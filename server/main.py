@@ -1,7 +1,12 @@
+from fastapi.responses import StreamingResponse
+from .api import healthcheck
 import logging
 import os
+import jwt
+from redis.asyncio import Redis
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List
+from fastapi import FastAPI, Body, HTTPException, Depends, Query, Request
 import redis
 from fastapi import FastAPI, Body, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +16,15 @@ from dotenv import load_dotenv
 from .api import healthcheck
 from .api.v1.crud import download_quiz, generate_quiz, get_user_quiz_history
 from .app.db.routes import router as db_router
-from .app.db.routes.save_quiz_history import router as save_quiz_router
-from .app.db.routes.get_quiz_history import router as get_quiz_history_router
-from .app.db.core.connection import startUp
-from .app.quiz.routers.quiz import router as quiz_router
+from .app.db.core.connection import startUp, database
+from motor.motor_asyncio import AsyncIOMotorCollection
+from .app.db.core.connection import startUp, get_users_collection, get_quizzes_collection, get_blacklisted_tokens_collection
+from server.app.quiz.routers.quiz import router as quiz_router
+from server.app.auth.routes import router as auth_router
+from server.app.db.routes.save_quiz_history import router as save_quiz_router
+from server.app.db.routes.get_quiz_history import router as get_quiz_history_router
+from server.app.db.core.connection import startUp
+from server.app.quiz.routers.quiz import router as quiz_router
 from .schemas.model import UserModel, LoginRequestModel, LoginResponseModel
 from .schemas.query import (
     GenerateQuizQuery,
@@ -31,13 +41,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await startUp()
-    yield
 load_dotenv()
 
 origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await startUp()
+    redis = Redis.from_url("redis://localhost:6379", decode_responses=True)
+    app.state.redis = redis
+
+    app.state.users_collection = get_users_collection()
+    app.state.quizzes_collection = get_quizzes_collection()
+    app.state.blacklisted_tokens_collection = get_blacklisted_tokens_collection()
+
+    yield
+
+    get_users_collection().database.client.close()
+    await redis.close()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -52,40 +73,24 @@ app.add_middleware(
 app.include_router(db_router)
 app.include_router(quiz_router, prefix="/api", tags=["quiz"])
 app.include_router(healthcheck.router, prefix="/api", tags=["healthcheck"])
+app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 
-mock_db: List[UserModel] = []
+app.database = database
+
 
 @app.get("/api")
 def read_root():
     logger.info("Root endpoint accessed")
     return {"message": "Welcome to the Quiz App API!"}
 
-@app.post("/register/", response_model=UserModel)
-def create_user(user: UserModel):
-    if any(existing_user.username == user.username for existing_user in mock_db):
-        raise HTTPException(status_code=400, detail="Username already taken")
-    if any(existing_user.email == user.email for existing_user in mock_db):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    mock_db.append(user)
-    return user
+load_dotenv()  
 
-@app.get("/users/", response_model=List[UserModel])
-def list_users():
-    return mock_db
 
-@app.post("/login/", response_model=LoginResponseModel)
-def login(request: LoginRequestModel):
-    user = next(
-        (
-            u for u in mock_db 
-            if (u.username == request.username_or_email or u.email == request.username_or_email)
-            and u.password == request.password
-        ),
-        None
-    )
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    return {"message": "Login successful", "user": user}
+@app.get("/users")
+async def get_users(request: Request):
+    users_collection = request.app.state.users_collection
+    users = await users_collection.find().to_list(length=100)
+    return users
 
 @app.post("/generate-quiz")
 async def generate_quiz_handler(query: GenerateQuizQuery = Body(...)) -> Dict[str, Any]:

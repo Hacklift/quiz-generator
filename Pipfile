@@ -8,6 +8,13 @@ python-dotenv = "*"
 ipython = "*"
 streamlit = "*"
 langchain-openai = "*"
+pytest = "*"
+pyjwt = "*"
+pydantic-settings = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
 testcontainers = "*"
 pymongo = "*"
 pytest = "*"
