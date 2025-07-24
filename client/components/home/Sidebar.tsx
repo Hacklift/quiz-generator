@@ -6,13 +6,17 @@ import FoldersButton from "./sidebar/FoldersButton";
 import UpgradePlanButton from "./sidebar/UpgradePlanButton";
 import QuizHistoryButton from "./sidebar/QuizHistoryButton";
 
-export default function Sidebar() {
+interface SidebarProps {
+  onBrowseClick: () => void;
+}
+
+export default function Sidebar({ onBrowseClick }: SidebarProps) {
   return (
     <div className="flex flex-col justify-between h-full p-4 bg-[#f2f2f2]">
       <div className="flex flex-col gap-3">
         <GenerateQuizButton />
         <SavedQuizzesButton />
-        <BrowseByCategoryButton />
+        <BrowseByCategoryButton onBrowseClick={onBrowseClick} />
         <PopularQuizzesButton />
         <FoldersButton />
         <QuizHistoryButton />

@@ -12,12 +12,15 @@ import PricingLink from "./PricingLink";
 import HowItWorksLink from "./HowItWorksLink";
 import NavGenerateQuizButton from "./NavGenerateQuizButton";
 import Sidebar from "./Sidebar";
+import BrowseModal from "./modals/BrowseModal";
+
 import { Menu, X } from "lucide-react";
 
 const NavBar: React.FC = () => {
   // Modal state
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
 
   // Callbacks for switching between modals
   const switchToSignIn = () => {
@@ -54,7 +57,7 @@ const NavBar: React.FC = () => {
         `}
         style={{ paddingTop: "64px" }}
       >
-        <Sidebar />
+        <Sidebar onBrowseClick={() => setIsBrowseModalOpen(true)} />
       </div>
 
       {/* ── 3) Top Navigation Bar ── */}
@@ -136,6 +139,10 @@ const NavBar: React.FC = () => {
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
         switchToSignUp={switchToSignUp}
+      />
+      <BrowseModal
+        isOpen={isBrowseModalOpen}
+        onClose={() => setIsBrowseModalOpen(false)}
       />
     </>
   );
