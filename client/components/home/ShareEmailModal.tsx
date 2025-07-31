@@ -23,15 +23,14 @@ const ShareEmailModal = ({
     setIsSending(true);
     setStatus(null);
 
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
     try {
-      const response = await axios.post(
-        "http://localhost:8000/share/share-email",
-        {
-          quiz_id: quizId,
-          recipient_email: recipientEmail,
-          shareableLink,
-        },
-      );
+      const response = await axios.post(`${API_BASE_URL}/share/share-email`, {
+        quiz_id: quizId,
+        recipient_email: recipientEmail,
+        shareableLink,
+      });
       setStatus({ message: response.data.message, success: true });
       setRecipientEmail("");
     } catch (error: any) {

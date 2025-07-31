@@ -8,10 +8,10 @@ const ShareButton = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const generateQuizAndShare = async () => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
     try {
-      const response = await axios.get(
-        "http://localhost:8000/share/get-quiz-id",
-      );
+      const response = await axios.get(`${API_BASE_URL}/share/get-quiz-id`);
 
       const id = response.data.id;
       const quizData = response.data;
@@ -25,7 +25,7 @@ const ShareButton = () => {
       }
 
       const linkResponse = await axios.get(
-        `http://localhost:8000/share/share-quiz/${id}`,
+        `${API_BASE_URL}/share/share-quiz/${id}`,
       );
       const newShareableLink = linkResponse.data.link;
       setShareableLink(newShareableLink);
