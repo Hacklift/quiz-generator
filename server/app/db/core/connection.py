@@ -5,7 +5,6 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 import os
 from pathlib import Path
 
-
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
 client = AsyncIOMotorClient(MONGO_URI)
@@ -15,6 +14,7 @@ database = client["quizApp_db"]
 quizzes_collection = database["quizzes"]
 users_collection = database["users"]
 quiz_history_collection = database["quiz_history"]
+quiz_categories_collection = database["quizzes_category"]
 
 async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
     await users_collection.create_index("email", unique=True) 
@@ -36,5 +36,3 @@ def get_quizzes_collection() -> AsyncIOMotorCollection:
     if quizzes_collection is None:
         raise RuntimeError("[DB Error] quizzes_collection has not been initialized properly.")
     return quizzes_collection
-
-
