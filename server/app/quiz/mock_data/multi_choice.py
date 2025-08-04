@@ -1,3 +1,5 @@
+import string
+
 mock_multiple_choice_questions = [
     {
         "question": "What is the capital of France?",
@@ -50,3 +52,22 @@ mock_multiple_choice_questions = [
         "answer": "Yen",
     },
 ]
+
+
+for q in mock_multiple_choice_questions:
+    options = q["options"]
+    answer = q["answer"]
+
+    # Create prefixed options
+    prefixed_options = [f"{letter}) {opt}" for letter, opt in zip(string.ascii_uppercase, options)]
+    q["options"] = prefixed_options
+
+    # Match the correct answer with the prefixed one
+    for opt in prefixed_options:
+        if opt.endswith(answer):
+            q["answer"] = opt
+            break
+
+# === Optional: Print updated data ===
+from pprint import pprint
+pprint(mock_multiple_choice_questions)
