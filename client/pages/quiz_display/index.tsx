@@ -18,34 +18,92 @@ const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
   const questionType = searchParams.get("questionType") || "multichoice";
   const numQuestions = Number(searchParams.get("numQuestions")) || 1;
-  const userId = searchParams.get("userId") || "defaultUserId"; // ✅ (for now, until auth works)
+  const profession = searchParams.get("profession") || "general knowledge";
+  const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
+  const audienceType = searchParams.get("audienceType") || "students";
+  const customInstruction = searchParams.get("customInstruction") || "";
+  const userId = searchParams.get("userId") || "defaultUserId";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
 
+  const getAnswerText = (label: string, options: string[]) => {
+    const index = label?.charCodeAt(0) - 65; // Convert "A" → 0, "B" → 1, etc.
+    return options?.[index] || "";
+  };
+
   useEffect(() => {
     const fetchQuizQuestions = async () => {
+      const basePayload = {
+        question_type: questionType,
+        num_questions: numQuestions,
+        profession: profession,
+        difficulty_level: difficultyLevel,
+        audience_type: audienceType,
+        custom_instruction: customInstruction,
+      };
+
       try {
-        const { data } = await axios.post(
+        // 🔹 Try AI first
+        const aiResponse = await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
           {
-            question_type: questionType,
-            num_questions: numQuestions,
+            ...basePayload,
+            source: "ai",
           },
         );
-        setQuizQuestions(data);
-        setUserAnswers(Array(data.length).fill(""));
 
-        // ✅ Save to history after generating the quiz
-        await saveQuizToHistory(userId, questionType, data);
+        const questions = aiResponse.data?.questions;
+        if (!Array.isArray(questions) || questions.length === 0) {
+          throw new Error("AI returned invalid data");
+        }
+
+        setQuizQuestions(questions);
+        setUserAnswers(Array(questions.length).fill(""));
+
+        try {
+          await saveQuizToHistory(userId, questionType, questions);
+        } catch (err) {
+          console.error("❌ Failed to save AI quiz history:", err);
+        }
       } catch (error) {
-        console.error("Error fetching quiz questions:", error);
+        console.warn("⚠️ AI failed, falling back to mock:", error);
+
+        try {
+          const mockResponse = await axios.post(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
+            {
+              ...basePayload,
+              source: "mock",
+            },
+          );
+
+          const mockQuestions = mockResponse.data?.questions || [];
+          setQuizQuestions(mockQuestions);
+          setUserAnswers(Array(mockQuestions.length).fill(""));
+
+          try {
+            await saveQuizToHistory(userId, questionType, mockQuestions);
+          } catch (err) {
+            console.error("❌ Failed to save mock quiz history:", err);
+          }
+        } catch (mockErr) {
+          console.error("❌ Mock fallback also failed:", mockErr);
+        }
       }
     };
+
     fetchQuizQuestions();
-  }, [questionType, numQuestions]);
+  }, [
+    questionType,
+    numQuestions,
+    profession,
+    difficultyLevel,
+    audienceType,
+    customInstruction,
+  ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
     const updated = [...userAnswers];
@@ -64,12 +122,15 @@ const QuizDisplayPage: React.FC = () => {
           user_answer: userAnswers[i].toString(),
           correct_answer: correct.toString(),
           question_type: q.question_type,
+          source: q.source || "unknown",
         };
       });
+
       const { data: report } = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/grade-answers`,
         payload,
       );
+
       const transformed = report.map((r: any) =>
         r.question_type === "true-false"
           ? {
@@ -79,6 +140,7 @@ const QuizDisplayPage: React.FC = () => {
             }
           : r,
       );
+
       setQuizReport(transformed);
       setIsQuizChecked(true);
     } catch (err) {
@@ -92,29 +154,29 @@ const QuizDisplayPage: React.FC = () => {
 
       <main className="flex-1 flex justify-center px-4 sm:px-6 md:px-8 py-8">
         <div className="w-full max-w-4xl space-y-10">
-          {/* Quiz Questions Card */}
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
               {`${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
             </h1>
 
             <div className="space-y-6">
-              {quizQuestions.map((q, i) => (
-                <div
-                  key={i}
-                  className="bg-gray-50 p-4 rounded-md border border-gray-200"
-                >
-                  <h3 className="font-medium text-gray-800 mb-2 text-sm sm:text-base">
-                    {i + 1}. {q.question}
-                  </h3>
-                  <QuizAnswerField
-                    questionType={q.question_type}
-                    index={i}
-                    onAnswerChange={handleAnswerChange}
-                    options={q.options || []}
-                  />
-                </div>
-              ))}
+              {Array.isArray(quizQuestions) &&
+                quizQuestions.map((q, i) => (
+                  <div
+                    key={i}
+                    className="bg-gray-50 p-4 rounded-md border border-gray-200"
+                  >
+                    <h3 className="font-medium text-gray-800 mb-2 text-sm sm:text-base">
+                      {i + 1}. {q.question}
+                    </h3>
+                    <QuizAnswerField
+                      questionType={q.question_type}
+                      index={i}
+                      onAnswerChange={handleAnswerChange}
+                      options={q.options || []}
+                    />
+                  </div>
+                ))}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
@@ -149,10 +211,15 @@ const QuizDisplayPage: React.FC = () => {
                       <strong>Question:</strong> {r.question}
                     </p>
                     <p>
-                      <strong>Your Answer:</strong> {r.user_answer}
+                      <strong>Your Answer:</strong>{" "}
+                      {getAnswerText(r.user_answer, quizQuestions[i]?.options)}
                     </p>
                     <p>
-                      <strong>Correct:</strong> {r.correct_answer}
+                      <strong>Correct:</strong>{" "}
+                      {getAnswerText(
+                        r.correct_answer,
+                        quizQuestions[i]?.options,
+                      )}
                     </p>
                     {r.accuracy_percentage && (
                       <p>
