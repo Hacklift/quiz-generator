@@ -1,13 +1,18 @@
 import React from "react";
 import SidebarButton from "./SidebarButton";
-import { showComingSoonToast } from "../../ui/ComingSoonToast";
 
-const BrowseByCategoryButton = () => {
+interface BrowseByCategoryButtonProps {
+  onBrowseClick: () => void;
+}
+
+const BrowseByCategoryButton: React.FC<BrowseByCategoryButtonProps> = ({
+  onBrowseClick,
+}) => {
   return (
     <SidebarButton
       label="Browse by Category"
       icon="📚"
-      onClick={showComingSoonToast}
+      onClick={onBrowseClick}
     />
   );
 };

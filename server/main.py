@@ -13,6 +13,7 @@ from .api.v1.crud import download_quiz, generate_quiz, get_user_quiz_history
 from .app.db.routes import router as db_router
 from .app.db.routes.save_quiz_history import router as save_quiz_router
 from .app.db.routes.get_quiz_history import router as get_quiz_history_router
+from .app.db.routes.get_categories import router as get_categories_router
 from .app.db.core.connection import startUp
 from .app.quiz.routers.quiz import router as quiz_router
 from .app.share.routes.share_routes import router as share_router
@@ -106,6 +107,7 @@ async def download_quiz_handler(query: DownloadQuizQuery = Depends()) -> Streami
 
 app.include_router(save_quiz_router, prefix="/api")
 app.include_router(get_quiz_history_router, prefix="/api")
+app.include_router(get_categories_router, prefix="/api")
 
 
 
