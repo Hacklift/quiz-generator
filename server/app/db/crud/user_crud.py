@@ -20,6 +20,7 @@ async def create_user(users_collection: AsyncIOMotorCollection, user: CreateUser
             **user_dict,
             "quizzes": [],
             "is_active": True,
+            "is_verified": False,
             "role": "user",
             "created_at": datetime.now(timezone.utc),
             "updated_at": None,
@@ -35,6 +36,11 @@ async def create_user(users_collection: AsyncIOMotorCollection, user: CreateUser
             username=user_dict["username"],
             email=user_dict["email"],
             full_name=user_dict["full_name"],
+            is_active=new_user_data["is_active"],
+            is_verified=new_user_data["is_verified"],
+            role=new_user_data["role"],
+            created_at=new_user_data["created_at"],
+            updated_at=new_user_data["updated_at"]
         ) 
     
     except PyMongoError as e:
