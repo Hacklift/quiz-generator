@@ -14,10 +14,10 @@ from ..schemas.user_schemas import (
     NewUserSchema, 
     UserSchema, 
     DeleteUserResponse, 
-    UpdateUserSchema, 
-    LoginRequest, 
-    LoginResponse
+    UpdateUserSchema
 )
+from server.app.auth.models import LoginRequestModel, LoginResponse
+
 from ..utils import is_valid_password
 
 router = APIRouter()
@@ -78,7 +78,7 @@ async def delete_existing_user(
 
 @router.post("/test/login/", response_model=LoginResponse)
 async def login_user(
-    request: LoginRequest,
+    request: LoginRequestModel,
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection)
 ):
     if not request.username and not request.email:
