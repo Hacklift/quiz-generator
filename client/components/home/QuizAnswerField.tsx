@@ -1,21 +1,25 @@
-import { QuizAnswerFieldProps } from '../../interfaces/props';
-import React from 'react';
+import { QuizAnswerFieldProps } from "../../interfaces/props";
+import React from "react";
 
-
-
-const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({ questionType, index, onAnswerChange, options }) => {
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
+  questionType,
+  index,
+  onAnswerChange,
+  options,
+}) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     let answerValue: string | number = e.target.value;
 
-    // Convert true/false to binary (1 for "true", 0 for "false")
     if (questionType === "true-false") {
-      answerValue = answerValue === "true" ? 1 : 0;  // Return 1 for true and 0 for false as integers
+      answerValue = answerValue === "true" ? 1 : 0;
     }
 
-    onAnswerChange(index, answerValue);  // Pass the correct value to parent
+    onAnswerChange(index, answerValue);
   };
 
-  if (questionType === 'multichoice') {
+  if (questionType === "multichoice") {
     return (
       <div>
         {options?.map((option, optionIndex) => (
@@ -31,10 +35,10 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({ questionType, index, 
         ))}
       </div>
     );
-  } else if (questionType === 'true-false') {
+  } else if (questionType === "true-false") {
     return (
       <div>
-        {options?.map((option, optionIndex) => (
+        {["true", "false"].map((option, optionIndex) => (
           <div key={optionIndex}>
             <input
               type="radio"
@@ -47,12 +51,22 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({ questionType, index, 
         ))}
       </div>
     );
-  } else if (questionType === 'open-ended') {
+  } else if (questionType === "short-answer") {
+    return (
+      <input
+        type="text"
+        onChange={handleInputChange}
+        placeholder="Type your short answer here"
+        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+      />
+    );
+  } else if (questionType === "open-ended") {
     return (
       <textarea
         rows={4}
         onChange={handleInputChange}
-        placeholder="Write your answer here"
+        placeholder="Write your detailed answer here"
+        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
     );
   }

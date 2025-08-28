@@ -1,55 +1,18 @@
-from difflib import SequenceMatcher
+from fastapi import HTTPException
+from .mock_grading import grade_mock_answers
+from .ai_grading import grade_with_ai
 
-def sequence_matcher_similarity(a, b):
-    return SequenceMatcher(None, str(a), str(b)).ratio() * 100
+def grade_answers(user_answers: list, source: str = "mock"):
+    """
+    Grade answers from either a mock quiz or an AI-generated quiz.
 
-def grade_answers(user_answers):
-    result = []
-    for answer in user_answers:
-        question_type = answer.get("question_type", "").strip()
-        user_answer = str(answer.get("user_answer", "")).strip()
-        correct_answer = str(answer.get("correct_answer", "")).strip()
-
-        # If the correct answer is missing, skip this entry entirely
-        if not correct_answer:
-            continue  
-
-        # Open‑ended: compute similarity, mark ≥50% as correct
-        if question_type == "open-ended":
-            accuracy = sequence_matcher_similarity(user_answer, correct_answer)
-            is_correct = accuracy >= 50
-            result.append({
-                "question": answer.get("question", ""),
-                "user_answer": user_answer,
-                "correct_answer": correct_answer,
-                "question_type": question_type,
-                "accuracy_percentage": accuracy,
-                "is_correct": is_correct,
-                "result": "Correct" if is_correct else "Incorrect"
-            })
-
-        # Multiple‑choice & True/False: exact match only
-        elif question_type in ["multichoice", "true-false"]:
-            is_correct = (user_answer == correct_answer)
-            result.append({
-                "question": answer.get("question", ""),
-                "user_answer": user_answer,
-                "correct_answer": correct_answer,
-                "question_type": question_type,
-                "is_correct": is_correct,
-                "result": "Correct" if is_correct else "Incorrect"
-            })
-
-        # Any other question types you may add in future
-        else:
-            # treat as incorrect by default
-            result.append({
-                "question": answer.get("question", ""),
-                "user_answer": user_answer,
-                "correct_answer": correct_answer,
-                "question_type": question_type,
-                "is_correct": False,
-                "result": "Incorrect"
-            })
-
-    return result
+    :param user_answers: list of dicts containing answers
+    :param source: "mock" or "ai"
+    :return: list of graded answer dicts
+    """
+    if source == "mock":
+        return grade_mock_answers(user_answers)
+    elif source == "ai":
+        return grade_with_ai(user_answers)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid quiz source. Must be 'mock' or 'ai'.")

@@ -41,12 +41,18 @@ export default function QuizForm() {
         },
       );
 
-      const userId = "userId";
+      const userId = "userId"; // Replace with actual auth value later
+      const source = "ai"; // 👈 Indicating this is an AI-generated quiz
+
       const queryParams = new URLSearchParams({
         userId,
         questionType,
         numQuestions: numQuestions.toString(),
         profession,
+        customInstruction, // 👈 Add this
+        audienceType,
+        difficultyLevel,
+        source, // 👈 Add the source to query params
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
