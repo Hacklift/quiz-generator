@@ -19,7 +19,8 @@ if parsed.scheme == "rediss":
     }
 
 celery_app.conf.task_routes = {
-    "server.tasks.send_quiz_email": {"queue": "email"}
+    "tasks.send_quiz_email": {"queue": "email"},
+    "tasks.send_email_generic": {"queue": "email"},
 }
 
 import server.app.share.share_tasks

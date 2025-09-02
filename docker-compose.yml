@@ -57,10 +57,13 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/
-    command: ["celery", "-A", "server.celery_config.celery_app", "worker", "--loglevel=info", "--pool=solo"]
+    command: ["celery", "-A", "server.celery_config.celery_app", "worker",
+              "-Q", "email,celery",
+              "--loglevel=info", "--pool=solo", "--concurrency=1"]
     depends_on:
       - redis
-      - server
+      - server 
+
 
   mongodb:
     image: mongo:latest

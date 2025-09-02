@@ -6,12 +6,15 @@ import logging
 from dotenv import load_dotenv
 from ...db.core.connection import get_quizzes_collection
 from ...db.crud.quiz_crud import list_quizzes, get_quiz
-from ..share_tasks import send_quiz_email
 from ...db.schemas.quiz_schemas import QuizSchema
 from .share_schemas import (
     ShareQuizResponse, 
     ShareEmailRequest, 
     ShareEmailResponse)
+
+# NEW: platform email service
+from server.app.email_platform.service import EmailService
+from server.app.email_platform.deps import get_email_service
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +38,6 @@ async def get_random_quiz_id(quizzes_collection: AsyncIOMotorCollection = Depend
         raise HTTPException(detail=f"Unable to fetch from database!", status_code=404)
 
 
-
 @router.get("/share-quiz/{quiz_id}", response_model=ShareQuizResponse)
 async def get_share_link(quiz_id: str):
     try:
@@ -47,20 +49,33 @@ async def get_share_link(quiz_id: str):
         raise HTTPException(detail="Failed to generate shareable link", status_code=500)
 
 
-
 @router.post("/share-email", response_model=ShareEmailResponse)
-async def share_quiz_via_email(query: ShareEmailRequest):
+async def share_quiz_via_email(
+    query: ShareEmailRequest,
+    email_svc: EmailService = Depends(get_email_service),
+):
     try:
         collection = get_quizzes_collection()
-        quiz = await get_quiz(collection, query.quiz_id,)
-        send_quiz_email.delay(quiz.title, quiz.description, query.recipient_email, query.shareableLink)
-        logger.info(f"[API] Queued email for {query.recipient_email} and quiz ID {query.quiz_id}")
+        quiz = await get_quiz(collection, query.quiz_id)
+
+        # Platform service: quiz_link => Celery, then Background (no Direct)
+        await email_svc.send_email(
+            to=query.recipient_email,
+            template_id="quiz_link",
+            template_vars={
+                "title": quiz.title,
+                "description": quiz.description,
+                "link": query.shareableLink,
+            },
+            purpose="quiz_link",
+            priority="default",
+        )
+        logger.info(f"[API] Email pipeline triggered for {query.recipient_email} and quiz ID {query.quiz_id}")
         return {"message": "Email sent successfully!"}
     
     except Exception as e:
-        logger.error(f"[API Error] Failed to enqueue email task: {e}", exc_info=True)
+        logger.error(f"[API Error] Email pipeline failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send email. Please try again later."
         )
-    
