@@ -4,7 +4,7 @@ from docx import Document
 
 def generate_docx(data: List[dict]):
     buffer = BytesIO()
-    doc = Document()
+    doc = Document() 
     for item in data:
         doc.add_paragraph(f"Question: {item['question']}")
         if 'options' in item:
