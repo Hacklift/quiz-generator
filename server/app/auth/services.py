@@ -1,6 +1,8 @@
 from fastapi import Request, HTTPException, Depends, status
+from typing import Dict
 from redis import Redis
 import random
+from bson import ObjectId
 from datetime import datetime, timezone, timedelta
 import jwt
 import uuid
@@ -9,6 +11,12 @@ from jwt.exceptions import (
     InvalidTokenError,
     DecodeError
 )
+from server.app.db.models.user_models import (
+    UserDB,
+    UserOut,
+    UpdateProfileRequest,
+    UpdateProfileResponse
+    )
 import os
 from fastapi.security import OAuth2PasswordBearer
 import redis
@@ -223,7 +231,6 @@ async def refresh_token_service(refresh_token: str, users_collection: AsyncIOMot
     if not user_id or not token_jti:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
-    from bson import ObjectId
     user = await users_collection.find_one({"_id": ObjectId(user_id)})
     
     if not user:
@@ -357,3 +364,107 @@ async def logout_service(token: str, blacklist_collection = Depends(get_blacklis
          raise HTTPException(status_code=401, detail="Invalid token or expired token")
     except Exception as e:
          raise HTTPException(status_code=500, detail="An error occurred during logout") from e
+
+def get_user_profile_service(current_user: UserOut) -> dict:
+    """Return serialized user profile"""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "bio": current_user.bio,
+        "location": current_user.location,
+        "website": current_user.website,
+        "avatar_color": current_user.avatar_color,
+        "is_active": current_user.is_active,
+        "is_verified": current_user.is_verified,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
+    }
+
+
+async def update_user_profile_service(
+    profile_data: UpdateProfileRequest,
+    current_user: UserOut,
+    users_collection  
+) -> UpdateProfileResponse:
+    try:
+        update_data = {}
+
+        if profile_data.full_name is not None:
+            update_data["full_name"] = profile_data.full_name
+        if profile_data.bio is not None:
+            update_data["bio"] = profile_data.bio
+        if profile_data.location is not None:
+            update_data["location"] = profile_data.location
+        if profile_data.website is not None:
+            update_data["website"] = profile_data.website
+        if profile_data.avatar_color is not None:
+            update_data["avatar_color"] = profile_data.avatar_color
+
+        update_data["updated_at"] = datetime.now(timezone.utc)
+
+        try:
+            user_object_id = ObjectId(current_user.id)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid user ID format: {str(e)}"
+            )
+
+        result = await users_collection.update_one(
+            {"_id": user_object_id},
+            {"$set": update_data}
+        )
+
+        if result.modified_count == 0:
+            user_exists = await users_collection.find_one({"_id": user_object_id})
+            if not user_exists:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="User not found"
+                )
+
+        updated_user = await users_collection.find_one({"_id": user_object_id})
+        
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found after update"
+            )
+
+        created_at = updated_user.get("created_at")
+        if isinstance(created_at, datetime):
+            created_at = created_at.isoformat()
+
+        updated_at_value = updated_user.get("updated_at")
+        if isinstance(updated_at_value, datetime):
+            updated_at_value = updated_at_value.isoformat()
+
+        user_out = UserOut(
+            id=str(updated_user["_id"]),
+            username=updated_user["username"],
+            email=updated_user["email"],
+            full_name=updated_user.get("full_name"),
+            bio=updated_user.get("bio"),
+            location=updated_user.get("location"),
+            website=updated_user.get("website"),
+            avatar_color=updated_user.get("avatar_color", "#143E6F"),
+            is_active=updated_user.get("is_active", True),
+            is_verified=updated_user.get("is_verified", False),
+            created_at=created_at,
+            updated_at=updated_at_value,
+        )
+
+        return UpdateProfileResponse(
+            message="Profile updated successfully",
+            user=user_out
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+            )

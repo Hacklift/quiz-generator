@@ -4,6 +4,8 @@ import {
   LoginPayload,
   RefreshTokenPayload,
   RefreshTokenResponse,
+  UpdateProfilePayload,
+  UpdateProfileResponse,
 } from "../../interfaces/models/User";
 import { TokenService } from "./tokenService";
 
@@ -17,7 +19,6 @@ const api = axios.create({
   },
 });
 
-// Flag to prevent multiple refresh attempts
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
@@ -38,7 +39,6 @@ const processQueue = (
   failedQueue = [];
 };
 
-// Request interceptor - Add access token to requests
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = TokenService.getAccessToken();
@@ -52,7 +52,6 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor - Handle token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -60,9 +59,7 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Skip refresh for login, register, and refresh endpoints
       if (
         originalRequest.url?.includes("/auth/login") ||
         originalRequest.url?.includes("/auth/register") ||
@@ -72,7 +69,6 @@ api.interceptors.response.use(
       }
 
       if (isRefreshing) {
-        // If already refreshing, queue this request
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -93,7 +89,6 @@ api.interceptors.response.use(
       const refreshToken = TokenService.getRefreshToken();
 
       if (!refreshToken) {
-        // No refresh token available, clear tokens and reject
         TokenService.clearTokens();
         processQueue(error, null);
         isRefreshing = false;
@@ -149,7 +144,6 @@ api.interceptors.response.use(
   },
 );
 
-// Auth API functions
 export const registerUser = async (data: {
   username: string;
   email: string;
@@ -200,6 +194,17 @@ export const refreshAccessToken = async (
 export const getProfile = async () => {
   const response = await api.get("/auth/profile");
   return response.data;
+};
+
+export const updateProfile = async (
+  data: UpdateProfilePayload,
+): Promise<UpdateProfileResponse> => {
+  try {
+    const response = await api.put("/auth/profile", data);
+    return response.data as UpdateProfileResponse;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.detail || "Failed to update profile");
+  }
 };
 
 export const requestPasswordReset = async (email: string) =>
