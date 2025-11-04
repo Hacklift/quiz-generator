@@ -156,8 +156,18 @@ export const registerUser = async (data: {
   full_name: string;
   password: string;
 }) => {
-  const response = await api.post("/auth/register/", data);
-  return response.data;
+  try {
+    const response = await api.post("/auth/register/", data);
+    return response.data;
+  } catch (error: any) {
+    const detail = error.response?.data?.detail;
+    const message = Array.isArray(detail)
+      ? detail[0]?.msg || "Invalid input."
+      : typeof detail === "string"
+        ? detail
+        : error.message || "Registration failed.";
+    throw new Error(message);
+  }
 };
 
 export const verifyOtp = async (email: string, otp: string) =>

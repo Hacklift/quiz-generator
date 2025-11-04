@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { SignUpModalProps } from "../../interfaces/props/sign-up-modal-props";
 import { registerUser } from "../../lib";
 import { EMAIL_REGEX, PASSWORD_REGEX } from "../../constants/patterns/patterns";
@@ -26,35 +27,25 @@ export default function SignUpModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [passwordStrength, setPasswordStrength] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // ✅ Nouveaux états pour gérer le modal de vérification
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   useEffect(() => {
     const newErrors: Record<string, string> = {};
-
-    if (username && username.length < 3) {
+    if (username && username.length < 3)
       newErrors.username = "Username must be at least 3 characters.";
-    }
-
-    if (fullName && fullName.length < 3) {
+    if (fullName && fullName.length < 3)
       newErrors.fullName = "Full name must be at least 3 characters.";
-    }
-
-    if (email && !EMAIL_REGEX.test(email)) {
+    if (email && !EMAIL_REGEX.test(email))
       newErrors.email = "Please enter a valid email address.";
-    }
-
-    if (password && !PASSWORD_REGEX.test(password)) {
+    if (password && !PASSWORD_REGEX.test(password))
       newErrors.password =
         "Password must be at least 8 characters long, include a number, a letter, and a special character.";
-    }
-
-    if (confirmPassword && password !== confirmPassword) {
+    if (confirmPassword && password !== confirmPassword)
       newErrors.confirmPassword = "Passwords do not match.";
-    }
-
     setErrors(newErrors);
   }, [username, fullName, email, password, confirmPassword]);
 
@@ -63,13 +54,11 @@ export default function SignUpModal({
       setPasswordStrength("");
       return;
     }
-
     let score = 0;
     if (password.length >= 8) score++;
     if (/[0-9]/.test(password)) score++;
     if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
     if (/[^A-Za-z0-9]/.test(password)) score++;
-
     if (score <= 1) setPasswordStrength("Weak");
     else if (score === 2) setPasswordStrength("Fair");
     else if (score === 3) setPasswordStrength("Good");
@@ -80,9 +69,7 @@ export default function SignUpModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     if (Object.keys(errors).length > 0) return;
-
     try {
       setLoading(true);
       await registerUser({
@@ -91,13 +78,8 @@ export default function SignUpModal({
         full_name: fullName,
         password,
       });
-
-      // ✅ Après inscription réussie, stocker l'email et ouvrir le modal de vérification
       setRegisteredEmail(email);
-      // onClose(); // Fermer le modal d'inscription
-      setShowVerifyModal(true); // Ouvrir le modal de vérification
-
-      // ✅ Réinitialiser les champs du formulaire
+      setShowVerifyModal(true);
       setUsername("");
       setFullName("");
       setEmail("");
@@ -106,7 +88,6 @@ export default function SignUpModal({
       setErrors({});
       setPasswordStrength("");
     } catch (error: any) {
-      console.error("Registration error:", error);
       setErrors({
         global:
           error.response?.data?.detail ||
@@ -134,7 +115,6 @@ export default function SignUpModal({
 
   return (
     <>
-      {/* Modal d'inscription */}
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
         <div className="bg-white rounded-2xl w-full max-w-md p-8">
           <div className="relative">
@@ -156,7 +136,6 @@ export default function SignUpModal({
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Username */}
             <div className="mb-4">
               <label
                 className="block text-sm font-medium mb-2"
@@ -180,7 +159,6 @@ export default function SignUpModal({
               )}
             </div>
 
-            {/* Full Name */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" htmlFor="name">
                 Full Name
@@ -201,7 +179,6 @@ export default function SignUpModal({
               )}
             </div>
 
-            {/* Email */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" htmlFor="email">
                 Email Address
@@ -222,8 +199,7 @@ export default function SignUpModal({
               )}
             </div>
 
-            {/* Password */}
-            <div className="mb-4">
+            <div className="mb-4 relative">
               <label
                 className="block text-sm font-medium mb-2"
                 htmlFor="password"
@@ -231,16 +207,23 @@ export default function SignUpModal({
                 Password
               </label>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 id="password"
                 placeholder="Enter Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`w-full px-4 py-2 border rounded-md ${
+                className={`w-full px-4 py-2 border rounded-md pr-10 ${
                   errors.password ? "border-red-500" : "border-gray-300"
                 }`}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-9 text-gray-500 hover:text-gray-700"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
               {errors.password && (
                 <p className="text-red-600 text-sm mt-1">{errors.password}</p>
               )}
@@ -251,8 +234,7 @@ export default function SignUpModal({
               )}
             </div>
 
-            {/* Confirm Password */}
-            <div className="mb-6">
+            <div className="mb-6 relative">
               <label
                 className="block text-sm font-medium mb-2"
                 htmlFor="confirmPassword"
@@ -260,16 +242,23 @@ export default function SignUpModal({
                 Confirm Password
               </label>
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 id="confirmPassword"
                 placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className={`w-full px-4 py-2 border rounded-md ${
+                className={`w-full px-4 py-2 border rounded-md pr-10 ${
                   errors.confirmPassword ? "border-red-500" : "border-gray-300"
                 }`}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-9 text-gray-500 hover:text-gray-700"
+              >
+                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
               {errors.confirmPassword && (
                 <p className="text-red-600 text-sm mt-1">
                   {errors.confirmPassword}
@@ -286,7 +275,6 @@ export default function SignUpModal({
             </button>
           </form>
 
-          {/* Login Redirect */}
           <div className="text-center mt-6 text-sm">
             Already Have An Account?{" "}
             <button
@@ -303,12 +291,11 @@ export default function SignUpModal({
         </div>
       </div>
 
-      {/* ✅ Modal de vérification d'email (s'ouvre après inscription réussie) */}
       <VerifyEmailModal
         isOpen={showVerifyModal}
         onClose={() => {
           setShowVerifyModal(false);
-          onClose(); // now it is safe to close SignUpModal
+          onClose();
         }}
         userEmail={registeredEmail}
         onVerified={() => {

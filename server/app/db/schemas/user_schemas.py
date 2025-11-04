@@ -19,7 +19,7 @@ class UserRegisterSchema(BaseModel):
             raise ValueError('Password must contain at least one lowercase letter.')
         if not re.search(r'[0-9]', value):
             raise ValueError('Password must contain at least one number.')
-        if not re.search(r'[!@\$%\^&\*\(\)\-_,\.\?":\{\}\|<>]', value):
+        if not re.search(r'[!@#\$%\^&\*\(\)\-_,\.\?":\{\}\|<>]', value):
             raise ValueError('Password must contain at least one special character.')
         if len(value) < 8:
             raise ValueError('Password must be at least 8 characters long.')

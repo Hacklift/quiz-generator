@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { ROUTES } from "../constants/patterns/routes";
 import { useAuth } from "../contexts/authContext";
+import NavBar from "../components/home/NavBar";
+import Footer from "../components/home/Footer";
 
 export default function ProfilePage() {
   const { user, isLoading, logout } = useAuth();
@@ -9,7 +11,6 @@ export default function ProfilePage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !user) {
       router.push(ROUTES.LOGIN);
@@ -26,7 +27,6 @@ export default function ProfilePage() {
     }
   };
 
-  // Show loading
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -38,22 +38,18 @@ export default function ProfilePage() {
     );
   }
 
-  // Don't render if no user
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-[#143E6F]">My Profile</h1>
-        </div>
-      </header>
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      <NavBar />
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-sm p-8 mb-6">
+      <main className="flex-grow mx-auto px-4 py-8 w-full max-w-6xl">
+        <h1 className="text-3xl font-bold text-[#143E6F] mb-8 text-center">
+          My Profile
+        </h1>
+
+        <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
           <div className="flex items-center mb-6">
             <div className="w-20 h-20 rounded-full bg-[#143E6F] flex items-center justify-center text-white text-3xl font-bold">
               {user.username?.charAt(0).toUpperCase() || "U"}
@@ -95,8 +91,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Actions Card */}
-        <div className="bg-white rounded-2xl shadow-sm p-8">
+        <div className="bg-white rounded-2xl shadow-sm p-8 max-w-3xl mx-auto w-full">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Account Actions
           </h3>
@@ -131,7 +126,8 @@ export default function ProfilePage() {
         </div>
       </main>
 
-      {/* Logout Confirmation Modal */}
+      <Footer />
+
       {showLogoutConfirm && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"

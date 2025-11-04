@@ -12,6 +12,8 @@ import {
   createFolder,
   addQuizToFolder,
 } from "../../lib/functions/folders";
+import { getProfile } from "../../lib/functions/auth";
+import { TokenService } from "../../lib/functions/tokenService";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
 
@@ -39,16 +41,17 @@ const AddToFolderModal = ({
   isOpen,
   onClose,
   selectedQuizIds,
+  userId,
 }: {
   isOpen: boolean;
   onClose: () => void;
   selectedQuizIds: string[];
+  userId: string;
 }) => {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const userId = "dummy_user_123"; // Replace when auth is added
 
   useEffect(() => {
     if (!isOpen) return;
@@ -64,7 +67,7 @@ const AddToFolderModal = ({
       }
     };
     fetchFolders();
-  }, [isOpen]);
+  }, [isOpen, userId]);
 
   const handleAddToFolder = async () => {
     if (!selectedFolderId && !newFolderName) {
@@ -75,15 +78,12 @@ const AddToFolderModal = ({
     try {
       let targetFolderId = selectedFolderId;
 
-      // Create folder if needed
       if (!targetFolderId && newFolderName) {
         const newFolder = await createFolder(userId, newFolderName);
         targetFolderId = newFolder._id;
       }
 
-      // Add each selected quiz
       for (const quizId of selectedQuizIds) {
-        console.log("Full quiz object before adding to folder:", quizId);
         await addQuizToFolder(targetFolderId!, { quiz_id: quizId });
       }
 
@@ -169,7 +169,8 @@ const AddToFolderModal = ({
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];
   onDeleteClick: (quizId: string) => void;
-}> = ({ savedQuizzes, onDeleteClick }) => {
+  userId: string;
+}> = ({ savedQuizzes, onDeleteClick, userId }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -186,7 +187,10 @@ const DisplaySavedQuizzesPage: React.FC<{
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
     try {
-      await deleteSavedQuiz(confirmDeleteId);
+      const user = await getProfile();
+      const token = user?.token;
+      if (!token) throw new Error("No auth token found.");
+      await deleteSavedQuiz(confirmDeleteId, token);
       toast.success("Quiz deleted successfully!");
       onDeleteClick(confirmDeleteId);
       setConfirmDeleteId(null);
@@ -307,6 +311,7 @@ const DisplaySavedQuizzesPage: React.FC<{
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         selectedQuizIds={selectedQuizIds}
+        userId={userId}
       />
 
       {/* Delete Confirmation */}
@@ -344,11 +349,29 @@ const DisplaySavedQuizzesPage: React.FC<{
 export default function SavedQuizzes() {
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    const init = async () => {
+      try {
+        const user = await getProfile();
+        setUserId(user.id || user._id);
+      } catch (err) {
+        console.error("User not authenticated:", err);
+        toast.error("Please log in to access saved quizzes.");
+      }
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
     const fetchSaved = async () => {
       try {
-        const quizzes = await getSavedQuizzes();
+        const user = await getProfile();
+        const token = user?.token;
+        if (!token) throw new Error("No auth token found.");
+        const quizzes = await getSavedQuizzes(token);
         setSavedQuizzes(quizzes);
       } catch (err) {
         console.error(err);
@@ -358,11 +381,20 @@ export default function SavedQuizzes() {
       }
     };
     fetchSaved();
-  }, []);
+  }, [userId]);
 
   const handleDeleteFromList = (quizId: string) => {
     setSavedQuizzes((prev) => prev.filter((q) => q._id !== quizId));
   };
+
+  if (!userId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center text-gray-700">
+        <h1 className="text-2xl font-bold mb-2">Authentication Required</h1>
+        <p>Please log in to view your saved quizzes.</p>
+      </div>
+    );
+  }
 
   return (
     <Suspense
@@ -376,6 +408,7 @@ export default function SavedQuizzes() {
         <DisplaySavedQuizzesPage
           savedQuizzes={savedQuizzes}
           onDeleteClick={handleDeleteFromList}
+          userId={userId}
         />
       )}
     </Suspense>
