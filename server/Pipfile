@@ -13,22 +13,16 @@ bcrypt = "<4.0"
 python-docx = "*"
 reportlab = "*"
 docx = "*"
-redis = "*"
+redis = ">=6.0,<7.0"
 celery = "*"
 pyjwt = "*"
 testcontainers = "*"
 pypdf = "*"
-aioredis = "*"
 passlib = "*"
 pydantic-settings = "*"
-pymongo = "*"
 huggingface-hub = "*"
-transformers = "*"
-torch = "*"
-fuzzywuzzy = "*"
 rapidfuzz = "*"
 cryptography = "*"
-beanie = "*"
 
 [dev-packages]
 pytest = "*"
@@ -36,4 +30,3 @@ pytest-asyncio = "*"
 
 [requires]
 python_version = "3.12"
-
