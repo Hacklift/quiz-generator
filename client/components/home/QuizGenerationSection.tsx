@@ -53,23 +53,25 @@ export default function QuizGenerationSection({
           />
         </div>
 
-        {/* Token Field */}
+        {/* Optional API Token */}
         <div className="md:col-span-2">
           <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-            API token
+            API Token (Optional)
           </label>
           <input
             type="text"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder="Enter your API token"
+            placeholder="Enter your API token (optional)"
             className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
           />
+          <p className="text-xs text-gray-500 mt-1">
+            Leave blank to use the default server API key.
+          </p>
         </div>
 
         {/* Left Column: Audience Type, Difficulty Level, Custom Instruction */}
         <div className="space-y-4">
-          {/* Audience Type */}
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
               Audience type
@@ -83,7 +85,6 @@ export default function QuizGenerationSection({
             />
           </div>
 
-          {/* Difficulty Level */}
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
               Select difficulty level
@@ -99,7 +100,6 @@ export default function QuizGenerationSection({
             </select>
           </div>
 
-          {/* Custom Instruction */}
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
               Custom instruction
@@ -116,7 +116,6 @@ export default function QuizGenerationSection({
 
         {/* Right Column: Question Type and Number of Questions */}
         <div className="space-y-4">
-          {/* Question Types */}
           <div>
             <RequiredLabel text="Question type(s)" required />
             <div className="space-y-2">
@@ -142,7 +141,6 @@ export default function QuizGenerationSection({
             </div>
           </div>
 
-          {/* Number of Questions */}
           <div>
             <RequiredLabel text="Number of questions" required />
             <input

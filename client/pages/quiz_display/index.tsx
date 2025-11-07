@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import axios from "axios";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
@@ -12,25 +12,32 @@ import {
   NavBar,
   Footer,
   ShareButton,
+  SaveQuizButton,
 } from "../../components/home";
 import { saveQuizToHistory } from "../../lib/functions/saveQuizToHistory";
 
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
+  const savedQuizId = searchParams.get("id");
   const questionType = searchParams.get("questionType") || "multichoice";
   const numQuestions = Number(searchParams.get("numQuestions")) || 1;
   const profession = searchParams.get("profession") || "general knowledge";
   const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
-  const userId = searchParams.get("userId") || "defaultUserId"; // ✅ dummy user until auth works
+  const userId = searchParams.get("userId") || "defaultUserId"; // dummy user until auth works
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const hasFetchedRef = useRef(false); // ✅ Prevent double fetch
 
   useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+
     const fetchQuizQuestions = async () => {
       const basePayload = {
         question_type: questionType,
@@ -42,38 +49,85 @@ const QuizDisplayPage: React.FC = () => {
       };
 
       try {
-        // 🔹 Try AI source first
-        const aiResponse = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
-          basePayload,
-        );
+        setIsLoading(true);
+        let questions: any[] = [];
 
-        const data = aiResponse.data;
+        // ✅ Step 1: Check if a saved quiz was passed via localStorage
+        const storedQuiz = localStorage.getItem("saved_quiz_view");
 
-        console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
-
-        // ✅ Notify user if AI is down
-        if (data?.ai_down) {
-          toast.error(data.notification_message || "AI model unavailable.", {
-            duration: 4000,
-          });
+        if (storedQuiz) {
+          const parsedQuiz = JSON.parse(storedQuiz);
+          if (parsedQuiz?.questions?.length > 0) {
+            setQuizQuestions(parsedQuiz.questions);
+            setUserAnswers(Array(parsedQuiz.questions.length).fill(""));
+            toast.success(`Loaded saved quiz: ${parsedQuiz.title}`);
+            localStorage.removeItem("saved_quiz_view");
+            setIsLoading(false);
+            return;
+          }
         }
 
-        const questions = data?.questions || [];
-        if (!Array.isArray(questions) || questions.length === 0) {
-          throw new Error("No quiz questions returned.");
+        // ✅ Step 2: If there’s a savedQuizId in URL, fetch from API
+        if (savedQuizId) {
+          const { data } = await axios.get(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/saved-quizzes/${savedQuizId}`,
+          );
+
+          if (!data || !data.questions || data.questions.length === 0) {
+            throw new Error("No questions found for this saved quiz.");
+          }
+
+          questions = data.questions.map((q: any) => ({
+            ...q,
+            answer: q.answer || q.correct_answer,
+          }));
+
+          toast.success("Loaded saved quiz successfully!");
+        } else {
+          // ✅ Step 3: Fallback — generate a new quiz
+          const basePayload = {
+            question_type: questionType,
+            num_questions: numQuestions,
+            profession,
+            difficulty_level: difficultyLevel,
+            audience_type: audienceType,
+            custom_instruction: customInstruction,
+          };
+
+          const { data } = await axios.post(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
+            basePayload,
+          );
+
+          if (data?.ai_down) {
+            toast.error(data.notification_message || "AI model unavailable.", {
+              duration: 4000,
+            });
+          }
+
+          questions = data?.questions || [];
+          if (!Array.isArray(questions) || questions.length === 0) {
+            throw new Error("No quiz questions returned.");
+          }
+
+          toast.success("Generated new quiz successfully!");
         }
 
         setQuizQuestions(questions);
         setUserAnswers(Array(questions.length).fill(""));
-      } catch (error) {
+      } catch (error: any) {
         console.error("❌ Failed to fetch quiz questions:", error);
-        toast.error("Failed to fetch quiz questions. Please try again later.");
+        toast.error(error.message || "Failed to fetch quiz questions.");
+        setQuizQuestions([]);
+        setUserAnswers([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchQuizQuestions();
   }, [
+    savedQuizId,
     questionType,
     numQuestions,
     profession,
@@ -98,7 +152,6 @@ const QuizDisplayPage: React.FC = () => {
         let userAnswer = userAnswers[i];
         let correctAnswer = correct;
 
-        // ✅ Keep true/false as binary values (1 or 0) for backend
         if (q.question_type === "true-false") {
           if (typeof userAnswer === "string") {
             userAnswer = userAnswer.toLowerCase() === "true" ? 1 : 0;
@@ -122,7 +175,6 @@ const QuizDisplayPage: React.FC = () => {
         payload,
       );
 
-      // Convert back to "true"/"false" for display
       const transformed = report.map((r: any) =>
         r.question_type === "true-false"
           ? {
@@ -136,7 +188,6 @@ const QuizDisplayPage: React.FC = () => {
       setQuizReport(transformed);
       setIsQuizChecked(true);
 
-      // ✅ Save quiz to history only after grading
       await saveQuizToHistory(userId, questionType, quizQuestions);
     } catch (err) {
       console.error("Error checking answers:", err);
@@ -144,13 +195,31 @@ const QuizDisplayPage: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264]"></div>
+      </div>
+    );
+  }
+
+  if (!quizQuestions.length) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p className="text-gray-600 text-center text-lg">
+          No quiz questions found.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
       <NavBar />
 
       <main className="flex-1 flex justify-center px-4 sm:px-6 md:px-8 py-8">
         <div className="w-full max-w-4xl space-y-10">
-          {/* Quiz Questions Card */}
+          {/* Quiz Questions */}
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
               {`${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
@@ -177,6 +246,7 @@ const QuizDisplayPage: React.FC = () => {
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
               <CheckButton onClick={checkAnswers} />
+              <SaveQuizButton quizData={quizQuestions} />
               <DownloadQuizButton
                 userId={userId}
                 question_type={questionType}
@@ -187,6 +257,7 @@ const QuizDisplayPage: React.FC = () => {
             </div>
           </section>
 
+          {/* Quiz Results */}
           {isQuizChecked && (
             <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
               <h2 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-4">

@@ -13,3 +13,4 @@ export { default as NavBar } from "./NavBar";
 export { default as Footer } from "./Footer";
 export { default as DisplaySharedQuiz } from "./DisplaySharedQuiz";
 export { default as ShareButton } from "./ShareButton";
+export { default as SaveQuizButton } from "./SaveQuizButton";
