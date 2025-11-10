@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import re
 import asyncio
 import functools
@@ -6,6 +7,9 @@ from typing import Any, Dict, List, Optional
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 from ....app.db.crud.token_crud import get_user_token
+
+env_path = Path(__file__).resolve().parents[3] / ".env"
+load_dotenv(dotenv_path=env_path)
 
 load_dotenv()
 HF_FALLBACK_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
