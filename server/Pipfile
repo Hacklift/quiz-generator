@@ -23,6 +23,7 @@ pydantic-settings = "*"
 huggingface-hub = "*"
 rapidfuzz = "*"
 cryptography = "*"
+slowapi = "*"
 
 [dev-packages]
 pytest = "*"
