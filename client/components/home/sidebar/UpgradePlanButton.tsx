@@ -1,20 +1,20 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/router";
+import { useRouter, usePathname } from "next/navigation";
 import SidebarButton from "./SidebarButton";
 
 const UpgradePlanButton: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const isActive = pathname === "/#pricing";
 
   return (
     <SidebarButton
       label="Upgrade Plan"
       icon="🚀"
-      onClick={() => {
-        // Navigate to homepage and scroll to Pricing
-        router.push("/#pricing");
-      }}
+      onClick={() => router.push("/#pricing")}
+      isActive={isActive}
     />
   );
 };

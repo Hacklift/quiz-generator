@@ -18,15 +18,19 @@ async def create_saved_quiz(
     quiz: SavedQuizModel,
     current_user: UserResponseSchema = Depends(get_current_user),
 ):
-    print("Received quiz payload:", quiz.dict())
     try:
+        # ✅ Inject user_id before printing or saving
+        quiz.user_id = str(current_user.id)
+        print("Received quiz payload:", quiz.dict())
+
         quiz_id = await save_quiz(
-            user_id=str(current_user.id),
+            user_id=quiz.user_id,
             title=quiz.title,
             question_type=quiz.question_type,
             questions=quiz.questions,
         )
         return {"message": "Quiz saved successfully", "quiz_id": quiz_id}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

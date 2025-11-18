@@ -3,13 +3,23 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { saveQuiz } from "../../lib/functions/savedQuiz";
+import { useAuth } from "../../contexts/authContext";
+import SignInModal from "../auth/SignInModal";
+import { TokenService } from "../../lib/functions/tokenService";
 
 export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
+  const { user } = useAuth();
   const [showInput, setShowInput] = useState(false);
   const [quizTitle, setQuizTitle] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const handleSave = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
     if (!quizData || quizData.length === 0) {
       toast.error("❌ No questions found to save!");
       return;
@@ -23,6 +33,12 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
     const questionType =
       quizData[0]?.question_type || quizData[0]?.type || "unknown-type";
 
+    const token = TokenService.getAccessToken();
+    if (!token) {
+      toast.error("Authentication token missing. Please log in again.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -32,7 +48,8 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
         question_type: q.question_type || q.type || questionType,
       }));
 
-      await saveQuiz(quizTitle.trim(), questionType, formattedQuestions);
+      await saveQuiz(quizTitle.trim(), questionType, formattedQuestions, token);
+
       toast.success("✅ Quiz saved successfully!");
       setQuizTitle("");
       setShowInput(false);
@@ -80,6 +97,12 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
           </button>
         </div>
       )}
+
+      <SignInModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        switchToSignUp={() => {}}
+      />
     </div>
   );
 }

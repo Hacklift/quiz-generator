@@ -1,12 +1,18 @@
 // pages/_app.tsx
 import type { AppProps } from "next/app";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import SplashScreen from "../components/splash_screen/SplashScreen";
-import { AuthProvider } from "../contexts/authContext"; //
+import { AuthProvider } from "../contexts/authContext";
+import SignInModal from "../components/auth/SignInModal";
 import "../components/ui/global.css";
 
 export default function MyApp({ Component, pageProps }: AppProps) {
+  const [showSignInModal, setShowSignInModal] = useState(false);
+
+  const openSignInModal = () => setShowSignInModal(true);
+  const closeSignInModal = () => setShowSignInModal(false);
+
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       window.addEventListener("load", () => {
@@ -20,10 +26,16 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <AuthProvider>
-      {" "}
-      {/* Wrap everything in AuthProvider */}
       <SplashScreen />
-      <Component {...pageProps} />
+
+      <Component {...pageProps} openLoginModal={openSignInModal} />
+
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={closeSignInModal}
+        switchToSignUp={() => {}}
+      />
+
       <Toaster position="top-right" />
     </AuthProvider>
   );

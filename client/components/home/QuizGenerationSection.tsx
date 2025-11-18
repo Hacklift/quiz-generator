@@ -23,9 +23,11 @@ export default function QuizGenerationSection({
   setDifficultyLevel,
   token,
   setToken,
+  previousToken = "",
 }: QuizGenerationSectionProps & {
   token: string;
   setToken: (val: string) => void;
+  previousToken?: string;
 }) {
   return (
     <section className="w-full max-w-3xl mx-auto bg-white shadow rounded-xl px-6 py-8">
@@ -62,9 +64,14 @@ export default function QuizGenerationSection({
             type="text"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder="Enter your API token (optional)"
+            placeholder={
+              previousToken
+                ? `Previously used token: ${previousToken}`
+                : "Enter your API token (optional)"
+            }
             className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
           />
+
           <p className="text-xs text-gray-500 mt-1">
             Leave blank to use the default server API key.
           </p>

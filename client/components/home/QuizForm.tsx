@@ -3,6 +3,7 @@
 import { useState } from "react";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
+import { useAuth } from "../../contexts/authContext";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
@@ -13,13 +14,17 @@ export default function QuizForm() {
   const [numQuestions, setNumQuestions] = useState(1);
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
-  const [token, setToken] = useState(""); // optional
+  const previousToken =
+    typeof window !== "undefined"
+      ? localStorage.getItem("user_api_token") || undefined
+      : undefined;
+  const [token, setToken] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { user } = useAuth();
 
   const handleGenerateQuiz = async () => {
-    // ✅ Field-specific validation
     if (!profession) {
       setErrorMessage("Please enter a profession or topic for your quiz.");
       return;
@@ -35,13 +40,11 @@ export default function QuizForm() {
       return;
     }
 
-    // ✅ All good — clear previous errors
     setErrorMessage("");
     setLoading(true);
 
     try {
-      // ✅ Save token only if provided
-      if (token.trim()) {
+      if (!user && token.trim()) {
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
           { token },
@@ -57,13 +60,13 @@ export default function QuizForm() {
           num_questions: numQuestions,
           question_type: questionType,
           difficulty_level: difficultyLevel,
-          token: token.trim() || undefined, // optional
+          token: !user && token.trim() ? token.trim() : undefined,
         },
       );
 
       console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
 
-      const userId = "userId"; // Replace with actual auth value later
+      const userId = "userId";
       const source = data.source || "mock";
 
       const queryParams = new URLSearchParams({
@@ -104,6 +107,7 @@ export default function QuizForm() {
           setDifficultyLevel={setDifficultyLevel}
           token={token}
           setToken={setToken}
+          previousToken={previousToken}
         />
         {errorMessage && (
           <p className="text-red-500 mb-4 font-medium">{errorMessage}</p>

@@ -15,8 +15,10 @@ import {
   SaveQuizButton,
 } from "../../components/home";
 import { saveQuizToHistory } from "../../lib/functions/saveQuizToHistory";
+import { useAuth } from "../../contexts/authContext";
 
 const QuizDisplayPage: React.FC = () => {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const savedQuizId = searchParams.get("id");
   const questionType = searchParams.get("questionType") || "multichoice";
@@ -25,14 +27,14 @@ const QuizDisplayPage: React.FC = () => {
   const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
-  const userId = searchParams.get("userId") || "defaultUserId"; // dummy user until auth works
+  const userId = user?.id || "defaultUserId";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
-  const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
+  const [isQuizChecked, setIsQuizChecked] = useState(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const hasFetchedRef = useRef(false); // ✅ Prevent double fetch
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -43,9 +45,7 @@ const QuizDisplayPage: React.FC = () => {
         setIsLoading(true);
         let questions: any[] = [];
 
-        // ✅ Step 1: Check if a saved quiz was passed via localStorage
         const storedQuiz = localStorage.getItem("saved_quiz_view");
-
         if (storedQuiz) {
           const parsedQuiz = JSON.parse(storedQuiz);
           if (parsedQuiz?.questions?.length > 0) {
@@ -58,15 +58,12 @@ const QuizDisplayPage: React.FC = () => {
           }
         }
 
-        // ✅ Step 2: If there’s a savedQuizId in URL, fetch from API
         if (savedQuizId) {
           const { data } = await axios.get(
             `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/saved-quizzes/${savedQuizId}`,
           );
-
-          if (!data || !data.questions || data.questions.length === 0) {
+          if (!data?.questions?.length)
             throw new Error("No questions found for this saved quiz.");
-          }
 
           questions = data.questions.map((q: any) => ({
             ...q,
@@ -75,8 +72,7 @@ const QuizDisplayPage: React.FC = () => {
 
           toast.success("Loaded saved quiz successfully!");
         } else {
-          // ✅ Step 3: Fallback — generate a new quiz
-          const basePayload = {
+          const payload = {
             question_type: questionType,
             num_questions: numQuestions,
             profession,
@@ -87,28 +83,24 @@ const QuizDisplayPage: React.FC = () => {
 
           const { data } = await axios.post(
             `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
-            basePayload,
+            payload,
           );
 
-          if (data?.ai_down) {
+          if (data?.ai_down)
             toast.error(data.notification_message || "AI model unavailable.", {
               duration: 4000,
             });
-          }
-
           questions = data?.questions || [];
-          if (!Array.isArray(questions) || questions.length === 0) {
+          if (!Array.isArray(questions) || !questions.length)
             throw new Error("No quiz questions returned.");
-          }
-
           toast.success("Generated new quiz successfully!");
         }
 
         setQuizQuestions(questions);
         setUserAnswers(Array(questions.length).fill(""));
-      } catch (error: any) {
-        console.error("❌ Failed to fetch quiz questions:", error);
-        toast.error(error.message || "Failed to fetch quiz questions.");
+      } catch (err: any) {
+        console.error("❌ Failed to fetch quiz questions:", err);
+        toast.error(err.message || "Failed to fetch quiz questions.");
         setQuizQuestions([]);
         setUserAnswers([]);
       } finally {
@@ -144,12 +136,10 @@ const QuizDisplayPage: React.FC = () => {
         let correctAnswer = correct;
 
         if (q.question_type === "true-false") {
-          if (typeof userAnswer === "string") {
+          if (typeof userAnswer === "string")
             userAnswer = userAnswer.toLowerCase() === "true" ? 1 : 0;
-          }
-          if (typeof correctAnswer === "string") {
+          if (typeof correctAnswer === "string")
             correctAnswer = correctAnswer.toLowerCase() === "true" ? 1 : 0;
-          }
         }
 
         return {
@@ -179,22 +169,31 @@ const QuizDisplayPage: React.FC = () => {
       setQuizReport(transformed);
       setIsQuizChecked(true);
 
-      await saveQuizToHistory(userId, questionType, quizQuestions);
+      if (user && !savedQuizId) {
+        const meta = {
+          question_type: questionType,
+          num_questions: numQuestions,
+          difficulty_level: difficultyLevel,
+          profession,
+          audience_type: audienceType,
+          custom_instruction: customInstruction,
+        };
+
+        await saveQuizToHistory(userId, meta, quizQuestions);
+      }
     } catch (err) {
       console.error("Error checking answers:", err);
       toast.error("Failed to grade your quiz. Please try again.");
     }
   };
 
-  if (isLoading) {
+  if (isLoading)
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264]"></div>
       </div>
     );
-  }
-
-  if (!quizQuestions.length) {
+  if (!quizQuestions.length)
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-gray-600 text-center text-lg">
@@ -202,20 +201,16 @@ const QuizDisplayPage: React.FC = () => {
         </p>
       </div>
     );
-  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
       <NavBar />
-
       <main className="flex-1 flex justify-center px-4 sm:px-6 md:px-8 py-8">
         <div className="w-full max-w-4xl space-y-10">
-          {/* Quiz Questions */}
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
               {`${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
             </h1>
-
             <div className="space-y-6">
               {quizQuestions.map((q, i) => (
                 <div
@@ -234,7 +229,6 @@ const QuizDisplayPage: React.FC = () => {
                 </div>
               ))}
             </div>
-
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
               <CheckButton onClick={checkAnswers} />
               <SaveQuizButton quizData={quizQuestions} />
@@ -248,22 +242,16 @@ const QuizDisplayPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Quiz Results */}
           {isQuizChecked && (
             <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
               <h2 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-4">
                 My Quiz Result
               </h2>
-
               <div className="space-y-4">
                 {quizReport.map((r, i) => (
                   <div
                     key={i}
-                    className={`p-4 rounded-md border text-sm ${
-                      r.is_correct
-                        ? "border-green-200 bg-green-50"
-                        : "border-red-200 bg-red-50"
-                    }`}
+                    className={`p-4 rounded-md border text-sm ${r.is_correct ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}
                   >
                     <p>
                       <strong>Question:</strong> {r.question}
@@ -286,18 +274,18 @@ const QuizDisplayPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-
               <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-                <button className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-4 py-2 rounded-xl shadow-md transition text-sm">
-                  Upgrade Plan to Save your Quiz
-                </button>
+                {!user && (
+                  <button className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-4 py-2 rounded-xl shadow-md text-sm">
+                    Upgrade Plan to Save your Quiz
+                  </button>
+                )}
                 <NewQuizButton />
               </div>
             </section>
           )}
         </div>
       </main>
-
       <Footer />
     </div>
   );

@@ -1,4 +1,3 @@
-// context/authContext.tsx
 import {
   createContext,
   useContext,
@@ -12,12 +11,14 @@ import { ROUTES } from "../constants/patterns/routes";
 import { getProfile, logoutUser, TokenService } from "../lib";
 
 interface User {
+  id: string;
   username: string;
   email?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (
@@ -36,19 +37,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // Check if user is authenticated
-  const isAuthenticated = !!user && TokenService.hasTokens();
+  const isAuthenticated = !!user && !!TokenService.getAccessToken();
 
-  // Load user profile
   const loadUserProfile = useCallback(async () => {
     try {
       if (TokenService.hasTokens()) {
-        console.log("🔍 Loading user profile...");
         const profile = await getProfile();
-        console.log("✅ User profile loaded:", profile);
         setUser(profile);
       } else {
-        console.log("⚠️ No tokens found — user not authenticated.");
         setUser(null);
       }
     } catch (error) {
@@ -58,23 +54,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Login function - save tokens and load user
   const login = async (
     accessToken: string,
     refreshToken: string,
     tokenType: string = "bearer",
   ) => {
-    console.log("🔐 Logging in...");
     TokenService.setTokens(accessToken, refreshToken, tokenType);
-    console.log("💾 Tokens saved:", { accessToken, refreshToken, tokenType });
     await loadUserProfile();
   };
 
-  // Logout function
   const logout = async () => {
     try {
-      // Call backend logout endpoint to revoke refresh token
-      console.log("🚪 Logging out user...");
       await logoutUser();
     } catch (error) {
       console.error("Logout error:", error);
@@ -85,12 +75,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Refresh user data
   const refreshUser = async () => {
     await loadUserProfile();
   };
 
-  // Listen for token expiration event (triggered by axios interceptor)
   useEffect(() => {
     const handleTokenExpired = () => {
       setUser(null);
@@ -99,13 +87,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     window.addEventListener("token-expired", handleTokenExpired);
-
     return () => {
       window.removeEventListener("token-expired", handleTokenExpired);
     };
   }, [router]);
 
-  // Load user on mount
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
@@ -129,6 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
+        token: TokenService.getAccessToken(),
         isAuthenticated,
         isLoading,
         login,

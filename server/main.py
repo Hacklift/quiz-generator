@@ -25,8 +25,6 @@ from server.app.db.routes.save_quiz_history import router as save_quiz_router
 from server.app.db.routes.get_quiz_history import router as get_quiz_history_router
 from server.app.db.core.connection import startUp
 from server.app.quiz.routers.quiz import router as quiz_router
-from .app.db.routes.save_quiz_history import router as save_quiz_router
-from .app.db.routes.get_quiz_history import router as get_quiz_history_router
 from .app.db.routes.get_categories import router as get_categories_router
 from .app.db.routes.folder_routes import router as folder_routes
 from .app.db.core.connection import startUp

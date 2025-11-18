@@ -168,23 +168,28 @@ Now generate the quiz:
 # ================= MAIN FUNCTION =====================
 # =====================================================
 
+async def resolve_final_token(user_id: Optional[str], provided_token: Optional[str]):
+    if provided_token:
+        return provided_token
+
+    if user_id:
+        saved = await get_user_token(user_id)
+        if saved:
+            return saved
+
+    return HF_FALLBACK_TOKEN
+
+
 async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Async wrapper for HuggingFace call.
-    """
     loop = asyncio.get_event_loop()
 
-    # 1. Get token from DB (for dev, hardcode user_id)
-    user_id = "dev_user"  # TODO: replace with real auth later
-    user_token = await get_user_token(user_id)
+    user_id = payload.get("user_id")           # logged-in user id
+    provided_token = payload.get("token")      # one-time token from frontend
 
-    # 2. Use user’s token if exists, otherwise fallback
-    final_token = user_token if user_token else HF_FALLBACK_TOKEN
+    final_token = await resolve_final_token(user_id, provided_token)
 
-    # 3. Build client with the chosen token
     client = InferenceClient(token=final_token)
 
-    # 4. Run HuggingFace call
     response = await loop.run_in_executor(
         None,
         functools.partial(
@@ -198,7 +203,7 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
                     payload.get("difficulty_level", "medium"),
                     int(payload.get("num_questions", 5)),
                     payload.get("audience_type", "general"),
-                    payload.get("custom_instruction"),
+                    payload.get("custom_instruction")
                 )
             }],
             max_tokens=2048,
@@ -207,10 +212,10 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
     )
 
     response_text = response.choices[0].message.content
-    print("\n--- Raw Model Response ---\n", response_text, "\n--------------------------\n")
 
-    # 5. Parse response
     qtype = payload.get("question_type", "multichoice").lower()
+
+    # --- parsing logic stays same ---
     if qtype == "multichoice":
         questions = parse_multichoice(response_text)
     elif qtype == "true-false":
@@ -220,12 +225,14 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
     elif qtype == "short-answer":
         questions = parse_short_answer(response_text)
     else:
-        return {"error": f"Unsupported question type: {qtype}", "raw": response_text}
+        return {"error": f"Unsupported question type: {qtype}"}
 
     return {
-        "message": "Quiz generated successfully",
         "questions": questions,
         "raw_response": response_text,
-        "source": "user_token" if user_token else "default_env",  # 👈 helpful metadata
-        **payload,
+        "source": (
+            "temporary_token" if provided_token else
+            "user_saved_token" if user_id else
+            "default_env"
+        )
     }

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 from typing import List, Optional
 from datetime import datetime, timezone
+from bson import ObjectId
 from enum import Enum
 import re
 
@@ -27,9 +28,9 @@ class UserRegisterSchema(BaseModel):
 
 
 class UserResponseSchema(BaseModel):
-    id: str
+    id: str = Field(alias="_id")
     username: str
-    email: EmailStr
+    email: str
     full_name: Optional[str] = None
     is_active: bool
     is_verified: bool
@@ -38,6 +39,15 @@ class UserResponseSchema(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
 
+    class Config:
+        allow_population_by_field_name = True
+        json_encoders = {ObjectId: str}
+
+    @classmethod
+    def model_validate(cls, obj):
+        if "_id" in obj and isinstance(obj["_id"], ObjectId):
+            obj["_id"] = str(obj["_id"])
+        return cls(**obj)
 
 class UserBaseSchema(BaseModel):
     username: str

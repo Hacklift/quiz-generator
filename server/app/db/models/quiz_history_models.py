@@ -1,5 +1,3 @@
-# models/quiz_history_model.py
-
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
@@ -7,15 +5,27 @@ from bson import ObjectId
 
 class QuizQuestionModel(BaseModel):
     question: str
-    options: Optional[List[str]] = None  # Only for multichoice questions
-    answer: str
-    question_type: str  # e.g., "multichoice", "open-ended"
+    options: Optional[List[str]] = None
+    answer: str  
+    question_type: str
 
 class QuizHistoryModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
-    user_id: Optional[str] = None  # <-- Optional for now, will be required when auth is added
+
+    user_id: Optional[str] = None  # Filled automatically by JWT auth
+
+    # Quiz metadata
+    quiz_name: Optional[str] = None
     question_type: str
+    num_questions: Optional[int] = None
+    difficulty_level: Optional[str] = None
+    profession: Optional[str] = None
+    audience_type: Optional[str] = None
+    custom_instruction: Optional[str] = None
+
+    # Questions
     questions: List[QuizQuestionModel]
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:

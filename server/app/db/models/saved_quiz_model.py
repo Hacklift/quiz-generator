@@ -12,7 +12,7 @@ class QuizQuestionModel(BaseModel):
 
 class SavedQuizModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
-    user_id: str  
+    user_id: Optional[str] = None 
     title: str
     question_type: str
     questions: List[QuizQuestionModel]

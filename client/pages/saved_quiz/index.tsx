@@ -6,16 +6,17 @@ import { useRouter } from "next/navigation";
 import {
   getSavedQuizzes,
   deleteSavedQuiz,
+  saveQuiz,
 } from "../../lib/functions/savedQuiz";
 import {
   getUserFolders,
   createFolder,
   addQuizToFolder,
 } from "../../lib/functions/folders";
-import { getProfile } from "../../lib/functions/auth";
-import { TokenService } from "../../lib/functions/tokenService";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
+import { useAuth } from "../../contexts/authContext";
+import SignInModal from "../../components/auth/SignInModal";
 
 interface QuizQuestion {
   question: string;
@@ -169,8 +170,8 @@ const AddToFolderModal = ({
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];
   onDeleteClick: (quizId: string) => void;
-  userId: string;
-}> = ({ savedQuizzes, onDeleteClick, userId }) => {
+  token: string;
+}> = ({ savedQuizzes, onDeleteClick, token }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -187,9 +188,6 @@ const DisplaySavedQuizzesPage: React.FC<{
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
     try {
-      const user = await getProfile();
-      const token = user?.token;
-      if (!token) throw new Error("No auth token found.");
       await deleteSavedQuiz(confirmDeleteId, token);
       toast.success("Quiz deleted successfully!");
       onDeleteClick(confirmDeleteId);
@@ -200,7 +198,23 @@ const DisplaySavedQuizzesPage: React.FC<{
     }
   };
 
-  const handleViewQuiz = (quiz: SavedQuiz) => {
+  const handleViewQuiz = async (quiz: SavedQuiz) => {
+    if (!token) {
+      toast.error("Authentication required to view this quiz.");
+      return;
+    }
+
+    const questionType = quiz.question_type || "unknown-type";
+
+    if (quiz.questions && quiz.questions.length > 0) {
+      try {
+        await saveQuiz(quiz.title, questionType, quiz.questions, token);
+      } catch (err) {
+        console.error("Failed to save quiz:", err);
+        toast.error("Failed to load quiz.");
+      }
+    }
+
     router.push(`/quiz_display?id=${quiz._id}`, { scroll: true });
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
   };
@@ -254,7 +268,30 @@ const DisplaySavedQuizzesPage: React.FC<{
                       <h2 className="text-xl font-bold text-[#0F2654]">
                         {quiz.title}
                       </h2>
+
+                      {quiz.questions && quiz.questions.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          {quiz.questions.map((q, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3 border rounded-lg bg-gray-50"
+                            >
+                              <p className="font-medium">
+                                {idx + 1}. {q.question}
+                              </p>
+                              {q.options && q.options.length > 0 && (
+                                <ul className="list-disc list-inside mt-1 text-gray-700">
+                                  {q.options.map((opt, i) => (
+                                    <li key={i}>{opt}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex gap-2">
                       <button
                         onClick={() => setConfirmDeleteId(quiz._id)}
@@ -270,34 +307,6 @@ const DisplaySavedQuizzesPage: React.FC<{
                       </button>
                     </div>
                   </div>
-
-                  {quiz.questions && quiz.questions.length > 0 ? (
-                    quiz.questions.map((q, idx) => (
-                      <div key={idx} className="mb-4">
-                        <h3 className="font-semibold text-gray-800 text-base sm:text-lg mb-1">
-                          {idx + 1}. {q.question}
-                        </h3>
-                        {q.options && (
-                          <ul className="ml-4 list-disc list-inside text-sm text-gray-700">
-                            {q.options.map((opt, optIdx) => (
-                              <li key={optIdx} className="py-0.5">
-                                {opt}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {q.correct_answer && (
-                          <p className="mt-1 text-sm text-[#0F2654]">
-                            <strong>Answer:</strong> {q.correct_answer}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      No questions found for this quiz.
-                    </p>
-                  )}
                 </div>
               </div>
             ))
@@ -306,15 +315,13 @@ const DisplaySavedQuizzesPage: React.FC<{
       </main>
       <Footer />
 
-      {/* Add-to-Folder Modal */}
       <AddToFolderModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         selectedQuizIds={selectedQuizIds}
-        userId={userId}
+        userId="" // Optional: only needed for folder API
       />
 
-      {/* Delete Confirmation */}
       {confirmDeleteId && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full">
@@ -347,30 +354,18 @@ const DisplaySavedQuizzesPage: React.FC<{
 };
 
 export default function SavedQuizzes() {
+  const { user, token, isAuthenticated, isLoading } = useAuth();
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const user = await getProfile();
-        setUserId(user.id || user._id);
-      } catch (err) {
-        console.error("User not authenticated:", err);
-        toast.error("Please log in to access saved quizzes.");
-      }
-    };
-    init();
-  }, []);
-
-  useEffect(() => {
-    if (!userId) return;
+    if (!isAuthenticated || !token) {
+      setLoading(false);
+      return;
+    }
     const fetchSaved = async () => {
       try {
-        const user = await getProfile();
-        const token = user?.token;
-        if (!token) throw new Error("No auth token found.");
         const quizzes = await getSavedQuizzes(token);
         setSavedQuizzes(quizzes);
       } catch (err) {
@@ -381,18 +376,31 @@ export default function SavedQuizzes() {
       }
     };
     fetchSaved();
-  }, [userId]);
+  }, [token, isAuthenticated]);
 
-  const handleDeleteFromList = (quizId: string) => {
-    setSavedQuizzes((prev) => prev.filter((q) => q._id !== quizId));
-  };
-
-  if (!userId) {
+  if (!isAuthenticated && !isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen text-center text-gray-700">
-        <h1 className="text-2xl font-bold mb-2">Authentication Required</h1>
-        <p>Please log in to view your saved quizzes.</p>
-      </div>
+      <>
+        <div className="flex flex-col items-center justify-center min-h-screen text-center text-gray-700">
+          <h1 className="text-2xl font-bold mb-2">Authentication Required</h1>
+          <p>
+            Please{" "}
+            <span
+              onClick={() => setIsLoginOpen(true)}
+              className="text-blue-600 underline cursor-pointer"
+            >
+              log in
+            </span>{" "}
+            to view your saved quizzes.
+          </p>
+        </div>
+
+        <SignInModal
+          isOpen={isLoginOpen}
+          onClose={() => setIsLoginOpen(false)}
+          switchToSignUp={() => {}}
+        />
+      </>
     );
   }
 
@@ -407,8 +415,10 @@ export default function SavedQuizzes() {
       ) : (
         <DisplaySavedQuizzesPage
           savedQuizzes={savedQuizzes}
-          onDeleteClick={handleDeleteFromList}
-          userId={userId}
+          onDeleteClick={(id) =>
+            setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
+          }
+          token={token!}
         />
       )}
     </Suspense>

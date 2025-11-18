@@ -10,29 +10,19 @@ from server.app.db.crud.update_quiz_history import update_quiz_history
 from server.app.db.crud.ai_generated_quiz_crud import save_ai_generated_quiz
 
 
-async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") -> Dict:
-    """
-    Generate quiz questions using Hugging Face AI.
-    Falls back to mock data if AI generation fails.
-    Notifies frontend when AI is down via 'ai_down' flag and message.
-    Automatically saves AI-generated quizzes to the database.
-    """
+async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dict:
     ai_down = False
     notification_message = None
     ai_quiz_payload = None
     final_questions = []
 
     try:
-        # === 1. Attempt Hugging Face AI generation ===
         ai_payload = request.dict()
-
-        # ✅ Await if this is an async function
         response = await generate_quiz_with_huggingface(ai_payload)
-        
+
         questions = response.get("questions") if response else None
 
-        # Validate Hugging Face response
-        if not questions or isinstance(questions, dict) and "error" in questions:
+        if not questions or (isinstance(questions, dict) and "error" in questions):
             raise ValueError("Invalid Hugging Face response")
 
         if len(questions) < request.num_questions:
@@ -40,13 +30,11 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
 
         final_questions = questions[:request.num_questions]
 
-        # Ensure question_type is added to each question
         for q in final_questions:
             q["question_type"] = request.question_type
 
         source = "huggingface"
 
-        # Prepare payload for saving to DB
         ai_quiz_payload = {
             "profession": request.profession,
             "question_type": request.question_type,
@@ -58,46 +46,39 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
         }
 
     except Exception as e:
-        # === 2. Notify UI that AI is down ===
         ai_down = True
         notification_message = "AI model is currently unavailable. Using mock questions instead."
         logging.warning(f"Hugging Face fallback triggered: {e}")
 
-        # === 3. Fallback to mock quiz generation ===
-        question_type = request.question_type
-        num_questions = request.num_questions
+        mock_data = get_mock_questions_by_type(request.question_type, request.num_questions)
 
-        mock_data = get_mock_questions_by_type(question_type, num_questions)
         if not mock_data:
             raise HTTPException(
                 status_code=400,
-                detail=f"No mock data for question type: {question_type}"
+                detail=f"No mock data for question type: {request.question_type}"
             )
 
-        if num_questions > len(mock_data):
+        if request.num_questions > len(mock_data):
             raise HTTPException(
                 status_code=400,
-                detail=f"Requested {num_questions} questions, but only {len(mock_data)} available in mock data."
+                detail=f"Requested {request.num_questions} but only {len(mock_data)} available."
             )
 
-        final_questions = random.sample(mock_data, num_questions)
+        final_questions = random.sample(mock_data, request.num_questions)
 
         for q in final_questions:
-            q["question_type"] = question_type
+            q["question_type"] = request.question_type
 
         source = "mock"
 
-    # === 4. Update quiz history ===
-    update_quiz_history(user_id, final_questions)
+    await update_quiz_history(user_id, final_questions)
 
-    # === 5. Save AI-generated quiz if successful ===
     if source == "huggingface" and ai_quiz_payload:
         try:
             await save_ai_generated_quiz(ai_quiz_payload)
         except Exception as db_error:
-            logging.error(f"Failed to save AI-generated quiz to DB: {db_error}")
+            logging.error(f"Failed to save AI-generated quiz: {db_error}")
 
-    # === 6. Final response ===
     result = {
         "source": source,
         "questions": final_questions,
@@ -105,5 +86,5 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
         "notification_message": notification_message
     }
 
-    logging.warning(f"Final API Response: {result}")  # ✅ Now this will actually log
+    logging.warning(f"Final API Response: {result}")
     return result
