@@ -11,6 +11,7 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./client:/client
+      - /client/node_modules
     environment:
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
       - NEXT_PUBLIC_SSR_API_BASE_URL=http://server:8000
@@ -27,15 +28,11 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./server:/server
+    env_file:
+      - .env
     environment:
-      - SENDER_EMAIL=${SENDER_EMAIL}
-      - SENDER_PASSWORD=${SENDER_PASSWORD}
-      - EMAIL_HOST=${EMAIL_HOST}
-      - EMAIL_PORT=${EMAIL_PORT}
-      - SHARE_URL=${SHARE_URL}
-      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
-      - ALLOWED_ORIGINS=http://localhost:3000
       - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
       - PYTHONPATH=/
     command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}", "--reload"]
     depends_on:
@@ -64,7 +61,6 @@ services:
       - redis
       - server 
 
-
   mongodb:
     image: mongo:latest
     ports:
@@ -80,6 +76,7 @@ services:
       - ./server:/server
     environment:
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - FERNET_KEY=${FERNET_KEY}
     command: ["python", "-m", "app.seed"]
     depends_on:
       - server
