@@ -18,7 +18,7 @@ def generate_pdf(data: List[dict]) -> BytesIO:
         question = f"Question: {item['question']}"
         y_position = draw_wrapped_text(pdf, question, margin, y_position, line_width)
 
-        if 'options' in item:
+        if (item.get("options") or "").strip():
             options = "Options: " + ", ".join(item['options'])
             y_position = draw_wrapped_text(pdf, options, margin, y_position, line_width)
 

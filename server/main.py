@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 
 from .api import healthcheck
-from .api.v1.crud import download_quiz, generate_quiz, get_user_quiz_history
+from .api.v1.crud import generate_quiz, get_user_quiz_history
+from .api.v1.crud.downloads.download_quiz import download_mock_quiz, download_quiz_by_id
 from .app.db.routes import router as db_router
 from .app.db.core.connection import startUp, database
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -112,10 +113,24 @@ def get_user_quiz_history_handler(query: GetUserQuizHistoryQuery = Body(...)) ->
     logger.info("Received query: %s", query)
     return get_user_quiz_history(query.user_id)
 
+
 @app.get("/download-quiz")
 async def download_quiz_handler(query: DownloadQuizQuery = Depends()) -> StreamingResponse:
     logger.info("Received query: %s", query)
-    return download_quiz(query.format, query.question_type, query.num_question)
+
+    if query.quiz_id:
+        return await download_quiz_by_id(
+            quiz_id=query.quiz_id,
+            file_format=query.format,
+            user_id=query.user_id
+        )
+
+    return download_mock_quiz(
+        query.format,
+        query.question_type,
+        query.num_question
+    )
+
 
 app.include_router(save_quiz_router, prefix="/api")
 app.include_router(get_quiz_history_router, prefix="/api")

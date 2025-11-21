@@ -24,11 +24,13 @@ const QuizDisplayPage: React.FC = () => {
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
   const userId = searchParams.get("userId") || "defaultUserId"; // ✅ dummy user until auth works
+  const token = searchParams.get("token") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
+  const [quizId, setQuizId] = useState("");
 
   useEffect(() => {
     const fetchQuizQuestions = async () => {
@@ -39,6 +41,7 @@ const QuizDisplayPage: React.FC = () => {
         difficulty_level: difficultyLevel,
         audience_type: audienceType,
         custom_instruction: customInstruction,
+        token: token,
       };
 
       try {
@@ -57,6 +60,7 @@ const QuizDisplayPage: React.FC = () => {
           toast.error(data.notification_message || "AI model unavailable.", {
             duration: 4000,
           });
+          setQuizId("");
         }
 
         const questions = data?.questions || [];
@@ -66,6 +70,7 @@ const QuizDisplayPage: React.FC = () => {
 
         setQuizQuestions(questions);
         setUserAnswers(Array(questions.length).fill(""));
+        setQuizId(data?.quiz_id);
       } catch (error) {
         console.error("❌ Failed to fetch quiz questions:", error);
         toast.error("Failed to fetch quiz questions. Please try again later.");
@@ -178,6 +183,7 @@ const QuizDisplayPage: React.FC = () => {
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
               <CheckButton onClick={checkAnswers} />
               <DownloadQuizButton
+                quizId={quizId}
                 userId={userId}
                 question_type={questionType}
                 numQuestion={numQuestions}

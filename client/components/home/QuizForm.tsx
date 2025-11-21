@@ -30,29 +30,7 @@ export default function QuizForm() {
     setErrorMessage("");
 
     try {
-      // ✅ Save the token first before requesting quiz generation
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
-        { token },
-      );
-
-      const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
-        {
-          profession,
-          audience_type: audienceType,
-          custom_instruction: customInstruction,
-          num_questions: numQuestions,
-          question_type: questionType,
-          difficulty_level: difficultyLevel,
-          token, // ✅ send token in request too (optional redundancy)
-        },
-      );
-
-      console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
-
       const userId = "userId"; // Replace with actual auth value later
-      const source = data.source || "mock"; // ✅ dynamically set from backend
 
       const queryParams = new URLSearchParams({
         userId,
@@ -62,7 +40,7 @@ export default function QuizForm() {
         customInstruction,
         audienceType,
         difficultyLevel,
-        source,
+        token,
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
@@ -90,8 +68,8 @@ export default function QuizForm() {
           setQuestionType={setQuestionType}
           difficultyLevel={difficultyLevel}
           setDifficultyLevel={setDifficultyLevel}
-          token={token} // ✅ pass token
-          setToken={setToken} // ✅ pass setToken
+          token={token}
+          setToken={setToken}
         />
         {errorMessage && <p className="text-red-500 mb-4">{errorMessage}</p>}
         <GenerateButton onClick={handleGenerateQuiz} loading={loading} />
