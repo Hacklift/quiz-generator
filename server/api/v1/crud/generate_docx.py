@@ -7,7 +7,7 @@ def generate_docx(data: List[dict]):
     doc = Document() 
     for item in data:
         doc.add_paragraph(f"Question: {item['question']}")
-        if (item.get("options") or "").strip():
+        if item.get("options"):
             doc.add_paragraph("Options: " + ", ".join(item['options']))
         doc.add_paragraph(f"Answer: {item['answer']}")
         doc.add_paragraph("")  
