@@ -28,8 +28,7 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [loading, setLoading] = useState(false);
-  const userId = "dummy_user_123"; // placeholder until auth integration
-
+  const userId = "dummy_user_123";
   useEffect(() => {
     if (isOpen) {
       (async () => {
@@ -56,18 +55,15 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
       setLoading(true);
       let targetFolderId = selectedFolderId;
 
-      // ✅ Create new folder if user typed a name
       if (isCreatingNew && newFolderName.trim()) {
         const newFolder = await createFolder(userId, newFolderName);
         targetFolderId = newFolder._id;
       }
 
-      // ✅ Move quiz
       await moveQuiz(quiz._id, sourceFolderId, targetFolderId);
 
       toast.success("Quiz moved successfully");
 
-      // ✅ Trigger folder refresh after successful move
       if (onQuizMoved) onQuizMoved();
 
       onClose();

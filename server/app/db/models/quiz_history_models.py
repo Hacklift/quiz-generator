@@ -12,9 +12,8 @@ class QuizQuestionModel(BaseModel):
 class QuizHistoryModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
 
-    user_id: Optional[str] = None  # Filled automatically by JWT auth
+    user_id: Optional[str] = None  
 
-    # Quiz metadata
     quiz_name: Optional[str] = None
     question_type: str
     num_questions: Optional[int] = None
@@ -23,7 +22,6 @@ class QuizHistoryModel(BaseModel):
     audience_type: Optional[str] = None
     custom_instruction: Optional[str] = None
 
-    # Questions
     questions: List[QuizQuestionModel]
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

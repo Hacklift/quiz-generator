@@ -44,7 +44,6 @@ async def ensure_blacklist_indexes(blacklisted_tokens_collection: AsyncIOMotorCo
     await blacklisted_tokens_collection.create_index("expires_at")
 async def ensure_ai_quiz_indexes(ai_generated_quizzes_collection: AsyncIOMotorCollection):
     """Indexes for the AI-generated quizzes collection."""
-    # Compound unique index: no two identical quizzes with same title and questions
     await ai_generated_quizzes_collection.create_index(
         [("title", 1), ("questions", 1)],
         unique=True

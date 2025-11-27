@@ -1,7 +1,6 @@
 from rapidfuzz import fuzz
 
 def fuzzy_similarity(a, b):
-    """Returns a similarity score (0–100) using fuzzy matching."""
     return fuzz.token_set_ratio(str(a), str(b))
 
 def grade_mock_answers(user_answers):

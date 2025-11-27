@@ -36,7 +36,6 @@ const NavBar: React.FC = () => {
 
   return (
     <>
-      {/* ── Sidebar Toggle ── */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         className="fixed top-4 left-4 z-[100] text-[#0F2654] text-2xl focus:outline-none bg-[#E0E2E5] p-2 rounded-full shadow-md"
@@ -44,7 +43,6 @@ const NavBar: React.FC = () => {
         {isSidebarOpen ? <X /> : <Menu />}
       </button>
 
-      {/* ── Sidebar ── */}
       <div
         className={`
           fixed top-0 left-0 h-full bg-[#F5F5F5] shadow-md z-50
@@ -56,7 +54,6 @@ const NavBar: React.FC = () => {
         <Sidebar onBrowseClick={() => setIsBrowseModalOpen(true)} />
       </div>
 
-      {/* ── Top Navigation Bar ── */}
       <nav className="bg-[#E0E2E5] shadow-md fixed top-0 left-0 right-0 z-40 h-16 flex items-center">
         <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 md:px-8 flex items-center justify-between">
           <Link
@@ -66,14 +63,12 @@ const NavBar: React.FC = () => {
             HQuiz
           </Link>
 
-          {/* ── Desktop/Tablet Links ── */}
           <div className="hidden md:flex items-center space-x-8">
             <QuizDropdown />
             <PricingLink />
             <HowItWorksLink />
           </div>
 
-          {/* ── Desktop Buttons ── */}
           <div className="hidden md:flex items-center space-x-4">
             <NavGenerateQuizButton />
             {!isLoading && (
@@ -100,7 +95,6 @@ const NavBar: React.FC = () => {
             )}
           </div>
 
-          {/* ── Mobile Hamburger ── */}
           <button
             onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
             className="md:hidden text-[#0F2654] text-2xl focus:outline-none p-2 rounded-full"
@@ -113,7 +107,6 @@ const NavBar: React.FC = () => {
 
       <div className="h-16" />
 
-      {/* ── Mobile Dropdown ── */}
       <div
         className={`
           fixed top-16 left-0 w-full bg-white shadow-md z-30
@@ -161,7 +154,6 @@ const NavBar: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Modals ── */}
       <SignUpModal
         isOpen={isSignUpOpen}
         onClose={() => setIsSignUpOpen(false)}

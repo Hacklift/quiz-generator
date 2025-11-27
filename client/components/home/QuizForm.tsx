@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
 import { useAuth } from "../../contexts/authContext";
@@ -14,15 +14,48 @@ export default function QuizForm() {
   const [numQuestions, setNumQuestions] = useState(1);
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
-  const previousToken =
-    typeof window !== "undefined"
-      ? localStorage.getItem("user_api_token") || undefined
-      : undefined;
   const [token, setToken] = useState("");
+  const [previousToken, setPreviousToken] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
   const router = useRouter();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const savedLocal = localStorage.getItem("user_api_token");
+    if (savedLocal) setPreviousToken(savedLocal);
+
+    const loadFromBackend = async () => {
+      if (user === undefined) return;
+      if (!user) return;
+      const accessToken = localStorage.getItem("access_token");
+      if (!accessToken) return;
+
+      try {
+        const res = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            withCredentials: true,
+          },
+        );
+
+        if (res.data?.token) {
+          setPreviousToken(res.data.token);
+          localStorage.setItem("user_api_token", res.data.token);
+        }
+      } catch (e: any) {
+        if (e.response?.status !== 404) {
+          console.warn("Error fetching user token:", e);
+        }
+      }
+    };
+
+    loadFromBackend();
+  }, [user]);
 
   const handleGenerateQuiz = async () => {
     if (!profession) {
@@ -44,11 +77,21 @@ export default function QuizForm() {
     setLoading(true);
 
     try {
-      if (!user && token.trim()) {
+      if (user && token.trim()) {
+        const accessToken = localStorage.getItem("access_token");
+
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
           { token },
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            withCredentials: true,
+          },
         );
+
+        localStorage.setItem("user_api_token", token);
       }
 
       const { data } = await axios.post(
@@ -60,11 +103,9 @@ export default function QuizForm() {
           num_questions: numQuestions,
           question_type: questionType,
           difficulty_level: difficultyLevel,
-          token: !user && token.trim() ? token.trim() : undefined,
+          token: token.trim() ? token.trim() : undefined,
         },
       );
-
-      console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
 
       const userId = "userId";
       const source = data.source || "mock";
@@ -82,7 +123,6 @@ export default function QuizForm() {
 
       router.push(`/quiz_display?${queryParams}`);
     } catch (error) {
-      console.error(error);
       setErrorMessage("Failed to generate quiz. Please try again.");
     } finally {
       setLoading(false);
@@ -109,9 +149,11 @@ export default function QuizForm() {
           setToken={setToken}
           previousToken={previousToken}
         />
+
         {errorMessage && (
           <p className="text-red-500 mb-4 font-medium">{errorMessage}</p>
         )}
+
         <GenerateButton onClick={handleGenerateQuiz} loading={loading} />
       </form>
     </div>

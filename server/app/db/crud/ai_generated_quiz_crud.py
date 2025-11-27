@@ -14,13 +14,10 @@ async def save_ai_generated_quiz(quiz_data: dict):
     collection = get_ai_generated_quizzes_collection()
 
     try:
-        # ✅ Convert to Pydantic model
         new_quiz = AIGeneratedQuiz(**quiz_data)
 
-        # ✅ Serialize questions for safe querying
         questions_serialized = jsonable_encoder(new_quiz.questions)
 
-        # ✅ Check for duplicate quiz by questions
         existing_quiz = await collection.find_one({"questions": questions_serialized})
         if existing_quiz:
             logger.info("Duplicate quiz detected based on identical questions. Skipping save.")
@@ -29,10 +26,8 @@ async def save_ai_generated_quiz(quiz_data: dict):
                 "id": existing_quiz["id"],
             }
 
-        # ✅ Prepare full quiz for saving
         quiz_to_save = jsonable_encoder(new_quiz.dict())
 
-        # ✅ Insert into MongoDB
         await collection.insert_one(quiz_to_save)
 
         logger.info(f"Quiz saved successfully with id: {new_quiz.id}")

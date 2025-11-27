@@ -26,7 +26,6 @@ const FolderCard: React.FC<FolderCardProps> = ({
         isSelected ? "border-navy-600 bg-blue-50" : "border-gray-200 bg-white"
       }`}
     >
-      {/* Checkbox in corner */}
       <div className="absolute top-4 right-4">
         <input
           type="checkbox"
@@ -36,7 +35,6 @@ const FolderCard: React.FC<FolderCardProps> = ({
         />
       </div>
 
-      {/* Folder name and info */}
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-navy-900 truncate">
           {folder.name}
@@ -47,7 +45,6 @@ const FolderCard: React.FC<FolderCardProps> = ({
         <p className="text-xs text-gray-400 mt-1">Created: {formattedDate}</p>
       </div>
 
-      {/* 🟢 Open Folder Button — clearly visible */}
       <div className="mt-4">
         <Link href={`/folders/${folder._id}`} className="block">
           <button

@@ -8,7 +8,7 @@ class FolderModel(BaseModel):
     id: Optional[str] = Field(default_factory=lambda: str(ObjectId()))
     user_id: str
     name: str
-    quizzes: List[Any] = []  # <-- allow full quiz objects, not just IDs
+    quizzes: List[Any] = []  
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

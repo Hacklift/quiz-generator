@@ -1,4 +1,3 @@
-# routers/quiz.py
 from fastapi import APIRouter, HTTPException, Query
 from typing import List
 
@@ -9,13 +8,10 @@ from server.app.quiz.utils.grading import grade_answers
 
 router = APIRouter()
 
-# Generate quiz (AI or mock fallback)
 @router.post("/get-questions", response_model=QuizResponse)
 async def get_quiz(request: QuizRequest):
-    return await get_questions(request)  # ✅ Await required here
+    return await get_questions(request)  
 
-
-# Grade quiz answers
 @router.post("/grade-answers")
 async def grade_user_answers(
     user_answers: List[UserAnswer],

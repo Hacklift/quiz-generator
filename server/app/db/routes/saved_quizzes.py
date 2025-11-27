@@ -12,14 +12,12 @@ from ....app.db.schemas.user_schemas import UserResponseSchema
 
 router = APIRouter(prefix="/saved-quizzes", tags=["Saved Quizzes"])
 
-# ✅ Create (Save quiz)
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_saved_quiz(
     quiz: SavedQuizModel,
     current_user: UserResponseSchema = Depends(get_current_user),
 ):
     try:
-        # ✅ Inject user_id before printing or saving
         quiz.user_id = str(current_user.id)
         print("Received quiz payload:", quiz.dict())
 
@@ -34,7 +32,6 @@ async def create_saved_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ✅ Get all saved quizzes for user
 @router.get("/", status_code=status.HTTP_200_OK)
 async def list_saved_quizzes(
     current_user: UserResponseSchema = Depends(get_current_user),
@@ -45,7 +42,6 @@ async def list_saved_quizzes(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ✅ Delete saved quiz
 @router.delete("/{quiz_id}", status_code=status.HTTP_200_OK)
 async def remove_saved_quiz(
     quiz_id: str,
@@ -59,7 +55,6 @@ async def remove_saved_quiz(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ✅ Get a specific saved quiz by ID
 @router.get("/{quiz_id}", status_code=status.HTTP_200_OK)
 async def get_saved_quiz(
     quiz_id: str,

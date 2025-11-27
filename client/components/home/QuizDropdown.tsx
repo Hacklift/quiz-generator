@@ -16,9 +16,7 @@ const QuizDropdown: React.FC = () => {
         <ChevronDown className="ml-1" size={20} />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5">
-          {/* menu items will go here */}
-        </div>
+        <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5"></div>
       )}
     </div>
   );

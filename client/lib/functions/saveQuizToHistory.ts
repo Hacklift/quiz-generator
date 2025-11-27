@@ -15,16 +15,15 @@ export async function saveQuizToHistory(
 ) {
   const token = TokenService.getAccessToken();
 
-  // Normalize question format to match backend
   const formattedQuestions = questions.map((q: any) => ({
     question: q.question,
     options: q.options || null,
-    answer: q.answer || q.correct_answer, // <--- REQUIRED FIX
+    answer: q.answer || q.correct_answer,
     question_type: q.question_type,
   }));
 
   const payload = {
-    user_id: userId, // Backend overwrites it — still allowed
+    user_id: userId,
     quiz_name: `${meta.question_type} Quiz`,
     question_type: meta.question_type,
     num_questions: meta.num_questions,

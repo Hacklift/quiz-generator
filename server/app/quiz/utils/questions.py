@@ -71,7 +71,11 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
 
         source = "mock"
 
-    await update_quiz_history(user_id, final_questions)
+    await update_quiz_history({
+        "user_id": user_id,
+        "questions": final_questions
+        })
+
 
     if source == "huggingface" and ai_quiz_payload:
         try:

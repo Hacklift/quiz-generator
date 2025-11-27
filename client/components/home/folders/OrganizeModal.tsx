@@ -70,7 +70,6 @@ function OrganizeModal<
               Choose how you want to organize:
             </p>
             <div className="flex flex-col gap-3">
-              {/* 📅 By Date */}
               <div>
                 <button
                   onClick={() =>
@@ -104,7 +103,6 @@ function OrganizeModal<
                 )}
               </div>
 
-              {/* 🔤 By Alphabet */}
               <div>
                 <button
                   onClick={() =>
@@ -138,7 +136,6 @@ function OrganizeModal<
                 )}
               </div>
 
-              {/* ✋ Manual Reorder */}
               <button
                 onClick={() => setMode("manual")}
                 className="w-full flex justify-between items-center border rounded-lg py-2 px-3 hover:bg-gray-100 text-sm"

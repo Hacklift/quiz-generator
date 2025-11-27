@@ -1,6 +1,4 @@
 import string
-
-# Raw mock data
 _raw_mock_questions = [
     {
         "question": "What is the capital of France?",
@@ -62,10 +60,8 @@ def mock_multiple_choice_questions():
         options = q["options"]
         answer = q["answer"]
 
-        # Add letter prefixes to options (A), (B), (C), (D)
         prefixed_options = [f"{letter}) {opt}" for letter, opt in zip(string.ascii_uppercase, options)]
 
-        # Match correct answer with its prefixed version
         updated_question = {
             "question": q["question"],
             "options": prefixed_options,

@@ -1,4 +1,3 @@
-// components/sidebar/HowItWorksLink.tsx
 "use client";
 
 import React from "react";

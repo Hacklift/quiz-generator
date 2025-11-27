@@ -12,7 +12,7 @@ class UserDB(BaseModel):
     email: EmailStr
     hashed_password: str
     full_name: Optional[str] = None
-    quizzes: Optional[List[str]] = []  # List of quiz IDs associated with the user
+    quizzes: Optional[List[str]] = []  
     is_active: bool
     is_verified: bool 
     role: str
@@ -30,7 +30,7 @@ class SeedUser(BaseModel):
     username: str
     email: EmailStr
     full_name: Optional[str] = None
-    quizzes: Optional[List[str]] = []  # List of quiz IDs associated with the user
+    quizzes: Optional[List[str]] = []  
     hashed_password: str
     is_active: bool 
     role: str

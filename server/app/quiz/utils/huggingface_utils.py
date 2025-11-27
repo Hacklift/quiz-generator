@@ -14,9 +14,6 @@ load_dotenv(dotenv_path=env_path)
 load_dotenv()
 HF_FALLBACK_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
-# =====================================================
-# =============== PARSING FUNCTIONS ===================
-# =====================================================
 
 def parse_multichoice(response: str) -> List[Dict[str, Any]]:
     """Parse multiple-choice questions with A–D options."""
@@ -28,14 +25,12 @@ def parse_multichoice(response: str) -> List[Dict[str, Any]]:
 
     questions = []
     for question_text, options_block, correct_letter in question_blocks:
-        # Find options A-D
         options = re.findall(r"([A-D]\))\s*(.*?)\s{2,}", options_block + "  ", re.DOTALL)
         if not options:
             options = re.findall(r"([A-D]\))\s*(.*?)\n", options_block)
 
         formatted_options = [f"{opt[0]} {opt[1].strip()}" for opt in options]
 
-        # Convert "A"/"B"/"C"/"D" into the actual text
         idx = ord(correct_letter.strip().upper()) - ord("A")
         correct_answer = formatted_options[idx] if 0 <= idx < len(formatted_options) else correct_letter
 
@@ -90,10 +85,6 @@ def parse_short_answer(response: str) -> List[Dict[str, Any]]:
         for item in parse_open_ended(response)
     ]
 
-# =====================================================
-# ================= PROMPT BUILDER ====================
-# =====================================================
-
 def build_prompt(
     profession: str,
     question_type: str,
@@ -106,7 +97,6 @@ def build_prompt(
     Builds a prompt with all required parameters to generate a well-structured quiz.
     """
 
-    # Strict format instructions for each type
     type_formats = {
         "multichoice": """
 Each question must have 4 options (A–D), with only one correct answer.
@@ -146,10 +136,8 @@ Format Example:
 """
     }
 
-    # Include extra custom instruction if provided
     custom_part = f"\nAdditional instructions: {custom_instruction}" if custom_instruction else ""
 
-    # Full prompt
     return f"""
 You are generating a **{difficulty_level} difficulty** {question_type} quiz with **{num_questions} questions**.
 The quiz topic is **{profession}**, and it is intended for **{audience_type} learners**.
@@ -163,10 +151,6 @@ Ensure every question reflects the topic and context.
 
 Now generate the quiz:
 """
-
-# =====================================================
-# ================= MAIN FUNCTION =====================
-# =====================================================
 
 async def resolve_final_token(user_id: Optional[str], provided_token: Optional[str]):
     if provided_token:
@@ -183,8 +167,8 @@ async def resolve_final_token(user_id: Optional[str], provided_token: Optional[s
 async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, Any]:
     loop = asyncio.get_event_loop()
 
-    user_id = payload.get("user_id")           # logged-in user id
-    provided_token = payload.get("token")      # one-time token from frontend
+    user_id = payload.get("user_id")           
+    provided_token = payload.get("token")      
 
     final_token = await resolve_final_token(user_id, provided_token)
 
@@ -215,7 +199,6 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
 
     qtype = payload.get("question_type", "multichoice").lower()
 
-    # --- parsing logic stays same ---
     if qtype == "multichoice":
         questions = parse_multichoice(response_text)
     elif qtype == "true-false":

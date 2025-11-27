@@ -24,8 +24,7 @@ const FolderModal: React.FC<FolderModalProps> = ({
   const [folderName, setFolderName] = useState(currentName);
   const [loading, setLoading] = useState(false);
 
-  const dummyUserId = "12345"; // 🔹 Replace with real user ID once auth is ready
-
+  const dummyUserId = "12345";
   const handleSubmit = async () => {
     if (!folderName.trim()) {
       toast.error("Please enter a folder name");
@@ -35,12 +34,10 @@ const FolderModal: React.FC<FolderModalProps> = ({
     setLoading(true);
     try {
       if (mode === "create") {
-        // ✅ createFolder expects (userId, name)
         const newFolder = await createFolder(dummyUserId, folderName);
         toast.success("Folder created successfully");
         onFolderCreated?.(newFolder);
       } else if (mode === "rename" && folderId) {
-        // ✅ renameFolder expects (folderId, newName)
         const updated = await renameFolder(folderId, folderName);
         toast.success("Folder renamed successfully");
         onFolderRenamed?.(updated);

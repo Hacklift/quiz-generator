@@ -37,9 +37,8 @@ def get_mock_questions_by_type(question_type: str, num_questions: int):
 
     questions = mock_dispatch[normalized_key]
 
-    # Ensure `questions` is a list
     if callable(questions):
-        questions = questions()  # In case it's accidentally a function
+        questions = questions()  
 
     if num_questions > len(questions):
         raise HTTPException(

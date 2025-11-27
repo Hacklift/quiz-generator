@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { QuizGenerationSectionProps } from "../../interfaces/props";
 import RequiredLabel from "./common/RequiredLabel";
 
@@ -29,6 +30,8 @@ export default function QuizGenerationSection({
   setToken: (val: string) => void;
   previousToken?: string;
 }) {
+  const [showSuggestion, setShowSuggestion] = useState(false);
+
   return (
     <section className="w-full max-w-3xl mx-auto bg-white shadow rounded-xl px-6 py-8">
       <h2 className="text-2xl font-semibold text-[#2C3E50] mb-2">
@@ -39,7 +42,6 @@ export default function QuizGenerationSection({
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Quiz Topic */}
         <div className="md:col-span-2">
           <RequiredLabel
             text="Enter The Concept/Context For This Quiz"
@@ -55,8 +57,7 @@ export default function QuizGenerationSection({
           />
         </div>
 
-        {/* Optional API Token */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 relative">
           <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
             API Token (Optional)
           </label>
@@ -64,20 +65,32 @@ export default function QuizGenerationSection({
             type="text"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={
-              previousToken
-                ? `Previously used token: ${previousToken}`
-                : "Enter your API token (optional)"
-            }
+            onFocus={() => setShowSuggestion(true)}
+            onBlur={() => setTimeout(() => setShowSuggestion(false), 150)}
+            placeholder="Enter your API token"
             className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
           />
-
+          {showSuggestion && previousToken && (
+            <div
+              className="absolute w-full mt-1 bg-white border rounded-md shadow z-10 cursor-pointer"
+              onMouseDown={() => {
+                setToken(previousToken);
+                setShowSuggestion(false);
+              }}
+            >
+              <div className="px-4 py-2 hover:bg-gray-100">
+                <p className="text-xs text-gray-500">
+                  Use previously saved token
+                </p>
+                <p className="text-sm text-gray-700">{previousToken}</p>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mt-1">
             Leave blank to use the default server API key.
           </p>
         </div>
 
-        {/* Left Column: Audience Type, Difficulty Level, Custom Instruction */}
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
@@ -121,7 +134,6 @@ export default function QuizGenerationSection({
           </div>
         </div>
 
-        {/* Right Column: Question Type and Number of Questions */}
         <div className="space-y-4">
           <div>
             <RequiredLabel text="Question type(s)" required />

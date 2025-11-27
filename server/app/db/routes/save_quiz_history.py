@@ -7,7 +7,9 @@ router = APIRouter()
 
 @router.post("/save-quiz")
 async def save_quiz(quiz: QuizHistoryModel, current_user=Depends(get_current_user)):
-    quiz.user_id = current_user.id  # Force secure overwrite
-    inserted_id = await update_quiz_history(quiz.user_id, quiz)
+    quiz.user_id = current_user.id 
+    quiz_dict = quiz.model_dump(by_alias=True) 
+    inserted_id = await update_quiz_history(quiz_dict)
     return {"message": "Quiz saved", "quiz_id": inserted_id}
+
 
