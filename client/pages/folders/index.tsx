@@ -9,6 +9,7 @@ import FolderOptionsMenu from "../../components/home/folders/FolderOptionsMenu";
 import FolderModal from "../../components/home/folders/FolderModal";
 import OrganizeModal from "../../components/home/folders/OrganizeModal";
 import ConfirmDeleteModal from "../../components/home/folders/ConfirmDeleteModal";
+import { useAuth } from "../../contexts/authContext";
 import {
   getUserFolders,
   deleteFolder,
@@ -23,12 +24,29 @@ interface Folder {
 }
 
 const FoldersPage = () => {
+  const { user } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showOrganizeModal, setShowOrganizeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
-  const userId = "dummy_user_123"; // temporary placeholder
+
+  // Fetch user folders
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchFolders = async () => {
+      try {
+        const data = await getUserFolders(user.id);
+        setFolders(data);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load folders");
+      }
+    };
+
+    fetchFolders();
+  }, [user]);
 
   // Single folder delete
   const handleDeleteFolder = async (folderId: string) => {
@@ -54,20 +72,6 @@ const FoldersPage = () => {
       toast.error("Failed to delete folders");
     }
   };
-
-  // Fetch user folders
-  useEffect(() => {
-    const fetchFolders = async () => {
-      try {
-        const data = await getUserFolders(userId);
-        setFolders(data);
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load folders");
-      }
-    };
-    fetchFolders();
-  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-white text-navy-900">
@@ -103,7 +107,7 @@ const FoldersPage = () => {
                   setSelectedFolders((prev) =>
                     prev.includes(folder._id)
                       ? prev.filter((id) => id !== folder._id)
-                      : [...prev, folder._id],
+                      : [...prev, folder._id]
                   )
                 }
               />

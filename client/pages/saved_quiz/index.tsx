@@ -80,12 +80,12 @@ const AddToFolderModal = ({
       let targetFolderId = selectedFolderId;
 
       if (!targetFolderId && newFolderName) {
-        const newFolder = await createFolder(userId, newFolderName);
+        const newFolder = await createFolder({ userId, name: newFolderName });
         targetFolderId = newFolder._id;
       }
 
       for (const quizId of selectedQuizIds) {
-        await addQuizToFolder(targetFolderId!, { quiz_id: quizId });
+        await addQuizToFolder(targetFolderId!, { _id: quizId });
       }
 
       toast.success("Quiz(es) added to folder successfully!");
@@ -166,6 +166,7 @@ const AddToFolderModal = ({
     </div>
   );
 };
+
 
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];

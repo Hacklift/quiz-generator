@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { createFolder, renameFolder } from "../../../lib/functions/folders";
+import { useAuth } from "../../../contexts/authContext";
 
 interface FolderModalProps {
   mode: "create" | "rename";
@@ -21,27 +22,36 @@ const FolderModal: React.FC<FolderModalProps> = ({
   onFolderCreated,
   onFolderRenamed,
 }) => {
+  const { user } = useAuth();
   const [folderName, setFolderName] = useState(currentName);
   const [loading, setLoading] = useState(false);
 
-  const dummyUserId = "12345";
   const handleSubmit = async () => {
     if (!folderName.trim()) {
       toast.error("Please enter a folder name");
       return;
     }
 
+    if (!user?.id) {
+      toast.error("You must be logged in");
+      return;
+    }
+
     setLoading(true);
+
     try {
       if (mode === "create") {
-        const newFolder = await createFolder(dummyUserId, folderName);
+        const newFolder = await createFolder({ userId: user.id, name: folderName });
         toast.success("Folder created successfully");
         onFolderCreated?.(newFolder);
-      } else if (mode === "rename" && folderId) {
+      }
+
+      if (mode === "rename" && folderId) {
         const updated = await renameFolder(folderId, folderName);
         toast.success("Folder renamed successfully");
         onFolderRenamed?.(updated);
       }
+
       onClose();
     } catch (err) {
       console.error(err);
@@ -69,15 +79,16 @@ const FolderModal: React.FC<FolderModalProps> = ({
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-100"
             disabled={loading}
+            className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-100"
           >
             Cancel
           </button>
+
           <button
             onClick={handleSubmit}
-            className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-6 py-2 rounded-xl shadow-md transition text-sm"
             disabled={loading}
+            className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-6 py-2 rounded-xl shadow-md transition text-sm"
           >
             {loading ? "Saving..." : "Done"}
           </button>

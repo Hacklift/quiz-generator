@@ -12,10 +12,12 @@ import ConfirmDeleteModal from "../../components/home/folders/ConfirmDeleteModal
 import { FaArrowLeft, FaEllipsisV } from "react-icons/fa";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
+import { useAuth } from "../../contexts/authContext";
 
 const FolderView = () => {
   const router = useRouter();
   const { folderId } = router.query;
+  const { user } = useAuth();
 
   const [folder, setFolder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -27,9 +29,9 @@ const FolderView = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
-  // ✅ Function to re-fetch folder data
+  // Re-fetch folder data
   const refreshFolderData = async () => {
-    if (!folderId) return;
+    if (!folderId || !user) return;
     try {
       const res = await getFolderById(folderId as string);
       setFolder(res);
@@ -38,9 +40,8 @@ const FolderView = () => {
     }
   };
 
-  // ✅ Fetch folder when mounted or folderId changes
   useEffect(() => {
-    if (!folderId) return;
+    if (!folderId || !user) return;
     const fetchFolder = async () => {
       try {
         setLoading(true);
@@ -53,9 +54,8 @@ const FolderView = () => {
         setLoading(false);
       }
     };
-
     fetchFolder();
-  }, [folderId]);
+  }, [folderId, user]);
 
   const handleDeleteQuizConfirmed = async (quizId: string) => {
     try {
@@ -67,7 +67,7 @@ const FolderView = () => {
               ...prev,
               quizzes: prev.quizzes.filter((q: any) => q._id !== quizId),
             }
-          : prev,
+          : prev
       );
     } catch (err) {
       console.error(err);
@@ -120,10 +120,8 @@ const FolderView = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* NAVBAR */}
       <NavBar />
 
-      {/* BACK BUTTON */}
       <div className="px-6 mt-4">
         <button
           onClick={() => router.push("/folders")}
@@ -133,7 +131,6 @@ const FolderView = () => {
         </button>
       </div>
 
-      {/* FOLDER INFO */}
       <header className="p-6 flex flex-col items-center text-center">
         <div className="text-4xl mb-2">📁</div>
         <h2 className="text-2xl font-bold text-navy-800 mb-1">{folder.name}</h2>
@@ -143,7 +140,6 @@ const FolderView = () => {
         </p>
       </header>
 
-      {/* QUIZZES */}
       <main className="flex-1 p-6 flex flex-col items-center gap-6">
         {folder.quizzes.length === 0 ? (
           <div className="w-full text-center text-gray-500">
@@ -163,13 +159,10 @@ const FolderView = () => {
                   Added on {formatDate(quiz.added_on || quiz.created_at)}
                 </p>
 
-                {/* Quiz content preview */}
                 <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md border">
                   <p>
                     <strong>Type:</strong>{" "}
-                    {quiz.question_type ||
-                      quiz.quiz_data?.question_type ||
-                      "N/A"}
+                    {quiz.question_type || quiz.quiz_data?.question_type || "N/A"}
                   </p>
                   <p>
                     <strong>Questions:</strong> {getQuizQuestions(quiz).length}
@@ -198,7 +191,6 @@ const FolderView = () => {
                 </div>
               </div>
 
-              {/* Three-dot menu */}
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() =>
@@ -237,19 +229,16 @@ const FolderView = () => {
         )}
       </main>
 
-      {/* FOOTER */}
       <Footer />
 
-      {/* ✅ Move Quiz Modal */}
       <MoveQuizModal
         isOpen={moveModalOpen}
         onClose={() => setMoveModalOpen(false)}
         quiz={selectedQuiz}
         sourceFolderId={folderId as string}
-        onQuizMoved={refreshFolderData} // 👈 instant refresh
+        onQuizMoved={refreshFolderData}
       />
 
-      {/* Confirm Delete Modal */}
       {confirmModalOpen && quizToDelete && (
         <ConfirmDeleteModal
           selectedItems={[quizToDelete]}
