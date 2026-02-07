@@ -7,15 +7,6 @@ from ..renderer import render_email
 
 logger = logging.getLogger(__name__)
 
-MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
-MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
-MAILGUN_SENDER_EMAIL = os.getenv(
-    "MAILGUN_SENDER_EMAIL",
-    f"no-reply@{MAILGUN_DOMAIN}" if MAILGUN_DOMAIN else "no-reply@example.com"
-)
-MAILGUN_API_BASE_URL = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}" if MAILGUN_DOMAIN else None
-
-
 class MailgunAdapter:
     """
     Adapter for sending emails via Mailgun HTTP API.
@@ -23,21 +14,29 @@ class MailgunAdapter:
     """
 
     def __init__(self):
-        if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+        self.api_key = os.getenv("MAILGUN_API_KEY")
+        self.domain = os.getenv("MAILGUN_DOMAIN")
+        self.sender_email = os.getenv(
+            "MAILGUN_SENDER_EMAIL",
+            f"no-reply@{self.domain}" if self.domain else "no-reply@example.com"
+        )
+        self.base_url = f"https://api.mailgun.net/v3/{self.domain}" if self.domain else None
+
+        if not self.api_key or not self.domain:
             logger.warning("[MailgunAdapter] Missing MAILGUN_API_KEY or MAILGUN_DOMAIN — adapter will be skipped if used.")
         
         self.session = requests.Session()
-        self.session.auth = ("api", MAILGUN_API_KEY)
+        self.session.auth = ("api", self.api_key)
         self.session.headers.update({"User-Agent": "QuizAppVault-Mailer"})
-        self.base_url = MAILGUN_API_BASE_URL
 
-        try:
-            self.session.get("https://api.mailgun.net/v3/domains", timeout=5)
-        except Exception as e:
-            logger.warning(f"[MailgunAdapter] Mailgun session warmed up error: {e}")
+        if os.getenv("MAILGUN_WARMUP", "1") == "1":
+            try:
+                self.session.get("https://api.mailgun.net/v3/domains", timeout=5)
+            except Exception as e:
+                logger.warning(f"[MailgunAdapter] Mailgun session warmed up error: {e}")
 
     async def send(self, payload: EmailPayload) -> SendResult:
-        if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+        if not self.api_key or not self.domain:
             logger.error("[MailgunAdapter] Cannot send — missing configuration.")
             raise RuntimeError("Mailgun not configured")
 
@@ -46,7 +45,7 @@ class MailgunAdapter:
         body = msg.get_payload()
 
         data = {
-            "from": f"QuizAppVault <{MAILGUN_SENDER_EMAIL}>",
+            "from": f"QuizAppVault <{self.sender_email}>",
             "to": [payload.to],
             "subject": subject,
             "text": body,
