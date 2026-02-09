@@ -1,4 +1,3 @@
-// client/components/home/DownloadQuizButton.tsx
 "use client";
 
 import React, { useState } from "react";

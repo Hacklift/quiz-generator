@@ -1,4 +1,3 @@
-// components/ui/ComingSoonToast.tsx
 "use client";
 import { toast } from "react-hot-toast";
 

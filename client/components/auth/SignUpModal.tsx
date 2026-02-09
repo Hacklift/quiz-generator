@@ -89,9 +89,7 @@ export default function SignUpModal({
       setPasswordStrength("");
     } catch (error: any) {
       setErrors({
-        global:
-          error.response?.data?.detail ||
-          "Registration failed. Please try again.",
+        global: error?.message || "Registration failed. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -224,6 +222,10 @@ export default function SignUpModal({
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
+              <p className="text-xs text-gray-500 mt-2">
+                Must be 8+ chars, include uppercase, lowercase, a number, and a
+                special character.
+              </p>
               {errors.password && (
                 <p className="text-red-600 text-sm mt-1">{errors.password}</p>
               )}

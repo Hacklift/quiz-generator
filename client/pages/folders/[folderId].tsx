@@ -25,11 +25,9 @@ const FolderView = () => {
   const [selectedQuiz, setSelectedQuiz] = useState<any>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // Confirm Delete Modal state
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
-  // Re-fetch folder data
   const refreshFolderData = async () => {
     if (!folderId || !user) return;
     try {
@@ -67,7 +65,7 @@ const FolderView = () => {
               ...prev,
               quizzes: prev.quizzes.filter((q: any) => q._id !== quizId),
             }
-          : prev
+          : prev,
       );
     } catch (err) {
       console.error(err);
@@ -162,7 +160,9 @@ const FolderView = () => {
                 <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md border">
                   <p>
                     <strong>Type:</strong>{" "}
-                    {quiz.question_type || quiz.quiz_data?.question_type || "N/A"}
+                    {quiz.question_type ||
+                      quiz.quiz_data?.question_type ||
+                      "N/A"}
                   </p>
                   <p>
                     <strong>Questions:</strong> {getQuizQuestions(quiz).length}

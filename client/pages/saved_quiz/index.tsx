@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import {
@@ -51,6 +51,8 @@ const AddToFolderModal = ({
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const folderMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,6 +69,20 @@ const AddToFolderModal = ({
     };
     fetchFolders();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!folderMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        folderMenuRef.current &&
+        !folderMenuRef.current.contains(event.target as Node)
+      ) {
+        setFolderMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [folderMenuOpen]);
 
   const handleAddToFolder = async () => {
     if (!selectedFolderId && !newFolderName) {
@@ -116,18 +132,63 @@ const AddToFolderModal = ({
                   No folders available.
                 </p>
               ) : (
-                <select
-                  value={selectedFolderId || ""}
-                  onChange={(e) => setSelectedFolderId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  <option value="">Select a folder</option>
-                  {folders.map((folder) => (
-                    <option key={folder._id} value={folder._id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative" ref={folderMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setFolderMenuOpen((prev) => !prev)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-left bg-white text-[#2C3E50] focus:outline-none focus:ring focus:ring-blue-500 flex items-center justify-between"
+                    aria-haspopup="listbox"
+                    aria-expanded={folderMenuOpen}
+                  >
+                    <span>
+                      {selectedFolderId
+                        ? folders.find(
+                            (folder) => folder._id === selectedFolderId,
+                          )?.name
+                        : "Select a folder"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-[#0F2654] transition-transform ${
+                        folderMenuOpen ? "rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  {folderMenuOpen && (
+                    <div
+                      className="absolute left-0 right-0 mt-1 rounded-md border border-[#0F2654]/20 bg-white shadow-lg z-20 max-h-56 overflow-auto"
+                      role="listbox"
+                    >
+                      {folders.map((folder) => (
+                        <button
+                          key={folder._id}
+                          type="button"
+                          role="option"
+                          aria-selected={folder._id === selectedFolderId}
+                          onClick={() => {
+                            setSelectedFolderId(folder._id);
+                            setFolderMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm ${
+                            folder._id === selectedFolderId
+                              ? "bg-[#0F2654] text-white"
+                              : "text-[#2C3E50] hover:bg-[#0F2654]/10"
+                          }`}
+                        >
+                          {folder.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

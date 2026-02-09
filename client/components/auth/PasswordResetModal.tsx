@@ -25,7 +25,6 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
   const [resendSuccess, setResendSuccess] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Auto-detect method and set email/token from URL
   useEffect(() => {
     if (tokenFromUrl) {
       setMethod("token");
@@ -36,7 +35,6 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
     }
   }, [tokenFromUrl, initialEmail]);
 
-  // Resend cooldown timer
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(
@@ -103,13 +101,11 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
     e.preventDefault();
     setError("");
 
-    // Validate passwords match
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    // Validate password strength
     const errors = validatePassword(newPassword);
     if (errors.length > 0) {
       setError(errors.join(". "));

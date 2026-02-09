@@ -14,7 +14,6 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
   const [successMessage, setSuccessMessage] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
 
-  // ✅ Hook placé AVANT le return conditionnel
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

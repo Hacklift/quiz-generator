@@ -31,7 +31,6 @@ const FoldersPage = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
 
-  // Fetch user folders
   useEffect(() => {
     if (!user?.id) return;
 
@@ -48,7 +47,6 @@ const FoldersPage = () => {
     fetchFolders();
   }, [user]);
 
-  // Single folder delete
   const handleDeleteFolder = async (folderId: string) => {
     try {
       await deleteFolder(folderId);
@@ -60,7 +58,6 @@ const FoldersPage = () => {
     }
   };
 
-  // Bulk folder delete
   const handleBulkDeleteFolders = async (folderIds: string[]) => {
     if (!folderIds.length) return;
     try {

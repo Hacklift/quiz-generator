@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QuizGenerationSectionProps } from "../../interfaces/props";
 import RequiredLabel from "./common/RequiredLabel";
 
@@ -31,6 +31,28 @@ export default function QuizGenerationSection({
   previousToken?: string;
 }) {
   const [showSuggestion, setShowSuggestion] = useState(false);
+  const [difficultyOpen, setDifficultyOpen] = useState(false);
+  const difficultyRef = useRef<HTMLDivElement | null>(null);
+
+  const difficultyOptions = [
+    { value: "easy", label: "Easy" },
+    { value: "medium", label: "Medium" },
+    { value: "hard", label: "Hard" },
+  ];
+
+  useEffect(() => {
+    if (!difficultyOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        difficultyRef.current &&
+        !difficultyRef.current.contains(event.target as Node)
+      ) {
+        setDifficultyOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [difficultyOpen]);
 
   return (
     <section className="w-full max-w-3xl mx-auto bg-white shadow rounded-xl px-6 py-8">
@@ -109,15 +131,63 @@ export default function QuizGenerationSection({
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
               Select difficulty level
             </label>
-            <select
-              value={difficultyLevel}
-              onChange={(e) => setDifficultyLevel(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
-            >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
+            <div className="relative" ref={difficultyRef}>
+              <button
+                type="button"
+                onClick={() => setDifficultyOpen((prev) => !prev)}
+                className="w-full border border-gray-300 rounded-md px-4 py-2 text-left bg-white text-[#2C3E50] focus:outline-none focus:ring focus:ring-blue-500 flex items-center justify-between"
+                aria-haspopup="listbox"
+                aria-expanded={difficultyOpen}
+              >
+                <span>
+                  {
+                    difficultyOptions.find(
+                      (option) => option.value === difficultyLevel,
+                    )?.label
+                  }
+                </span>
+                <svg
+                  className={`h-4 w-4 text-[#0F2654] transition-transform ${
+                    difficultyOpen ? "rotate-180" : ""
+                  }`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+              {difficultyOpen && (
+                <div
+                  className="absolute left-0 right-0 mt-1 rounded-md border border-[#0F2654]/20 bg-white shadow-lg z-20"
+                  role="listbox"
+                >
+                  {difficultyOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={option.value === difficultyLevel}
+                      onClick={() => {
+                        setDifficultyLevel(option.value);
+                        setDifficultyOpen(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm ${
+                        option.value === difficultyLevel
+                          ? "bg-[#0F2654] text-white"
+                          : "text-[#2C3E50] hover:bg-[#0F2654]/10"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

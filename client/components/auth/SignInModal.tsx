@@ -50,7 +50,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const response: LoginResponse = await login(payload);
 
-      // Save both access and refresh tokens using auth context
       if (response.access_token && response.refresh_token) {
         await authLogin(
           response.access_token,
@@ -58,7 +57,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
           response.token_type,
         );
 
-        // Navigate to profile
         router.push(ROUTES.PROFILE || "/profile");
         onClose();
       } else {

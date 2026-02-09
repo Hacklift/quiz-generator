@@ -1,4 +1,3 @@
-// pages/_app.tsx
 import type { AppProps } from "next/app";
 import { useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";

@@ -17,7 +17,6 @@ const api = axios.create({
   },
 });
 
-// Flag to prevent multiple refresh attempts
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;
@@ -38,7 +37,6 @@ const processQueue = (
   failedQueue = [];
 };
 
-// Request interceptor - Add access token to requests
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = TokenService.getAccessToken();
@@ -52,7 +50,6 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor - Handle token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -60,9 +57,7 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // If error is 401 and we haven't retried yet
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Skip refresh for login, register, and refresh endpoints
       if (
         originalRequest.url?.includes("/auth/login") ||
         originalRequest.url?.includes("/auth/register") ||
@@ -72,7 +67,6 @@ api.interceptors.response.use(
       }
 
       if (isRefreshing) {
-        // If already refreshing, queue this request
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -93,7 +87,6 @@ api.interceptors.response.use(
       const refreshToken = TokenService.getRefreshToken();
 
       if (!refreshToken) {
-        // No refresh token available, clear tokens and reject
         TokenService.clearTokens();
         processQueue(error, null);
         isRefreshing = false;
@@ -101,7 +94,6 @@ api.interceptors.response.use(
       }
 
       try {
-        // Attempt to refresh the token
         const response = await axios.post<RefreshTokenResponse>(
           `${BASE_URL}/auth/refresh`,
           { refresh_token: refreshToken },
@@ -149,7 +141,6 @@ api.interceptors.response.use(
   },
 );
 
-// Auth API functions
 export const registerUser = async (data: {
   username: string;
   email: string;
