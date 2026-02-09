@@ -104,26 +104,32 @@ origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 
 async def lifespan(app: FastAPI):
 
-    await startUp()
+    skip_startup = os.getenv("SKIP_APP_STARTUP") == "1"
 
-    redis = Redis.from_url(redis_url, decode_responses=True)
+    if not skip_startup:
+        await startUp()
 
-    app.state.redis = redis
+    redis = None
+    if not skip_startup:
+        redis = Redis.from_url(redis_url, decode_responses=True)
+
+        app.state.redis = redis
 
 
-    app.state.users_collection = get_users_collection()
+        app.state.users_collection = get_users_collection()
 
-    app.state.quizzes_collection = get_quizzes_collection()
+        app.state.quizzes_collection = get_quizzes_collection()
 
-    app.state.blacklisted_tokens_collection = get_blacklisted_tokens_collection()
+        app.state.blacklisted_tokens_collection = get_blacklisted_tokens_collection()
 
 
     yield
 
 
-    get_users_collection().database.client.close()
+    if not skip_startup:
+        get_users_collection().database.client.close()
 
-    await redis.close()
+        await redis.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -208,4 +214,3 @@ def ping_redis():
     r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
     return {"pong": r.ping()}
-

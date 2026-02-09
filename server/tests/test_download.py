@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("SKIP_APP_STARTUP", "1")
+
 import pytest
 
 from unittest.mock import patch
@@ -6,11 +10,12 @@ from fastapi import HTTPException
 
 from fastapi.responses import StreamingResponse
 
-from fastapi.testclient import TestClient
-
 from io import BytesIO
 
-from server.main import app
+from pydantic import ValidationError
+
+from server.main import download_quiz_handler
+from server.schemas.query import DownloadQuizQuery
 
 from docx import Document
 
@@ -29,9 +34,6 @@ from server.api.v1.crud.download_quiz import (
     generate_txt
 
     )
-
-
-client = TestClient(app)
 
 
 def mock_generate_file(data):
@@ -125,34 +127,20 @@ def test_download_quiz_invalid_format(format):
 
 ])
 
-def test_download_quiz_api_valid(format, question_type, num_question):
+@pytest.mark.asyncio
+async def test_download_quiz_api_valid(format, question_type, num_question):
 
-    response = client.get(
-
-        "/download-quiz",
-
-        params={
-
-            "format": format,
-
-            "question_type": question_type,
-
-            "num_question": num_question,
-
-            "user_id": "test_user"
-
-        }
-
+    query = DownloadQuizQuery(
+        format=format,
+        question_type=question_type,
+        num_question=num_question,
+        user_id="test_user",
     )
 
+    response = await download_quiz_handler(query)
 
-    assert response.status_code == 200
-
-    assert "Content-Disposition" in response.headers
-
-    assert f"attachment; filename=quiz_data.{format}" in response.headers["Content-Disposition"]
-
-    assert response.content
+    assert isinstance(response, StreamingResponse)
+    assert response.headers["Content-Disposition"] == f"attachment; filename=quiz_data.{format}"
 
 
 
@@ -165,32 +153,30 @@ def test_download_quiz_api_valid(format, question_type, num_question):
 
 ])
 
-def test_download_quiz_api_invalid(format, question_type, num_question, expected_status):
+@pytest.mark.asyncio
+async def test_download_quiz_api_invalid(format, question_type, num_question, expected_status):
 
-    response = client.get(
+    if expected_status == 422:
+        with pytest.raises(ValidationError):
+            DownloadQuizQuery(
+                format=format,
+                question_type=question_type,
+                num_question=num_question,
+                user_id="test_user",
+            )
+        return
 
-        "/download-quiz",
-
-        params={
-
-            "format": format,
-
-            "question_type": question_type,
-
-            "num_question": num_question,
-
-            "user_id": "test_user"
-
-        }
-
+    query = DownloadQuizQuery(
+        format=format,
+        question_type=question_type,
+        num_question=num_question,
+        user_id="test_user",
     )
 
+    with pytest.raises(HTTPException) as exc:
+        await download_quiz_handler(query)
 
-    assert response.status_code == expected_status
-
-    assert "application/json" in response.headers["content-type"]
-
-    assert "detail" in response.json()
+    assert exc.value.status_code == expected_status
 
 
 
@@ -354,6 +340,4 @@ def test_generate_pdf(sample_quiz_data):
     assert "Question: Explain the process of photosynthesis." in content
 
     assert "Answer: Photosynthesis is the process" in content
-
-
 

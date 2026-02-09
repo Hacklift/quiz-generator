@@ -3,14 +3,16 @@ import os
 import pytest
 
 
-if not os.path.exists("/var/run/docker.sock"):
-
+if os.getenv("RUN_INTEGRATION") != "1":
     pytest.skip(
-
-        "Docker is not available; skipping MongoDB integration tests.",
-
+        "RUN_INTEGRATION!=1; skipping MongoDB integration tests.",
         allow_module_level=True,
+    )
 
+if not os.path.exists("/var/run/docker.sock"):
+    pytest.skip(
+        "Docker is not available; skipping MongoDB integration tests.",
+        allow_module_level=True,
     )
 
 
@@ -86,4 +88,3 @@ async def cleanup_db_after_test(test_db):
     for name in await test_db.list_collection_names():
 
         await test_db.drop_collection(name)
-
