@@ -26,7 +26,7 @@ def sample_user():
 
         "email": "testuser@example.com",
 
-        "password": "secure123",
+        "password": "Secure123!",
 
         "full_name": "Test User"
 
@@ -44,7 +44,7 @@ def updated_user():
 
         "email": "updateduser@example.com",
 
-        "password": "newsecure123",
+        "password": "Newsecure123!",
 
         "full_name": "Updated User"
 
@@ -256,7 +256,7 @@ async def test_login_invalid_credentials(client):
 
         "email": "wrong@email.com",
 
-        "password": "wrongpass"
+        "password": "Wrongpass1!"
 
     }
 
@@ -275,7 +275,7 @@ async def test_create_user_missing_email(client):
 
         "username": "incomplete",
 
-        "password": "pass123",
+        "password": "Pass1234!",
 
         "full_name": "Incomplete User"
 
@@ -303,9 +303,9 @@ async def test_get_nonexistent_user(client):
 
 @pytest.mark.parametrize("login_data", [
 
-    {"username": "david_clark", "email": "david.clark@example.com", "password": "wrongpass"},
+    {"username": "david_clark", "email": "david.clark@example.com", "password": "Wrongpass1!"},
 
-    {"username": "nonexistent", "email": "nonexistent@example.com", "password": "testpassword8"},
+    {"username": "nonexistent", "email": "nonexistent@example.com", "password": "Testpassword8!"},
 
 ])
 
@@ -345,5 +345,3 @@ async def test_list_users_empty(client, seeded_database):
     assert response.status_code == 200
 
     assert response.json() == []
-
-

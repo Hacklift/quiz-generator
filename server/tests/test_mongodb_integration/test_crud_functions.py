@@ -58,7 +58,7 @@ def sample_user_data():
 
         email="testuser@example.com",
 
-        password="testpass123",
+        password="Testpass123!",
 
         full_name="Test User"
 
@@ -75,7 +75,7 @@ def update_user_data():
 
         email="updatedTestUser@example.com",
 
-        password="updatedTestPass123",
+        password="UpdatedTestPass123!",
 
         full_name="Updated Test User"
 
@@ -404,5 +404,3 @@ async def test_list_quizzes(seeded_database):
     assert any(quiz["questions"][0]["question"] == "Who was the first President of the United States?" for quiz in quizzes)
 
     assert any(quiz["questions"][0]["correct_answer"] == "George Washington" for quiz in quizzes)
-
-

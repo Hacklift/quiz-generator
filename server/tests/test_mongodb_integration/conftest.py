@@ -9,9 +9,11 @@ if os.getenv("RUN_INTEGRATION") != "1":
         allow_module_level=True,
     )
 
-if not os.path.exists("/var/run/docker.sock"):
+MONGO_URI = os.getenv("MONGO_URI")
+
+if not MONGO_URI and not os.path.exists("/var/run/docker.sock"):
     pytest.skip(
-        "Docker is not available; skipping MongoDB integration tests.",
+        "Docker is not available and MONGO_URI not set; skipping MongoDB integration tests.",
         allow_module_level=True,
     )
 
@@ -30,11 +32,12 @@ from ...app.seed_data import seed_quizzes, seed_user_data
 
 
 @pytest.fixture(scope="session")
-
 def mongo_container():
+    if MONGO_URI:
+        yield None
+        return
 
     with MongoDbContainer("mongo:latest") as mongo:
-
         yield mongo
 
 
@@ -42,8 +45,7 @@ def mongo_container():
 @pytest_asyncio.fixture(scope="function")
 
 async def motor_client(mongo_container):
-
-    uri = mongo_container.get_connection_url()
+    uri = MONGO_URI or mongo_container.get_connection_url()
 
     client = AsyncIOMotorClient(uri)
 
