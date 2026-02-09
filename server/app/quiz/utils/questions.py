@@ -6,7 +6,6 @@ from typing import Dict
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.utils.huggingface_utils import generate_quiz_with_huggingface
 from server.app.quiz.utils.mock_quiz_generator import get_mock_questions_by_type
-from server.app.db.crud.update_quiz_history import update_quiz_history
 from server.app.db.crud.ai_generated_quiz_crud import save_ai_generated_quiz
 
 
@@ -18,6 +17,8 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
 
     try:
         ai_payload = request.dict()
+        if user_id:
+            ai_payload["user_id"] = user_id
         response = await generate_quiz_with_huggingface(ai_payload)
 
         questions = response.get("questions") if response else None
@@ -70,12 +71,6 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
             q["question_type"] = request.question_type
 
         source = "mock"
-
-    await update_quiz_history({
-        "user_id": user_id,
-        "questions": final_questions
-        })
-
 
     if source == "huggingface" and ai_quiz_payload:
         try:

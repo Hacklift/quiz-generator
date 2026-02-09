@@ -35,6 +35,10 @@ class MoveQuizRequest(BaseModel):
     to_folder_id: str
 
 
+class RenameFolderRequest(BaseModel):
+    new_name: str
+
+
 # -------------------- Folder CRUD --------------------
 
 @router.post("/create")
@@ -61,11 +65,15 @@ async def get_folder_by_id_route(folder_id: str, user = Depends(get_current_user
 
 
 @router.put("/{folder_id}/rename")
-async def rename_existing_folder(folder_id: str, new_name: str, user = Depends(get_current_user)):
+async def rename_existing_folder(
+    folder_id: str,
+    payload: RenameFolderRequest,
+    user = Depends(get_current_user),
+):
     folder = await get_folder_by_id(folder_id)
     if not folder or folder["user_id"] != user.id:
         raise HTTPException(status_code=403, detail="Unauthorized access to folder")
-    await rename_folder(folder_id, new_name)
+    await rename_folder(folder_id, payload.new_name)
     return {"message": "Folder renamed successfully"}
 
 

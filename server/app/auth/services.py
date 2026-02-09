@@ -4,11 +4,10 @@ import random
 from datetime import datetime, timezone, timedelta
 import jwt
 import uuid
-from jwt.exceptions import (
-    ExpiredSignatureError,
-    InvalidTokenError,
-    DecodeError
-)
+try:
+    from jwt import ExpiredSignatureError, InvalidTokenError, DecodeError
+except ImportError:
+    from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, DecodeError
 import os
 from fastapi.security import OAuth2PasswordBearer
 import redis

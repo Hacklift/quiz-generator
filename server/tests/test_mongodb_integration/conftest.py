@@ -1,4 +1,12 @@
+import os
 import pytest
+
+if not os.path.exists("/var/run/docker.sock"):
+    pytest.skip(
+        "Docker is not available; skipping MongoDB integration tests.",
+        allow_module_level=True,
+    )
+
 import pytest_asyncio
 from testcontainers.mongodb import MongoDbContainer
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -41,4 +49,3 @@ async def cleanup_db_after_test(test_db):
     yield
     for name in await test_db.list_collection_names():
         await test_db.drop_collection(name)
-

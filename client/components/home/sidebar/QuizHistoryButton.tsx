@@ -10,9 +10,7 @@ const QuizHistoryButton: React.FC = () => {
   const isActive = pathname.startsWith("/quiz_history");
 
   const handleClick = () => {
-    const userId = "userId";
-    const query = new URLSearchParams({ userId }).toString();
-    router.push(`/quiz_history?${query}`);
+    router.push("/quiz_history");
   };
 
   return (

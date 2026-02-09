@@ -42,12 +42,10 @@ const AddToFolderModal = ({
   isOpen,
   onClose,
   selectedQuizIds,
-  userId,
 }: {
   isOpen: boolean;
   onClose: () => void;
   selectedQuizIds: string[];
-  userId: string;
 }) => {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +56,7 @@ const AddToFolderModal = ({
     if (!isOpen) return;
     const fetchFolders = async () => {
       try {
-        const res = await getUserFolders(userId);
+        const res = await getUserFolders();
         setFolders(res);
       } catch (err) {
         console.error(err);
@@ -68,7 +66,7 @@ const AddToFolderModal = ({
       }
     };
     fetchFolders();
-  }, [isOpen, userId]);
+  }, [isOpen]);
 
   const handleAddToFolder = async () => {
     if (!selectedFolderId && !newFolderName) {
@@ -80,7 +78,7 @@ const AddToFolderModal = ({
       let targetFolderId = selectedFolderId;
 
       if (!targetFolderId && newFolderName) {
-        const newFolder = await createFolder({ userId, name: newFolderName });
+        const newFolder = await createFolder({ name: newFolderName });
         targetFolderId = newFolder._id;
       }
 
@@ -166,7 +164,6 @@ const AddToFolderModal = ({
     </div>
   );
 };
-
 
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];
@@ -320,7 +317,6 @@ const DisplaySavedQuizzesPage: React.FC<{
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         selectedQuizIds={selectedQuizIds}
-        userId="" // Optional: only needed for folder API
       />
 
       {confirmDeleteId && (

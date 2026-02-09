@@ -64,7 +64,7 @@ async def get_saved_quiz(
         if not ObjectId.is_valid(quiz_id):
             raise HTTPException(status_code=400, detail="Invalid quiz ID")
 
-        quiz = await get_saved_quiz_by_id(quiz_id)
+        quiz = await get_saved_quiz_by_id(quiz_id, user_id=str(current_user.id))
         if not quiz or quiz.get("user_id") != str(current_user.id):
             raise HTTPException(status_code=404, detail="Quiz not found or unauthorized")
 

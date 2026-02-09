@@ -41,7 +41,7 @@ const FolderModal: React.FC<FolderModalProps> = ({
 
     try {
       if (mode === "create") {
-        const newFolder = await createFolder({ userId: user.id, name: folderName });
+        const newFolder = await createFolder({ name: folderName });
         toast.success("Folder created successfully");
         onFolderCreated?.(newFolder);
       }

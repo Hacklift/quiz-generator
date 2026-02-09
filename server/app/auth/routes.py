@@ -90,7 +90,19 @@ async def refresh_token(
 
 @router.get("/profile")
 def get_profile(current_user: UserDB = Depends(get_current_user)):
-    return {"username": current_user.username}
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+    }
+
+@router.get("/me")
+def get_me(current_user: UserDB = Depends(get_current_user)):
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+    }
 
 @router.post("/request-password-reset", response_model=MessageResponse)
 async def request_password_reset(

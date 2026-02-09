@@ -16,6 +16,7 @@ import {
 } from "../../components/home";
 import { saveQuizToHistory } from "../../lib/functions/saveQuizToHistory";
 import { useAuth } from "../../contexts/authContext";
+import { TokenService } from "../../lib/functions/tokenService";
 
 const QuizDisplayPage: React.FC = () => {
   const { user } = useAuth();
@@ -27,7 +28,6 @@ const QuizDisplayPage: React.FC = () => {
   const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
-  const userId = user?.id || "defaultUserId";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
@@ -59,8 +59,14 @@ const QuizDisplayPage: React.FC = () => {
         }
 
         if (savedQuizId) {
+          const accessToken = TokenService.getAccessToken();
+          if (!accessToken) {
+            throw new Error("Authentication required to view saved quizzes.");
+          }
+
           const { data } = await axios.get(
             `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/saved-quizzes/${savedQuizId}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
           );
           if (!data?.questions?.length)
             throw new Error("No questions found for this saved quiz.");
@@ -179,7 +185,7 @@ const QuizDisplayPage: React.FC = () => {
           custom_instruction: customInstruction,
         };
 
-        await saveQuizToHistory(userId, meta, quizQuestions);
+        await saveQuizToHistory(meta, quizQuestions);
       }
     } catch (err) {
       console.error("Error checking answers:", err);
@@ -233,7 +239,6 @@ const QuizDisplayPage: React.FC = () => {
               <CheckButton onClick={checkAnswers} />
               <SaveQuizButton quizData={quizQuestions} />
               <DownloadQuizButton
-                userId={userId}
                 question_type={questionType}
                 numQuestion={numQuestions}
               />

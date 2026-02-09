@@ -140,7 +140,7 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
         {/* Resend */}
         <div className="text-center">
           <p className="text-sm text-gray-600 mb-2">
-            Didn't receive the email?
+            Didn&apos;t receive the email?
           </p>
           <button
             onClick={handleResend}

@@ -71,6 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setUser(null);
       TokenService.clearTokens();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("user_api_token");
+      }
       router.push(ROUTES.LOGIN || "/");
     }
   };
@@ -83,6 +86,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleTokenExpired = () => {
       setUser(null);
       TokenService.clearTokens();
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("user_api_token");
+      }
       router.push(ROUTES.LOGIN || "/");
     };
 

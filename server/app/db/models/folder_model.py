@@ -18,7 +18,7 @@ class FolderModel(BaseModel):
         json_encoders = {ObjectId: str}
 
 class FolderCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     name: str
 
 class FolderUpdate(BaseModel):

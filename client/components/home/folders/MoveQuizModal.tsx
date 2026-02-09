@@ -2,7 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { moveQuiz, getUserFolders, createFolder } from "../../../lib/functions/folders";
+import {
+  moveQuiz,
+  getUserFolders,
+  createFolder,
+} from "../../../lib/functions/folders";
 import { useAuth } from "../../../contexts/authContext";
 
 interface MoveQuizModalProps {
@@ -33,7 +37,7 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
 
     const loadFolders = async () => {
       try {
-        const res = await getUserFolders(user.id);
+        const res = await getUserFolders();
         setFolders(res);
       } catch (err) {
         console.error(err);
@@ -63,7 +67,7 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
       let targetFolderId = selectedFolderId;
 
       if (isCreatingNew && newFolderName.trim()) {
-        const newFolder = await createFolder({ userId: user.id, name: newFolderName });
+        const newFolder = await createFolder({ name: newFolderName });
         targetFolderId = newFolder._id;
       }
 
@@ -99,7 +103,9 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
         {!isCreatingNew && (
           <div className="space-y-2 mb-4">
             {folders.length === 0 ? (
-              <p className="text-gray-500 text-sm mb-3">No folders available.</p>
+              <p className="text-gray-500 text-sm mb-3">
+                No folders available.
+              </p>
             ) : (
               <div className="space-y-2 overflow-y-auto max-h-[50vh] pr-1">
                 {folders.map((folder) => (

@@ -1,9 +1,19 @@
+import { TokenService } from "./functions/tokenService";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const authHeaders = () => {
+  const token = TokenService.getAccessToken();
+  if (!token) {
+    throw new Error("Authentication token missing");
+  }
+  return { Authorization: `Bearer ${token}` };
+};
 
 export async function saveUserToken(token: string) {
   const res = await fetch(`${API_BASE}/api/user/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ token }),
   });
 
@@ -17,6 +27,7 @@ export async function saveUserToken(token: string) {
 export async function getUserToken(): Promise<string | null> {
   const res = await fetch(`${API_BASE}/api/user/token`, {
     method: "GET",
+    headers: authHeaders(),
   });
 
   if (!res.ok) {

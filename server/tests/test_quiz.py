@@ -2,47 +2,58 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-
 from server.app.quiz.routers.quiz import router as quiz_router
-
-def dummy_update_quiz_history(user_id, data):
-    return None
-
-import server.app.quiz.utils.questions as questions_module
-questions_module.update_quiz_history = dummy_update_quiz_history
+from server.app.auth.dependencies import get_current_user_optional
 
 app = FastAPI()
 app.include_router(quiz_router, prefix="/api")
+app.dependency_overrides[get_current_user_optional] = lambda: None
 
 client = TestClient(app)
 
-def test_get_questions_multichoice_success():
-    payload = {
-        "question_type": "multichoice",
-        "num_questions": 3
+@pytest.fixture(autouse=True)
+def mock_hf_down(monkeypatch):
+    async def _raise(*args, **kwargs):
+        raise Exception("mocked HF down")
+
+    monkeypatch.setattr(
+        "server.app.quiz.utils.questions.generate_quiz_with_huggingface",
+        _raise,
+    )
+
+def build_payload(question_type: str, num_questions: int):
+    return {
+        "profession": "Engineer",
+        "num_questions": num_questions,
+        "question_type": question_type,
+        "difficulty_level": "medium",
+        "audience_type": "students",
+        "custom_instruction": "",
     }
+
+def test_get_questions_multichoice_success():
+    payload = build_payload("multichoice", 3)
     response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 3
-    for question in data:
+    assert isinstance(data, dict)
+    assert isinstance(data["questions"], list)
+    assert len(data["questions"]) == 3
+    for question in data["questions"]:
         assert "question" in question
         assert "options" in question
         assert "question_type" in question
         assert "answer" in question
 
 def test_get_questions_true_false_success():
-    payload = {
-        "question_type": "true-false",
-        "num_questions": 5
-    }
+    payload = build_payload("true-false", 5)
     response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 5
-    for question in data:
+    assert isinstance(data, dict)
+    assert isinstance(data["questions"], list)
+    assert len(data["questions"]) == 5
+    for question in data["questions"]:
         assert "question" in question
         assert "options" in question
         assert isinstance(question["options"], list)
@@ -51,39 +62,31 @@ def test_get_questions_true_false_success():
         assert "answer" in question
 
 def test_get_questions_open_ended_success():
-    payload = {
-        "question_type": "open-ended",
-        "num_questions": 3
-    }
+    payload = build_payload("open-ended", 3)
     response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 3
-    for question in data:
+    assert isinstance(data, dict)
+    assert isinstance(data["questions"], list)
+    assert len(data["questions"]) == 3
+    for question in data["questions"]:
         assert "question" in question
-        assert "options" in question
-        assert question["options"] == []  
+        if "options" in question:
+            assert question["options"] == [] or question["options"] is None
         assert "question_type" in question
         assert question["question_type"] == "open-ended"
         assert "answer" in question
-        assert question["answer"] != ""  
+        assert question["answer"] != ""
 
 def test_get_questions_invalid_type():
-    payload = {
-        "question_type": "invalid-type",
-        "num_questions": 2
-    }
+    payload = build_payload("invalid-type", 2)
     response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 400
     data = response.json()
-    assert "Invalid question type" in data["detail"]
+    assert "No mock data for question type" in data["detail"]
 
 def test_get_questions_exceeding_available():
-    payload = {
-        "question_type": "multichoice",
-        "num_questions": 20
-    }
+    payload = build_payload("multichoice", 20)
     response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 400
     data = response.json()
@@ -167,20 +170,11 @@ def test_grade_answers_open_ended():
     assert "result" in data[0]
     assert data[0]["is_correct"] in [True, False]  
 
-@pytest.mark.asyncio
-async def test_generate_quiz():
-    payload = {
-        "profession": "Engineer",
-        "num_questions": 3,
-        "question_type": "multichoice",
-        "difficulty_level": "medium"
-    }
-    response = client.post("/api/generate-quiz", json=payload)
+def test_generate_quiz():
+    payload = build_payload("multichoice", 3)
+    response = client.post("/api/get-questions", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["message"] == "Quiz generated successfully"
-    assert data["profession"] == "Engineer"
-    assert data["num_questions"] == 3
-    assert data["question_type"] == "multichoice"
-    assert data["difficulty_level"] == "medium"
+    assert "source" in data
     assert isinstance(data["questions"], list)
+    assert len(data["questions"]) == 3

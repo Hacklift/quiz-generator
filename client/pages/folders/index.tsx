@@ -37,7 +37,7 @@ const FoldersPage = () => {
 
     const fetchFolders = async () => {
       try {
-        const data = await getUserFolders(user.id);
+        const data = await getUserFolders();
         setFolders(data);
       } catch (err) {
         console.error(err);
@@ -107,7 +107,7 @@ const FoldersPage = () => {
                   setSelectedFolders((prev) =>
                     prev.includes(folder._id)
                       ? prev.filter((id) => id !== folder._id)
-                      : [...prev, folder._id]
+                      : [...prev, folder._id],
                   )
                 }
               />

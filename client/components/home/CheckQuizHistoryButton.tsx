@@ -3,12 +3,7 @@ import { useRouter } from "next/navigation";
 export default function CheckQuizHistoryButton() {
   const router = useRouter();
   const handleCheckQuizHistory = () => {
-    const userId = "userId";
-    const queryParams = new URLSearchParams({
-      userId,
-    }).toString();
-
-    router.push(`/quiz_history?${queryParams}`);
+    router.push("/quiz_history");
   };
 
   return (

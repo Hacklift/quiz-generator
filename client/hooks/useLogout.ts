@@ -1,22 +1,23 @@
 import { useRouter } from "next/router";
-import { logoutUser } from "../lib/api/auth";
+import { logoutUser } from "../lib/functions/auth";
+import { TokenService } from "../lib/functions/tokenService";
 
 export const useLogout = () => {
   const router = useRouter();
 
   const logout = async () => {
-    const token = localStorage.getItem("accessToken");
+    const token = TokenService.getAccessToken();
     if (!token) {
       router.push("/auth/login");
       return;
     }
 
     try {
-      await logoutUser(token);
+      await logoutUser();
     } catch (error) {
       console.error("Backend logout failed, clearing token anyway:", error);
     } finally {
-      localStorage.removeItem("accessToken");
+      TokenService.clearTokens();
       router.push("/auth/login");
     }
   };

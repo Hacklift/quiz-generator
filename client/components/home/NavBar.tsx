@@ -78,6 +78,18 @@ const NavBar: React.FC = () => {
                     <span className="text-[#0F2654] font-medium">
                       Hi, {user?.username || "User"} 👋
                     </span>
+                    <Link
+                      href="/profile"
+                      className="text-[#0F2654] font-medium hover:underline"
+                    >
+                      Profile
+                    </Link>
+                    <Link
+                      href="/profile"
+                      className="text-[#0F2654] font-medium hover:underline"
+                    >
+                      Settings
+                    </Link>
                     <button
                       onClick={logout}
                       className="bg-[#0F2654] text-white px-4 py-2 rounded-lg hover:bg-[#173773] transition-all"
@@ -127,6 +139,18 @@ const NavBar: React.FC = () => {
                   <span className="text-[#0F2654] text-center">
                     Hi, {user?.username || "User"} 👋
                   </span>
+                  <Link
+                    href="/profile"
+                    className="text-[#0F2654] text-center font-medium hover:underline"
+                  >
+                    Profile
+                  </Link>
+                  <Link
+                    href="/profile"
+                    className="text-[#0F2654] text-center font-medium hover:underline"
+                  >
+                    Settings
+                  </Link>
                   <button
                     onClick={() => {
                       logout();

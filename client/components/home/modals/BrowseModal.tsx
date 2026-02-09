@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
@@ -53,21 +53,21 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
     setHasMore(true);
   };
 
-  useEffect(() => {
-    if (isOpen) {
-      resetState();
-      fetchCategories();
-    }
-  }, [isOpen]);
-
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const { data } = await axios.get(`${API_BASE}/api/categories`);
       setCategories(data);
     } catch (err) {
       console.error("Error fetching categories:", err);
     }
-  };
+  }, [API_BASE]);
+
+  useEffect(() => {
+    if (isOpen) {
+      resetState();
+      fetchCategories();
+    }
+  }, [fetchCategories, isOpen]);
 
   const fetchSubcategories = async (category: string) => {
     try {

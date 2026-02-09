@@ -2,7 +2,6 @@ import axios from "axios";
 import { TokenService } from "./tokenService";
 
 export async function saveQuizToHistory(
-  userId: string,
   meta: {
     question_type: string;
     num_questions: number;
@@ -23,7 +22,6 @@ export async function saveQuizToHistory(
   }));
 
   const payload = {
-    user_id: userId,
     quiz_name: `${meta.question_type} Quiz`,
     question_type: meta.question_type,
     num_questions: meta.num_questions,

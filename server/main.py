@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 
 from .api import healthcheck
-from .api.v1.crud import download_quiz, generate_quiz, get_user_quiz_history
+from .api.v1.crud import download_quiz
 from .app.db.routes import router as db_router
 from .app.db.core.connection import startUp, database
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -33,11 +33,7 @@ from .app.db.routes import saved_quizzes
 from .app.quiz.routers.quiz import router as quiz_router
 from .app.share.routes.share_routes import router as share_router
 from .schemas.model import UserModel, LoginRequestModel, LoginResponseModel
-from .schemas.query import (
-    GenerateQuizQuery,
-    DownloadQuizQuery,
-    GetUserQuizHistoryQuery
-)
+from .schemas.query import DownloadQuizQuery
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,16 +100,6 @@ async def get_users(request: Request):
     users = await users_collection.find().to_list(length=100)
     return users
 
-@app.post("/generate-quiz")
-async def generate_quiz_handler(query: GenerateQuizQuery = Body(...)) -> Dict[str, Any]:
-    logger.info("Received query: %s", query)
-    return generate_quiz(query.user_id, query.question_type, query.num_question)
-
-@app.post("/get-user-quiz-history")
-def get_user_quiz_history_handler(query: GetUserQuizHistoryQuery = Body(...)) -> List[Any]:
-    logger.info("Received query: %s", query)
-    return get_user_quiz_history(query.user_id)
-
 @app.get("/download-quiz")
 async def download_quiz_handler(query: DownloadQuizQuery = Depends()) -> StreamingResponse:
     logger.info("Received query: %s", query)
@@ -127,4 +113,3 @@ app.include_router(get_categories_router, prefix="/api")
 def ping_redis():
     r = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     return {"pong": r.ping()}
-

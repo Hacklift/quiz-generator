@@ -6,6 +6,7 @@ import QuizGenerationSection from "./QuizGenerationSection";
 import { useAuth } from "../../contexts/authContext";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { TokenService } from "../../lib/functions/tokenService";
 
 export default function QuizForm() {
   const [profession, setProfession] = useState("");
@@ -23,13 +24,18 @@ export default function QuizForm() {
   const { user } = useAuth();
 
   useEffect(() => {
+    if (user === undefined) return;
+
+    if (!user) {
+      setPreviousToken("");
+      return;
+    }
+
     const savedLocal = localStorage.getItem("user_api_token");
     if (savedLocal) setPreviousToken(savedLocal);
 
     const loadFromBackend = async () => {
-      if (user === undefined) return;
-      if (!user) return;
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = TokenService.getAccessToken();
       if (!accessToken) return;
 
       try {
@@ -78,7 +84,7 @@ export default function QuizForm() {
 
     try {
       if (user && token.trim()) {
-        const accessToken = localStorage.getItem("access_token");
+        const accessToken = TokenService.getAccessToken();
 
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
@@ -94,6 +100,8 @@ export default function QuizForm() {
         localStorage.setItem("user_api_token", token);
       }
 
+      const accessToken = TokenService.getAccessToken();
+
       const { data } = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
         {
@@ -105,13 +113,16 @@ export default function QuizForm() {
           difficulty_level: difficultyLevel,
           token: token.trim() ? token.trim() : undefined,
         },
+        {
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : undefined,
+        },
       );
 
-      const userId = "userId";
       const source = data.source || "mock";
 
       const queryParams = new URLSearchParams({
-        userId,
         questionType,
         numQuestions: numQuestions.toString(),
         profession,
