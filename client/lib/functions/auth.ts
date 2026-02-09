@@ -4,6 +4,8 @@ import {
   LoginPayload,
   RefreshTokenPayload,
   RefreshTokenResponse,
+  UpdateProfilePayload,
+  UpdateProfileResponse,
 } from "../../interfaces/models/User";
 import { TokenService } from "./tokenService";
 
@@ -201,6 +203,17 @@ export const refreshAccessToken = async (
 export const getProfile = async () => {
   const response = await api.get("/auth/me");
   return response.data;
+};
+
+export const updateProfile = async (
+  data: UpdateProfilePayload,
+): Promise<UpdateProfileResponse> => {
+  try {
+    const response = await api.put("/auth/profile", data);
+    return response.data as UpdateProfileResponse;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.detail || "Failed to update profile");
+  }
 };
 
 export const requestPasswordReset = async (email: string) =>

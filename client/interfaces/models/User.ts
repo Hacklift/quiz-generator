@@ -3,8 +3,26 @@ export interface User {
   username: string;
   email: string;
   isVerified: boolean;
+  full_name?: string;
+  bio?: string;
+  location?: string;
+  website?: string;
+  avatar_color?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface UpdateProfilePayload {
+  full_name?: string;
+  bio?: string;
+  location?: string;
+  website?: string;
+  avatar_color?: string;
+}
+
+export interface UpdateProfileResponse {
+  message: string;
+  user: User;
 }
 
 export interface LoginResponse {

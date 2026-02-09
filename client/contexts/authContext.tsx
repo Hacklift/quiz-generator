@@ -8,14 +8,8 @@ import {
 } from "react";
 import { useRouter } from "next/router";
 import { ROUTES } from "../constants/patterns/routes";
+import { User } from "../interfaces/models/User";
 import { getProfile, logoutUser, TokenService } from "../lib";
-
-interface User {
-  id: string;
-  username: string;
-  email?: string;
-}
-
 interface AuthContextType {
   user: User | null;
   token: string | null;

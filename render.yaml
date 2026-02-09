@@ -22,6 +22,33 @@ services:
       - key: MONGO_URI
         sync: false
       - key: SHARE_URL
-        value: https://quiz-generator-2.vercel.app
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: EMAIL_SENDER
+        sync: false
+      - key: ENV
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGO_URL
+        sync: false
+      - key: HUGGINGFACEHUB_API_TOKEN
+        sync: false
+      - key: FERNET_KEY
+        sync: false
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: MAILGUN_SENDER_EMAIL
+        sync: false
+      - key: PRIMARY_EMAIL_PROVIDER
+        sync: false
+      
     plan: free
 
