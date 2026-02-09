@@ -34,7 +34,7 @@ from ..schemas.user_schemas import (
 
 )
 
-from server.app.auth.models import LoginRequestModel, LoginResponse
+from server.schemas.model import LoginRequestModel
 
 
 from ..utils import is_valid_password
@@ -145,7 +145,7 @@ async def delete_existing_user(
     return result
 
 
-@router.post("/test/login/", response_model=LoginResponse)
+@router.post("/test/login/")
 
 async def login_user(
 
@@ -155,14 +155,13 @@ async def login_user(
 
 ):
 
-    if not request.username and not request.email:
-
+    identifier = request.username_or_email
+    if not identifier:
         raise HTTPException(status_code=400, detail="Username or email is required")
-
 
     user = await users_collection.find_one(
 
-        {"$or": [{"username": request.username}, {"email": request.email}]}
+        {"$or": [{"username": identifier}, {"email": identifier}]}
 
     )
 
@@ -172,19 +171,11 @@ async def login_user(
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
-    return LoginResponse(
-
-        message="Login successful",
-
-        user_id=str(user["_id"]),
-
-        username=user["username"],
-
-        fullname=user.get("full_name", ""),
-
-        email=user["email"],
-
-        role=user.get("role", "user"),
-
-    )
-
+    return {
+        "message": "Login successful",
+        "user_id": str(user["_id"]),
+        "username": user["username"],
+        "fullname": user.get("full_name", ""),
+        "email": user["email"],
+        "role": user.get("role", "user"),
+    }

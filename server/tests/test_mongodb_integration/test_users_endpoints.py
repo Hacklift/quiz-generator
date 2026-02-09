@@ -218,13 +218,8 @@ async def test_delete_user_endpoint(client, created_user):
 async def test_login_endpoint(client, created_user, sample_user):
 
     login_data = {
-
-        "username": created_user["username"],
-
-        "email": created_user["email"],
-
-        "password": sample_user["password"]
-
+        "username_or_email": created_user["email"],
+        "password": sample_user["password"],
     }
 
     response = await client.post("/users/test/login/", json=login_data)
@@ -251,13 +246,8 @@ async def test_login_endpoint(client, created_user, sample_user):
 async def test_login_invalid_credentials(client):
 
     login_data = {
-
-        "username": "nonexistent",
-
-        "email": "wrong@email.com",
-
-        "password": "Wrongpass1!"
-
+        "username_or_email": "wrong@email.com",
+        "password": "Wrongpass1!",
     }
 
     response = await client.post("/users/test/login/", json=login_data)
@@ -301,13 +291,13 @@ async def test_get_nonexistent_user(client):
 
 @pytest.mark.asyncio
 
-@pytest.mark.parametrize("login_data", [
-
-    {"username": "david_clark", "email": "david.clark@example.com", "password": "Wrongpass1!"},
-
-    {"username": "nonexistent", "email": "nonexistent@example.com", "password": "Testpassword8!"},
-
-])
+@pytest.mark.parametrize(
+    "login_data",
+    [
+        {"username_or_email": "david.clark@example.com", "password": "Wrongpass1!"},
+        {"username_or_email": "nonexistent@example.com", "password": "Testpassword8!"},
+    ],
+)
 
 async def test_login_fails_various(client, login_data):
 
