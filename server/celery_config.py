@@ -39,4 +39,4 @@ celery_app.conf.task_routes = {
     "tasks.send_email_generic": {"queue": "email"},
 }
 
-import server.app.share.share_tasks
+import server.app.email_platform.email_tasks
