@@ -1,14 +1,14 @@
+"use client";
+
 import React from "react";
+import Link from "next/link";
 import SidebarButton from "./SidebarButton";
-import { showComingSoonToast } from "../../ui/ComingSoonToast";
 
 const SavedQuizzesButton = () => {
   return (
-    <SidebarButton
-      label="Saved Quizzes"
-      icon="💾"
-      onClick={showComingSoonToast}
-    />
+    <Link href="/saved_quiz">
+      <SidebarButton label="Saved Quizzes" icon="💾" onClick={() => {}} />
+    </Link>
   );
 };
 

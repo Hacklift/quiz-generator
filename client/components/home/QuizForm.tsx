@@ -13,24 +13,40 @@ export default function QuizForm() {
   const [numQuestions, setNumQuestions] = useState(1);
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
-  const [token, setToken] = useState(""); // ✅ NEW
+  const [token, setToken] = useState(""); // optional
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleGenerateQuiz = async () => {
-    if (!profession || !numQuestions || !questionType || !token) {
-      setErrorMessage(
-        "Please fill in the topic, number of questions, quiz type, and API token.",
-      );
+    // ✅ Field-specific validation
+    if (!profession) {
+      setErrorMessage("Please enter a profession or topic for your quiz.");
       return;
     }
 
-    setLoading(true);
+    if (!questionType) {
+      setErrorMessage("Please select a question type.");
+      return;
+    }
+
+    if (!numQuestions || numQuestions <= 0) {
+      setErrorMessage("Please enter a valid number of questions.");
+      return;
+    }
+    // ✅ All good — clear previous errors
     setErrorMessage("");
+    setLoading(true);
 
     try {
       const userId = "userId"; // Replace with actual auth value later
+      // ✅ Save token only if provided
+      if (token.trim()) {
+        await axios.post(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
+          { token },
+        );
+      }
 
       const queryParams = new URLSearchParams({
         userId,
@@ -71,7 +87,9 @@ export default function QuizForm() {
           token={token}
           setToken={setToken}
         />
-        {errorMessage && <p className="text-red-500 mb-4">{errorMessage}</p>}
+        {errorMessage && (
+          <p className="text-red-500 mb-4 font-medium">{errorMessage}</p>
+        )}
         <GenerateButton onClick={handleGenerateQuiz} loading={loading} />
       </form>
     </div>

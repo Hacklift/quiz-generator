@@ -1,10 +1,18 @@
+"use client";
+
 import React from "react";
+import { useRouter } from "next/navigation";
 import SidebarButton from "./SidebarButton";
-import { showComingSoonToast } from "../../ui/ComingSoonToast";
 
 const FoldersButton = () => {
+  const router = useRouter();
+
+  const handleOpenFolders = () => {
+    router.push("/folders"); // ✅ Navigate to your folders page
+  };
+
   return (
-    <SidebarButton label="Folders" icon="📁" onClick={showComingSoonToast} />
+    <SidebarButton label="Folders" icon="📁" onClick={handleOpenFolders} />
   );
 };
 

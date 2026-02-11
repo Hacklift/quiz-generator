@@ -28,6 +28,9 @@ quiz_categories_collection = database["quizzes_category"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
+saved_quizzes_collection = database["saved_quizzes"]
+folders_collection = database["quiz_folders"]
+
 
 
 async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
@@ -53,9 +56,20 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
     await user_tokens_collection.create_index("user_id", unique=True)
 
 
+async def ensure_saved_quizzes_indexes(saved_quizzes_collection: AsyncIOMotorCollection):
+    await saved_quizzes_collection.create_index("user_id")
+    await saved_quizzes_collection.create_index("created_at")
+
+async def ensure_folder_indexes(folders_collection: AsyncIOMotorCollection):
+    await folders_collection.create_index("user_id")
+    await folders_collection.create_index("created_at")    
+
+
 async def startUp():
     await ensure_user_indexes(users_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
+    await ensure_saved_quizzes_indexes(saved_quizzes_collection)
+    await ensure_folder_indexes(folders_collection)
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:
@@ -78,3 +92,13 @@ def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
+
+def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
+    if saved_quizzes_collection is None:
+        raise RuntimeError("[DB Error] saved_quizzes_collection not initialized.")
+    return saved_quizzes_collection
+
+def get_folders_collection() -> AsyncIOMotorCollection:
+    if folders_collection is None:
+        raise RuntimeError("[DB Error] folders_collection not initialized.")
+    return folders_collection
