@@ -10,6 +10,7 @@ class QuizRequest(BaseModel):
     difficulty_level: str
     audience_type: str
     custom_instruction: Optional[str] = None
+    token: str
 
 
 class QuizQuestion(BaseModel):
@@ -23,4 +24,5 @@ class QuizResponse(BaseModel):
     questions: List[QuizQuestion]
     ai_down: Optional[bool] = False
     notification_message: Optional[str] = None
+    quiz_id: Optional[str] = None
 
