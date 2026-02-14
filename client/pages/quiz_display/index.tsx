@@ -261,7 +261,7 @@ const QuizDisplayPage: React.FC = () => {
                 question_type={questionType}
                 numQuestion={numQuestions}
               />
-              <ShareButton />
+              <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}
             </div>
           </section>
