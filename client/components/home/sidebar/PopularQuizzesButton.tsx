@@ -1,19 +1,23 @@
 "use client";
 
 import React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import SidebarButton from "./SidebarButton";
-import { showComingSoonToast } from "../../ui/ComingSoonToast";
 
 const PopularQuizzesButton = () => {
+  const router = useRouter();
   const pathname = usePathname();
   const isActive = pathname === "/popular";
+
+  const handleClick = () => {
+    router.push("/popular");
+  };
 
   return (
     <SidebarButton
       label="Popular Quizzes"
       icon="🌟"
-      onClick={showComingSoonToast}
+      onClick={handleClick}
       isActive={isActive}
     />
   );
