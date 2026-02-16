@@ -8,3 +8,6 @@ python-dotenv = "*"
 ipython = "*"
 streamlit = "*"
 langchain-openai = "*"
+passlib = {extras = ["bcrypt"], version = "*"}
+
+[dev-packages]
