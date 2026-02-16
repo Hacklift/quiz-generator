@@ -23,6 +23,7 @@ pydantic-settings = "*"
 huggingface-hub = "*"
 rapidfuzz = "*"
 cryptography = "*"
+slowapi = "*"
 
 [dev-packages]
 pytest = "*"
@@ -30,3 +31,4 @@ pytest-asyncio = "*"
 
 [requires]
 python_version = "3.12"
+
