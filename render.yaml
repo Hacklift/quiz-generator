@@ -5,10 +5,13 @@ services:
     buildCommand: |
       cd server && \
       pip install --upgrade pip && \
-      pip install pipenv && \
+      pip install "pipenv==2026.0.3" && \
       pipenv install --system --deploy
     startCommand: bash server/start_server_and_celery.sh
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+
       - key: REDIS_URL
         sync: false
       - key: SENDER_EMAIL
@@ -49,6 +52,5 @@ services:
         sync: false
       - key: PRIMARY_EMAIL_PROVIDER
         sync: false
-      
-    plan: free
 
+    plan: free
