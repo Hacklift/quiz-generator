@@ -11,7 +11,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
   try {
     console.log(API_BASE_URL);
-    const res = await axios.get(`${API_BASE_URL}/quizzes/test/get-quiz/${id}`);
+    const res = await axios.get(`${API_BASE_URL}/share/shared-quiz/${id}`);
     const quiz = res.data;
 
     return {
