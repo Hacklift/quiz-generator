@@ -21,12 +21,11 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
     notification_message = None
     ai_quiz_payload = None
     final_questions = []
+    quiz_id = None  
 
     try:
         # === 1. Attempt Hugging Face AI generation ===
         ai_payload = request.dict()
-
-        # ✅ Await if this is an async function
         response = await generate_quiz_with_huggingface(ai_payload)
         
         questions = response.get("questions") if response else None
@@ -93,7 +92,9 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
     # === 5. Save AI-generated quiz if successful ===
     if source == "huggingface" and ai_quiz_payload:
         try:
-            await save_ai_generated_quiz(ai_quiz_payload)
+            save_result = await save_ai_generated_quiz(ai_quiz_payload)
+            if save_result and "quiz_id" in save_result:
+                quiz_id = save_result.get("quiz_id")
         except Exception as db_error:
             logging.error(f"Failed to save AI-generated quiz to DB: {db_error}")
 
@@ -102,8 +103,9 @@ async def get_questions(request: QuizRequest, user_id: str = "defaultUserId") ->
         "source": source,
         "questions": final_questions,
         "ai_down": ai_down,
-        "notification_message": notification_message
+        "notification_message": notification_message,
+        "quiz_id": quiz_id  
     }
 
-    logging.warning(f"Final API Response: {result}")  # ✅ Now this will actually log
+    logging.warning(f"Final API Response: {result}")
     return result

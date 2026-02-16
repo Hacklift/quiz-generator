@@ -34,12 +34,12 @@ export default function QuizForm() {
       setErrorMessage("Please enter a valid number of questions.");
       return;
     }
-
     // ✅ All good — clear previous errors
     setErrorMessage("");
     setLoading(true);
 
     try {
+      const userId = "userId"; // Replace with actual auth value later
       // ✅ Save token only if provided
       if (token.trim()) {
         await axios.post(
@@ -47,24 +47,6 @@ export default function QuizForm() {
           { token },
         );
       }
-
-      const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
-        {
-          profession,
-          audience_type: audienceType,
-          custom_instruction: customInstruction,
-          num_questions: numQuestions,
-          question_type: questionType,
-          difficulty_level: difficultyLevel,
-          token: token.trim() || undefined, // optional
-        },
-      );
-
-      console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
-
-      const userId = "userId"; // Replace with actual auth value later
-      const source = data.source || "mock";
 
       const queryParams = new URLSearchParams({
         userId,
@@ -74,7 +56,7 @@ export default function QuizForm() {
         customInstruction,
         audienceType,
         difficultyLevel,
-        source,
+        token,
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);

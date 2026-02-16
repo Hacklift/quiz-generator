@@ -178,8 +178,9 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
     user_id = "dev_user"  # TODO: replace with real auth later
     user_token = await get_user_token(user_id)
 
-    # 2. Use user’s token if exists, otherwise fallback
-    final_token = user_token if user_token else HF_FALLBACK_TOKEN
+    request_token = (payload.get("token") or "").strip() or None
+    
+    final_token = request_token or user_token or HF_FALLBACK_TOKEN
 
     # 3. Build client with the chosen token
     client = InferenceClient(token=final_token)

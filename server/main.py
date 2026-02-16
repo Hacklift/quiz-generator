@@ -13,7 +13,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .api import healthcheck
-from .api.v1.crud import download_quiz, generate_quiz, get_user_quiz_history
+from .api.v1.crud import generate_quiz, get_user_quiz_history
+from .api.v1.crud.download.download_quiz import download_mock_quiz, download_quiz_by_id
 from .app.db.routes import router as db_router
 from .app.db.core.connection import startUp, database
 from .app.db.core.connection import (
@@ -96,6 +97,49 @@ app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(token_router.router, prefix="/api", tags=["Token"])
 app.include_router(saved_quizzes.router, prefix="/api", tags=["Saved Quizzes"])
 app.include_router(folder_routes, prefix="/api/folders", tags=["Folders"])
+app.database = database
+
+
+@app.get("/api")
+def read_root():
+    logger.info("Root endpoint accessed")
+    return {"message": "Welcome to the Quiz App API!"}
+
+
+@app.get("/users")
+async def get_users(request: Request):
+    users_collection = request.app.state.users_collection
+    users = await users_collection.find().to_list(length=100)
+    return users
+
+@app.post("/generate-quiz")
+async def generate_quiz_handler(query: GenerateQuizQuery = Body(...)) -> Dict[str, Any]:
+    logger.info("Received query: %s", query)
+    return generate_quiz(query.user_id, query.question_type, query.num_question)
+
+@app.post("/get-user-quiz-history")
+def get_user_quiz_history_handler(query: GetUserQuizHistoryQuery = Body(...)) -> List[Any]:
+    logger.info("Received query: %s", query)
+    return get_user_quiz_history(query.user_id)
+
+
+@app.get("/download-quiz")
+async def download_quiz_handler(query: DownloadQuizQuery = Depends()) -> StreamingResponse:
+    logger.info("Received query: %s", query)
+
+    if query.quiz_id:
+        return await download_quiz_by_id(
+            quiz_id=query.quiz_id,
+            file_format=query.format,
+            user_id=query.user_id
+        )
+
+    return download_mock_quiz(
+        query.format,
+        query.question_type,
+        query.num_question
+    )
+
 
 app.include_router(save_quiz_router, prefix="/api")
 app.include_router(get_quiz_history_router, prefix="/api")
