@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .api import healthcheck
 from .api.v1.crud import generate_quiz, get_user_quiz_history
-from .api.v1.crud.downloads.download_quiz import download_mock_quiz, download_quiz_by_id
+from .api.v1.crud.download.download_quiz import download_mock_quiz, download_quiz_by_id
 from .app.db.routes import router as db_router
 from .app.db.core.connection import startUp, database
 from .app.db.core.connection import (
