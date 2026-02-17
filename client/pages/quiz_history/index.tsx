@@ -5,6 +5,7 @@ import { getUserQuizHistory } from "../../lib/functions/getUserQuizHistory";
 import { useAuth } from "../../contexts/authContext";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
+import RequireAuth from "../../components/auth/RequireAuth";
 
 const transformQuizHistory = (quizHistory: any[]) => {
   if (!quizHistory || quizHistory.length === 0) return [];
@@ -58,12 +59,8 @@ const transformQuizHistory = (quizHistory: any[]) => {
 
 const DisplayQuizHistoryPage = ({
   quizHistory,
-  isLoggedIn,
-  openLoginModal,
 }: {
   quizHistory: JSX.Element[];
-  isLoggedIn: boolean;
-  openLoginModal: () => void;
 }) => {
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
@@ -75,18 +72,7 @@ const DisplayQuizHistoryPage = ({
             Quiz History
           </h1>
 
-          {!isLoggedIn ? (
-            <p className="text-center text-gray-600">
-              You must{" "}
-              <span
-                onClick={openLoginModal}
-                className="text-blue-600 cursor-pointer hover:underline"
-              >
-                sign in
-              </span>{" "}
-              to view your quiz history.
-            </p>
-          ) : quizHistory.length === 0 ? (
+          {quizHistory.length === 0 ? (
             <p className="text-center text-gray-600">
               No quiz history available.
             </p>
@@ -109,7 +95,7 @@ const DisplayQuizHistoryPage = ({
 };
 
 export default function DisplayQuizHistory({
-  openLoginModal,
+  openLoginModal: _openLoginModal,
 }: {
   openLoginModal: () => void;
 }) {
@@ -150,14 +136,17 @@ export default function DisplayQuizHistory({
   }
 
   return (
-    <Suspense
-      fallback={<div className="p-8 text-center">Loading quiz history...</div>}
+    <RequireAuth
+      title="Quiz History"
+      description="Sign in to see your quiz history."
     >
-      <DisplayQuizHistoryPage
-        quizHistory={quizHistory}
-        isLoggedIn={isAuthenticated}
-        openLoginModal={openLoginModal}
-      />
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="p-8 text-center">Loading quiz history...</div>
+        }
+      >
+        <DisplayQuizHistoryPage quizHistory={quizHistory} />
+      </Suspense>
+    </RequireAuth>
   );
 }

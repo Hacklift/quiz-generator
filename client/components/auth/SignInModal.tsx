@@ -57,7 +57,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           response.token_type,
         );
 
-        router.push(ROUTES.PROFILE || "/profile");
+        router.push(ROUTES.HOME || "/");
         onClose();
       } else {
         setError("Invalid response from server");

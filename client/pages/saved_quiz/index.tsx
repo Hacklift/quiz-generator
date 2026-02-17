@@ -16,7 +16,7 @@ import {
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
 import { useAuth } from "../../contexts/authContext";
-import SignInModal from "../../components/auth/SignInModal";
+import RequireAuth from "../../components/auth/RequireAuth";
 
 interface QuizQuestion {
   question: string;
@@ -412,10 +412,9 @@ const DisplaySavedQuizzesPage: React.FC<{
 };
 
 export default function SavedQuizzes() {
-  const { user, token, isAuthenticated, isLoading } = useAuth();
+  const { token, isAuthenticated } = useAuth();
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
@@ -436,49 +435,30 @@ export default function SavedQuizzes() {
     fetchSaved();
   }, [token, isAuthenticated]);
 
-  if (!isAuthenticated && !isLoading) {
-    return (
-      <>
-        <div className="flex flex-col items-center justify-center min-h-screen text-center text-gray-700">
-          <h1 className="text-2xl font-bold mb-2">Authentication Required</h1>
-          <p>
-            Please{" "}
-            <span
-              onClick={() => setIsLoginOpen(true)}
-              className="text-blue-600 underline cursor-pointer"
-            >
-              log in
-            </span>{" "}
-            to view your saved quizzes.
-          </p>
-        </div>
-
-        <SignInModal
-          isOpen={isLoginOpen}
-          onClose={() => setIsLoginOpen(false)}
-          switchToSignUp={() => {}}
-        />
-      </>
-    );
-  }
-
   return (
-    <Suspense
-      fallback={<div className="p-8 text-center">Loading saved quizzes...</div>}
+    <RequireAuth
+      title="Saved Quizzes"
+      description="You need to be signed in to view your saved quizzes."
     >
-      {loading ? (
-        <div className="p-8 text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264] mx-auto"></div>
-        </div>
-      ) : (
-        <DisplaySavedQuizzesPage
-          savedQuizzes={savedQuizzes}
-          onDeleteClick={(id) =>
-            setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
-          }
-          token={token!}
-        />
-      )}
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="p-8 text-center">Loading saved quizzes...</div>
+        }
+      >
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264] mx-auto"></div>
+          </div>
+        ) : (
+          <DisplaySavedQuizzesPage
+            savedQuizzes={savedQuizzes}
+            onDeleteClick={(id) =>
+              setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
+            }
+            token={token!}
+          />
+        )}
+      </Suspense>
+    </RequireAuth>
   );
 }

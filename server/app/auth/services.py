@@ -24,6 +24,8 @@ from server.app.db.core.connection import users_collection, blacklisted_tokens_c
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.db.crud.user_crud import create_user, get_user_by_email
 from server.app.db.schemas.user_schemas import  UserRegisterSchema, UserResponseSchema, CreateUserRequest, PasswordResetRequest, PasswordResetResponse, RequestPasswordReset, ResendVerificationRequest, MessageResponse
+from server.app.db.crud.user_crud import delete_user
+import json
 from .utils import (
     verify_password, 
     create_access_token, 
@@ -468,3 +470,78 @@ async def update_user_profile_service(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile: {str(e)}"
             )
+
+
+async def request_email_change_service(
+    new_email: str,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+    email_svc: EmailService,
+) -> MessageResponse:
+    if new_email.lower() == current_user.email.lower():
+        raise HTTPException(status_code=400, detail="New email must be different.")
+
+    existing_user = await users_collection.find_one({"email": new_email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use.")
+
+    redis_client = await get_redis_client()
+    otp = generate_otp()
+    token = generate_verification_token(new_email)
+
+    payload = json.dumps({"new_email": new_email, "otp": otp, "token": token})
+    await redis_client.setex(
+        f"email_change:{current_user.id}",
+        timedelta(minutes=10),
+        payload,
+    )
+
+    await email_svc.send_email(
+        to=new_email,
+        template_id="verification",
+        template_vars={"code": otp, "token": token},
+        purpose="verification",
+        priority="default",
+    )
+
+    return MessageResponse(message="Verification code sent to new email.")
+
+
+async def verify_email_change_service(
+    otp: str,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+) -> MessageResponse:
+    redis_client = await get_redis_client()
+    stored = await redis_client.get(f"email_change:{current_user.id}")
+    if not stored:
+        raise HTTPException(status_code=400, detail="No pending email change request.")
+
+    data = json.loads(stored)
+    stored_otp = data.get("otp")
+    new_email = data.get("new_email")
+
+    if otp != stored_otp:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    existing_user = await users_collection.find_one({"email": new_email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use.")
+
+    await users_collection.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {"email": new_email, "is_verified": True, "updated_at": datetime.now(timezone.utc)}},
+    )
+
+    await redis_client.delete(f"email_change:{current_user.id}")
+    return MessageResponse(message="Email updated successfully.")
+
+
+async def delete_account_service(
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+) -> MessageResponse:
+    result = await delete_user(users_collection, current_user.id)
+    if result.delete_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return MessageResponse(message="Account deleted successfully.")

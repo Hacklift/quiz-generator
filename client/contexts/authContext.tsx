@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== "undefined") {
         localStorage.removeItem("user_api_token");
       }
-      router.push(ROUTES.LOGIN || "/");
+      router.push(ROUTES.HOME || "/");
     }
   };
 
@@ -83,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== "undefined") {
         localStorage.removeItem("user_api_token");
       }
-      router.push(ROUTES.LOGIN || "/");
+      router.push(ROUTES.HOME || "/");
     };
 
     window.addEventListener("token-expired", handleTokenExpired);

@@ -201,7 +201,24 @@ export const refreshAccessToken = async (
 };
 
 export const getProfile = async () => {
-  const response = await api.get("/auth/me");
+  const response = await api.get("/auth/profile");
+  return response.data;
+};
+
+export const requestEmailChange = async (newEmail: string) => {
+  const response = await api.post("/auth/email-change/request", {
+    new_email: newEmail,
+  });
+  return response.data;
+};
+
+export const verifyEmailChange = async (otp: string) => {
+  const response = await api.post("/auth/email-change/verify", { otp });
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete("/auth/account");
   return response.data;
 };
 

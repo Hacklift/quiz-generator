@@ -25,6 +25,8 @@ ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 
 
 quiz_categories_collection = database["quizzes_category"]
+folders_collection = database["folders"]
+saved_quizzes_collection = database["saved_quizzes"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
@@ -71,8 +73,15 @@ def get_ai_generated_quizzes_collection() -> AsyncIOMotorCollection:
     return ai_generated_quizzes_collection
 def get_blacklisted_tokens_collection() -> AsyncIOMotorCollection:
     return blacklisted_tokens_collection
-def get_ai_generated_quizzes_collection() -> AsyncIOMotorCollection:
-    return ai_generated_quizzes_collection
+def get_folders_collection() -> AsyncIOMotorCollection:
+    if folders_collection is None:
+        raise RuntimeError("[DB Error] folders_collection has not been initialized properly.")
+    return folders_collection
+
+def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
+    if saved_quizzes_collection is None:
+        raise RuntimeError("[DB Error] saved_quizzes_collection has not been initialized properly.")
+    return saved_quizzes_collection
 
 def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
