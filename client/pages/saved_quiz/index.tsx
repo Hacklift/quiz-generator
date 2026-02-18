@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import {
@@ -14,6 +14,8 @@ import {
 } from "../../lib/functions/folders";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
+import { useAuth } from "../../contexts/authContext";
+import RequireAuth from "../../components/auth/RequireAuth";
 
 interface QuizQuestion {
   question: string;
@@ -48,13 +50,14 @@ const AddToFolderModal = ({
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const userId = "dummy_user_123"; // Replace when auth is added
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const folderMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     const fetchFolders = async () => {
       try {
-        const res = await getUserFolders(userId);
+        const res = await getUserFolders();
         setFolders(res);
       } catch (err) {
         console.error(err);
@@ -66,6 +69,20 @@ const AddToFolderModal = ({
     fetchFolders();
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!folderMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        folderMenuRef.current &&
+        !folderMenuRef.current.contains(event.target as Node)
+      ) {
+        setFolderMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [folderMenuOpen]);
+
   const handleAddToFolder = async () => {
     if (!selectedFolderId && !newFolderName) {
       toast.error("Please select or create a folder.");
@@ -75,16 +92,13 @@ const AddToFolderModal = ({
     try {
       let targetFolderId = selectedFolderId;
 
-      // Create folder if needed
       if (!targetFolderId && newFolderName) {
-        const newFolder = await createFolder(userId, newFolderName);
+        const newFolder = await createFolder({ name: newFolderName });
         targetFolderId = newFolder._id;
       }
 
-      // Add each selected quiz
       for (const quizId of selectedQuizIds) {
-        console.log("Full quiz object before adding to folder:", quizId);
-        await addQuizToFolder(targetFolderId!, { quiz_id: quizId });
+        await addQuizToFolder(targetFolderId!, { _id: quizId });
       }
 
       toast.success("Quiz(es) added to folder successfully!");
@@ -117,18 +131,63 @@ const AddToFolderModal = ({
                   No folders available.
                 </p>
               ) : (
-                <select
-                  value={selectedFolderId || ""}
-                  onChange={(e) => setSelectedFolderId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                >
-                  <option value="">Select a folder</option>
-                  {folders.map((folder) => (
-                    <option key={folder._id} value={folder._id}>
-                      {folder.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative" ref={folderMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setFolderMenuOpen((prev) => !prev)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-left bg-white text-[#2C3E50] focus:outline-none focus:ring focus:ring-blue-500 flex items-center justify-between"
+                    aria-haspopup="listbox"
+                    aria-expanded={folderMenuOpen}
+                  >
+                    <span>
+                      {selectedFolderId
+                        ? folders.find(
+                            (folder) => folder._id === selectedFolderId,
+                          )?.name
+                        : "Select a folder"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-[#0F2654] transition-transform ${
+                        folderMenuOpen ? "rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  {folderMenuOpen && (
+                    <div
+                      className="absolute left-0 right-0 mt-1 rounded-md border border-[#0F2654]/20 bg-white shadow-lg z-20 max-h-56 overflow-auto"
+                      role="listbox"
+                    >
+                      {folders.map((folder) => (
+                        <button
+                          key={folder._id}
+                          type="button"
+                          role="option"
+                          aria-selected={folder._id === selectedFolderId}
+                          onClick={() => {
+                            setSelectedFolderId(folder._id);
+                            setFolderMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-2 text-left text-sm ${
+                            folder._id === selectedFolderId
+                              ? "bg-[#0F2654] text-white"
+                              : "text-[#2C3E50] hover:bg-[#0F2654]/10"
+                          }`}
+                        >
+                          {folder.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -169,7 +228,8 @@ const AddToFolderModal = ({
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];
   onDeleteClick: (quizId: string) => void;
-}> = ({ savedQuizzes, onDeleteClick }) => {
+  token: string;
+}> = ({ savedQuizzes, onDeleteClick, token }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -186,7 +246,7 @@ const DisplaySavedQuizzesPage: React.FC<{
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
     try {
-      await deleteSavedQuiz(confirmDeleteId);
+      await deleteSavedQuiz(confirmDeleteId, token);
       toast.success("Quiz deleted successfully!");
       onDeleteClick(confirmDeleteId);
       setConfirmDeleteId(null);
@@ -197,8 +257,13 @@ const DisplaySavedQuizzesPage: React.FC<{
   };
 
   const handleViewQuiz = (quiz: SavedQuiz) => {
-    router.push(`/quiz_display?id=${quiz._id}`, { scroll: true });
+    if (!token) {
+      toast.error("Authentication required to view this quiz.");
+      return;
+    }
+
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
+    router.push(`/quiz_display?id=${quiz._id}`);
   };
 
   return (
@@ -250,7 +315,30 @@ const DisplaySavedQuizzesPage: React.FC<{
                       <h2 className="text-xl font-bold text-[#0F2654]">
                         {quiz.title}
                       </h2>
+
+                      {quiz.questions && quiz.questions.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                          {quiz.questions.map((q, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3 border rounded-lg bg-gray-50"
+                            >
+                              <p className="font-medium">
+                                {idx + 1}. {q.question}
+                              </p>
+                              {q.options && q.options.length > 0 && (
+                                <ul className="list-disc list-inside mt-1 text-gray-700">
+                                  {q.options.map((opt, i) => (
+                                    <li key={i}>{opt}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex gap-2">
                       <button
                         onClick={() => setConfirmDeleteId(quiz._id)}
@@ -266,34 +354,6 @@ const DisplaySavedQuizzesPage: React.FC<{
                       </button>
                     </div>
                   </div>
-
-                  {quiz.questions && quiz.questions.length > 0 ? (
-                    quiz.questions.map((q, idx) => (
-                      <div key={idx} className="mb-4">
-                        <h3 className="font-semibold text-gray-800 text-base sm:text-lg mb-1">
-                          {idx + 1}. {q.question}
-                        </h3>
-                        {q.options && (
-                          <ul className="ml-4 list-disc list-inside text-sm text-gray-700">
-                            {q.options.map((opt, optIdx) => (
-                              <li key={optIdx} className="py-0.5">
-                                {opt}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {q.correct_answer && (
-                          <p className="mt-1 text-sm text-[#0F2654]">
-                            <strong>Answer:</strong> {q.correct_answer}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">
-                      No questions found for this quiz.
-                    </p>
-                  )}
                 </div>
               </div>
             ))
@@ -302,14 +362,12 @@ const DisplaySavedQuizzesPage: React.FC<{
       </main>
       <Footer />
 
-      {/* Add-to-Folder Modal */}
       <AddToFolderModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         selectedQuizIds={selectedQuizIds}
       />
 
-      {/* Delete Confirmation */}
       {confirmDeleteId && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full">
@@ -342,13 +400,18 @@ const DisplaySavedQuizzesPage: React.FC<{
 };
 
 export default function SavedQuizzes() {
+  const { token, isAuthenticated } = useAuth();
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isAuthenticated || !token) {
+      setLoading(false);
+      return;
+    }
     const fetchSaved = async () => {
       try {
-        const quizzes = await getSavedQuizzes();
+        const quizzes = await getSavedQuizzes(token);
         setSavedQuizzes(quizzes);
       } catch (err) {
         console.error(err);
@@ -358,26 +421,32 @@ export default function SavedQuizzes() {
       }
     };
     fetchSaved();
-  }, []);
-
-  const handleDeleteFromList = (quizId: string) => {
-    setSavedQuizzes((prev) => prev.filter((q) => q._id !== quizId));
-  };
+  }, [token, isAuthenticated]);
 
   return (
-    <Suspense
-      fallback={<div className="p-8 text-center">Loading saved quizzes...</div>}
+    <RequireAuth
+      title="Saved Quizzes"
+      description="You need to be signed in to view your saved quizzes."
     >
-      {loading ? (
-        <div className="p-8 text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264] mx-auto"></div>
-        </div>
-      ) : (
-        <DisplaySavedQuizzesPage
-          savedQuizzes={savedQuizzes}
-          onDeleteClick={handleDeleteFromList}
-        />
-      )}
-    </Suspense>
+      <Suspense
+        fallback={
+          <div className="p-8 text-center">Loading saved quizzes...</div>
+        }
+      >
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#0a3264] mx-auto"></div>
+          </div>
+        ) : (
+          <DisplaySavedQuizzesPage
+            savedQuizzes={savedQuizzes}
+            onDeleteClick={(id) =>
+              setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
+            }
+            token={token!}
+          />
+        )}
+      </Suspense>
+    </RequireAuth>
   );
 }

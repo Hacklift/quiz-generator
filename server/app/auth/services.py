@@ -24,6 +24,10 @@ from server.app.db.core.connection import users_collection, blacklisted_tokens_c
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.db.crud.user_crud import create_user, get_user_by_email
 from server.app.db.schemas.user_schemas import  UserRegisterSchema, UserResponseSchema, CreateUserRequest, PasswordResetRequest, PasswordResetResponse, RequestPasswordReset, ResendVerificationRequest, MessageResponse
+from server.app.db.crud.user_crud import delete_user
+import json
+import hmac
+from pymongo.errors import DuplicateKeyError
 from .utils import (
     verify_password, 
     create_access_token, 
@@ -66,6 +70,7 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
 
     await redis_client.setex(f"otp:{user.email}", timedelta(minutes=10), otp)
     await redis_client.setex(f"token:{user.email}", timedelta(minutes=30), token)
+    await redis_client.delete(f"attempts:{user.email}")
 
     await email_svc.send_email(
         to=user.email,
@@ -102,6 +107,7 @@ async def resend_verification_email_service(email: str, email_svc: EmailService)
 
     await redis_client.setex(f"otp:{email}", timedelta(minutes=10), otp)
     await redis_client.setex(f"token:{email}", timedelta(minutes=30), token)
+    await redis_client.delete(f"attempts:{email}")
 
     await email_svc.send_email(
         to=email,
@@ -128,7 +134,13 @@ async def verify_otp_service(email: str,
         raise HTTPException(status_code=400, detail="OTP expired or not requested.")
 
     if otp != stored_otp:
-        await redis_client.incr(f"attempts:{email}")
+        attempts_key = f"attempts:{email}"
+        await redis_client.incr(attempts_key)
+        otp_ttl = await redis_client.ttl(f"otp:{email}")
+        if otp_ttl and otp_ttl > 0:
+            await redis_client.expire(attempts_key, otp_ttl)
+        else:
+            await redis_client.expire(attempts_key, 600)
         raise HTTPException(status_code=401, detail="Invalid OTP. Try again.")
 
     user = await users_collection.find_one({"email": email})
@@ -158,6 +170,10 @@ async def verify_link_service(
 
     if not email:
         raise HTTPException(status_code=400, detail="Could not decode token.")
+
+    stored_token = await redis_client.get(f"token:{email}")
+    if not stored_token or not hmac.compare_digest(token, stored_token):
+        raise HTTPException(status_code=400, detail="Invalid or already used verification link.")
 
     user = await users_collection.find_one({"email": email})
     if not user:
@@ -290,6 +306,7 @@ async def request_password_reset_service(request: RequestPasswordReset, email_sv
     redis_client = await get_redis_client()
     await redis_client.setex(f"otp:{request.email}", 300, otp)
     await redis_client.setex(f"token:{request.email}", 1800, token)
+    await redis_client.delete(f"attempts:{request.email}")
 
     await email_svc.send_email(
         to=request.email,
@@ -318,6 +335,9 @@ async def reset_password_service(request: PasswordResetRequest):
     elif request.reset_method == "token":
         if not request.token:
             raise HTTPException(status_code=400, detail="Token is required")
+        stored_token = await redis_client.get(f"token:{request.email}")
+        if not stored_token or not hmac.compare_digest(request.token, stored_token):
+            raise HTTPException(status_code=400, detail="Invalid or already used reset token")
         try:
             email_from_token = decode_verification_token(request.token)
         except HTTPException as e:
@@ -342,21 +362,42 @@ async def reset_password_service(request: PasswordResetRequest):
 
     return PasswordResetResponse(message="Password reset successful", success=True)
 
-async def logout_service(token: str, blacklist_collection = Depends(get_blacklisted_tokens_collection)):
+async def logout_service(
+    token: str,
+    users_collection: AsyncIOMotorCollection,
+    blacklist_collection=Depends(get_blacklisted_tokens_collection),
+):
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         jti = payload.get("jti")
         exp = payload.get("exp")
+        user_id = payload.get("sub")
 
         if not jti or not exp:
             raise HTTPException(status_code=400, detail="Invalid token or missing JTI/exp")
 
         expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
 
-        await blacklisted_tokens_collection.insert_one({
-            "jti": jti,
-            "expires_at": expires_at
-        })
+        try:
+            await blacklist_collection.insert_one({
+                "jti": jti,
+                "expires_at": expires_at
+            })
+        except DuplicateKeyError:
+            # Already blacklisted; treat as idempotent logout.
+            pass
+
+        if user_id:
+            await users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$unset": {
+                        "refresh_token": "",
+                        "refresh_token_jti": "",
+                        "refresh_token_expires_at": "",
+                    }
+                },
+            )
 
         return {"message": "Logged out successfully"}
     
@@ -468,3 +509,78 @@ async def update_user_profile_service(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update profile: {str(e)}"
             )
+
+
+async def request_email_change_service(
+    new_email: str,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+    email_svc: EmailService,
+) -> MessageResponse:
+    if new_email.lower() == current_user.email.lower():
+        raise HTTPException(status_code=400, detail="New email must be different.")
+
+    existing_user = await users_collection.find_one({"email": new_email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use.")
+
+    redis_client = await get_redis_client()
+    otp = generate_otp()
+    token = generate_verification_token(new_email)
+
+    payload = json.dumps({"new_email": new_email, "otp": otp, "token": token})
+    await redis_client.setex(
+        f"email_change:{current_user.id}",
+        timedelta(minutes=10),
+        payload,
+    )
+
+    await email_svc.send_email(
+        to=new_email,
+        template_id="verification",
+        template_vars={"code": otp, "token": token},
+        purpose="verification",
+        priority="default",
+    )
+
+    return MessageResponse(message="Verification code sent to new email.")
+
+
+async def verify_email_change_service(
+    otp: str,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+) -> MessageResponse:
+    redis_client = await get_redis_client()
+    stored = await redis_client.get(f"email_change:{current_user.id}")
+    if not stored:
+        raise HTTPException(status_code=400, detail="No pending email change request.")
+
+    data = json.loads(stored)
+    stored_otp = data.get("otp")
+    new_email = data.get("new_email")
+
+    if otp != stored_otp:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+
+    existing_user = await users_collection.find_one({"email": new_email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use.")
+
+    await users_collection.update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {"email": new_email, "is_verified": True, "updated_at": datetime.now(timezone.utc)}},
+    )
+
+    await redis_client.delete(f"email_change:{current_user.id}")
+    return MessageResponse(message="Email updated successfully.")
+
+
+async def delete_account_service(
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+) -> MessageResponse:
+    result = await delete_user(users_collection, current_user.id)
+    if result.delete_count == 0:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return MessageResponse(message="Account deleted successfully.")

@@ -29,7 +29,6 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
 
   return (
     <div className="relative" ref={menuRef}>
-      {/* Three-dot icon */}
       <button
         onClick={() => setOpen((prev) => !prev)}
         className="p-2 rounded-full hover:bg-gray-100 transition"
@@ -37,7 +36,6 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
         <MoreVertical className="text-navy-900" size={20} />
       </button>
 
-      {/* Dropdown menu */}
       {open && (
         <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded-xl border border-gray-100 z-20">
           <button

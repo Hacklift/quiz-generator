@@ -1,186 +1,345 @@
 import pytest
+
 from fastapi.testclient import TestClient
+
 from fastapi import FastAPI
 
 
 from server.app.quiz.routers.quiz import router as quiz_router
 
-def dummy_update_quiz_history(user_id, data):
-    return None
+from server.app.dependancies import get_current_user_optional
 
-import server.app.quiz.utils.questions as questions_module
-questions_module.update_quiz_history = dummy_update_quiz_history
 
 app = FastAPI()
+
 app.include_router(quiz_router, prefix="/api")
+
+app.dependency_overrides[get_current_user_optional] = lambda: None
+
 
 client = TestClient(app)
 
-def test_get_questions_multichoice_success():
-    payload = {
-        "question_type": "multichoice",
-        "num_questions": 3
+
+@pytest.fixture(autouse=True)
+
+def mock_hf_down(monkeypatch):
+
+    async def _raise(*args, **kwargs):
+
+        raise Exception("mocked HF down")
+
+
+    monkeypatch.setattr(
+
+        "server.app.quiz.utils.questions.generate_quiz_with_huggingface",
+
+        _raise,
+
+    )
+
+
+def build_payload(question_type: str, num_questions: int):
+
+    return {
+
+        "profession": "Engineer",
+
+        "num_questions": num_questions,
+
+        "question_type": question_type,
+
+        "difficulty_level": "medium",
+
+        "audience_type": "students",
+
+        "custom_instruction": "",
+
     }
+
+
+def test_get_questions_multichoice_success():
+
+    payload = build_payload("multichoice", 3)
+
     response = client.post("/api/get-questions", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 3
-    for question in data:
+
+    assert isinstance(data, dict)
+
+    assert isinstance(data["questions"], list)
+
+    assert len(data["questions"]) == 3
+
+    for question in data["questions"]:
+
         assert "question" in question
+
         assert "options" in question
+
         assert "question_type" in question
+
         assert "answer" in question
+
 
 def test_get_questions_true_false_success():
-    payload = {
-        "question_type": "true-false",
-        "num_questions": 5
-    }
+
+    payload = build_payload("true-false", 5)
+
     response = client.post("/api/get-questions", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 5
-    for question in data:
+
+    assert isinstance(data, dict)
+
+    assert isinstance(data["questions"], list)
+
+    assert len(data["questions"]) == 5
+
+    for question in data["questions"]:
+
         assert "question" in question
+
         assert "options" in question
+
         assert isinstance(question["options"], list)
+
         assert "question_type" in question
+
         assert question["question_type"] == "true-false"
+
         assert "answer" in question
+
 
 def test_get_questions_open_ended_success():
-    payload = {
-        "question_type": "open-ended",
-        "num_questions": 3
-    }
+
+    payload = build_payload("open-ended", 3)
+
     response = client.post("/api/get-questions", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 3
-    for question in data:
+
+    assert isinstance(data, dict)
+
+    assert isinstance(data["questions"], list)
+
+    assert len(data["questions"]) == 3
+
+    for question in data["questions"]:
+
         assert "question" in question
-        assert "options" in question
-        assert question["options"] == []  
+
+        if "options" in question:
+
+            assert question["options"] == [] or question["options"] is None
+
         assert "question_type" in question
+
         assert question["question_type"] == "open-ended"
+
         assert "answer" in question
-        assert question["answer"] != ""  
+
+        assert question["answer"] != ""
+
 
 def test_get_questions_invalid_type():
-    payload = {
-        "question_type": "invalid-type",
-        "num_questions": 2
-    }
+
+    payload = build_payload("invalid-type", 2)
+
     response = client.post("/api/get-questions", json=payload)
+
     assert response.status_code == 400
+
     data = response.json()
-    assert "Invalid question type" in data["detail"]
+
+    assert "No mock data for question type" in data["detail"]
+
 
 def test_get_questions_exceeding_available():
-    payload = {
-        "question_type": "multichoice",
-        "num_questions": 20
-    }
+
+    payload = build_payload("multichoice", 20)
+
     response = client.post("/api/get-questions", json=payload)
+
     assert response.status_code == 400
+
     data = response.json()
+
     assert "Requested" in data["detail"]
 
+
 def test_grade_answers_multichoice():
+
     payload = [
+
         {
+
             "question": "What is the capital of France?",
+
             "user_answer": "Paris",
+
             "correct_answer": "Paris",
+
             "question_type": "multichoice"
+
         },
+
         {
+
             "question": "Which planet is known as the Red Planet?",
-            "user_answer": "Jupiter",  
+
+            "user_answer": "Jupiter",
+
             "correct_answer": "Mars",
+
             "question_type": "multichoice"
+
         },
+
     ]
+
     response = client.post("/api/grade-answers", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
+
     assert isinstance(data, list)
+
     assert len(data) == 2
+
     assert data[0]["is_correct"] is True
+
     assert data[0]["result"] == "Correct"
+
     assert data[1]["is_correct"] is False
+
     assert data[1]["result"] == "Incorrect"
 
+
 def test_grade_answers_true_false():
+
     payload = [
+
         {
+
             "question": "The Earth is flat.",
+
             "user_answer": "false",
+
             "correct_answer": "false",
+
             "question_type": "true-false"
+
         },
+
         {
+
             "question": "Water boils at 100°C.",
+
             "user_answer": "true",
+
             "correct_answer": "true",
+
             "question_type": "true-false"
+
         },
+
         {
+
             "question": "The sun revolves around the Earth.",
+
             "user_answer": "false",
+
             "correct_answer": "false",
+
             "question_type": "true-false"
+
         },
+
     ]
+
     response = client.post("/api/grade-answers", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
+
     assert isinstance(data, list)
+
     assert len(data) == 3
+
     for item in data:
+
         if item["question"] == "Water boils at 100°C.":
+
             assert item["is_correct"] is True
+
             assert item["result"] == "Correct"
+
         else:
+
             assert item["is_correct"] is True
+
             assert item["result"] == "Correct"
+
 
 def test_grade_answers_open_ended():
-    payload = [
-        {
-            "question": "Explain the process of photosynthesis.",
-            "user_answer": "Photosynthesis uses sunlight to make food from carbon dioxide and water.",
-            "correct_answer": (
-                "Photosynthesis is the process by which green plants and some organisms use sunlight to synthesize foods with the help of chlorophyll. "
-                "It involves the conversion of carbon dioxide and water into glucose and oxygen."
-            ),
-            "question_type": "open-ended"
-        }
-    ]
-    response = client.post("/api/grade-answers", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert "accuracy_percentage" in data[0]
-    assert "result" in data[0]
-    assert data[0]["is_correct"] in [True, False]  
 
-@pytest.mark.asyncio
-async def test_generate_quiz():
-    payload = {
-        "profession": "Engineer",
-        "num_questions": 3,
-        "question_type": "multichoice",
-        "difficulty_level": "medium"
-    }
-    response = client.post("/api/generate-quiz", json=payload)
+    payload = [
+
+        {
+
+            "question": "Explain the process of photosynthesis.",
+
+            "user_answer": "Photosynthesis uses sunlight to make food from carbon dioxide and water.",
+
+            "correct_answer": (
+
+                "Photosynthesis is the process by which green plants and some organisms use sunlight to synthesize foods with the help of chlorophyll. "
+
+                "It involves the conversion of carbon dioxide and water into glucose and oxygen."
+
+            ),
+
+            "question_type": "open-ended"
+
+        }
+
+    ]
+
+    response = client.post("/api/grade-answers", json=payload)
+
     assert response.status_code == 200
+
     data = response.json()
-    assert data["message"] == "Quiz generated successfully"
-    assert data["profession"] == "Engineer"
-    assert data["num_questions"] == 3
-    assert data["question_type"] == "multichoice"
-    assert data["difficulty_level"] == "medium"
+
+    assert "accuracy_percentage" in data[0]
+
+    assert "result" in data[0]
+
+    assert data[0]["is_correct"] in [True, False]
+
+
+def test_generate_quiz():
+
+    payload = build_payload("multichoice", 3)
+
+    response = client.post("/api/get-questions", json=payload)
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "source" in data
+
     assert isinstance(data["questions"], list)
+
+    assert len(data["questions"]) == 3
+

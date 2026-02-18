@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
+import { useAuth } from "../../contexts/authContext";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { TokenService } from "../../lib/functions/tokenService";
 
 export default function QuizForm() {
   const [profession, setProfession] = useState("");
@@ -13,13 +15,55 @@ export default function QuizForm() {
   const [numQuestions, setNumQuestions] = useState(1);
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
-  const [token, setToken] = useState(""); // optional
+  const [token, setToken] = useState("");
+  const [previousToken, setPreviousToken] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
   const router = useRouter();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user === undefined) return;
+
+    if (!user) {
+      setPreviousToken("");
+      return;
+    }
+
+    const savedLocal = sessionStorage.getItem("user_api_token");
+    if (savedLocal) setPreviousToken(savedLocal);
+
+    const loadFromBackend = async () => {
+      const accessToken = TokenService.getAccessToken();
+      if (!accessToken) return;
+
+      try {
+        const res = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            withCredentials: true,
+          },
+        );
+
+        if (res.data?.token) {
+          setPreviousToken(res.data.token);
+          sessionStorage.setItem("user_api_token", res.data.token);
+        }
+      } catch (e: any) {
+        if (e.response?.status !== 404) {
+          console.warn("Error fetching user token:", e);
+        }
+      }
+    };
+
+    loadFromBackend();
+  }, [user]);
 
   const handleGenerateQuiz = async () => {
-    // ✅ Field-specific validation
     if (!profession) {
       setErrorMessage("Please enter a profession or topic for your quiz.");
       return;
@@ -35,18 +79,28 @@ export default function QuizForm() {
       return;
     }
 
-    // ✅ All good — clear previous errors
     setErrorMessage("");
     setLoading(true);
 
     try {
-      // ✅ Save token only if provided
-      if (token.trim()) {
+      if (user && token.trim()) {
+        const accessToken = TokenService.getAccessToken();
+
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
           { token },
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            withCredentials: true,
+          },
         );
+
+        sessionStorage.setItem("user_api_token", token);
       }
+
+      const accessToken = TokenService.getAccessToken();
 
       const { data } = await axios.post(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
@@ -57,17 +111,18 @@ export default function QuizForm() {
           num_questions: numQuestions,
           question_type: questionType,
           difficulty_level: difficultyLevel,
-          token: token.trim() || undefined, // optional
+          token: token.trim() ? token.trim() : undefined,
+        },
+        {
+          headers: accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : undefined,
         },
       );
 
-      console.log("🔥 RAW RESPONSE FROM BACKEND:", data);
-
-      const userId = "userId"; // Replace with actual auth value later
       const source = data.source || "mock";
 
       const queryParams = new URLSearchParams({
-        userId,
         questionType,
         numQuestions: numQuestions.toString(),
         profession,
@@ -79,7 +134,6 @@ export default function QuizForm() {
 
       router.push(`/quiz_display?${queryParams}`);
     } catch (error) {
-      console.error(error);
       setErrorMessage("Failed to generate quiz. Please try again.");
     } finally {
       setLoading(false);
@@ -104,10 +158,13 @@ export default function QuizForm() {
           setDifficultyLevel={setDifficultyLevel}
           token={token}
           setToken={setToken}
+          previousToken={previousToken}
         />
+
         {errorMessage && (
           <p className="text-red-500 mb-4 font-medium">{errorMessage}</p>
         )}
+
         <GenerateButton onClick={handleGenerateQuiz} loading={loading} />
       </form>
     </div>

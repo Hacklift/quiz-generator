@@ -50,7 +50,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const response: LoginResponse = await login(payload);
 
-      // Save both access and refresh tokens using auth context
       if (response.access_token && response.refresh_token) {
         await authLogin(
           response.access_token,
@@ -58,8 +57,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           response.token_type,
         );
 
-        // Navigate to profile
-        router.push(ROUTES.PROFILE || "/profile");
+        router.push(ROUTES.HOME || "/");
         onClose();
       } else {
         setError("Invalid response from server");
@@ -137,7 +135,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             />
             {identifier && isEmail && !EMAIL_REGEX.test(identifier) && (
               <p className="text-xs text-amber-600 mt-1">
-                {"This doesn't look like a valid email address"}
+                This doesn&apos;t look like a valid email address
               </p>
             )}
           </div>
@@ -193,7 +191,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </div>
           <div className="relative flex justify-center text-sm">
             <span className="px-2 bg-white text-gray-500">
-              {"Don't have an account?"}
+              Don&apos;t have an account?
             </span>
           </div>
         </div>

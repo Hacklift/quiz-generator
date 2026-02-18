@@ -1,20 +1,42 @@
-// client/components/sidebar/QuizHistoryButton.tsx
 "use client";
 
-import React from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import SidebarButton from "./SidebarButton";
+import { useAuth } from "../../../contexts/authContext";
+import SignInModal from "../../auth/SignInModal";
 
 const QuizHistoryButton: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth();
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const isActive = pathname.startsWith("/quiz_history");
 
   const handleClick = () => {
-    const userId = "userId"; // replace with real userId when available
-    const query = new URLSearchParams({ userId }).toString();
-    router.push(`/quiz_history?${query}`);
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      setIsLoginOpen(true);
+      return;
+    }
+    router.push("/quiz_history");
   };
 
-  return <SidebarButton label="Quiz History" icon="🕘" onClick={handleClick} />;
+  return (
+    <>
+      <SidebarButton
+        label="Quiz History"
+        icon="🕘"
+        onClick={handleClick}
+        isActive={isActive}
+      />
+      <SignInModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        switchToSignUp={() => {}}
+      />
+    </>
+  );
 };
 
 export default QuizHistoryButton;

@@ -12,7 +12,7 @@ import { TokenService } from "./tokenService";
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
@@ -96,7 +96,6 @@ api.interceptors.response.use(
       }
 
       try {
-        // Attempt to refresh the token
         const response = await axios.post<RefreshTokenResponse>(
           `${BASE_URL}/auth/refresh`,
           { refresh_token: refreshToken },
@@ -150,8 +149,18 @@ export const registerUser = async (data: {
   full_name: string;
   password: string;
 }) => {
-  const response = await api.post("/auth/register/", data);
-  return response.data;
+  try {
+    const response = await api.post("/auth/register/", data);
+    return response.data;
+  } catch (error: any) {
+    const detail = error.response?.data?.detail;
+    const message = Array.isArray(detail)
+      ? detail[0]?.msg || "Invalid input."
+      : typeof detail === "string"
+        ? detail
+        : error.message || "Registration failed.";
+    throw new Error(message);
+  }
 };
 
 export const verifyOtp = async (email: string, otp: string) =>
@@ -193,6 +202,23 @@ export const refreshAccessToken = async (
 
 export const getProfile = async () => {
   const response = await api.get("/auth/profile");
+  return response.data;
+};
+
+export const requestEmailChange = async (newEmail: string) => {
+  const response = await api.post("/auth/email-change/request", {
+    new_email: newEmail,
+  });
+  return response.data;
+};
+
+export const verifyEmailChange = async (otp: string) => {
+  const response = await api.post("/auth/email-change/verify", { otp });
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete("/auth/account");
   return response.data;
 };
 

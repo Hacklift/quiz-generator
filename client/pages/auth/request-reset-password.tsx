@@ -14,7 +14,6 @@ export default function RequestResetPasswordPage() {
   };
 
   const handleSuccess = (submittedEmail: string) => {
-    // Store the email and redirect to reset password page with OTP mode
     router.push({
       pathname: ROUTES.RESET_PASSWORD,
       query: { email: submittedEmail, mode: "otp" },

@@ -88,6 +88,72 @@ async def get_current_user(
         location=user.get("location"),
         website=user.get("website"),
         avatar_color=user.get("avatar_color", "#143E6F"),
+        role=user.get("role", "user"),
+        is_active=user.get("is_active", True),
+        is_verified=user.get("is_verified", False),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(HTTPBearer(auto_error=False)),
+    users_collection=Depends(get_users_collection),
+    blacklist_collection=Depends(get_blacklisted_tokens_collection),
+) -> UserOut | None:
+    """
+    Optional version of get_current_user. Returns None when no/invalid token is provided.
+    """
+    if credentials is None:
+        return None
+
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+
+        user_id: str = payload.get("sub")
+        jti: str = payload.get("jti")
+
+        if not user_id or not jti:
+            return None
+
+    except (ExpiredSignatureError, InvalidTokenError, DecodeError):
+        return None
+
+    blacklisted = await blacklist_collection.find_one({"jti": jti})
+    if blacklisted:
+        return None
+
+    try:
+        user = await users_collection.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        return None
+
+    if user is None:
+        return None
+
+    created_at = user.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+
+    updated_at = user.get("updated_at")
+    if isinstance(updated_at, datetime):
+        updated_at = updated_at.isoformat()
+
+    return UserOut(
+        id=str(user["_id"]),
+        username=user["username"],
+        email=user["email"],
+        full_name=user.get("full_name"),
+        bio=user.get("bio"),
+        location=user.get("location"),
+        website=user.get("website"),
+        avatar_color=user.get("avatar_color", "#143E6F"),
+        role=user.get("role", "user"),
         is_active=user.get("is_active", True),
         is_verified=user.get("is_verified", False),
         created_at=created_at,

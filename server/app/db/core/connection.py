@@ -25,12 +25,11 @@ ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 
 
 quiz_categories_collection = database["quizzes_category"]
+folders_collection = database["folders"]
+saved_quizzes_collection = database["saved_quizzes"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
-saved_quizzes_collection = database["saved_quizzes"]
-folders_collection = database["quiz_folders"]
-
 
 
 async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
@@ -41,7 +40,15 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
 
 async def ensure_blacklist_indexes(blacklisted_tokens_collection: AsyncIOMotorCollection):
     await blacklisted_tokens_collection.create_index("jti", unique=True)
-    await blacklisted_tokens_collection.create_index("expires_at")
+    index_info = await blacklisted_tokens_collection.index_information()
+    expires_index = index_info.get("expires_at_1")
+    if expires_index and "expireAfterSeconds" not in expires_index:
+        await blacklisted_tokens_collection.drop_index("expires_at_1")
+    await blacklisted_tokens_collection.create_index(
+        "expires_at",
+        expireAfterSeconds=0,
+        name="expires_at_1",
+    )
 async def ensure_ai_quiz_indexes(ai_generated_quizzes_collection: AsyncIOMotorCollection):
     """Indexes for the AI-generated quizzes collection."""
     # Compound unique index: no two identical quizzes with same title and questions
@@ -56,20 +63,11 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
     await user_tokens_collection.create_index("user_id", unique=True)
 
 
-async def ensure_saved_quizzes_indexes(saved_quizzes_collection: AsyncIOMotorCollection):
-    await saved_quizzes_collection.create_index("user_id")
-    await saved_quizzes_collection.create_index("created_at")
-
-async def ensure_folder_indexes(folders_collection: AsyncIOMotorCollection):
-    await folders_collection.create_index("user_id")
-    await folders_collection.create_index("created_at")    
-
-
 async def startUp():
     await ensure_user_indexes(users_collection)
+    await ensure_blacklist_indexes(blacklisted_tokens_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
-    await ensure_saved_quizzes_indexes(saved_quizzes_collection)
-    await ensure_folder_indexes(folders_collection)
+    await ensure_user_tokens_indexes(user_tokens_collection)
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:
@@ -85,20 +83,17 @@ def get_ai_generated_quizzes_collection() -> AsyncIOMotorCollection:
     return ai_generated_quizzes_collection
 def get_blacklisted_tokens_collection() -> AsyncIOMotorCollection:
     return blacklisted_tokens_collection
-def get_ai_generated_quizzes_collection() -> AsyncIOMotorCollection:
-    return ai_generated_quizzes_collection
+def get_folders_collection() -> AsyncIOMotorCollection:
+    if folders_collection is None:
+        raise RuntimeError("[DB Error] folders_collection has not been initialized properly.")
+    return folders_collection
+
+def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
+    if saved_quizzes_collection is None:
+        raise RuntimeError("[DB Error] saved_quizzes_collection has not been initialized properly.")
+    return saved_quizzes_collection
 
 def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
-
-def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
-    if saved_quizzes_collection is None:
-        raise RuntimeError("[DB Error] saved_quizzes_collection not initialized.")
-    return saved_quizzes_collection
-
-def get_folders_collection() -> AsyncIOMotorCollection:
-    if folders_collection is None:
-        raise RuntimeError("[DB Error] folders_collection not initialized.")
-    return folders_collection

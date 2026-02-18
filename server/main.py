@@ -43,6 +43,9 @@ from .schemas.query import (
 
 # Import rate limiter
 from .app.db.core.rate_limiter import limiter, rate_limit_handler
+from .app.db.core.config import settings
+from .app.dependancies import get_current_user
+from .app.db.models.user_models import UserOut
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,9 +115,23 @@ async def read_root(request: Request, response: Response):
 
 @app.get("/users")
 @limiter.limit("30/minute")  # Restrictive for user listing
-async def get_users(request: Request, response: Response):
+async def get_users(
+    request: Request,
+    response: Response,
+    current_user: UserOut = Depends(get_current_user),
+):
+    if not settings.ENABLE_PUBLIC_USER_LIST and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     users_collection = request.app.state.users_collection
-    users = await users_collection.find().to_list(length=100)
+    users = await users_collection.find(
+        {},
+        projection={
+            "hashed_password": 0,
+            "refresh_token": 0,
+            "refresh_token_jti": 0,
+            "refresh_token_expires_at": 0,
+        },
+    ).to_list(length=100)
     return users
 
 @app.post("/generate-quiz")

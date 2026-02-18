@@ -1,10 +1,7 @@
-// components/home/NavGenerateQuizButton.tsx
 "use client";
 
 import React from "react";
-import { useRouter } from "next/router"; // For Pages Router
-// If you're using the App Router, use: `import { useRouter } from "next/navigation";`
-
+import { useRouter } from "next/router";
 interface NavGenerateQuizButtonProps {
   className?: string;
 }

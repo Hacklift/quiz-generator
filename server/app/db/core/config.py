@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     VERIFICATION_TOKEN_EXPIRE_HOURS: int = 2
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ENABLE_TEST_USER_ROUTES: bool = False
+    ENABLE_PUBLIC_USER_LIST: bool = False
 
     email_sender: str
     email_password: str

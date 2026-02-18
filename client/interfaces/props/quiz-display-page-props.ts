@@ -1,6 +1,5 @@
-export interface QuizDisplayPageProps{
-    userId: string,
-    questionType: string,
-    numQuestions: number,
-    quizQuestions: any[]
+export interface QuizDisplayPageProps {
+  questionType: string;
+  numQuestions: number;
+  quizQuestions: any[];
 }
