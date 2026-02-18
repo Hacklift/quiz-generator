@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from ....app.auth.dependencies import get_current_user
+from ....app.dependancies import get_current_user
 
 from ....app.db.models.quiz_history_models import QuizHistoryModel
 

@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       TokenService.clearTokens();
       if (typeof window !== "undefined") {
-        localStorage.removeItem("user_api_token");
+        sessionStorage.removeItem("user_api_token");
       }
       router.push(ROUTES.HOME || "/");
     }
@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       TokenService.clearTokens();
       if (typeof window !== "undefined") {
-        localStorage.removeItem("user_api_token");
+        sessionStorage.removeItem("user_api_token");
       }
       router.push(ROUTES.HOME || "/");
     };

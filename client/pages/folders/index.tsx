@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import toast from "react-hot-toast";
 import NavBar from "../../components/home/NavBar";
 import Footer from "../../components/home/Footer";
@@ -25,6 +26,7 @@ interface Folder {
 }
 
 const FoldersPage = () => {
+  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -105,7 +107,8 @@ const FoldersPage = () => {
                   key={folder._id}
                   folder={folder}
                   isSelected={selectedFolders.includes(folder._id)}
-                  onSelect={() =>
+                  onOpen={() => router.push(`/folders/${folder._id}`)}
+                  onToggleSelect={() =>
                     setSelectedFolders((prev) =>
                       prev.includes(folder._id)
                         ? prev.filter((id) => id !== folder._id)

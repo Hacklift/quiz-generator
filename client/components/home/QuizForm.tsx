@@ -31,7 +31,7 @@ export default function QuizForm() {
       return;
     }
 
-    const savedLocal = localStorage.getItem("user_api_token");
+    const savedLocal = sessionStorage.getItem("user_api_token");
     if (savedLocal) setPreviousToken(savedLocal);
 
     const loadFromBackend = async () => {
@@ -51,7 +51,7 @@ export default function QuizForm() {
 
         if (res.data?.token) {
           setPreviousToken(res.data.token);
-          localStorage.setItem("user_api_token", res.data.token);
+          sessionStorage.setItem("user_api_token", res.data.token);
         }
       } catch (e: any) {
         if (e.response?.status !== 404) {
@@ -97,7 +97,7 @@ export default function QuizForm() {
           },
         );
 
-        localStorage.setItem("user_api_token", token);
+        sessionStorage.setItem("user_api_token", token);
       }
 
       const accessToken = TokenService.getAccessToken();

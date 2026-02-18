@@ -37,7 +37,7 @@ from ....app.db.core.connection import get_saved_quizzes_collection
 
 from ....app.db.models.folder_model import FolderCreate, BulkDeleteFoldersRequest, BulkRemoveRequest
 
-from ....app.auth.dependencies import get_current_user
+from ....app.dependancies import get_current_user
 
 
 router = APIRouter(tags=["Folders"])

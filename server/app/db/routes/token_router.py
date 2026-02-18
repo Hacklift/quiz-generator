@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from ....app.db.crud.token_crud import save_user_token, get_user_token
 
-from ....app.auth.dependencies import get_current_user
+from ....app.dependancies import get_current_user
 
 
 router = APIRouter()

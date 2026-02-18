@@ -16,7 +16,7 @@ from ....app.db.crud.saved_quiz_crud import (
 
 from ....app.db.models.saved_quiz_model import SavedQuizModel
 
-from ....app.auth.dependencies import get_current_user
+from ....app.dependancies import get_current_user
 
 from ....app.db.schemas.user_schemas import UserResponseSchema
 

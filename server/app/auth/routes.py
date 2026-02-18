@@ -216,4 +216,5 @@ async def logout(
     blacklist_collection = Depends(get_blacklisted_tokens_collection),
 ):
     token = credentials.credentials
-    return await logout_service(token, blacklist_collection)
+    users_collection = request.app.state.users_collection
+    return await logout_service(token, users_collection, blacklist_collection)

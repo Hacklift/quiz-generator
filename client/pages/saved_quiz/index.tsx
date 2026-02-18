@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   getSavedQuizzes,
   deleteSavedQuiz,
-  saveQuiz,
 } from "../../lib/functions/savedQuiz";
 import {
   getUserFolders,
@@ -257,25 +256,14 @@ const DisplaySavedQuizzesPage: React.FC<{
     }
   };
 
-  const handleViewQuiz = async (quiz: SavedQuiz) => {
+  const handleViewQuiz = (quiz: SavedQuiz) => {
     if (!token) {
       toast.error("Authentication required to view this quiz.");
       return;
     }
 
-    const questionType = quiz.question_type || "unknown-type";
-
-    if (quiz.questions && quiz.questions.length > 0) {
-      try {
-        await saveQuiz(quiz.title, questionType, quiz.questions, token);
-      } catch (err) {
-        console.error("Failed to save quiz:", err);
-        toast.error("Failed to load quiz.");
-      }
-    }
-
-    router.push(`/quiz_display?id=${quiz._id}`, { scroll: true });
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
+    router.push(`/quiz_display?id=${quiz._id}`);
   };
 
   return (

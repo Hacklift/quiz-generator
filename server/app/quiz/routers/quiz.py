@@ -11,7 +11,7 @@ from server.app.quiz.utils.questions import get_questions
 
 from server.app.quiz.utils.grading import grade_answers
 
-from server.app.auth.dependencies import get_current_user_optional
+from server.app.dependancies import get_current_user_optional
 
 
 router = APIRouter()

@@ -40,7 +40,15 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
 
 async def ensure_blacklist_indexes(blacklisted_tokens_collection: AsyncIOMotorCollection):
     await blacklisted_tokens_collection.create_index("jti", unique=True)
-    await blacklisted_tokens_collection.create_index("expires_at")
+    index_info = await blacklisted_tokens_collection.index_information()
+    expires_index = index_info.get("expires_at_1")
+    if expires_index and "expireAfterSeconds" not in expires_index:
+        await blacklisted_tokens_collection.drop_index("expires_at_1")
+    await blacklisted_tokens_collection.create_index(
+        "expires_at",
+        expireAfterSeconds=0,
+        name="expires_at_1",
+    )
 async def ensure_ai_quiz_indexes(ai_generated_quizzes_collection: AsyncIOMotorCollection):
     """Indexes for the AI-generated quizzes collection."""
     # Compound unique index: no two identical quizzes with same title and questions
@@ -57,7 +65,9 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
 
 async def startUp():
     await ensure_user_indexes(users_collection)
+    await ensure_blacklist_indexes(blacklisted_tokens_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
+    await ensure_user_tokens_indexes(user_tokens_collection)
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:

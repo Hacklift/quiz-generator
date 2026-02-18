@@ -85,8 +85,8 @@ const FolderView = () => {
   };
 
   const handleViewQuiz = (quiz: any) => {
-    router.push(`/quiz_display?id=${quiz._id}`);
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
+    router.push("/quiz_display");
   };
 
   const formatDate = (date: string) => {

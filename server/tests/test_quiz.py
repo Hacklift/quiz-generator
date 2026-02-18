@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from server.app.quiz.routers.quiz import router as quiz_router
 
-from server.app.auth.dependencies import get_current_user_optional
+from server.app.dependancies import get_current_user_optional
 
 
 app = FastAPI()
