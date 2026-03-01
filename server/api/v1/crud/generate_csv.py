@@ -15,8 +15,12 @@ def generate_csv(data: List[dict]):
     writer.writerow(["Question", "Options", "Answer"])
 
     for item in data:
+        raw_options = item.get("options")
 
-        options = ", ".join(item.get("options", []))
+        if isinstance(raw_options, list):
+            options = ", ".join(raw_options)
+        else:
+            options = ""
 
         writer.writerow([item["question"], options, item["answer"]])
 
