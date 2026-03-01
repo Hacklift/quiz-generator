@@ -19,6 +19,7 @@ class QuizRequest(BaseModel):
     audience_type: str
 
     custom_instruction: Optional[str] = None
+    token: str
 
     token: Optional[str] = None
 
@@ -44,4 +45,5 @@ class QuizResponse(BaseModel):
     ai_down: Optional[bool] = False
 
     notification_message: Optional[str] = None
+    quiz_id: Optional[str] = None
 

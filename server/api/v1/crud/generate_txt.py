@@ -11,9 +11,7 @@ def generate_txt(data: List[dict]):
     for item in data:
 
         buffer.write(f"Question: {item['question']}\n")
-
-        if 'options' in item:
-
+        if item.get("options"):
             buffer.write("Options: " + ", ".join(item['options']) + "\n")
 
         buffer.write(f"Answer: {item['answer']}\n\n")
