@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import axios from "axios";
 import ShareModal from "./ShareModal";
+import publicApi from "../../lib/functions/publicApi";
 
 const ShareButton = () => {
   const [quizId, setQuizId] = useState<string | null>(null);
@@ -8,10 +8,8 @@ const ShareButton = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const generateQuizAndShare = async () => {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
     try {
-      const response = await axios.get(`${API_BASE_URL}/share/get-quiz-id`);
+      const response = await publicApi.get("/share/get-quiz-id");
 
       const id = response.data.id;
       const quizData = response.data;
@@ -24,9 +22,7 @@ const ShareButton = () => {
         );
       }
 
-      const linkResponse = await axios.get(
-        `${API_BASE_URL}/share/share-quiz/${id}`,
-      );
+      const linkResponse = await publicApi.get(`/share/share-quiz/${id}`);
       const newShareableLink = linkResponse.data.link;
       setShareableLink(newShareableLink);
 
