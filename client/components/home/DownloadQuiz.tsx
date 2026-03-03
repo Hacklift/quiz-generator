@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import publicApi from "../../lib/functions/publicApi";
 import { Observable } from "rxjs";
 import { QueryPattern } from "../../constants/patterns";
 import { DownloadQuizProps } from "../../interfaces/props";
@@ -20,8 +20,8 @@ export default function DownloadQuiz({
   const handleDownload = () => {
     setIsDownloading(true);
     const observable = new Observable((subscriber) => {
-      axios
-        .get(`${process.env.NEXT_PUBLIC_API_BASE_URL}/download-quiz`, {
+      publicApi
+        .get("/download-quiz", {
           responseType: "blob",
           params: {
             pattern: QueryPattern.DownloadQuiz,

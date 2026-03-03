@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
+import publicApi from "../../../lib/functions/publicApi";
 
 interface Quiz {
   question: string;
@@ -36,8 +36,6 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
-
   const resetState = () => {
     setCategories([]);
     setSubcategories([]);
@@ -55,12 +53,12 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API_BASE}/api/categories`);
+      const { data } = await publicApi.get("/api/categories");
       setCategories(data);
     } catch (err) {
       console.error("Error fetching categories:", err);
     }
-  }, [API_BASE]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,8 +69,8 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
 
   const fetchSubcategories = async (category: string) => {
     try {
-      const { data } = await axios.get(
-        `${API_BASE}/api/category/${category}/subcategories`,
+      const { data } = await publicApi.get(
+        `/api/category/${category}/subcategories`,
       );
       setSubcategories(data);
     } catch (err) {
@@ -82,8 +80,8 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
 
   const fetchQuizTypes = async (category: string, subcategory: string) => {
     try {
-      const { data } = await axios.get(
-        `${API_BASE}/api/category/${category}/subcategory/${subcategory}/types`,
+      const { data } = await publicApi.get(
+        `/api/category/${category}/subcategory/${subcategory}/types`,
       );
       setQuizTypes(data);
       setFilteredTypes(data);
@@ -104,8 +102,8 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
     pageNum: number = 1,
   ) => {
     try {
-      const { data } = await axios.get(
-        `${API_BASE}/api/category/${category}/subcategory/${subcategory}/type/${type}?page=${pageNum}&page_size=10`,
+      const { data } = await publicApi.get(
+        `/api/category/${category}/subcategory/${subcategory}/type/${type}?page=${pageNum}&page_size=10`,
       );
       setHasMore(data.length === 10);
       setQuizzes(data);

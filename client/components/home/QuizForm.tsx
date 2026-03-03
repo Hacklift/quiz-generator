@@ -5,9 +5,9 @@ import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
 import { useAuth } from "../../contexts/authContext";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import { TokenService } from "../../lib/functions/tokenService";
 import { api } from "../../lib/functions/auth";
+import publicApi from "../../lib/functions/publicApi";
 
 export default function QuizForm() {
   const [profession, setProfession] = useState("");
@@ -83,8 +83,8 @@ export default function QuizForm() {
       if (user && token.trim()) {
         const accessToken = TokenService.getAccessToken();
 
-        await axios.post(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/user/token`,
+        await api.post(
+          "/api/user/token",
           { token },
           {
             headers: {
@@ -99,8 +99,8 @@ export default function QuizForm() {
 
       const accessToken = TokenService.getAccessToken();
 
-      const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
+      const { data } = await publicApi.post(
+        "/api/get-questions",
         {
           profession,
           audience_type: audienceType,
