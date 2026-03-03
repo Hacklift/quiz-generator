@@ -30,6 +30,7 @@ ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
 saved_quizzes_collection = database["saved_quizzes"]
 folders_collection = database["quiz_folders"]
+quiz_events_collection = database["quiz_events"]
 
 
 
@@ -58,11 +59,24 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
 
 async def ensure_saved_quizzes_indexes(saved_quizzes_collection: AsyncIOMotorCollection):
     await saved_quizzes_collection.create_index("user_id")
+    await saved_quizzes_collection.create_index("quiz_id")
     await saved_quizzes_collection.create_index("created_at")
+    await saved_quizzes_collection.create_index(
+        [("user_id", 1), ("quiz_id", 1), ("is_deleted", 1)],
+        unique=True,
+    )
 
 async def ensure_folder_indexes(folders_collection: AsyncIOMotorCollection):
     await folders_collection.create_index("user_id")
-    await folders_collection.create_index("created_at")    
+    await folders_collection.create_index("created_at")
+    await folders_collection.create_index("is_deleted")
+
+
+async def ensure_quiz_event_indexes(quiz_events_collection: AsyncIOMotorCollection):
+    await quiz_events_collection.create_index("quiz_id")
+    await quiz_events_collection.create_index("user_id")
+    await quiz_events_collection.create_index("event_type")
+    await quiz_events_collection.create_index("created_at")
 
 
 async def startUp():
@@ -70,6 +84,7 @@ async def startUp():
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_saved_quizzes_indexes(saved_quizzes_collection)
     await ensure_folder_indexes(folders_collection)
+    await ensure_quiz_event_indexes(quiz_events_collection)
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:
@@ -102,3 +117,8 @@ def get_folders_collection() -> AsyncIOMotorCollection:
     if folders_collection is None:
         raise RuntimeError("[DB Error] folders_collection not initialized.")
     return folders_collection
+
+def get_quiz_events_collection() -> AsyncIOMotorCollection:
+    if quiz_events_collection is None:
+        raise RuntimeError("[DB Error] quiz_events_collection not initialized.")
+    return quiz_events_collection

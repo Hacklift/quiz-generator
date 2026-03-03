@@ -30,3 +30,18 @@ class BulkDeleteFoldersRequest(BaseModel):
 
 class BulkRemoveRequest(BaseModel):
     quiz_ids: List[str]
+
+
+class FolderQuizRef(BaseModel):
+    quiz_id: str
+    added_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class UserFolderRecord(BaseModel):
+    user_id: str
+    name: str
+    quiz_refs: List[FolderQuizRef] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None

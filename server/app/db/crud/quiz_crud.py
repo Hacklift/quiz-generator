@@ -9,10 +9,13 @@ from ..schemas.quiz_schemas import (
     )
 import logging
 from typing import Optional, List
-from pymongo import ReturnDocument
 from pymongo.errors import PyMongoError
 from bson.errors import InvalidId
-from datetime import datetime, timezone
+from .quiz_write_service import (
+    create_quiz_document,
+    soft_delete_quiz_document,
+    update_quiz_document,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +24,10 @@ logging.basicConfig(level=logging.INFO)
 
 async def create_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_data: NewQuizSchema) -> Optional[NewQuizResponse]:
     try:
-        quiz_data_dict = quiz_data.model_dump()
-        new_quiz = await quizzes_collection.insert_one(quiz_data_dict)
-        logger.info(f"New quiz created with ID: {new_quiz.inserted_id}")
+        new_quiz_id, quiz_data_dict = await create_quiz_document(quizzes_collection, quiz_data)
+        logger.info(f"New quiz created with ID: {new_quiz_id}")
         return NewQuizResponse(
-            id=str(new_quiz.inserted_id),
+            id=new_quiz_id,
             title=quiz_data_dict["title"],
             description=quiz_data_dict["description"]
         )
@@ -38,7 +40,10 @@ async def create_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_data: New
 
 async def get_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str) -> Optional[QuizSchema]:
     try:
-        quiz = await quizzes_collection.find_one({"_id": ObjectId(quiz_id)}, projection={"_id": 0})
+        quiz = await quizzes_collection.find_one(
+            {"_id": ObjectId(quiz_id), "is_deleted": {"$ne": True}},
+            projection={"_id": 0},
+        )
         if quiz:
             return QuizSchema(**quiz, id=quiz_id)
         return None
@@ -51,14 +56,7 @@ async def get_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str) -> 
 
 async def update_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str, update_data: UpdateQuiz) -> Optional[QuizSchema]:
     try:
-        update_data_dict = update_data.model_dump(exclude_unset=True)
-        update_data_dict["updated_at"] = datetime.now(timezone.utc)
-
-        updated_quiz = await quizzes_collection.find_one_and_update(
-            {"_id": ObjectId(quiz_id)}, 
-            {"$set": update_data_dict},
-            return_document=ReturnDocument.AFTER
-        )
+        updated_quiz = await update_quiz_document(quizzes_collection, quiz_id, update_data)
 
         if updated_quiz:
             return QuizSchema(**updated_quiz, id=str(updated_quiz["_id"]))
@@ -74,11 +72,11 @@ async def update_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str, 
 
 async def delete_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str) -> DeleteQuizResponse:
     try:
-        result = await quizzes_collection.delete_one({"_id": ObjectId(quiz_id)})
-        if result.deleted_count:
+        modified_count = await soft_delete_quiz_document(quizzes_collection, quiz_id)
+        if modified_count:
             return DeleteQuizResponse(
                 message=f"Quiz with ID {quiz_id} deleted successfully",
-                delete_count=result.deleted_count
+                delete_count=modified_count
             )
         return DeleteQuizResponse(
             message=f"No quiz found with ID {quiz_id}",
@@ -93,7 +91,7 @@ async def delete_quiz(quizzes_collection: AsyncIOMotorCollection, quiz_id: str) 
 
 async def list_quizzes(quizzes_collection: AsyncIOMotorCollection) -> List[QuizSchema]:
     try:
-        quizzes_cursor = quizzes_collection.find({})
+        quizzes_cursor = quizzes_collection.find({"is_deleted": {"$ne": True}})
         quizzes = await quizzes_cursor.to_list(length=8)
 
         return [
