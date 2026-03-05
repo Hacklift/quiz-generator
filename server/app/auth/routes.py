@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status, HTTPException
 from redis.asyncio import Redis
 from server.app.db.core.connection import get_blacklisted_tokens_collection
 from server.schemas.model.password_reset_model import (
@@ -21,14 +21,19 @@ from ..auth.services import (
     reset_password_service,
     logout_service,
     get_user_profile_service,
-    update_user_profile_service
+    update_user_profile_service,
+    request_email_change_service,
+    verify_email_change_service,
+    delete_account_service,
 )
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from server.app.db.schemas.user_schemas import (
     UserRegisterSchema, 
     UserResponseSchema, 
-    ResendVerificationRequest
+    ResendVerificationRequest,
+    EmailChangeRequest,
+    EmailChangeVerifyRequest,
 )
 from server.app.db.models.user_models import UserDB
 from server.app.db.schemas.user_schemas import  UserRegisterSchema, UserResponseSchema, ResendVerificationRequest
@@ -47,6 +52,7 @@ from server.app.auth.models import (
 )
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
+from server.app.db.core.config import settings
 
 # Import rate limiter
 from server.app.db.core.rate_limiter import limiter, RateLimits
@@ -102,11 +108,27 @@ async def login(
     request_data: LoginRequestModel, 
 ):
     users_collection = request.app.state.users_collection
-    return await login_service(
+    result = await login_service(
         identifier=request_data.identifier,
         password=request_data.password,
         users_collection=users_collection
     )
+    refresh_token = result.get("refresh_token")
+    if refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="lax",
+            max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            path="/",
+        )
+    return {
+        "message": result.get("message", "Login successful"),
+        "access_token": result["access_token"],
+        "token_type": result.get("token_type", "bearer"),
+    }
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
 @limiter.limit(RateLimits.AUTH_REFRESH)  
@@ -117,10 +139,29 @@ async def refresh_token(
 ):
     """Refresh access token using refresh token"""
     users_collection = request.app.state.users_collection
-    return await refresh_token_service(
-        refresh_token=request_data.refresh_token,
+    cookie_refresh_token = request.cookies.get("refresh_token")
+    token = request_data.refresh_token or cookie_refresh_token
+    if not token:
+        raise HTTPException(status_code=401, detail="Refresh token missing")
+    result = await refresh_token_service(
+        refresh_token=token,
         users_collection=users_collection
     )
+    new_refresh_token = result.get("refresh_token")
+    if new_refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=new_refresh_token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="lax",
+            max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            path="/",
+        )
+    return {
+        "access_token": result["access_token"],
+        "token_type": result.get("token_type", "bearer"),
+    }
 
 @router.get("/profile")
 @limiter.limit(RateLimits.API_READ)  
@@ -129,7 +170,60 @@ async def get_profile(
     response: Response,
     current_user: UserDB = Depends(get_current_user)
 ):
-    return {"username": current_user.username}
+    return get_user_profile_service(current_user)
+
+@router.put("/profile", response_model=UpdateProfileResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def update_profile(
+    request: Request,
+    response: Response,
+    profile_data: UpdateProfileRequest,
+    current_user: UserDB = Depends(get_current_user),
+):
+    users_collection = request.app.state.users_collection
+    return await update_user_profile_service(profile_data, current_user, users_collection)
+
+@router.post("/email-change/request", response_model=MessageResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def request_email_change(
+    request: Request,
+    response: Response,
+    payload: EmailChangeRequest,
+    current_user: UserDB = Depends(get_current_user),
+    email_svc: EmailService = Depends(get_email_service),
+):
+    users_collection = request.app.state.users_collection
+    return await request_email_change_service(
+        payload.new_email,
+        current_user,
+        users_collection,
+        email_svc,
+    )
+
+@router.post("/email-change/verify", response_model=MessageResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def verify_email_change(
+    request: Request,
+    response: Response,
+    payload: EmailChangeVerifyRequest,
+    current_user: UserDB = Depends(get_current_user),
+):
+    users_collection = request.app.state.users_collection
+    return await verify_email_change_service(
+        payload.otp,
+        current_user,
+        users_collection,
+    )
+
+@router.delete("/account", response_model=MessageResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def delete_account(
+    request: Request,
+    response: Response,
+    current_user: UserDB = Depends(get_current_user),
+):
+    users_collection = request.app.state.users_collection
+    return await delete_account_service(current_user, users_collection)
 
 @router.post("/request-password-reset", response_model=MessageResponse)
 @limiter.limit(RateLimits.AUTH_PASSWORD_RESET)  
@@ -158,4 +252,6 @@ async def logout(
     blacklist_collection = Depends(get_blacklisted_tokens_collection),
 ):
     token = credentials.credentials
-    return await logout_service(token, blacklist_collection)
+    users_collection = request.app.state.users_collection
+    response.delete_cookie("refresh_token", path="/")
+    return await logout_service(token, users_collection, blacklist_collection)

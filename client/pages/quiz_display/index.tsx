@@ -15,6 +15,7 @@ import {
   SaveQuizButton,
 } from "../../components/home";
 import { saveQuizToHistory } from "../../lib/functions/saveQuizToHistory";
+import { api } from "../../lib/functions/auth";
 
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
@@ -57,9 +58,20 @@ const QuizDisplayPage: React.FC = () => {
 
         if (storedQuiz) {
           const parsedQuiz = JSON.parse(storedQuiz);
-          if (parsedQuiz?.questions?.length > 0) {
-            setQuizQuestions(parsedQuiz.questions);
-            setUserAnswers(Array(parsedQuiz.questions.length).fill(""));
+          const storedQuestions = Array.isArray(parsedQuiz?.questions)
+            ? parsedQuiz.questions
+            : Array.isArray(parsedQuiz?.quiz_data?.questions)
+              ? parsedQuiz.quiz_data.questions
+              : [];
+
+          if (storedQuestions.length > 0) {
+            const normalizedQuestions = storedQuestions.map((q: any) => ({
+              ...q,
+              answer: q.answer || q.correct_answer,
+              question_type: q.question_type || questionType,
+            }));
+            setQuizQuestions(normalizedQuestions);
+            setUserAnswers(Array(normalizedQuestions.length).fill(""));
             toast.success(`Loaded saved quiz: ${parsedQuiz.title}`);
             localStorage.removeItem("saved_quiz_view");
             setIsLoading(false);
@@ -69,9 +81,7 @@ const QuizDisplayPage: React.FC = () => {
 
         // ✅ Step 2: If there’s a savedQuizId in URL, fetch from API
         if (savedQuizId) {
-          const { data } = await axios.get(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/saved-quizzes/${savedQuizId}`,
-          );
+          const { data } = await api.get(`/api/saved-quizzes/${savedQuizId}`);
 
           if (!data || !data.questions || data.questions.length === 0) {
             throw new Error("No questions found for this saved quiz.");
@@ -80,6 +90,7 @@ const QuizDisplayPage: React.FC = () => {
           questions = data.questions.map((q: any) => ({
             ...q,
             answer: q.answer || q.correct_answer,
+            question_type: q.question_type || questionType,
           }));
 
           toast.success("Loaded saved quiz successfully!");
@@ -105,7 +116,11 @@ const QuizDisplayPage: React.FC = () => {
             });
           }
 
-          questions = data?.questions || [];
+          questions =
+            data?.questions?.map((q: any) => ({
+              ...q,
+              question_type: q.question_type || questionType,
+            })) || [];
           if (!Array.isArray(questions) || questions.length === 0) {
             throw new Error("No quiz questions returned.");
           }
@@ -165,7 +180,7 @@ const QuizDisplayPage: React.FC = () => {
           question: q.question,
           user_answer: userAnswer,
           correct_answer: correctAnswer,
-          question_type: q.question_type,
+          question_type: q.question_type || questionType,
           source: q.source || "unknown",
         };
       });
@@ -188,7 +203,17 @@ const QuizDisplayPage: React.FC = () => {
       setQuizReport(transformed);
       setIsQuizChecked(true);
 
-      await saveQuizToHistory(userId, questionType, quizQuestions);
+      await saveQuizToHistory(
+        {
+          question_type: questionType,
+          num_questions: numQuestions,
+          difficulty_level: difficultyLevel,
+          profession: profession,
+          audience_type: audienceType,
+          custom_instruction: customInstruction,
+        },
+        quizQuestions,
+      );
     } catch (err) {
       console.error("Error checking answers:", err);
       toast.error("Failed to grade your quiz. Please try again.");
@@ -248,7 +273,6 @@ const QuizDisplayPage: React.FC = () => {
               <CheckButton onClick={checkAnswers} />
               <SaveQuizButton quizData={quizQuestions} />
               <DownloadQuizButton
-                userId={userId}
                 question_type={questionType}
                 numQuestion={numQuestions}
               />

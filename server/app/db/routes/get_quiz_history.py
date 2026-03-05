@@ -1,28 +1,25 @@
-from fastapi import APIRouter, HTTPException
-from ....app.db.core.connection import quiz_history_collection
-from bson import ObjectId  
-from datetime import datetime
+from fastapi import APIRouter, Depends
+
+from ....app.dependancies import get_current_user
+
+from ....app.db.crud.update_quiz_history import get_quiz_history
+
 
 router = APIRouter()
 
-# Helper function to serialize MongoDB document
-def serialize_mongo_document(doc):
-    doc_dict = {}
-    for key, value in doc.items():
-        if isinstance(value, ObjectId):
-            doc_dict[key] = str(value)
-        elif isinstance(value, datetime):
-            doc_dict[key] = value.isoformat()
-        else:
-            doc_dict[key] = value
-    return doc_dict
 
-@router.get("/quiz-history/{user_id}")
-async def get_quiz_history(user_id: str):
-    try:
-        cursor = quiz_history_collection.find({"user_id": user_id}).sort("_id", -1)
-        quizzes = await cursor.to_list(length=100)
-        serialized_quizzes = [serialize_mongo_document(quiz) for quiz in quizzes]
-        return serialized_quizzes
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/quiz-history")
+
+async def get_user_quiz_history(current_user=Depends(get_current_user)):
+
+    """
+    Returns quiz history for the currently authenticated user.
+    JWT token required in Authorization header.
+    """
+
+    user_id = current_user.id
+
+    quizzes = await get_quiz_history(user_id)
+
+    return quizzes
+

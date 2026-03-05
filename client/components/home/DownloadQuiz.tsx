@@ -7,7 +7,6 @@ import { DownloadQuizProps } from "../../interfaces/props";
 type FileFormat = "txt" | "csv" | "pdf" | "docx";
 
 export default function DownloadQuiz({
-  userId,
   question_type,
   numQuestion,
 }: DownloadQuizProps) {
@@ -26,9 +25,8 @@ export default function DownloadQuiz({
           responseType: "blob",
           params: {
             pattern: QueryPattern.DownloadQuiz,
-            user_id: userId,
             format: selectedFormat,
-            type: question_type,
+            question_type: question_type,
             num_question: numQuestion,
           },
         })

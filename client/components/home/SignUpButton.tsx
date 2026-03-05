@@ -1,4 +1,3 @@
-// components/home/SignUpButton.tsx
 import React from "react";
 
 interface SignUpButtonProps {

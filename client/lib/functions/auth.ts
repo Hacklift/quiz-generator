@@ -2,7 +2,6 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import {
   LoginResponse,
   LoginPayload,
-  RefreshTokenPayload,
   RefreshTokenResponse,
   UpdateProfilePayload,
   UpdateProfileResponse,
@@ -12,8 +11,9 @@ import { TokenService } from "./tokenService";
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -43,7 +43,8 @@ api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = TokenService.getAccessToken();
     if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+      const tokenType = TokenService.getTokenType() || "Bearer";
+      config.headers.Authorization = `${tokenType} ${token}`;
     }
     return config;
   },
@@ -86,41 +87,28 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = TokenService.getRefreshToken();
-
-      if (!refreshToken) {
-        TokenService.clearTokens();
-        processQueue(error, null);
-        isRefreshing = false;
-        return Promise.reject(error);
-      }
-
       try {
-        // Attempt to refresh the token
         const response = await axios.post<RefreshTokenResponse>(
           `${BASE_URL}/auth/refresh`,
-          { refresh_token: refreshToken },
+          {},
           {
             headers: {
               "Content-Type": "application/json",
             },
+            withCredentials: true,
           },
         );
 
         const { access_token, token_type } = response.data;
 
         TokenService.updateAccessToken(access_token);
-
-        if (response.data.refresh_token) {
-          TokenService.setTokens(
-            access_token,
-            response.data.refresh_token,
-            token_type,
-          );
+        if (token_type) {
+          TokenService.setTokens(access_token, null, token_type);
         }
 
         if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          const headerTokenType = token_type || "Bearer";
+          originalRequest.headers.Authorization = `${headerTokenType} ${access_token}`;
         }
 
         processQueue(null, access_token);
@@ -150,8 +138,18 @@ export const registerUser = async (data: {
   full_name: string;
   password: string;
 }) => {
-  const response = await api.post("/auth/register/", data);
-  return response.data;
+  try {
+    const response = await api.post("/auth/register/", data);
+    return response.data;
+  } catch (error: any) {
+    const detail = error.response?.data?.detail;
+    const message = Array.isArray(detail)
+      ? detail[0]?.msg || "Invalid input."
+      : typeof detail === "string"
+        ? detail
+        : error.message || "Registration failed.";
+    throw new Error(message);
+  }
 };
 
 export const verifyOtp = async (email: string, otp: string) =>
@@ -172,17 +170,16 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
   }
 };
 
-export const refreshAccessToken = async (
-  refreshToken: string,
-): Promise<RefreshTokenResponse> => {
+export const refreshAccessToken = async (): Promise<RefreshTokenResponse> => {
   try {
     const response = await axios.post<RefreshTokenResponse>(
       `${BASE_URL}/auth/refresh`,
-      { refresh_token: refreshToken },
+      {},
       {
         headers: {
           "Content-Type": "application/json",
         },
+        withCredentials: true,
       },
     );
     return response.data;
@@ -193,6 +190,23 @@ export const refreshAccessToken = async (
 
 export const getProfile = async () => {
   const response = await api.get("/auth/profile");
+  return response.data;
+};
+
+export const requestEmailChange = async (newEmail: string) => {
+  const response = await api.post("/auth/email-change/request", {
+    new_email: newEmail,
+  });
+  return response.data;
+};
+
+export const verifyEmailChange = async (otp: string) => {
+  const response = await api.post("/auth/email-change/verify", { otp });
+  return response.data;
+};
+
+export const deleteAccount = async () => {
+  const response = await api.delete("/auth/account");
   return response.data;
 };
 

@@ -1,4 +1,3 @@
-// client/components/home/CheckQuizButton.tsx
 "use client";
 
 import React from "react";

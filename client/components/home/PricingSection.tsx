@@ -1,4 +1,3 @@
-// components/home/PricingSection.tsx
 import React from "react";
 
 const plans = [

@@ -12,28 +12,28 @@ const VerifyEmailPage: React.FC = () => {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    const verifyEmailByToken = async (tokenValue: string) => {
+      try {
+        await verifyLink(tokenValue);
+        setStatus("success");
+        setMessage("Email verified successfully! Redirecting to login...");
+
+        setTimeout(() => {
+          router.push(ROUTES.LOGIN);
+        }, 2000);
+      } catch (err: any) {
+        setStatus("error");
+        setMessage(
+          err.response?.data?.detail ||
+            "Verification failed. The link may be expired.",
+        );
+      }
+    };
+
     if (token && typeof token === "string") {
       verifyEmailByToken(token);
     }
-  }, [token]);
-
-  const verifyEmailByToken = async (tokenValue: string) => {
-    try {
-      await verifyLink(tokenValue);
-      setStatus("success");
-      setMessage("Email verified successfully! Redirecting to login...");
-
-      setTimeout(() => {
-        router.push(ROUTES.LOGIN);
-      }, 2000);
-    } catch (err: any) {
-      setStatus("error");
-      setMessage(
-        err.response?.data?.detail ||
-          "Verification failed. The link may be expired.",
-      );
-    }
-  };
+  }, [router, token]);
 
   return (
     <div className="min-h-screen flex justify-center items-center bg-gray-100">

@@ -1,18 +1,42 @@
 "use client";
 
-import React from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import SidebarButton from "./SidebarButton";
+import { useAuth } from "../../../contexts/authContext";
+import SignInModal from "../../auth/SignInModal";
 
 const FoldersButton = () => {
   const router = useRouter();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth();
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const handleOpenFolders = () => {
-    router.push("/folders"); // ✅ Navigate to your folders page
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      setIsLoginOpen(true);
+      return;
+    }
+    router.push("/folders");
   };
 
+  const isActive = pathname === "/folders";
+
   return (
-    <SidebarButton label="Folders" icon="📁" onClick={handleOpenFolders} />
+    <>
+      <SidebarButton
+        label="Folders"
+        icon="📁"
+        onClick={handleOpenFolders}
+        isActive={isActive}
+      />
+      <SignInModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        switchToSignUp={() => {}}
+      />
+    </>
   );
 };
 

@@ -151,3 +151,9 @@ class RequestPasswordReset(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+
+class EmailChangeVerifyRequest(BaseModel):
+    otp: str

@@ -63,16 +63,15 @@ const RequestPasswordResetModal: React.FC<RequestPasswordResetProps> = ({
             <div className="text-green-600 text-5xl mb-4">✓</div>
             <p className="text-gray-700 mb-2 font-medium">Check your email!</p>
             <p className="text-sm text-gray-500 mb-3">
-              {" We've sent a 6-digit OTP and reset link to:"}
+              We&apos;ve sent a 6-digit OTP and reset link to:
             </p>
             <p className="text-sm font-medium text-[#143E6F]">{email}</p>
           </div>
         ) : (
           <>
             <p className="text-sm text-gray-600 mb-4 text-center">
-              {
-                "Enter your email address and we'll send you a code to reset your password."
-              }
+              Enter your email address and we&apos;ll send you a code to reset
+              your password.
             </p>
 
             {error && (

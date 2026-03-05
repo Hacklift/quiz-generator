@@ -14,7 +14,3 @@ export interface QuizGenerationSectionProps {
   difficultyLevel: string;
   setDifficultyLevel: Dispatch<SetStateAction<string>>;
 }
-
-// export interface GenerateButtonProps {
-//   onClick: () => void;
-// }

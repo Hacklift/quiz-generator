@@ -24,7 +24,6 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
 
   return (
     <div className="p-6 bg-white rounded-2xl shadow-sm border border-gray-100">
-      {/* ===== Header ===== */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-semibold text-navy-800">{folder.name}</h2>
         <button
@@ -35,7 +34,6 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
         </button>
       </div>
 
-      {/* ===== Folder Content ===== */}
       {quizzes.length === 0 ? (
         <p className="text-gray-500 text-sm">No quizzes in this folder yet.</p>
       ) : (
@@ -67,7 +65,6 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
         </div>
       )}
 
-      {/* ===== Modals ===== */}
       {showMoveModal && (
         <MoveQuizModal
           isOpen={showMoveModal}

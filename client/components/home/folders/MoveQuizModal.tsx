@@ -7,6 +7,7 @@ import {
   getUserFolders,
   createFolder,
 } from "../../../lib/functions/folders";
+import { useAuth } from "../../../contexts/authContext";
 
 interface MoveQuizModalProps {
   isOpen: boolean;
@@ -23,54 +24,62 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
   sourceFolderId,
   onQuizMoved,
 }) => {
+  const { user } = useAuth();
+
   const [folders, setFolders] = useState<any[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
+  const [selectedFolderId, setSelectedFolderId] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [loading, setLoading] = useState(false);
-  const userId = "dummy_user_123"; // placeholder until auth integration
 
   useEffect(() => {
-    if (isOpen) {
-      (async () => {
-        try {
-          const res = await getUserFolders(userId);
-          setFolders(res);
-        } catch (err) {
-          console.error(err);
-          toast.error("Failed to load folders");
-        }
-      })();
-    }
-  }, [isOpen]);
+    if (!isOpen || !user?.id) return;
+
+    const loadFolders = async () => {
+      try {
+        const res = await getUserFolders();
+        setFolders(res);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load folders");
+      }
+    };
+
+    loadFolders();
+  }, [isOpen, user]);
 
   if (!isOpen || !quiz) return null;
 
   const handleMove = async () => {
+    if (!user?.id) {
+      toast.error("You must be logged in");
+      return;
+    }
+
     if (!selectedFolderId && !newFolderName.trim()) {
       toast.error("Please select or create a folder");
       return;
     }
 
+    setLoading(true);
+
     try {
-      setLoading(true);
       let targetFolderId = selectedFolderId;
 
-      // ✅ Create new folder if user typed a name
       if (isCreatingNew && newFolderName.trim()) {
-        const newFolder = await createFolder(userId, newFolderName);
+        const newFolder = await createFolder({ name: newFolderName });
         targetFolderId = newFolder._id;
       }
 
-      // ✅ Move quiz
       await moveQuiz(quiz._id, sourceFolderId, targetFolderId);
 
       toast.success("Quiz moved successfully");
-
-      // ✅ Trigger folder refresh after successful move
-      if (onQuizMoved) onQuizMoved();
-
+      onQuizMoved?.();
       onClose();
+
+      setSelectedFolderId("");
+      setNewFolderName("");
+      setIsCreatingNew(false);
     } catch (err) {
       console.error("Error moving quiz:", err);
       toast.error("Failed to move quiz");
@@ -102,12 +111,12 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
                 {folders.map((folder) => (
                   <div
                     key={folder._id}
+                    onClick={() => setSelectedFolderId(folder._id)}
                     className={`p-3 border rounded-xl cursor-pointer ${
                       selectedFolderId === folder._id
                         ? "border-navy-600 bg-blue-50"
                         : "border-gray-200 hover:bg-gray-50"
                     }`}
-                    onClick={() => setSelectedFolderId(folder._id)}
                   >
                     <p className="font-medium text-navy-700">{folder.name}</p>
                     <p className="text-xs text-gray-500">
@@ -117,8 +126,12 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
                 ))}
               </div>
             )}
+
             <button
-              onClick={() => setIsCreatingNew(true)}
+              onClick={() => {
+                setSelectedFolderId("");
+                setIsCreatingNew(true);
+              }}
               className="mt-3 text-sm text-navy-600 font-medium hover:underline"
             >
               + Create new folder
@@ -131,6 +144,7 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               New Folder Name
             </label>
+
             <input
               type="text"
               value={newFolderName}
@@ -138,8 +152,12 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
               placeholder="Enter folder name"
               className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-600"
             />
+
             <button
-              onClick={() => setIsCreatingNew(false)}
+              onClick={() => {
+                setIsCreatingNew(false);
+                setNewFolderName("");
+              }}
               className="mt-2 text-sm text-navy-600 hover:underline"
             >
               ← Back to folders
@@ -150,16 +168,17 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
             disabled={loading}
+            className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300"
           >
             Cancel
           </button>
+
           {(selectedFolderId || (isCreatingNew && newFolderName.trim())) && (
             <button
               onClick={handleMove}
-              className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-6 py-2 rounded-xl shadow-md transition text-sm"
               disabled={loading}
+              className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-6 py-2 rounded-xl shadow-md transition text-sm"
             >
               {loading ? "Moving..." : "Move"}
             </button>

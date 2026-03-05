@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 interface ConfirmDeleteModalProps {
   selectedItems: string[];
-  type: string; // e.g. "folder" or "quiz"
+  type: string;
   onClose: () => void;
   onDeleted: (deletedIds: string[]) => void;
 }
@@ -22,10 +22,9 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
     try {
       setLoading(true);
 
-      // Simulate delete API call delay for now
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      onDeleted(selectedItems); // Pass back deleted IDs
+      onDeleted(selectedItems);
       onClose();
     } catch (error) {
       console.error("Delete failed:", error);

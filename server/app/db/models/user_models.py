@@ -75,6 +75,7 @@ class UserOut(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     avatar_color: Optional[str] = "#143E6F"
+    role: Optional[str] = "user"
     is_verified: Optional[bool] = False
     is_active: Optional[bool] = True
     created_at: Optional[str] = None

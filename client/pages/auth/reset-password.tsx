@@ -9,7 +9,6 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const { token, email, mode } = router.query;
 
-  // States for token-based reset (inline form)
   const [userEmail, setUserEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -18,18 +17,14 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
 
-  // State for OTP modal
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     if (router.isReady) {
-      // Set email if provided in query
       if (email && typeof email === "string") {
         setUserEmail(email);
       }
 
-      // If there's a token in URL, stay on page (inline form)
-      // If mode is OTP, open modal
       if (!token && mode === "otp") {
         setIsModalOpen(true);
       }
@@ -77,7 +72,6 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    // Email is required for reset - if not in URL, ask user to provide it
     const emailToUse = userEmail.trim();
     if (!emailToUse) {
       setError("Please enter your email address");
@@ -121,7 +115,6 @@ export default function ResetPasswordPage() {
     }, 2000);
   };
 
-  // Show loading state while router.query is being populated
   if (!router.isReady) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -130,7 +123,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // Token-based reset: Show inline form
   if (token) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -262,7 +254,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // OTP-based reset: Show modal
   const modalEmail = typeof email === "string" ? email : "";
 
   return (
