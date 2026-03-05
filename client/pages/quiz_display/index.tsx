@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
-import axios from "axios";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -16,6 +15,8 @@ import {
 } from "../../components/home";
 import { saveQuizToHistory } from "../../lib/functions/saveQuizToHistory";
 import { api } from "../../lib/functions/auth";
+import publicApi from "../../lib/functions/publicApi";
+import { TokenService } from "../../lib/functions/tokenService";
 
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
@@ -105,8 +106,8 @@ const QuizDisplayPage: React.FC = () => {
             custom_instruction: customInstruction,
           };
 
-          const { data } = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/get-questions`,
+          const { data } = await publicApi.post(
+            "/api/get-questions",
             basePayload,
           );
 
@@ -130,6 +131,24 @@ const QuizDisplayPage: React.FC = () => {
 
         setQuizQuestions(questions);
         setUserAnswers(Array(questions.length).fill(""));
+
+        if (!savedQuizId && TokenService.hasTokens()) {
+          try {
+            await saveQuizToHistory(
+              {
+                question_type: questionType,
+                num_questions: numQuestions,
+                difficulty_level: difficultyLevel,
+                profession: profession,
+                audience_type: audienceType,
+                custom_instruction: customInstruction,
+              },
+              questions,
+            );
+          } catch (err) {
+            console.error("Error saving quiz history:", err);
+          }
+        }
       } catch (error: any) {
         console.error("❌ Failed to fetch quiz questions:", error);
         toast.error(error.message || "Failed to fetch quiz questions.");
@@ -185,8 +204,8 @@ const QuizDisplayPage: React.FC = () => {
         };
       });
 
-      const { data: report } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/grade-answers`,
+      const { data: report } = await publicApi.post(
+        "/api/grade-answers",
         payload,
       );
 
@@ -203,17 +222,7 @@ const QuizDisplayPage: React.FC = () => {
       setQuizReport(transformed);
       setIsQuizChecked(true);
 
-      await saveQuizToHistory(
-        {
-          question_type: questionType,
-          num_questions: numQuestions,
-          difficulty_level: difficultyLevel,
-          profession: profession,
-          audience_type: audienceType,
-          custom_instruction: customInstruction,
-        },
-        quizQuestions,
-      );
+      // History is saved on generation to avoid duplicate entries.
     } catch (err) {
       console.error("Error checking answers:", err);
       toast.error("Failed to grade your quiz. Please try again.");

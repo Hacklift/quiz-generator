@@ -21,7 +21,6 @@ const NavBar: React.FC = () => {
   const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-
   const { user, isAuthenticated, logout, isLoading } = useAuth();
 
   const switchToSignIn = () => {
