@@ -81,18 +81,7 @@ export default function QuizForm() {
 
     try {
       if (user && token.trim()) {
-        const accessToken = TokenService.getAccessToken();
-
-        await api.post(
-          "/api/user/token",
-          { token },
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-            withCredentials: true,
-          },
-        );
+        await api.post("/api/user/token", { token });
 
         sessionStorage.setItem("user_api_token", token);
       }

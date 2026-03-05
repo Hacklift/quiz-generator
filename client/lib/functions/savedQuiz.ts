@@ -6,7 +6,6 @@ export const saveQuiz = async (
   title: string,
   questionType: string,
   questions: any[],
-  token: string,
 ) => {
   if (!Array.isArray(questions) || questions.length === 0) {
     throw new Error("No questions provided for saving.");
@@ -24,29 +23,17 @@ export const saveQuiz = async (
     questions: formattedQuestions,
   };
 
-  const res = await api.post(`${API_URL}/`, payload, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await api.post(`${API_URL}/`, payload);
 
   return res.data;
 };
 
-export const getSavedQuizzes = async (token: string) => {
-  const res = await api.get(`${API_URL}/`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+export const getSavedQuizzes = async () => {
+  const res = await api.get(`${API_URL}/`);
   return res.data;
 };
 
-export const deleteSavedQuiz = async (quizId: string, token: string) => {
-  const res = await api.delete(`${API_URL}/${quizId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+export const deleteSavedQuiz = async (quizId: string) => {
+  const res = await api.delete(`${API_URL}/${quizId}`);
   return res.data;
 };
