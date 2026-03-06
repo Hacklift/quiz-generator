@@ -23,6 +23,8 @@ blacklisted_tokens_collection = database["blacklisted_tokens"]
 user_tokens_collection = database["user_tokens"]
 saved_quizzes_collection = database["saved_quizzes"]
 folders_collection = database["quiz_folders"]
+saved_quizzes_v2_collection = database["saved_quizzes_v2"]
+folders_v2_collection = database["quiz_folders_v2"]
 quiz_events_collection = database["quiz_events"]
 
 
@@ -68,10 +70,31 @@ async def ensure_saved_quizzes_indexes(saved_quizzes_collection: AsyncIOMotorCol
         unique=True,
     )
 
+
+async def ensure_saved_quizzes_v2_indexes(saved_quizzes_v2_collection: AsyncIOMotorCollection):
+    await saved_quizzes_v2_collection.create_index("user_id")
+    await saved_quizzes_v2_collection.create_index("quiz_id")
+    await saved_quizzes_v2_collection.create_index("created_at")
+    await saved_quizzes_v2_collection.create_index(
+        [("user_id", 1), ("quiz_id", 1), ("is_deleted", 1)],
+        unique=True,
+    )
+
+
 async def ensure_folder_indexes(folders_collection: AsyncIOMotorCollection):
     await folders_collection.create_index("user_id")
     await folders_collection.create_index("created_at")
     await folders_collection.create_index("is_deleted")
+
+
+async def ensure_folder_v2_indexes(folders_v2_collection: AsyncIOMotorCollection):
+    await folders_v2_collection.create_index("user_id")
+    await folders_v2_collection.create_index("created_at")
+    await folders_v2_collection.create_index("is_deleted")
+    await folders_v2_collection.create_index(
+        [("user_id", 1), ("name", 1), ("is_deleted", 1)],
+        unique=True,
+    )
 
 
 async def ensure_quiz_event_indexes(quiz_events_collection: AsyncIOMotorCollection):
@@ -86,7 +109,9 @@ async def startUp():
     await ensure_blacklist_indexes(blacklisted_tokens_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_saved_quizzes_indexes(saved_quizzes_collection)
+    await ensure_saved_quizzes_v2_indexes(saved_quizzes_v2_collection)
     await ensure_folder_indexes(folders_collection)
+    await ensure_folder_v2_indexes(folders_v2_collection)
     await ensure_quiz_event_indexes(quiz_events_collection)
     await ensure_user_tokens_indexes(user_tokens_collection)
 
@@ -123,10 +148,23 @@ def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
     return saved_quizzes_collection
 
 
+def get_saved_quizzes_v2_collection() -> AsyncIOMotorCollection:
+    if saved_quizzes_v2_collection is None:
+        raise RuntimeError("[DB Error] saved_quizzes_v2_collection has not been initialized properly.")
+    return saved_quizzes_v2_collection
+
+
 def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
+
+
+def get_folders_v2_collection() -> AsyncIOMotorCollection:
+    if folders_v2_collection is None:
+        raise RuntimeError("[DB Error] folders_v2_collection has not been initialized properly.")
+    return folders_v2_collection
+
 
 def get_quiz_events_collection() -> AsyncIOMotorCollection:
     if quiz_events_collection is None:

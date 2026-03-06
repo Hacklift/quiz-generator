@@ -10,15 +10,15 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from server.app.db.models.ai_generated_quiz_model import AIGeneratedQuiz
-from server.app.db.models.canonical_quiz_models import (
+from ....app.db.models.ai_generated_quiz_model import AIGeneratedQuiz
+from ....app.db.models.canonical_quiz_models import (
     CanonicalQuizDocument,
     adapt_ai_quiz_to_canonical,
     adapt_seed_quiz_to_canonical,
 )
-from server.app.db.models.folder_model import FolderQuizRef, UserFolderRecord
-from server.app.db.models.quiz_event_model import QuizEventRecord
-from server.app.db.models.saved_quiz_model import SavedQuizRecord
+from ....app.db.models.folder_model import FolderQuizRef, UserFolderRecord
+from ....app.db.models.quiz_event_model import QuizEventRecord
+from ....app.db.models.saved_quiz_model import SavedQuizRecord
 
 
 def _utcnow() -> datetime:
@@ -194,21 +194,12 @@ async def create_saved_quiz_record(
 ) -> tuple[str, dict[str, Any]]:
     if not await _ensure_quiz_exists(quizzes_collection, quiz_id):
         raise ValueError("Referenced quiz does not exist or has been deleted")
-
-    existing = await saved_quizzes_collection.find_one(
-        {"user_id": user_id, "quiz_id": quiz_id, "is_deleted": {"$ne": True}}
-    )
-    if existing:
-        return str(existing["_id"]), jsonable_encoder(existing)
-
-    record = SavedQuizRecord(
+    return await _create_saved_quiz_record_in_collection(
+        saved_quizzes_collection=saved_quizzes_collection,
         user_id=user_id,
         quiz_id=quiz_id,
         metadata=metadata,
     )
-    doc = jsonable_encoder(_dump_model(record))
-    result = await saved_quizzes_collection.insert_one(doc)
-    return str(result.inserted_id), doc
 
 
 async def soft_delete_saved_quiz_record(
@@ -217,11 +208,11 @@ async def soft_delete_saved_quiz_record(
     user_id: str,
     quiz_id: str,
 ) -> int:
-    result = await saved_quizzes_collection.update_one(
-        {"user_id": user_id, "quiz_id": quiz_id, "is_deleted": {"$ne": True}},
-        {"$set": {"is_deleted": True, "deleted_at": _utcnow(), "updated_at": _utcnow()}},
+    return await _soft_delete_saved_quiz_in_collection(
+        saved_quizzes_collection=saved_quizzes_collection,
+        user_id=user_id,
+        quiz_id=quiz_id,
     )
-    return result.modified_count
 
 
 async def create_user_folder_record(
@@ -230,10 +221,11 @@ async def create_user_folder_record(
     user_id: str,
     name: str,
 ) -> tuple[str, dict[str, Any]]:
-    folder = UserFolderRecord(user_id=user_id, name=name)
-    doc = jsonable_encoder(_dump_model(folder))
-    result = await folders_collection.insert_one(doc)
-    return str(result.inserted_id), doc
+    return await _create_user_folder_in_collection(
+        folders_collection=folders_collection,
+        user_id=user_id,
+        name=name,
+    )
 
 
 async def add_quiz_ref_to_folder_record(
@@ -245,24 +237,11 @@ async def add_quiz_ref_to_folder_record(
 ) -> Optional[dict[str, Any]]:
     if not await _ensure_quiz_exists(quizzes_collection, quiz_id):
         raise ValueError("Referenced quiz does not exist or has been deleted")
-
-    folder_object_id = ObjectId(folder_id)
-    existing = await folders_collection.find_one(
-        {"_id": folder_object_id, "is_deleted": {"$ne": True}, "quiz_refs.quiz_id": quiz_id},
-        projection={"_id": 1},
+    return await _add_quiz_ref_to_folder_in_collection(
+        folders_collection=folders_collection,
+        folder_id=folder_id,
+        quiz_id=quiz_id,
     )
-    if existing:
-        return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
-
-    quiz_ref = FolderQuizRef(quiz_id=quiz_id)
-    await folders_collection.update_one(
-        {"_id": folder_object_id, "is_deleted": {"$ne": True}},
-        {
-            "$push": {"quiz_refs": jsonable_encoder(_dump_model(quiz_ref))},
-            "$set": {"updated_at": _utcnow()},
-        },
-    )
-    return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
 
 
 async def remove_quiz_ref_from_folder_record(
@@ -271,15 +250,11 @@ async def remove_quiz_ref_from_folder_record(
     folder_id: str,
     quiz_id: str,
 ) -> Optional[dict[str, Any]]:
-    folder_object_id = ObjectId(folder_id)
-    await folders_collection.update_one(
-        {"_id": folder_object_id, "is_deleted": {"$ne": True}},
-        {
-            "$pull": {"quiz_refs": {"quiz_id": quiz_id}},
-            "$set": {"updated_at": _utcnow()},
-        },
+    return await _remove_quiz_ref_from_folder_in_collection(
+        folders_collection=folders_collection,
+        folder_id=folder_id,
+        quiz_id=quiz_id,
     )
-    return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
 
 
 async def rename_user_folder_record(
@@ -300,11 +275,10 @@ async def soft_delete_user_folder_record(
     *,
     folder_id: str,
 ) -> int:
-    result = await folders_collection.update_one(
-        {"_id": ObjectId(folder_id), "is_deleted": {"$ne": True}},
-        {"$set": {"is_deleted": True, "deleted_at": _utcnow(), "updated_at": _utcnow()}},
+    return await _soft_delete_user_folder_in_collection(
+        folders_collection=folders_collection,
+        folder_id=folder_id,
     )
-    return result.modified_count
 
 
 async def record_quiz_event(
@@ -328,3 +302,253 @@ async def record_quiz_event(
     doc = jsonable_encoder(_dump_model(event))
     result = await quiz_events_collection.insert_one(doc)
     return str(result.inserted_id), doc
+
+
+async def _create_saved_quiz_record_in_collection(
+    saved_quizzes_collection: AsyncIOMotorCollection,
+    *,
+    user_id: str,
+    quiz_id: str,
+    metadata: Optional[dict[str, Any]] = None,
+) -> tuple[str, dict[str, Any]]:
+    existing = await saved_quizzes_collection.find_one(
+        {"user_id": user_id, "quiz_id": quiz_id, "is_deleted": {"$ne": True}}
+    )
+    if existing:
+        return str(existing["_id"]), jsonable_encoder(existing)
+
+    record = SavedQuizRecord(user_id=user_id, quiz_id=quiz_id, metadata=metadata)
+    doc = jsonable_encoder(_dump_model(record))
+    result = await saved_quizzes_collection.insert_one(doc)
+    return str(result.inserted_id), doc
+
+
+async def _soft_delete_saved_quiz_in_collection(
+    saved_quizzes_collection: AsyncIOMotorCollection,
+    *,
+    user_id: str,
+    quiz_id: str,
+) -> int:
+    result = await saved_quizzes_collection.update_one(
+        {"user_id": user_id, "quiz_id": quiz_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": _utcnow(), "updated_at": _utcnow()}},
+    )
+    return result.modified_count
+
+
+async def _create_user_folder_in_collection(
+    folders_collection: AsyncIOMotorCollection,
+    *,
+    user_id: str,
+    name: str,
+) -> tuple[str, dict[str, Any]]:
+    folder = UserFolderRecord(user_id=user_id, name=name)
+    doc = jsonable_encoder(_dump_model(folder))
+    result = await folders_collection.insert_one(doc)
+    return str(result.inserted_id), doc
+
+
+async def _add_quiz_ref_to_folder_in_collection(
+    folders_collection: AsyncIOMotorCollection,
+    *,
+    folder_id: str,
+    quiz_id: str,
+) -> Optional[dict[str, Any]]:
+    folder_object_id = ObjectId(folder_id)
+    existing = await folders_collection.find_one(
+        {"_id": folder_object_id, "is_deleted": {"$ne": True}, "quiz_refs.quiz_id": quiz_id},
+        projection={"_id": 1},
+    )
+    if existing:
+        return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
+
+    quiz_ref = FolderQuizRef(quiz_id=quiz_id)
+    await folders_collection.update_one(
+        {"_id": folder_object_id, "is_deleted": {"$ne": True}},
+        {
+            "$push": {"quiz_refs": jsonable_encoder(_dump_model(quiz_ref))},
+            "$set": {"updated_at": _utcnow()},
+        },
+    )
+    return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
+
+
+async def _remove_quiz_ref_from_folder_in_collection(
+    folders_collection: AsyncIOMotorCollection,
+    *,
+    folder_id: str,
+    quiz_id: str,
+) -> Optional[dict[str, Any]]:
+    folder_object_id = ObjectId(folder_id)
+    await folders_collection.update_one(
+        {"_id": folder_object_id, "is_deleted": {"$ne": True}},
+        {
+            "$pull": {"quiz_refs": {"quiz_id": quiz_id}},
+            "$set": {"updated_at": _utcnow()},
+        },
+    )
+    return await folders_collection.find_one({"_id": folder_object_id, "is_deleted": {"$ne": True}})
+
+
+async def _soft_delete_user_folder_in_collection(
+    folders_collection: AsyncIOMotorCollection,
+    *,
+    folder_id: str,
+) -> int:
+    result = await folders_collection.update_one(
+        {"_id": ObjectId(folder_id), "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": _utcnow(), "updated_at": _utcnow()}},
+    )
+    return result.modified_count
+
+
+async def dual_write_saved_quiz_record(
+    *,
+    legacy_saved_quizzes_collection: AsyncIOMotorCollection,
+    saved_quizzes_v2_collection: AsyncIOMotorCollection,
+    quizzes_collection: AsyncIOMotorCollection,
+    user_id: str,
+    quiz_id: str,
+    metadata: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    if not await _ensure_quiz_exists(quizzes_collection, quiz_id):
+        raise ValueError("Referenced quiz does not exist or has been deleted")
+
+    legacy_id, legacy_doc = await _create_saved_quiz_record_in_collection(
+        saved_quizzes_collection=legacy_saved_quizzes_collection,
+        user_id=user_id,
+        quiz_id=quiz_id,
+        metadata=metadata,
+    )
+    v2_id, _ = await _create_saved_quiz_record_in_collection(
+        saved_quizzes_collection=saved_quizzes_v2_collection,
+        user_id=user_id,
+        quiz_id=quiz_id,
+        metadata=metadata,
+    )
+    return {"legacy_id": legacy_id, "v2_id": v2_id, "record": legacy_doc}
+
+
+async def dual_write_saved_quiz_delete(
+    *,
+    legacy_saved_quizzes_collection: AsyncIOMotorCollection,
+    saved_quizzes_v2_collection: AsyncIOMotorCollection,
+    user_id: str,
+    quiz_id: str,
+) -> dict[str, int]:
+    legacy_count = await _soft_delete_saved_quiz_in_collection(
+        saved_quizzes_collection=legacy_saved_quizzes_collection,
+        user_id=user_id,
+        quiz_id=quiz_id,
+    )
+    v2_count = await _soft_delete_saved_quiz_in_collection(
+        saved_quizzes_collection=saved_quizzes_v2_collection,
+        user_id=user_id,
+        quiz_id=quiz_id,
+    )
+    return {"legacy_count": legacy_count, "v2_count": v2_count}
+
+
+async def dual_write_user_folder_create(
+    *,
+    legacy_folders_collection: AsyncIOMotorCollection,
+    folders_v2_collection: AsyncIOMotorCollection,
+    user_id: str,
+    name: str,
+) -> dict[str, Any]:
+    legacy_id, legacy_doc = await _create_user_folder_in_collection(
+        folders_collection=legacy_folders_collection,
+        user_id=user_id,
+        name=name,
+    )
+    v2_id, _ = await _create_user_folder_in_collection(
+        folders_collection=folders_v2_collection,
+        user_id=user_id,
+        name=name,
+    )
+    return {"legacy_id": legacy_id, "v2_id": v2_id, "record": legacy_doc}
+
+
+async def dual_write_user_folder_add_quiz_ref(
+    *,
+    legacy_folders_collection: AsyncIOMotorCollection,
+    folders_v2_collection: AsyncIOMotorCollection,
+    quizzes_collection: AsyncIOMotorCollection,
+    folder_id: str,
+    v2_folder_id: str,
+    quiz_id: str,
+) -> dict[str, Any]:
+    if not await _ensure_quiz_exists(quizzes_collection, quiz_id):
+        raise ValueError("Referenced quiz does not exist or has been deleted")
+
+    legacy_folder = await _add_quiz_ref_to_folder_in_collection(
+        folders_collection=legacy_folders_collection,
+        folder_id=folder_id,
+        quiz_id=quiz_id,
+    )
+    v2_folder = await _add_quiz_ref_to_folder_in_collection(
+        folders_collection=folders_v2_collection,
+        folder_id=v2_folder_id,
+        quiz_id=quiz_id,
+    )
+    return {"legacy_folder": legacy_folder, "v2_folder": v2_folder}
+
+
+async def dual_write_user_folder_remove_quiz_ref(
+    *,
+    legacy_folders_collection: AsyncIOMotorCollection,
+    folders_v2_collection: AsyncIOMotorCollection,
+    folder_id: str,
+    v2_folder_id: str,
+    quiz_id: str,
+) -> dict[str, Any]:
+    legacy_folder = await _remove_quiz_ref_from_folder_in_collection(
+        folders_collection=legacy_folders_collection,
+        folder_id=folder_id,
+        quiz_id=quiz_id,
+    )
+    v2_folder = await _remove_quiz_ref_from_folder_in_collection(
+        folders_collection=folders_v2_collection,
+        folder_id=v2_folder_id,
+        quiz_id=quiz_id,
+    )
+    return {"legacy_folder": legacy_folder, "v2_folder": v2_folder}
+
+
+async def dual_write_user_folder_rename(
+    *,
+    legacy_folders_collection: AsyncIOMotorCollection,
+    folders_v2_collection: AsyncIOMotorCollection,
+    folder_id: str,
+    v2_folder_id: str,
+    name: str,
+) -> dict[str, Any]:
+    legacy_folder = await rename_user_folder_record(
+        folders_collection=legacy_folders_collection,
+        folder_id=folder_id,
+        name=name,
+    )
+    v2_folder = await rename_user_folder_record(
+        folders_collection=folders_v2_collection,
+        folder_id=v2_folder_id,
+        name=name,
+    )
+    return {"legacy_folder": legacy_folder, "v2_folder": v2_folder}
+
+
+async def dual_write_user_folder_delete(
+    *,
+    legacy_folders_collection: AsyncIOMotorCollection,
+    folders_v2_collection: AsyncIOMotorCollection,
+    folder_id: str,
+    v2_folder_id: str,
+) -> dict[str, int]:
+    legacy_count = await _soft_delete_user_folder_in_collection(
+        folders_collection=legacy_folders_collection,
+        folder_id=folder_id,
+    )
+    v2_count = await _soft_delete_user_folder_in_collection(
+        folders_collection=folders_v2_collection,
+        folder_id=v2_folder_id,
+    )
+    return {"legacy_count": legacy_count, "v2_count": v2_count}
