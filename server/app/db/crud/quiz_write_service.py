@@ -10,15 +10,15 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
-from ....app.db.models.ai_generated_quiz_model import AIGeneratedQuiz
-from ....app.db.models.canonical_quiz_models import (
+from ..models.ai_generated_quiz_model import AIGeneratedQuiz
+from ..models.canonical_quiz_models import (
     CanonicalQuizDocument,
     adapt_ai_quiz_to_canonical,
     adapt_seed_quiz_to_canonical,
 )
-from ....app.db.models.folder_model import FolderQuizRef, UserFolderRecord
-from ....app.db.models.quiz_event_model import QuizEventRecord
-from ....app.db.models.saved_quiz_model import SavedQuizRecord
+from ..models.folder_model import FolderQuizRef, UserFolderRecord
+from ..models.quiz_event_model import QuizEventRecord
+from ..models.saved_quiz_model import SavedQuizRecord
 
 
 def _utcnow() -> datetime:
