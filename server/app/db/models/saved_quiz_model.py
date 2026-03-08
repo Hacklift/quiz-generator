@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
 
 from typing import List, Optional
 
@@ -39,3 +40,12 @@ class SavedQuizModel(BaseModel):
 
         allow_population_by_field_name = True
 
+
+class SavedQuizRecord(BaseModel):
+    user_id: str
+    quiz_id: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = None

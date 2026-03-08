@@ -7,6 +7,7 @@ from .db.utils import hash_password
 from .db.models.user_models import SeedUser
 from .db.models.quiz_models import SeedQuiz
 from .db.seed_data.seed_all_categories import seed_all
+from .db.crud.quiz_write_service import create_seed_quiz_document
 from typing import List
 
 
@@ -21,7 +22,7 @@ async def seed_quizzes_collection(collection: AsyncIOMotorCollection, seed_data:
             quiz_data = data.copy()
             try:
                 quiz = SeedQuiz(**quiz_data)
-                await collection.insert_one(quiz.model_dump())
+                await create_seed_quiz_document(collection, quiz)
                 print(f"Quiz '{quiz.title}' inserted successfully.")
             except Exception as e:
                 print(f"Error inserting quiz: {e}")
@@ -54,7 +55,7 @@ async def restoreSeed_quizzes_collection(collection: AsyncIOMotorCollection, see
         quiz_data = data.copy()
         try:
             quiz = SeedQuiz(**quiz_data)
-            await collection.insert_one(quiz.model_dump())
+            await create_seed_quiz_document(collection, quiz)
             print(f"Quiz '{quiz.title}' inserted successfully.")
         except Exception as e:
             print(f"Error inserting quiz: {e}")
