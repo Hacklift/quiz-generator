@@ -75,7 +75,6 @@ export default function QuizForm() {
       setErrorMessage("Please enter a valid number of questions.");
       return;
     }
-
     setErrorMessage("");
     setLoading(true);
 
@@ -115,7 +114,7 @@ export default function QuizForm() {
         customInstruction,
         audienceType,
         difficultyLevel,
-        source,
+        token,
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);

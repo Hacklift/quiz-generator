@@ -17,6 +17,7 @@ async def save_ai_generated_quiz(quiz_data: dict):
     """
     Save an AI-generated quiz to the database immediately after generation.
     Prevents saving duplicate quizzes with identical questions.
+    Returns MongoDB-assigned _id for later use.
     """
 
     collection = get_ai_generated_quizzes_collection()
@@ -39,23 +40,21 @@ async def save_ai_generated_quiz(quiz_data: dict):
             return {
 
                 "message": "Quiz with these exact questions already exists",
-
-                "id": existing_quiz["id"],
-
+                "quiz_id": str(existing_quiz["_id"]),
+                "duplicate": True
             }
 
 
         quiz_to_save = jsonable_encoder(new_quiz.dict())
 
+        insert_result = await collection.insert_one(quiz_to_save)
 
-        await collection.insert_one(quiz_to_save)
-
-
-        logger.info(f"Quiz saved successfully with id: {new_quiz.id}")
-
-        return {"message": "Quiz saved successfully", "id": new_quiz.id}
-
-
+        logger.info(f"Quiz saved successfully with MongoDB _id: {insert_result.inserted_id}")
+        return {
+            "message": "Quiz saved successfully",
+            "quiz_id": str(insert_result.inserted_id),
+            "duplicate": False
+        }
 
     except DuplicateKeyError:
 
@@ -66,9 +65,7 @@ async def save_ai_generated_quiz(quiz_data: dict):
             "message": "Duplicate quiz detected",
 
             "duplicate": True
-
-            }
-
+        }
 
 
     except Exception as e:

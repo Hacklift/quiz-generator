@@ -27,12 +27,14 @@ const QuizDisplayPage: React.FC = () => {
   const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
-  const userId = searchParams.get("userId") || "defaultUserId"; // dummy user until auth works
+  const userId = searchParams.get("userId") || "defaultUserId"; // ✅ dummy user until auth works
+  const token = searchParams.get("token") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
+  const [quizId, setQuizId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false); // ✅ Prevent double fetch
 
@@ -48,6 +50,7 @@ const QuizDisplayPage: React.FC = () => {
         difficulty_level: difficultyLevel,
         audience_type: audienceType,
         custom_instruction: customInstruction,
+        token: token,
       };
 
       try {
@@ -93,7 +96,7 @@ const QuizDisplayPage: React.FC = () => {
             answer: q.answer || q.correct_answer,
             question_type: q.question_type || questionType,
           }));
-
+          setQuizId(savedQuizId);
           toast.success("Loaded saved quiz successfully!");
         } else {
           // ✅ Step 3: Fallback — generate a new quiz
@@ -104,6 +107,7 @@ const QuizDisplayPage: React.FC = () => {
             difficulty_level: difficultyLevel,
             audience_type: audienceType,
             custom_instruction: customInstruction,
+            token,
           };
 
           const { data } = await publicApi.post(
@@ -111,10 +115,14 @@ const QuizDisplayPage: React.FC = () => {
             basePayload,
           );
 
+          if (data?.quiz_id && !data?.ai_down) {
+            setQuizId(data.quiz_id);
+          }
           if (data?.ai_down) {
             toast.error(data.notification_message || "AI model unavailable.", {
               duration: 4000,
             });
+            setQuizId("");
           }
 
           questions =
@@ -282,10 +290,12 @@ const QuizDisplayPage: React.FC = () => {
               <CheckButton onClick={checkAnswers} />
               <SaveQuizButton quizData={quizQuestions} />
               <DownloadQuizButton
+                quizId={quizId}
+                userId={userId}
                 question_type={questionType}
                 numQuestion={numQuestions}
               />
-              <ShareButton />
+              <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}
             </div>
           </section>
