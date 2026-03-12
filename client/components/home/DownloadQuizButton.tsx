@@ -9,6 +9,8 @@ import { DownloadQuizProps } from "../../interfaces/props";
 type FileFormat = "txt" | "csv" | "pdf" | "docx";
 
 export default function DownloadQuizButton({
+  quizId,
+  userId,
   question_type,
   numQuestion,
 }: DownloadQuizProps) {
@@ -22,28 +24,43 @@ export default function DownloadQuizButton({
 
   const handleDownload = () => {
     setIsDownloading(true);
+
     const observable = new Observable<void>((subscriber) => {
+      const isRealQuiz = quizId && quizId.trim() !== "";
+
+      const requestConfig = {
+        responseType: "blob" as const,
+        params: isRealQuiz
+          ? {
+              quiz_id: quizId,
+              format: selectedFormat,
+              user_id: userId,
+            }
+          : {
+              pattern: QueryPattern.DownloadQuiz,
+              user_id: userId,
+              format: selectedFormat,
+              question_type: question_type,
+              num_question: numQuestion,
+            },
+      };
+
       publicApi
-        .get("/download-quiz", {
-          responseType: "blob",
-          params: {
-            pattern: QueryPattern.DownloadQuiz,
-            format: selectedFormat,
-            question_type: question_type,
-            num_question: numQuestion,
-          },
-        })
+        .get("/download-quiz", requestConfig)
         .then((response) => {
           const url = window.URL.createObjectURL(new Blob([response.data]));
           const link = document.createElement("a");
+
           link.href = url;
           link.setAttribute(
             "download",
             `${question_type}-quiz.${selectedFormat}`,
           );
+
           document.body.appendChild(link);
           link.click();
           link.remove();
+
           subscriber.next();
           subscriber.complete();
           setShowOptions(false);

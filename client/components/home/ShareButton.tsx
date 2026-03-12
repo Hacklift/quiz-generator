@@ -2,19 +2,21 @@ import React, { useState } from "react";
 import ShareModal from "./ShareModal";
 import publicApi from "../../lib/functions/publicApi";
 
-const ShareButton = () => {
-  const [quizId, setQuizId] = useState<string | null>(null);
+const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
+  const [quizId, setQuizId] = useState<string>("");
   const [shareableLink, setShareableLink] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const generateQuizAndShare = async () => {
     try {
-      const response = await publicApi.get("/share/get-quiz-id");
+      let id = activeQuizId?.trim() || "";
 
-      const id = response.data.id;
-      const quizData = response.data;
+      if (!id) {
+        const response = await publicApi.get("/share/get-quiz-id");
+        id = response.data.id;
+      }
+
       setQuizId(id);
-      console.log(id);
 
       if (!id) {
         throw new Error(
@@ -46,7 +48,7 @@ const ShareButton = () => {
 
       {isModalOpen && shareableLink && (
         <ShareModal
-          quizId={quizId!}
+          quizId={quizId}
           shareableLink={shareableLink}
           closeModal={() => setIsModalOpen(false)}
         />
