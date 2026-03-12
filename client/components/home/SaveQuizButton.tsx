@@ -48,7 +48,7 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
         question_type: q.question_type || q.type || questionType,
       }));
 
-      await saveQuiz(quizTitle.trim(), questionType, formattedQuestions, token);
+      await saveQuiz(quizTitle.trim(), questionType, formattedQuestions);
 
       toast.success("✅ Quiz saved successfully!");
       setQuizTitle("");

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>You're Offline</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: radial-gradient(circle at top, #f7f8fa, #e7ecf3);
+        color: #0f2654;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        max-width: 520px;
+        background: #ffffff;
+        border: 1px solid #d8dfe8;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 12px 30px rgba(10, 50, 100, 0.12);
+      }
+      h1 {
+        margin: 0 0 8px 0;
+        font-size: 26px;
+        letter-spacing: 0.2px;
+      }
+      p {
+        margin: 0 0 16px 0;
+        line-height: 1.5;
+      }
+      .muted {
+        color: #5a6b88;
+        font-size: 14px;
+      }
+      .button {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: #0a3264;
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>You're offline</h1>
+      <p>
+        It looks like you lost your connection. You can still view any pages
+        that were recently opened.
+      </p>
+      <p class="muted">
+        Reconnect to continue generating and saving quizzes.
+      </p>
+      <a class="button" href="/">Try again</a>
+    </div>
+  </body>
+</html>

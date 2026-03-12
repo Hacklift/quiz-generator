@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import publicApi from "../../lib/functions/publicApi";
 
 const ShareEmailModal = ({
   shareableLink,
@@ -23,10 +23,8 @@ const ShareEmailModal = ({
     setIsSending(true);
     setStatus(null);
 
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
     try {
-      const response = await axios.post(`${API_BASE_URL}/share/share-email`, {
+      const response = await publicApi.post("/share/share-email", {
         quiz_id: quizId,
         recipient_email: recipientEmail,
         shareableLink,

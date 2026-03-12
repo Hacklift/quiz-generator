@@ -246,7 +246,7 @@ const DisplaySavedQuizzesPage: React.FC<{
   const handleConfirmDelete = async () => {
     if (!confirmDeleteId) return;
     try {
-      await deleteSavedQuiz(confirmDeleteId, token);
+      await deleteSavedQuiz(confirmDeleteId);
       toast.success("Quiz deleted successfully!");
       onDeleteClick(confirmDeleteId);
       setConfirmDeleteId(null);
@@ -411,7 +411,7 @@ export default function SavedQuizzes() {
     }
     const fetchSaved = async () => {
       try {
-        const quizzes = await getSavedQuizzes(token);
+        const quizzes = await getSavedQuizzes();
         setSavedQuizzes(quizzes);
       } catch (err) {
         console.error(err);

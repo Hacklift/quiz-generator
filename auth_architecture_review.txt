@@ -1,0 +1,160 @@
+Below is a plain-language, end-to-end review of the auth architecture as it exists in this repo, with concrete durations and the files that implement each part.
+
+High-level overview (what happens, in order)
+1) Signup creates the user in MongoDB, then sends a verification email.
+2) Verification can be done by OTP code or verification link. Both are stored in Redis with short expirations.
+3) Login checks password and verified status, then issues:
+   - a short-lived access token (JWT, used in headers), and
+   - a long-lived refresh token (JWT, stored in a secure cookie).
+4) Protected routes require a valid access token and also check that the token hasn’t been blacklisted.
+5) Refresh rotates the refresh token and issues a new access token.
+6) Logout blacklists the current access token and clears the refresh token.
+
+1. Signup + Verification (email/OTP)
+Signup
+- File: server/app/auth/services.py
+- register_user_service creates the user and immediately sends a verification email.
+
+Verification data storage
+- Redis is used to store:
+  - OTP: key otp:<email>
+  - Verification link token: key token:<email>
+  - Attempt counter: key attempts:<email>
+- File: server/app/auth/services.py
+
+Durations
+- OTP for verification: 10 minutes
+  - setex(..., timedelta(minutes=10), otp)
+- Verification link token in Redis: 30 minutes
+  - setex(..., timedelta(minutes=30), token)
+- The JWT verification token itself also has an expiry: 2 hours
+  - VERIFICATION_TOKEN_EXPIRE_HOURS = 2 in server/app/db/core/config.py
+  - Used by generate_verification_token in server/app/auth/utils.py
+
+Important detail (effective TTL)
+- Even though the link token JWT is valid for 2 hours, the Redis record only lasts 30 minutes, so after 30 minutes the link will be rejected.
+- That means real link expiry = 30 minutes, not 2 hours. (This mismatch is worth knowing.)
+
+OTP verification attempts
+- Max attempts: 4
+- After 4 failed attempts you get “Too many attempts.”
+- Attempts are stored in Redis with the same TTL as the OTP.
+
+Endpoints
+- Register: POST /auth/register/
+- Verify OTP: POST /auth/verify-otp/
+- Verify link: POST /auth/verify-link/
+- Resend verification email: POST /auth/resend-verification
+
+2. Login and token issuance
+Login flow
+- File: server/app/auth/services.py
+- Checks password and requires email to be verified.
+- Generates:
+  - Access token (JWT, short-lived)
+  - Refresh token (JWT, long-lived)
+- Refresh token is hashed and stored in MongoDB.
+- Endpoint: POST /auth/login
+
+Access token
+- Duration: 30 minutes
+  - ACCESS_TOKEN_EXPIRE_MINUTES = 30 in server/app/db/core/config.py
+- JWT includes sub (user id), jti, and type: "access".
+- Created in server/app/auth/utils.py
+
+Refresh token
+- Duration: 7 days
+  - REFRESH_TOKEN_EXPIRE_DAYS = 7
+- Stored as HTTP-only cookie on login.
+- Also stored hashed in MongoDB to validate later.
+- JWT includes sub, jti, and type: "refresh".
+
+3. Refresh flow (access renewal)
+- Endpoint: POST /auth/refresh
+- File: server/app/auth/routes.py + services.py
+- Reads refresh token from:
+  - request body or cookie refresh_token
+- Validates:
+  - JWT signature + type
+  - matches hashed refresh token in DB
+  - matches stored JTI
+  - not expired
+- Rotates refresh token:
+  - Issues new refresh token and access token
+  - Updates DB with new hashed refresh token + new JTI + new expiry
+  - Sets new refresh cookie
+
+Net effect: every refresh replaces the old refresh token. Good for security.
+
+4. Protected routes
+- Protection is via get_current_user in server/app/dependancies.py
+- It:
+  1) Validates JWT
+  2) Ensures token type is access
+  3) Checks blacklist collection for jti
+  4) Loads the user from MongoDB
+
+Protected endpoints include:
+- /auth/profile, /auth/email-change/*, /auth/account
+- Many /api/* routes (saved quizzes, folders, history, etc.)
+
+5. Logout + Blacklisting
+- Endpoint: POST /auth/logout
+- File: server/app/auth/services.py + routes.py
+- Requires current access token in Authorization header.
+- Extracts jti and inserts into blacklist collection (MongoDB).
+- Removes refresh token data from the user record.
+- Deletes refresh cookie.
+
+So after logout:
+- Old access token is blacklisted.
+- Refresh token is invalid (DB cleared).
+
+6. Password reset
+- Request: POST /auth/request-password-reset
+- Reset: POST /auth/reset-password
+- Flow uses both OTP and token (same mechanics as verification).
+- Redis durations here:
+  - OTP: 5 minutes (300 seconds)
+  - Token: 30 minutes (1800 seconds)
+- After password reset, refresh tokens are cleared from DB.
+
+7. Email change
+- Request: POST /auth/email-change/request
+- Verify: POST /auth/email-change/verify
+- Uses Redis key email_change:<user_id> with TTL 10 minutes.
+
+8. Redis + Celery usage
+Redis is used for:
+- OTPs
+- Verification tokens
+- Reset tokens
+- Attempt counters
+- Email-change payloads
+- Celery broker/backend
+
+Celery
+- Config: server/celery_config.py
+- Email sending uses a policy chain:
+  - Celery -> Background Tasks -> Direct (fallback)
+- Defined in server/app/email_platform/service.py and policy.py.
+
+9. Client-side auth behavior (axios)
+- client/lib/functions/auth.ts
+- Central axios instance adds Authorization: Bearer <access_token> automatically.
+- On 401, it tries /auth/refresh, updates token, replays original request.
+- Tokens stored in sessionStorage via TokenService:
+  - access_token, token_type, refresh_token (refresh is mostly server-cookie driven)
+
+Summary in plain English
+- Signup creates your account and sends an email with a code and a link. Both expire quickly and are kept in Redis.
+- Verification marks your account as verified.
+- Login gives you a short-lived access token and a long-lived refresh token; refresh lives in a secure cookie and is rotated often.
+- Protected routes require your access token and ensure it hasn’t been revoked.
+- Refresh gives you new tokens without re-logging in.
+- Logout revokes your access token and wipes refresh token state.
+
+Notable design quirks (FYI)
+- Verification link JWT lasts 2 hours, but Redis record lasts 30 minutes, so the link effectively expires at 30 minutes.
+- Refresh token is only one per user (rotated each refresh), so logging in elsewhere invalidates the old refresh token.
+- Blacklisting is stored in MongoDB, not Redis.

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import axios from "axios";
+import publicApi from "../../lib/functions/publicApi";
 import { Observable } from "rxjs";
 import { QueryPattern } from "../../constants/patterns";
 import { DownloadQuizProps } from "../../interfaces/props";
@@ -45,10 +45,8 @@ export default function DownloadQuizButton({
             },
       };
 
-      const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/download-quiz`;
-
-      axios
-        .get(endpoint, requestConfig)
+      publicApi
+        .get("/download-quiz", requestConfig)
         .then((response) => {
           const url = window.URL.createObjectURL(new Blob([response.data]));
           const link = document.createElement("a");
