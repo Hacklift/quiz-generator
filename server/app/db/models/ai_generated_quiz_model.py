@@ -40,6 +40,7 @@ class AIGeneratedQuiz(BaseModel):
     audience_type: str = Field(default="general")
 
     custom_instruction: Optional[str] = None
+    canonical_quiz_id: Optional[str] = None
 
 
     questions: List[AIQuestion]
@@ -101,4 +102,3 @@ class AIGeneratedQuiz(BaseModel):
             }
 
         }
-

@@ -24,11 +24,13 @@ class QuizHistoryModel(BaseModel):
 
 
     user_id: Optional[str] = None
+    quiz_id: Optional[str] = None
 
 
     quiz_name: Optional[str] = None
 
     question_type: str
+    canonical_quiz_id: Optional[str] = None
 
     num_questions: Optional[int] = None
 
@@ -54,4 +56,3 @@ class QuizHistoryModel(BaseModel):
         json_encoders = {ObjectId: str}
 
         allow_population_by_field_name = True
-

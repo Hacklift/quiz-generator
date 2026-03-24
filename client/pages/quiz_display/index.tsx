@@ -56,6 +56,7 @@ const QuizDisplayPage: React.FC = () => {
       try {
         setIsLoading(true);
         let questions: any[] = [];
+        let resolvedQuizId = "";
 
         // ✅ Step 1: Check if a saved quiz was passed via localStorage
         const storedQuiz = localStorage.getItem("saved_quiz_view");
@@ -97,6 +98,7 @@ const QuizDisplayPage: React.FC = () => {
             question_type: q.question_type || questionType,
           }));
           setQuizId(savedQuizId);
+          resolvedQuizId = savedQuizId;
           toast.success("Loaded saved quiz successfully!");
         } else {
           // ✅ Step 3: Fallback — generate a new quiz
@@ -117,12 +119,14 @@ const QuizDisplayPage: React.FC = () => {
 
           if (data?.quiz_id && !data?.ai_down) {
             setQuizId(data.quiz_id);
+            resolvedQuizId = data.quiz_id;
           }
           if (data?.ai_down) {
             toast.error(data.notification_message || "AI model unavailable.", {
               duration: 4000,
             });
             setQuizId("");
+            resolvedQuizId = "";
           }
 
           questions =
@@ -144,6 +148,7 @@ const QuizDisplayPage: React.FC = () => {
           try {
             await saveQuizToHistory(
               {
+                quiz_id: resolvedQuizId || undefined,
                 question_type: questionType,
                 num_questions: numQuestions,
                 difficulty_level: difficultyLevel,
@@ -288,7 +293,7 @@ const QuizDisplayPage: React.FC = () => {
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
               <CheckButton onClick={checkAnswers} />
-              <SaveQuizButton quizData={quizQuestions} />
+              <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
                 userId={userId}

@@ -163,7 +163,7 @@ async def bulk_delete_folders_route(req: BulkDeleteFoldersRequest = Body(...), u
 
         if folder and folder["user_id"] == user.id:
 
-            await bulk_delete_folders(fid)
+            await bulk_delete_folders([fid])
 
             deleted_count += 1
 
@@ -215,6 +215,8 @@ async def add_quiz_to_folder_route(folder_id: str, quiz_data: QuizData, user = D
         "_id": str(ObjectId()),
 
         "original_quiz_id": str(quiz["_id"]),
+        "quiz_id": quiz.get("quiz_id"),
+        "canonical_quiz_id": quiz.get("canonical_quiz_id"),
 
         "title": quiz.get("title", "Untitled Quiz"),
 
@@ -295,4 +297,3 @@ async def bulk_remove_quizzes(folder_id: str, request: BulkRemoveRequest, user =
     await bulk_remove_quizzes_from_folder(folder_id, request.quiz_ids)
 
     return {"message": "Quizzes removed successfully"}
-

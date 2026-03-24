@@ -4,6 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from cryptography.fernet import Fernet
 import os
 from datetime import datetime
+from ...db.v2.setup import ensure_v2_collections_and_validators, ensure_v2_indexes
 
 load_dotenv()   
 
@@ -30,6 +31,11 @@ saved_quizzes_collection = database["saved_quizzes"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
+quizzes_v2_collection = database["quizzes_v2"]
+folders_v2_collection = database["folders_v2"]
+folder_items_v2_collection = database["folder_items_v2"]
+saved_quizzes_v2_collection = database["saved_quizzes_v2"]
+quiz_history_v2_collection = database["quiz_history_v2"]
 
 
 async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
@@ -68,6 +74,14 @@ async def startUp():
     await ensure_blacklist_indexes(blacklisted_tokens_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_user_tokens_indexes(user_tokens_collection)
+    await ensure_v2_collections_and_validators(database)
+    await ensure_v2_indexes(
+        quizzes_v2_collection,
+        folders_v2_collection,
+        folder_items_v2_collection,
+        saved_quizzes_v2_collection,
+        quiz_history_v2_collection,
+    )
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:
@@ -97,3 +111,33 @@ def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
+
+
+def get_quizzes_v2_collection() -> AsyncIOMotorCollection:
+    if quizzes_v2_collection is None:
+        raise RuntimeError("[DB Error] quizzes_v2_collection has not been initialized properly.")
+    return quizzes_v2_collection
+
+
+def get_folders_v2_collection() -> AsyncIOMotorCollection:
+    if folders_v2_collection is None:
+        raise RuntimeError("[DB Error] folders_v2_collection has not been initialized properly.")
+    return folders_v2_collection
+
+
+def get_folder_items_v2_collection() -> AsyncIOMotorCollection:
+    if folder_items_v2_collection is None:
+        raise RuntimeError("[DB Error] folder_items_v2_collection has not been initialized properly.")
+    return folder_items_v2_collection
+
+
+def get_saved_quizzes_v2_collection() -> AsyncIOMotorCollection:
+    if saved_quizzes_v2_collection is None:
+        raise RuntimeError("[DB Error] saved_quizzes_v2_collection has not been initialized properly.")
+    return saved_quizzes_v2_collection
+
+
+def get_quiz_history_v2_collection() -> AsyncIOMotorCollection:
+    if quiz_history_v2_collection is None:
+        raise RuntimeError("[DB Error] quiz_history_v2_collection has not been initialized properly.")
+    return quiz_history_v2_collection

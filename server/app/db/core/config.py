@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -39,6 +40,9 @@ class Settings(BaseModel):
     share_url: str = "http://localhost:3000"
     db_name: str = "quiz_generator"
     mongo_url: str = "mongodb://localhost:27017"
+    QUIZ_V2_WRITE_MODE: Literal["legacy_only", "dual_write"] = "dual_write"
+    QUIZ_V2_FAIL_OPEN: bool = True
+    QUIZ_V2_STRUCTURED_LOGGING: bool = True
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -61,6 +65,11 @@ class Settings(BaseModel):
             share_url=os.getenv("SHARE_URL", "http://localhost:3000"),
             db_name=os.getenv("DB_NAME", "quiz_generator"),
             mongo_url=os.getenv("MONGO_URL", "mongodb://localhost:27017"),
+            QUIZ_V2_WRITE_MODE=os.getenv("QUIZ_V2_WRITE_MODE", "dual_write"),
+            QUIZ_V2_FAIL_OPEN=_get_bool("QUIZ_V2_FAIL_OPEN", True),
+            QUIZ_V2_STRUCTURED_LOGGING=_get_bool(
+                "QUIZ_V2_STRUCTURED_LOGGING", True
+            ),
         )
 
 

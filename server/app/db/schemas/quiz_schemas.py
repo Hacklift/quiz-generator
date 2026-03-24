@@ -17,6 +17,7 @@ class NewQuizSchema(BaseModel):
     quiz_type: str
 
     owner_id: Optional[str] = None
+    canonical_quiz_id: Optional[str] = None
 
     created_at: Optional[datetime]  = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -39,6 +40,7 @@ class UpdateQuiz(BaseModel):
     description: Optional[str] = None
 
     quiz_type: Optional[str] = None
+    canonical_quiz_id: Optional[str] = None
 
     questions: Optional[List[dict]] = None
 
@@ -61,4 +63,3 @@ class DeleteQuizResponse(BaseModel):
     message: str
 
     delete_count: int
-

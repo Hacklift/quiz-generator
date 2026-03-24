@@ -22,6 +22,7 @@ class QuizDB(BaseModel):
     quiz_type: str
 
     owner_id: Optional [str] = None
+    canonical_quiz_id: Optional[str] = None
 
     created_at: Optional[datetime]  = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -49,6 +50,7 @@ class SeedQuiz(BaseModel):
     quiz_type: str
 
     owner_id: Optional [str] = None
+    canonical_quiz_id: Optional[str] = None
 
     created_at: Optional[datetime]  = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -62,5 +64,4 @@ class SeedQuiz(BaseModel):
         populate_by_name = True
 
         arbitrary_types_allowed = True
-
 

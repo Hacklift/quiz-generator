@@ -3,6 +3,7 @@ import { api } from "./auth";
 
 export async function saveQuizToHistory(
   meta: {
+    quiz_id?: string;
     question_type: string;
     num_questions: number;
     difficulty_level: string;
@@ -22,6 +23,7 @@ export async function saveQuizToHistory(
   }));
 
   const payload = {
+    quiz_id: meta.quiz_id,
     quiz_name: `${meta.question_type} Quiz`,
     question_type: meta.question_type,
     num_questions: meta.num_questions,

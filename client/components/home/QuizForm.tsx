@@ -7,7 +7,6 @@ import { useAuth } from "../../contexts/authContext";
 import { useRouter } from "next/navigation";
 import { TokenService } from "../../lib/functions/tokenService";
 import { api } from "../../lib/functions/auth";
-import publicApi from "../../lib/functions/publicApi";
 
 export default function QuizForm() {
   const [profession, setProfession] = useState("");
@@ -84,28 +83,6 @@ export default function QuizForm() {
 
         sessionStorage.setItem("user_api_token", token);
       }
-
-      const accessToken = TokenService.getAccessToken();
-
-      const { data } = await publicApi.post(
-        "/api/get-questions",
-        {
-          profession,
-          audience_type: audienceType,
-          custom_instruction: customInstruction,
-          num_questions: numQuestions,
-          question_type: questionType,
-          difficulty_level: difficultyLevel,
-          token: token.trim() ? token.trim() : undefined,
-        },
-        {
-          headers: accessToken
-            ? { Authorization: `Bearer ${accessToken}` }
-            : undefined,
-        },
-      );
-
-      const source = data.source || "mock";
 
       const queryParams = new URLSearchParams({
         questionType,

@@ -7,7 +7,13 @@ import { useAuth } from "../../contexts/authContext";
 import SignInModal from "../auth/SignInModal";
 import { TokenService } from "../../lib/functions/tokenService";
 
-export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
+export default function SaveQuizButton({
+  quizData,
+  quizId,
+}: {
+  quizData: any[];
+  quizId?: string;
+}) {
   const { user } = useAuth();
   const [showInput, setShowInput] = useState(false);
   const [quizTitle, setQuizTitle] = useState("");
@@ -48,7 +54,13 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
         question_type: q.question_type || q.type || questionType,
       }));
 
-      await saveQuiz(quizTitle.trim(), questionType, formattedQuestions);
+      await saveQuiz(
+        quizTitle.trim(),
+        questionType,
+        formattedQuestions,
+        token,
+        quizId,
+      );
 
       toast.success("✅ Quiz saved successfully!");
       setQuizTitle("");

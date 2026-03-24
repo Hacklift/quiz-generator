@@ -50,6 +50,7 @@ async def create_saved_quiz(
             question_type=quiz.question_type,
 
             questions=quiz.questions,
+            quiz_id=quiz.quiz_id,
 
         )
 
@@ -134,4 +135,3 @@ async def get_saved_quiz(
     except Exception as e:
 
         raise HTTPException(status_code=500, detail=str(e))
-

@@ -13,7 +13,7 @@ class QuizQuestionModel(BaseModel):
 
     options: Optional[List[str]] = None
 
-    question_type: str
+    question_type: Optional[str] = None
 
 
 class SavedQuizModel(BaseModel):
@@ -21,10 +21,13 @@ class SavedQuizModel(BaseModel):
     id: Optional[str] = Field(alias="_id", default=None)
 
     user_id: Optional[str] = None
+    quiz_id: Optional[str] = None
 
     title: str
 
     question_type: str
+    canonical_quiz_id: Optional[str] = None
+    is_deleted: Optional[bool] = False
 
     questions: List[QuizQuestionModel]
 
@@ -38,4 +41,3 @@ class SavedQuizModel(BaseModel):
         json_encoders = {ObjectId: str}
 
         allow_population_by_field_name = True
-
