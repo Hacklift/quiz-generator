@@ -1,0 +1,47 @@
+import logging
+import smtplib
+import socket
+import ssl
+from email.mime.text import MIMEText
+
+from server.app.email_platform.platform_email_utils import send_email, sender_email
+from server.celery_config import celery_app
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+@celery_app.task(
+    name="tasks.send_email_generic",
+    bind=True,
+    autoretry_for=(
+        ssl.SSLError,
+        smtplib.SMTPException,
+        socket.timeout,
+        socket.gaierror,
+        ConnectionError,
+        TimeoutError,
+    ),
+    retry_backoff=5,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 3},
+)
+def send_email_generic(self, recipient: str, subject: str, body: str):
+    try:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = recipient
+
+        send_email(recipient, msg)
+        logger.info(
+            "[Celery Task] Completed send_email_generic for %s",
+            recipient,
+        )
+    except Exception as exc:
+        logger.error(
+            "[Celery Task Error] Failure in send_email_generic: %s",
+            exc,
+            exc_info=True,
+        )
+        raise

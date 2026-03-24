@@ -11,8 +11,6 @@ os.environ.setdefault("EMAIL_PORT", "1025")
 os.environ.setdefault("ALLOWED_ORIGINS", "https://example.com")
 os.environ["PRIMARY_EMAIL_PROVIDER"] = "smtp"
 
-pytest_plugins = ["pytest_asyncio"]
-
 class FakeBackgroundTasks:
     def __init__(self):
         self.tasks = []

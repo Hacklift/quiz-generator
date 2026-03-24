@@ -2,12 +2,33 @@
 Enhanced Rate Limiter Configuration for FastAPI
 """
 import os
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from typing import Callable
+
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+except ImportError:
+    class RateLimitExceeded(Exception):
+        def __init__(self, detail: str | None = None, retry_after: int | None = None):
+            self.detail = detail
+            self.retry_after = retry_after
+            super().__init__(detail)
+
+    def get_remote_address(request: Request) -> str:
+        return request.client.host if request.client else "unknown"
+
+    class Limiter:  # type: ignore[override]
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def limit(self, _limit: str):
+            def decorator(func):
+                return func
+
+            return decorator
 
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -74,7 +95,7 @@ class RateLimits:
 
 
 def custom_rate_limit(limit: str):
-    
     def decorator(func):
         return limiter.limit(limit)(func)
+
     return decorator

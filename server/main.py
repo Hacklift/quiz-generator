@@ -9,8 +9,6 @@ from fastapi import FastAPI, Body, HTTPException, Depends, Query, Request, Respo
 import redis
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 
 from .api import healthcheck
 from .api.v1.crud import generate_quiz, get_user_quiz_history
@@ -43,7 +41,7 @@ from .schemas.query import (
 )
 
 # Import rate limiter
-from .app.db.core.rate_limiter import limiter, rate_limit_handler
+from .app.db.core.rate_limiter import limiter, rate_limit_handler, RateLimitExceeded
 from .app.db.core.config import settings
 from .app.dependancies import get_current_user
 from .app.db.models.user_models import UserOut

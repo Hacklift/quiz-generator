@@ -1,36 +1,95 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import QuizForm from '../components/QuizForm';
+import React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import QuizForm from "../components/home/QuizForm";
 
+const push = jest.fn();
+const mockApiGet = jest.fn();
+const mockApiPost = jest.fn();
+const mockPublicPost = jest.fn();
 
-describe('QuizForm', () => {
-  test('renders the quiz form with initial state', () => {
-    render(<QuizForm />);
-    
-   
-    expect(screen.getByPlaceholderText('Enter question')).toBeInTheDocument(); 
-    expect(screen.getByRole('button', { name: /generate quiz/i })).toBeInTheDocument(); 
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
+
+jest.mock("../contexts/authContext", () => ({
+  useAuth: () => ({
+    user: null,
+    isAuthenticated: false,
+  }),
+}));
+
+jest.mock("../lib/functions/auth", () => ({
+  api: {
+    get: (...args: unknown[]) => mockApiGet(...args),
+    post: (...args: unknown[]) => mockApiPost(...args),
+  },
+}));
+
+jest.mock("../lib/functions/publicApi", () => ({
+  __esModule: true,
+  default: { post: (...args: unknown[]) => mockPublicPost(...args) },
+}));
+
+describe("QuizForm", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  test('updates question input on change', () => {
+  test("renders the current quiz form", () => {
     render(<QuizForm />);
-    
-    const input = screen.getByPlaceholderText('Enter question'); 
-    fireEvent.change(input, { target: { value: 'What is your favorite color?' } });
-    
-    expect(input).toHaveValue('What is your favorite color?');
+
+    expect(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /generate quiz/i }),
+    ).toBeInTheDocument();
   });
 
-  test('generates quiz and updates status', async () => {
+  test("updates the concept field", () => {
     render(<QuizForm />);
-    
-    const input = screen.getByPlaceholderText('Enter question'); 
-    fireEvent.change(input, { target: { value: 'What is your favorite color?' } });
-    
-    const generateButton = screen.getByRole('button', { name: /generate quiz/i }); 
-    fireEvent.click(generateButton);
-    
-    
-    expect(await screen.findByDisplayValue('Quiz generated')).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText("Enter the concept/context here");
+    fireEvent.change(input, { target: { value: "World History" } });
+
+    expect(input).toHaveValue("World History");
+  });
+
+  test("shows validation when required concept is missing", async () => {
+    render(<QuizForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+
+    expect(
+      await screen.findByText(/please enter a profession or topic/i),
+    ).toBeInTheDocument();
+    expect(mockPublicPost).not.toHaveBeenCalled();
+  });
+
+  test("submits quiz generation and routes to quiz display", async () => {
+    mockPublicPost.mockResolvedValue({ data: { source: "mock" } });
+
+    render(<QuizForm />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+      { target: { value: "Physics" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+
+    await waitFor(() => {
+      expect(mockPublicPost).toHaveBeenCalledWith(
+        "/api/get-questions",
+        expect.objectContaining({
+          profession: "Physics",
+          question_type: "multichoice",
+          num_questions: 1,
+        }),
+        expect.any(Object),
+      );
+    });
+    expect(push).toHaveBeenCalledWith(
+      expect.stringContaining("/quiz_display?"),
+    );
   });
 });

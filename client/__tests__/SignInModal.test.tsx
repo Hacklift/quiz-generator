@@ -1,74 +1,140 @@
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import SignInModal from '../components/(dashboard)/user/SignInModal';
+import React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import SignInModal from "../components/auth/SignInModal";
 
+const push = jest.fn();
+const authLogin = jest.fn();
+const mockLogin = jest.fn();
 
+jest.mock("next/router", () => ({
+  useRouter: () => ({ push }),
+}));
 
+jest.mock("../contexts/authContext", () => ({
+  useAuth: () => ({ login: authLogin }),
+}));
 
-describe('SignInModal', () => {
+jest.mock("../lib", () => ({
+  login: (...args: unknown[]) => mockLogin(...args),
+}));
+
+describe("SignInModal", () => {
   const mockOnClose = jest.fn();
+  const switchToSignUp = jest.fn();
 
   beforeEach(() => {
-    mockOnClose.mockClear(); 
+    jest.clearAllMocks();
   });
 
-  test('renders the modal when isOpen is true', () => {
-    render(<SignInModal isOpen={true} onClose={mockOnClose} />);
-    
-    
-    expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter username or email')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument();
+  test("renders the modal when open", () => {
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        switchToSignUp={switchToSignUp}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /sign in/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("email@example.com or username"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Enter your password"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^sign in$/i }),
+    ).toBeInTheDocument();
   });
 
-  test('does not render the modal when isOpen is false', () => {
-    render(<SignInModal isOpen={false} onClose={mockOnClose} />);
-    
-    expect(screen.queryByRole('heading', { name: /sign in/i })).not.toBeInTheDocument();
+  test("does not render the modal when closed", () => {
+    render(
+      <SignInModal
+        isOpen={false}
+        onClose={mockOnClose}
+        switchToSignUp={switchToSignUp}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: /sign in/i }),
+    ).not.toBeInTheDocument();
   });
 
-  test('updates input fields on change', () => {
-    render(<SignInModal isOpen={true} onClose={mockOnClose} />);
-    
-    const usernameInput = screen.getByPlaceholderText('Enter username or email');
-    const passwordInput = screen.getByPlaceholderText('Enter password');
+  test("updates form fields on change", () => {
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        switchToSignUp={switchToSignUp}
+      />,
+    );
 
-    fireEvent.change(usernameInput, { target: { value: 'testuser@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    const identifierInput = screen.getByPlaceholderText(
+      "email@example.com or username",
+    );
+    const passwordInput = screen.getByPlaceholderText("Enter your password");
 
-    expect(usernameInput).toHaveValue('testuser@example.com');
-    expect(passwordInput).toHaveValue('password123');
+    fireEvent.change(identifierInput, {
+      target: { value: "testuser@example.com" },
+    });
+    fireEvent.change(passwordInput, { target: { value: "password123" } });
+
+    expect(identifierInput).toHaveValue("testuser@example.com");
+    expect(passwordInput).toHaveValue("password123");
   });
 
-  test('calls onClose when form is submitted', () => {
-    render(<SignInModal isOpen={true} onClose={mockOnClose} />);
-    
-    const usernameInput = screen.getByPlaceholderText('Enter username or email');
-    const passwordInput = screen.getByPlaceholderText('Enter password');
-    const signInButton = screen.getByRole('button', { name: /sign in/i });
+  test("submits successfully and closes the modal", async () => {
+    mockLogin.mockResolvedValue({
+      access_token: "access",
+      refresh_token: "refresh",
+      token_type: "bearer",
+    });
 
-    
-    fireEvent.change(usernameInput, { target: { value: 'testuser@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'password123' } });
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        switchToSignUp={switchToSignUp}
+      />,
+    );
 
-    
-    fireEvent.click(signInButton);
+    fireEvent.change(
+      screen.getByPlaceholderText("email@example.com or username"),
+      { target: { value: "testuser@example.com" } },
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
-    
-    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledWith({
+        identifier: "testuser@example.com",
+        password: "password123",
+      });
+    });
+    expect(authLogin).toHaveBeenCalledWith("access", "refresh", "bearer");
+    expect(mockOnClose).toHaveBeenCalled();
+    expect(push).toHaveBeenCalled();
   });
 
-  test('calls onClose when close button is clicked', () => {
-    render(<SignInModal isOpen={true} onClose={mockOnClose} />);
+  test("closes when clicking the overlay", () => {
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        switchToSignUp={switchToSignUp}
+      />,
+    );
 
-    const closeButton = screen.getByRole('button', { name: /close/i });
-    
-    
-    fireEvent.click(closeButton);
+    fireEvent.click(
+      screen.getByRole("heading", { name: /sign in/i }).closest("div")!
+        .parentElement!,
+    );
 
-    
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 });
