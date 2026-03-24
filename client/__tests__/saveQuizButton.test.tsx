@@ -73,9 +73,13 @@ describe("SaveQuizButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "✓" }));
 
     await waitFor(() => {
-      expect(mockSaveQuiz).toHaveBeenCalledWith("My Quiz", "multichoice", [
-        { question: "Q1", options: ["A", "B"], question_type: "multichoice" },
-      ]);
+      expect(mockSaveQuiz).toHaveBeenCalledWith(
+        "My Quiz",
+        "multichoice",
+        [{ question: "Q1", options: ["A", "B"], question_type: "multichoice" }],
+        "access-token",
+        undefined,
+      );
     });
     expect(toastSuccess).toHaveBeenCalled();
   });

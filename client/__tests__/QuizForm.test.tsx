@@ -5,7 +5,6 @@ import QuizForm from "../components/home/QuizForm";
 const push = jest.fn();
 const mockApiGet = jest.fn();
 const mockApiPost = jest.fn();
-const mockPublicPost = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
@@ -23,11 +22,6 @@ jest.mock("../lib/functions/auth", () => ({
     get: (...args: unknown[]) => mockApiGet(...args),
     post: (...args: unknown[]) => mockApiPost(...args),
   },
-}));
-
-jest.mock("../lib/functions/publicApi", () => ({
-  __esModule: true,
-  default: { post: (...args: unknown[]) => mockPublicPost(...args) },
 }));
 
 describe("QuizForm", () => {
@@ -63,12 +57,10 @@ describe("QuizForm", () => {
     expect(
       await screen.findByText(/please enter a profession or topic/i),
     ).toBeInTheDocument();
-    expect(mockPublicPost).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   test("submits quiz generation and routes to quiz display", async () => {
-    mockPublicPost.mockResolvedValue({ data: { source: "mock" } });
-
     render(<QuizForm />);
 
     fireEvent.change(
@@ -78,18 +70,11 @@ describe("QuizForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
 
     await waitFor(() => {
-      expect(mockPublicPost).toHaveBeenCalledWith(
-        "/api/get-questions",
-        expect.objectContaining({
-          profession: "Physics",
-          question_type: "multichoice",
-          num_questions: 1,
-        }),
-        expect.any(Object),
+      expect(push).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "/quiz_display?questionType=multichoice&numQuestions=1&profession=Physics",
+        ),
       );
     });
-    expect(push).toHaveBeenCalledWith(
-      expect.stringContaining("/quiz_display?"),
-    );
   });
 });
