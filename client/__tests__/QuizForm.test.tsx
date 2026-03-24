@@ -77,4 +77,39 @@ describe("QuizForm", () => {
       );
     });
   });
+
+  test("updates selected difficulty in the UI", async () => {
+    render(<QuizForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: /easy/i }));
+    fireEvent.click(screen.getByRole("option", { name: /hard/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
+    });
+  });
+
+  test("submits selected difficulty and question type in route params", async () => {
+    render(<QuizForm />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+      { target: { value: "Biology" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /easy/i }));
+    fireEvent.click(screen.getByRole("option", { name: /hard/i }));
+    fireEvent.click(screen.getByLabelText(/true\/false/i));
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "/quiz_display?questionType=true-false&numQuestions=1&profession=Biology",
+        ),
+      );
+      expect(push).toHaveBeenCalledWith(
+        expect.stringContaining("difficultyLevel=hard"),
+      );
+    });
+  });
 });
