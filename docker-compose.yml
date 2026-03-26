@@ -18,7 +18,8 @@ services:
       - SHARE_URL=${SHARE_URL}
     command: ["pnpm", "run", "dev"]
     depends_on:
-      - server
+      server:
+        condition: service_started
 
   server:
     build:
@@ -36,8 +37,10 @@ services:
       - PYTHONPATH=/
     command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}", "--reload"]
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   celery:
     build:
@@ -58,8 +61,12 @@ services:
               "-Q", "email,celery",
               "--loglevel=info", "--pool=solo", "--concurrency=1"]
     depends_on:
-      - redis
-      - server 
+      redis:
+        condition: service_started
+      server:
+        condition: service_started
+      mongodb:
+        condition: service_healthy 
 
   mongodb:
     image: mongo:latest
@@ -67,6 +74,12 @@ services:
       - "${MONGO_PORT:-27017}:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   seed:
     build:
@@ -79,8 +92,10 @@ services:
       - FERNET_KEY=${FERNET_KEY}
     command: ["python", "-m", "app.seed"]
     depends_on:
-      - server
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      server:
+        condition: service_started
 
   redis:
     image: redis:7

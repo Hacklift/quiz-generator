@@ -35,7 +35,17 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         switchToSignUp={() => {}}
       />
 
-      <Toaster position="top-right" />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            borderRadius: "10px",
+            background: "#1f2937",
+            color: "#f9fafb",
+          },
+        }}
+      />
     </AuthProvider>
   );
 }

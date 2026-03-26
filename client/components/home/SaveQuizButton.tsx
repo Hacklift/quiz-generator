@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import toast from "react-hot-toast";
+import { notify } from "../ui/notifications";
 import { saveQuiz } from "../../lib/functions/savedQuiz";
 import { useAuth } from "../../contexts/authContext";
 import SignInModal from "../auth/SignInModal";
@@ -21,12 +21,12 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
     }
 
     if (!quizData || quizData.length === 0) {
-      toast.error("❌ No questions found to save!");
+      notify.error("❌ No questions found to save!");
       return;
     }
 
     if (!quizTitle.trim()) {
-      toast.error("Please enter a quiz title.");
+      notify.error("Please enter a quiz title.");
       return;
     }
 
@@ -35,7 +35,7 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
 
     const token = TokenService.getAccessToken();
     if (!token) {
-      toast.error("Authentication token missing. Please log in again.");
+      notify.error("Authentication token missing. Please log in again.");
       return;
     }
 
@@ -50,12 +50,12 @@ export default function SaveQuizButton({ quizData }: { quizData: any[] }) {
 
       await saveQuiz(quizTitle.trim(), questionType, formattedQuestions, token);
 
-      toast.success("✅ Quiz saved successfully!");
+      notify.success("✅ Quiz saved successfully!");
       setQuizTitle("");
       setShowInput(false);
     } catch (err) {
       console.error("Failed to save quiz:", err);
-      toast.error("Failed to save quiz. Try again.");
+      notify.error("Failed to save quiz. Try again.");
     } finally {
       setLoading(false);
     }
