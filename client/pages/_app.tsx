@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Toaster } from "react-hot-toast";
 import SplashScreen from "../components/splash_screen/SplashScreen";
 import { AuthProvider } from "../contexts/authContext";
+import { NotificationSettingsProvider } from "../contexts/notificationSettingsContext";
 import SignInModal from "../components/auth/SignInModal";
 import "../components/ui/global.css";
 
@@ -25,27 +26,29 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <AuthProvider>
-      <SplashScreen />
+      <NotificationSettingsProvider>
+        <SplashScreen />
 
-      <Component {...pageProps} openLoginModal={openSignInModal} />
+        <Component {...pageProps} openLoginModal={openSignInModal} />
 
-      <SignInModal
-        isOpen={showSignInModal}
-        onClose={closeSignInModal}
-        switchToSignUp={() => {}}
-      />
+        <SignInModal
+          isOpen={showSignInModal}
+          onClose={closeSignInModal}
+          switchToSignUp={() => {}}
+        />
 
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 5000,
-          style: {
-            borderRadius: "10px",
-            background: "#1f2937",
-            color: "#f9fafb",
-          },
-        }}
-      />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 5000,
+            style: {
+              borderRadius: "10px",
+              background: "#1f2937",
+              color: "#f9fafb",
+            },
+          }}
+        />
+      </NotificationSettingsProvider>
     </AuthProvider>
   );
 }

@@ -30,6 +30,7 @@ saved_quizzes_collection = database["saved_quizzes"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
+notification_settings_collection = database["notification_settings"]
 
 
 async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
@@ -97,3 +98,8 @@ def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
+
+def get_notification_settings_collection() -> AsyncIOMotorCollection:
+    if notification_settings_collection is None:
+        raise RuntimeError("[DB Error] notification_settings_collection has not been initialized properly.")
+    return notification_settings_collection
