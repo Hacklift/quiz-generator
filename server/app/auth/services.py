@@ -444,6 +444,11 @@ def get_user_profile_service(current_user: UserOut) -> dict:
         "avatar_color": current_user.avatar_color,
         "is_active": current_user.is_active,
         "is_verified": current_user.is_verified,
+        "stripe_customer_id": current_user.stripe_customer_id,
+        "stripe_subscription_id": current_user.stripe_subscription_id,
+        "subscription_plan": current_user.subscription_plan,
+        "subscription_status": current_user.subscription_status,
+        "current_period_end": current_user.current_period_end,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
     }
@@ -518,6 +523,11 @@ async def update_user_profile_service(
             avatar_color=updated_user.get("avatar_color", "#143E6F"),
             is_active=updated_user.get("is_active", True),
             is_verified=updated_user.get("is_verified", False),
+            stripe_customer_id=updated_user.get("stripe_customer_id"),
+            stripe_subscription_id=updated_user.get("stripe_subscription_id"),
+            subscription_plan=updated_user.get("subscription_plan", "free"),
+            subscription_status=updated_user.get("subscription_status", "inactive"),
+            current_period_end=updated_user.get("current_period_end"),
             created_at=created_at,
             updated_at=updated_at_value,
         )

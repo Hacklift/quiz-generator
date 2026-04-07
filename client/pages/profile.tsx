@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { Settings } from "lucide-react";
 import { useAuth } from "../contexts/authContext";
 import {
+  createPortalSession,
   updateProfile,
   requestEmailChange,
   verifyEmailChange,
@@ -31,6 +32,11 @@ export default function ProfilePage() {
   const [activeSettingSection, setActiveSettingSection] = useState<
     "account" | "profile" | null
   >(null);
+  const [paymentNotice, setPaymentNotice] = useState<{
+    type: "success" | "cancelled";
+    message: string;
+  } | null>(null);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -59,6 +65,37 @@ export default function ProfilePage() {
       setPublicProfile(storedPublicProfile === "true");
     }
   }, []);
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const paymentState = router.query.payment;
+    if (paymentState === "success") {
+      setPaymentNotice({
+        type: "success",
+        message:
+          "Payment completed. Your subscription status has been refreshed.",
+      });
+      refreshUser()
+        .catch(() => {
+          toast.error("Payment succeeded, but the profile refresh failed.");
+        })
+        .finally(() => {
+          router.replace("/profile", undefined, { shallow: true });
+        });
+      return;
+    }
+
+    if (paymentState === "cancelled") {
+      setPaymentNotice({
+        type: "cancelled",
+        message: "Checkout was cancelled. No changes were made to your plan.",
+      });
+      router.replace("/profile", undefined, { shallow: true });
+    }
+  }, [refreshUser, router, router.isReady, router.query.payment]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -151,6 +188,22 @@ export default function ProfilePage() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    try {
+      setIsOpeningPortal(true);
+      const { portal_url } = await createPortalSession();
+      window.location.assign(portal_url);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.detail ||
+          error?.message ||
+          "Unable to open the billing portal.",
+      );
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
+
   const handleCancelEdit = () => {
     if (user) {
       setFormData({
@@ -177,6 +230,30 @@ export default function ProfilePage() {
     "#0891b2",
     "#6366f1",
   ];
+
+  const formatPlanLabel = (plan?: string) => {
+    if (!plan || plan === "free") {
+      return "Free";
+    }
+    return plan.charAt(0).toUpperCase() + plan.slice(1);
+  };
+
+  const formatStatusLabel = (status?: string) => {
+    if (!status || status === "inactive") {
+      return "Inactive";
+    }
+    return status
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const subscriptionStatusClassName =
+    user?.subscription_status === "active"
+      ? "bg-green-100 text-green-800"
+      : user?.subscription_status === "past_due"
+        ? "bg-amber-100 text-amber-800"
+        : "bg-gray-100 text-gray-700";
 
   if (isLoading) {
     return (
@@ -251,6 +328,84 @@ export default function ProfilePage() {
               <span className="text-red-800">{saveError}</span>
             </div>
           )}
+
+          {paymentNotice && (
+            <div
+              className={`mb-6 rounded-lg border p-4 flex items-center justify-between ${
+                paymentNotice.type === "success"
+                  ? "bg-green-50 border-green-200"
+                  : "bg-amber-50 border-amber-200"
+              }`}
+            >
+              <span
+                className={
+                  paymentNotice.type === "success"
+                    ? "text-green-800"
+                    : "text-amber-800"
+                }
+              >
+                {paymentNotice.message}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPaymentNotice(null)}
+                className="ml-4 text-sm font-medium text-[#143E6F] hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Billing</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Current Stripe-backed subscription state for this account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={
+                  user?.stripe_customer_id
+                    ? handleManageSubscription
+                    : () => router.push("/#pricing")
+                }
+                disabled={isOpeningPortal}
+                className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {user?.stripe_customer_id
+                  ? isOpeningPortal
+                    ? "Opening Portal..."
+                    : "Manage Subscription"
+                  : "Change Plan"}
+              </button>
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Plan</p>
+                <p className="mt-2 text-lg font-semibold text-gray-900">
+                  {formatPlanLabel(user?.subscription_plan)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Status</p>
+                <span
+                  className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
+                >
+                  {formatStatusLabel(user?.subscription_status)}
+                </span>
+              </div>
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-500">Current Period End</p>
+                <p className="mt-2 text-lg font-semibold text-gray-900">
+                  {user?.current_period_end
+                    ? new Date(user.current_period_end).toLocaleDateString()
+                    : "N/A"}
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
             <div className="flex items-start mb-6">

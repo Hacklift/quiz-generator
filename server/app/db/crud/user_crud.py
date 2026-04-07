@@ -22,6 +22,11 @@ async def create_user(users_collection: AsyncIOMotorCollection, user: CreateUser
             "is_active": True,
             "is_verified": False,
             "role": "user",
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
+            "subscription_plan": "free",
+            "subscription_status": "inactive",
+            "current_period_end": None,
             "created_at": datetime.now(timezone.utc),
             "updated_at": None,
             "hashed_password": hash_password(user_dict["password"])
@@ -185,4 +190,3 @@ async def list_users(users_collection: AsyncIOMotorCollection) -> List[UserSchem
     except PyMongoError as e:
         logger.error(f"Database error while listing users: {e}")
     return []
-

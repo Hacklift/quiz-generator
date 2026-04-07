@@ -19,6 +19,11 @@ class UserDB(BaseModel):
     is_active: bool
     is_verified: bool 
     role: str
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -56,6 +61,11 @@ class SeedUser(BaseModel):
     hashed_password: str
     is_active: bool 
     role: str
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -78,6 +88,11 @@ class UserOut(BaseModel):
     role: Optional[str] = "user"
     is_verified: Optional[bool] = False
     is_active: Optional[bool] = True
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 

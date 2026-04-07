@@ -92,6 +92,11 @@ async def get_current_user(
         role=user.get("role", "user"),
         is_active=user.get("is_active", True),
         is_verified=user.get("is_verified", False),
+        stripe_customer_id=user.get("stripe_customer_id"),
+        stripe_subscription_id=user.get("stripe_subscription_id"),
+        subscription_plan=user.get("subscription_plan", "free"),
+        subscription_status=user.get("subscription_status", "inactive"),
+        current_period_end=user.get("current_period_end"),
         created_at=created_at,
         updated_at=updated_at,
     )
@@ -158,6 +163,11 @@ async def get_current_user_optional(
         role=user.get("role", "user"),
         is_active=user.get("is_active", True),
         is_verified=user.get("is_verified", False),
+        stripe_customer_id=user.get("stripe_customer_id"),
+        stripe_subscription_id=user.get("stripe_subscription_id"),
+        subscription_plan=user.get("subscription_plan", "free"),
+        subscription_status=user.get("subscription_status", "inactive"),
+        current_period_end=user.get("current_period_end"),
         created_at=created_at,
         updated_at=updated_at,
     )

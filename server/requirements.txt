@@ -6,3 +6,4 @@ celery
 python-dotenv
 email-validator
 slowapi
+stripe>=11,<12

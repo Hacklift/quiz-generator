@@ -35,6 +35,7 @@ from .app.db.core.connection import startUp
 from .app.db.routes import token_router
 from .app.quiz.routers.quiz import router as quiz_router
 from .app.share.routes.share_routes import router as share_router
+from .app.billing.routes import router as billing_router
 from .schemas.model import UserModel, LoginRequestModel, LoginResponseModel
 from .schemas.query import (
     GenerateQuizQuery,
@@ -101,6 +102,7 @@ app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(token_router.router, prefix="/api", tags=["Token"])
 app.include_router(saved_quizzes.router, prefix="/api", tags=["Saved Quizzes"])
 app.include_router(folder_routes, prefix="/api/folders", tags=["Folders"])
+app.include_router(billing_router)
 app.database = database
 
 
