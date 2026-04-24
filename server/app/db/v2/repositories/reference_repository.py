@@ -99,6 +99,23 @@ class ReferenceV2Repository:
         )
         return SavedQuizDocumentV2(**updated)
 
+    async def update_saved_quiz_by_legacy_id(
+        self,
+        legacy_saved_quiz_id: str,
+        *,
+        quiz_id: str,
+    ) -> SavedQuizDocumentV2 | None:
+        updated = await self.saved_quizzes_collection.find_one_and_update(
+            {"legacy_saved_quiz_id": legacy_saved_quiz_id},
+            {
+                "$set": {
+                    "quiz_id": quiz_id,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return SavedQuizDocumentV2(**updated) if updated else None
+
     async def upsert_quiz_history(self, quiz_history: QuizHistoryDocumentV2) -> QuizHistoryDocumentV2:
         payload = quiz_history.model_dump(by_alias=True)
         payload.pop("_id", None)

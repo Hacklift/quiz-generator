@@ -16,6 +16,23 @@ export interface SubscriptionSummary {
   current_period_end?: string | null;
 }
 
+export interface BillingHistoryItem {
+  invoice_id: string;
+  amount_paid: number;
+  currency: string;
+  status: string;
+  invoice_pdf?: string | null;
+  hosted_invoice_url?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  created_at?: string | null;
+  description?: string | null;
+}
+
+export interface BillingHistoryResponse {
+  invoices: BillingHistoryItem[];
+}
+
 export const createCheckoutSession = async (
   plan: "monthly" | "yearly",
 ): Promise<CheckoutSessionResponse> => {
@@ -34,4 +51,9 @@ export const getSubscriptionSummary =
 export const createPortalSession = async (): Promise<PortalSessionResponse> => {
   const response = await api.post("/api/billing/create-portal-session");
   return response.data as PortalSessionResponse;
+};
+
+export const getBillingHistory = async (): Promise<BillingHistoryResponse> => {
+  const response = await api.get("/api/billing/history");
+  return response.data as BillingHistoryResponse;
 };

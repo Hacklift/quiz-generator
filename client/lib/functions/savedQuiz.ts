@@ -52,3 +52,33 @@ export const deleteSavedQuiz = async (quizId: string, token: string) => {
   });
   return res.data;
 };
+
+export const duplicateSavedQuiz = async (quizId: string, token: string) => {
+  const res = await api.post(
+    `${API_URL}/${quizId}/duplicate`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  return res.data;
+};
+
+export const renameSavedQuiz = async (
+  quizId: string,
+  title: string,
+  token: string,
+) => {
+  const res = await api.patch(
+    `${API_URL}/${quizId}/rename`,
+    { title },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  return res.data;
+};

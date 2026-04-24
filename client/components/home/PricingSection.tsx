@@ -5,43 +5,10 @@ import React, { useState } from "react";
 import SignInModal from "../auth/SignInModal";
 import { useAuth } from "../../contexts/authContext";
 import { createCheckoutSession } from "../../lib";
-
-const plans = [
-  {
-    plan: "Free",
-    price: "$0",
-    action: "free",
-    features: [
-      "Generate up to 5 quizzes per month",
-      "Basic question types",
-      "Save and share quizzes",
-      "Access to community quiz templates",
-    ],
-  },
-  {
-    plan: "Monthly",
-    price: "$9.99",
-    action: "monthly",
-    features: [
-      "Unlimited quiz generation",
-      "Advanced question types",
-      "Edit and customize questions",
-      "Export in multiple formats",
-      "Priority support",
-    ],
-  },
-  {
-    plan: "Yearly",
-    price: "$99 (save 20%)",
-    action: "yearly",
-    features: [
-      "All monthly subscription benefits",
-      "Early access to new features",
-      "Personalized templates",
-      "Premium support",
-    ],
-  },
-];
+import {
+  billingPlans,
+  BillingPlanAction,
+} from "../../lib/constants/billingPlans";
 
 export default function PricingSection() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -51,7 +18,7 @@ export default function PricingSection() {
   );
   const [error, setError] = useState("");
 
-  const handlePlanSelection = async (action: "free" | "monthly" | "yearly") => {
+  const handlePlanSelection = async (action: BillingPlanAction) => {
     setError("");
 
     if (action === "free") {
@@ -90,40 +57,49 @@ export default function PricingSection() {
         </div>
       ) : null}
       <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
-        {plans.map(({ plan, price, features, action }, i) => {
-          const isCurrentPlan =
-            action !== "free" && user?.subscription_plan === action;
-          const isBusy = activePlan === action;
+        {billingPlans.map(
+          ({ plan, billingPeriod, price, features, action }, i) => {
+            const isCurrentPlan =
+              action !== "free" && user?.subscription_plan === action;
+            const isBusy = activePlan === action;
 
-          return (
-            <div
-              key={i}
-              className="bg-white rounded shadow-md p-6 text-left flex flex-col"
-            >
-              <h3 className="text-xl font-bold mb-2">{plan}</h3>
-              <p className="text-[#0F2654] font-semibold mb-4">{price}</p>
-              <ul className="text-sm text-gray-700 list-disc list-inside mb-6 flex-1">
-                {features.map((f, idx) => (
-                  <li key={idx}>{f}</li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => handlePlanSelection(action)}
-                disabled={isBusy || isCurrentPlan}
-                className="w-full bg-[#0F2654] text-white py-3 rounded-2xl hover:bg-[#0C2142] transition disabled:cursor-not-allowed disabled:opacity-60"
+            return (
+              <div
+                key={i}
+                className="bg-white rounded shadow-md p-6 text-left flex flex-col"
               >
-                {action === "free"
-                  ? "Included"
-                  : isCurrentPlan
-                    ? "Current Plan"
-                    : isBusy
-                      ? "Redirecting..."
-                      : "Get Started"}
-              </button>
-            </div>
-          );
-        })}
+                <h3 className="text-xl font-bold mb-2">
+                  {plan}
+                  {billingPeriod ? (
+                    <span className="block text-sm font-medium text-gray-500">
+                      {billingPeriod}
+                    </span>
+                  ) : null}
+                </h3>
+                <p className="text-[#0F2654] font-semibold mb-4">{price}</p>
+                <ul className="text-sm text-gray-700 list-disc list-inside mb-6 flex-1">
+                  {features.map((f, idx) => (
+                    <li key={idx}>{f}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => handlePlanSelection(action)}
+                  disabled={isBusy || isCurrentPlan}
+                  className="w-full bg-[#0F2654] text-white py-3 rounded-2xl hover:bg-[#0C2142] transition disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {action === "free"
+                    ? "Included"
+                    : isCurrentPlan
+                      ? "Current Plan"
+                      : isBusy
+                        ? "Redirecting..."
+                        : "Get Started"}
+                </button>
+              </div>
+            );
+          },
+        )}
       </div>
       <SignInModal
         isOpen={isLoginOpen}

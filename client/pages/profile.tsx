@@ -5,6 +5,7 @@ import { Settings } from "lucide-react";
 import { useAuth } from "../contexts/authContext";
 import {
   createPortalSession,
+  getSubscriptionSummary,
   updateProfile,
   requestEmailChange,
   verifyEmailChange,
@@ -30,13 +31,20 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [activeSettingSection, setActiveSettingSection] = useState<
-    "account" | "profile" | null
+    "account" | "profile" | "billing" | null
   >(null);
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "success" | "cancelled";
     message: string;
   } | null>(null);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [billingSummary, setBillingSummary] = useState<{
+    subscription_plan?: string;
+    subscription_status?: string;
+    stripe_customer_id?: string | null;
+    stripe_subscription_id?: string | null;
+    current_period_end?: string | null;
+  } | null>(null);
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -59,6 +67,21 @@ export default function ProfilePage() {
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      setBillingSummary(null);
+      return;
+    }
+
+    setBillingSummary({
+      subscription_plan: user.subscription_plan,
+      subscription_status: user.subscription_status,
+      stripe_customer_id: user.stripe_customer_id,
+      stripe_subscription_id: user.stripe_subscription_id,
+      current_period_end: user.current_period_end,
+    });
+  }, [user]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const storedPublicProfile = localStorage.getItem("public_profile_enabled");
     if (storedPublicProfile) {
@@ -78,13 +101,31 @@ export default function ProfilePage() {
         message:
           "Payment completed. Your subscription status has been refreshed.",
       });
-      refreshUser()
-        .catch(() => {
+      (async () => {
+        try {
+          let latestSummary = null;
+
+          for (let attempt = 0; attempt < 4; attempt += 1) {
+            latestSummary = await getSubscriptionSummary();
+            setBillingSummary(latestSummary);
+
+            if (
+              latestSummary.current_period_end ||
+              latestSummary.subscription_status === "active"
+            ) {
+              break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+
+          await refreshUser();
+        } catch {
           toast.error("Payment succeeded, but the profile refresh failed.");
-        })
-        .finally(() => {
+        } finally {
           router.replace("/profile", undefined, { shallow: true });
-        });
+        }
+      })();
       return;
     }
 
@@ -96,6 +137,20 @@ export default function ProfilePage() {
       router.replace("/profile", undefined, { shallow: true });
     }
   }, [refreshUser, router, router.isReady, router.query.payment]);
+
+  useEffect(() => {
+    if (!user?.stripe_customer_id || user.current_period_end) {
+      return;
+    }
+
+    getSubscriptionSummary()
+      .then((summary) => {
+        setBillingSummary(summary);
+      })
+      .catch(() => {
+        // Leave the existing profile snapshot in place if reconciliation fails.
+      });
+  }, [user?.current_period_end, user?.stripe_customer_id]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -249,9 +304,11 @@ export default function ProfilePage() {
   };
 
   const subscriptionStatusClassName =
-    user?.subscription_status === "active"
+    (billingSummary?.subscription_status || user?.subscription_status) ===
+    "active"
       ? "bg-green-100 text-green-800"
-      : user?.subscription_status === "past_due"
+      : (billingSummary?.subscription_status || user?.subscription_status) ===
+          "past_due"
         ? "bg-amber-100 text-amber-800"
         : "bg-gray-100 text-gray-700";
 
@@ -355,57 +412,6 @@ export default function ProfilePage() {
               </button>
             </div>
           )}
-
-          <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Billing</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Current Stripe-backed subscription state for this account.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={
-                  user?.stripe_customer_id
-                    ? handleManageSubscription
-                    : () => router.push("/#pricing")
-                }
-                disabled={isOpeningPortal}
-                className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {user?.stripe_customer_id
-                  ? isOpeningPortal
-                    ? "Opening Portal..."
-                    : "Manage Subscription"
-                  : "Change Plan"}
-              </button>
-            </div>
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Plan</p>
-                <p className="mt-2 text-lg font-semibold text-gray-900">
-                  {formatPlanLabel(user?.subscription_plan)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Status</p>
-                <span
-                  className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
-                >
-                  {formatStatusLabel(user?.subscription_status)}
-                </span>
-              </div>
-              <div className="rounded-xl border border-gray-200 p-4">
-                <p className="text-sm text-gray-500">Current Period End</p>
-                <p className="mt-2 text-lg font-semibold text-gray-900">
-                  {user?.current_period_end
-                    ? new Date(user.current_period_end).toLocaleDateString()
-                    : "N/A"}
-                </p>
-              </div>
-            </div>
-          </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
             <div className="flex items-start mb-6">
@@ -647,6 +653,98 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-4">
+                <div className="border border-[#143E6F]/20 rounded-xl">
+                  <button
+                    onClick={() =>
+                      setActiveSettingSection((prev) =>
+                        prev === "billing" ? null : "billing",
+                      )
+                    }
+                    className="w-full px-5 py-4 flex items-center justify-between text-left"
+                  >
+                    <h4 className="text-lg font-semibold text-[#143E6F]">
+                      Billing
+                    </h4>
+                    <span className="text-[#143E6F]">
+                      {activeSettingSection === "billing" ? "-" : "+"}
+                    </span>
+                  </button>
+                  {activeSettingSection === "billing" && (
+                    <div className="border-t border-[#143E6F]/10 p-5 space-y-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            Current Stripe-backed subscription state for this
+                            account.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => router.push("/billing_history")}
+                            className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5"
+                          >
+                            View Billing History
+                          </button>
+                          <button
+                            type="button"
+                            onClick={
+                              user?.stripe_customer_id
+                                ? handleManageSubscription
+                                : () => router.push("/#pricing")
+                            }
+                            disabled={isOpeningPortal}
+                            className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {user?.stripe_customer_id
+                              ? isOpeningPortal
+                                ? "Opening Portal..."
+                                : "Manage Subscription"
+                              : "Change Plan"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-xl border border-gray-200 p-4">
+                          <p className="text-sm text-gray-500">Plan</p>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {formatPlanLabel(
+                              billingSummary?.subscription_plan ||
+                                user?.subscription_plan,
+                            )}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-gray-200 p-4">
+                          <p className="text-sm text-gray-500">Status</p>
+                          <span
+                            className={`mt-2 inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
+                          >
+                            {formatStatusLabel(
+                              billingSummary?.subscription_status ||
+                                user?.subscription_status,
+                            )}
+                          </span>
+                        </div>
+                        <div className="rounded-xl border border-gray-200 p-4">
+                          <p className="text-sm text-gray-500">
+                            Current Period End
+                          </p>
+                          <p className="mt-2 text-lg font-semibold text-gray-900">
+                            {billingSummary?.current_period_end ||
+                            user?.current_period_end
+                              ? new Date(
+                                  billingSummary?.current_period_end ||
+                                    user?.current_period_end ||
+                                    "",
+                                ).toLocaleDateString()
+                              : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="border border-[#143E6F]/20 rounded-xl">
                   <button
                     onClick={() =>

@@ -1,8 +1,10 @@
 from datetime import datetime
 import logging
+import re
 
 from bson import ObjectId
 from pydantic import ValidationError
+from pymongo import ReturnDocument
 
 from ....app.db.core.connection import get_saved_quizzes_collection
 from ....app.db.models.saved_quiz_model import QuizQuestionModel, SavedQuizModel
@@ -76,10 +78,42 @@ async def save_quiz(
         raise Exception(f"Validation error: {exc}") from exc
 
 
+def _normalize_saved_quiz_document(quiz: dict) -> dict:
+    quiz["_id"] = str(quiz["_id"])
+    return quiz
+
+
+async def _build_duplicate_title(user_id: str, original_title: str) -> str:
+    base_title = f"Copy of {original_title.strip()}"
+    title_pattern = re.compile(
+        rf"^{re.escape(base_title)}(?: (\d+))?$",
+        re.IGNORECASE,
+    )
+    existing_titles = await collection.distinct("title", {"user_id": user_id})
+
+    highest_suffix = 0
+    base_exists = False
+    for existing_title in existing_titles:
+        if not isinstance(existing_title, str):
+            continue
+        match = title_pattern.match(existing_title.strip())
+        if not match:
+            continue
+        if match.group(1):
+            highest_suffix = max(highest_suffix, int(match.group(1)))
+        else:
+            base_exists = True
+
+    if not base_exists:
+        return base_title
+
+    return f"{base_title} {highest_suffix + 1}"
+
+
 async def get_saved_quizzes(user_id: str):
     quizzes = await collection.find({"user_id": user_id}).sort("created_at", -1).to_list(100)
     for quiz in quizzes:
-        quiz["_id"] = str(quiz["_id"])
+        _normalize_saved_quiz_document(quiz)
     return quizzes
 
 
@@ -97,5 +131,42 @@ async def delete_saved_quiz(quiz_id: str, user_id: str):
 async def get_saved_quiz_by_id(quiz_id: str, user_id: str):
     quiz = await collection.find_one({"_id": ObjectId(quiz_id), "user_id": user_id})
     if quiz:
-        quiz["_id"] = str(quiz["_id"])
+        _normalize_saved_quiz_document(quiz)
     return quiz
+
+
+async def duplicate_saved_quiz(quiz_id: str, user_id: str):
+    original_quiz = await collection.find_one(
+        {"_id": ObjectId(quiz_id), "user_id": user_id}
+    )
+    if not original_quiz:
+        return None
+
+    duplicated_title = await _build_duplicate_title(user_id, original_quiz["title"])
+    duplicated_quiz_id = await save_quiz(
+        user_id=user_id,
+        title=duplicated_title,
+        question_type=original_quiz["question_type"],
+        questions=original_quiz["questions"],
+    )
+    duplicated_quiz = await collection.find_one(
+        {"_id": ObjectId(duplicated_quiz_id), "user_id": user_id}
+    )
+    if duplicated_quiz:
+        _normalize_saved_quiz_document(duplicated_quiz)
+    return duplicated_quiz
+
+
+async def rename_saved_quiz(quiz_id: str, user_id: str, new_title: str):
+    sanitized_title = new_title.strip()
+    if not sanitized_title:
+        raise ValueError("Quiz title cannot be empty")
+
+    updated_quiz = await collection.find_one_and_update(
+        {"_id": ObjectId(quiz_id), "user_id": user_id},
+        {"$set": {"title": sanitized_title}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if updated_quiz:
+        _normalize_saved_quiz_document(updated_quiz)
+    return updated_quiz

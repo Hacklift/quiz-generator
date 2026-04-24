@@ -3,7 +3,7 @@ from typing import Literal
 
 import stripe
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel
 
@@ -36,6 +36,23 @@ class SubscriptionResponse(BaseModel):
     current_period_end: str | None = None
 
 
+class BillingHistoryItemResponse(BaseModel):
+    invoice_id: str
+    amount_paid: float
+    currency: str
+    status: str
+    invoice_pdf: str | None = None
+    hosted_invoice_url: str | None = None
+    period_start: str | None = None
+    period_end: str | None = None
+    created_at: str | None = None
+    description: str | None = None
+
+
+class BillingHistoryResponse(BaseModel):
+    invoices: list[BillingHistoryItemResponse] = []
+
+
 def _get_price_id(plan: str) -> str:
     price_id_map = {
         "monthly": settings.STRIPE_PRICE_ID_MONTHLY,
@@ -61,6 +78,29 @@ def _normalize_timestamp(value: int | None) -> str | None:
     if not value:
         return None
     return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+
+
+def _amount_to_major_units(amount: int | None) -> float:
+    if amount is None:
+        return 0.0
+    return amount / 100
+
+
+def _extract_current_period_end(subscription: stripe.Subscription | None) -> str | None:
+    if subscription is None:
+        return None
+
+    current_period_end = subscription.get("current_period_end")
+    if current_period_end:
+        return _normalize_timestamp(current_period_end)
+
+    items = subscription.get("items", {}).get("data", [])
+    if items:
+        item_period_end = items[0].get("current_period_end")
+        if item_period_end:
+            return _normalize_timestamp(item_period_end)
+
+    return None
 
 
 def _infer_plan_from_subscription(subscription: stripe.Subscription | None) -> str | None:
@@ -121,13 +161,80 @@ async def _persist_subscription_state(
                 "subscription_plan": plan,
                 "subscription_status": subscription.get("status", "inactive"),
                 "stripe_subscription_id": subscription.get("id"),
-                "current_period_end": _normalize_timestamp(
-                    subscription.get("current_period_end")
-                ),
+                "current_period_end": _extract_current_period_end(subscription),
             }
         )
 
     await users_collection.update_one(user_filter, {"$set": update_data})
+
+
+def _select_relevant_subscription(
+    subscriptions: list[stripe.Subscription],
+) -> stripe.Subscription | None:
+    if not subscriptions:
+        return None
+
+    status_priority = {
+        "active": 0,
+        "trialing": 1,
+        "past_due": 2,
+        "unpaid": 3,
+        "incomplete": 4,
+        "canceled": 5,
+        "incomplete_expired": 6,
+    }
+
+    return min(
+        subscriptions,
+        key=lambda subscription: (
+            status_priority.get(subscription.get("status", ""), 99),
+            -(subscription.get("created") or 0),
+        ),
+    )
+
+
+async def _reconcile_subscription_state(
+    users_collection: AsyncIOMotorCollection,
+    user: dict,
+):
+    customer_id = user.get("stripe_customer_id")
+    if not customer_id:
+        return user
+
+    stripe_client = _get_stripe_client()
+    subscriptions = stripe_client.Subscription.list(
+        customer=customer_id,
+        status="all",
+        limit=10,
+    )
+    subscription = _select_relevant_subscription(subscriptions.data)
+
+    await _persist_subscription_state(
+        users_collection,
+        {"_id": user["_id"]},
+        subscription,
+    )
+
+    return await users_collection.find_one({"_id": user["_id"]})
+
+
+def _serialize_invoice(invoice: stripe.Invoice) -> BillingHistoryItemResponse:
+    line_items = invoice.get("lines", {}).get("data", [])
+    period = line_items[0].get("period", {}) if line_items else {}
+    description = line_items[0].get("description") if line_items else None
+
+    return BillingHistoryItemResponse(
+        invoice_id=invoice.get("id", ""),
+        amount_paid=_amount_to_major_units(invoice.get("amount_paid")),
+        currency=(invoice.get("currency") or "").upper(),
+        status=invoice.get("status", "unknown"),
+        invoice_pdf=invoice.get("invoice_pdf"),
+        hosted_invoice_url=invoice.get("hosted_invoice_url"),
+        period_start=_normalize_timestamp(period.get("start")),
+        period_end=_normalize_timestamp(period.get("end")),
+        created_at=_normalize_timestamp(invoice.get("created")),
+        description=description,
+    )
 
 
 @router.post(
@@ -137,6 +244,7 @@ async def _persist_subscription_state(
 @limiter.limit(RateLimits.API_WRITE)
 async def create_checkout_session(
     request: Request,
+    response: Response,
     payload: CreateCheckoutSessionRequest,
     current_user: UserOut = Depends(get_current_user),
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
@@ -184,6 +292,7 @@ async def create_checkout_session(
 @limiter.limit(RateLimits.API_WRITE)
 async def create_portal_session(
     request: Request,
+    response: Response,
     current_user: UserOut = Depends(get_current_user),
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
 ):
@@ -211,14 +320,56 @@ async def create_portal_session(
 @limiter.limit(RateLimits.API_READ)
 async def get_subscription(
     request: Request,
+    response: Response,
     current_user: UserOut = Depends(get_current_user),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
 ):
+    user = await users_collection.find_one({"_id": ObjectId(current_user.id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    needs_reconciliation = bool(user.get("stripe_customer_id")) and (
+        not user.get("stripe_subscription_id")
+        or not user.get("current_period_end")
+        or user.get("subscription_status") == "inactive"
+    )
+
+    if needs_reconciliation:
+        try:
+            user = await _reconcile_subscription_state(users_collection, user)
+        except stripe.error.StripeError:
+            pass
+
     return SubscriptionResponse(
-        subscription_plan=current_user.subscription_plan or "free",
-        subscription_status=current_user.subscription_status or "inactive",
-        stripe_customer_id=current_user.stripe_customer_id,
-        stripe_subscription_id=current_user.stripe_subscription_id,
-        current_period_end=current_user.current_period_end,
+        subscription_plan=user.get("subscription_plan") or "free",
+        subscription_status=user.get("subscription_status") or "inactive",
+        stripe_customer_id=user.get("stripe_customer_id"),
+        stripe_subscription_id=user.get("stripe_subscription_id"),
+        current_period_end=user.get("current_period_end"),
+    )
+
+
+@router.get("/history", response_model=BillingHistoryResponse)
+@limiter.limit(RateLimits.API_READ)
+async def get_billing_history(
+    request: Request,
+    response: Response,
+    current_user: UserOut = Depends(get_current_user),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
+    user = await users_collection.find_one({"_id": ObjectId(current_user.id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    customer_id = user.get("stripe_customer_id")
+    if not customer_id:
+        return BillingHistoryResponse(invoices=[])
+
+    stripe_client = _get_stripe_client()
+    invoices = stripe_client.Invoice.list(customer=customer_id, limit=24)
+
+    return BillingHistoryResponse(
+        invoices=[_serialize_invoice(invoice) for invoice in invoices.data]
     )
 
 

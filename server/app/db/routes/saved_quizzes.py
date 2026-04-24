@@ -6,22 +6,23 @@ from ....app.db.crud.saved_quiz_crud import (
 
     save_quiz,
 
-    get_saved_quizzes,
-
-    delete_saved_quiz,
-
-    get_saved_quiz_by_id,
-
 )
 
 from ....app.db.models.saved_quiz_model import SavedQuizModel
+from pydantic import BaseModel
 
 from ....app.dependancies import get_current_user
 
 from ....app.db.schemas.user_schemas import UserResponseSchema
+from ....app.db.services.saved_quiz_management_service import SavedQuizManagementService
 
 
 router = APIRouter(prefix="/saved-quizzes", tags=["Saved Quizzes"])
+saved_quiz_management_service = SavedQuizManagementService()
+
+
+class RenameSavedQuizRequest(BaseModel):
+    title: str
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -41,20 +42,28 @@ async def create_saved_quiz(
         print("Received quiz payload:", quiz.dict())
 
 
-        quiz_id = await save_quiz(
-
+        created_quiz = await saved_quiz_management_service.create_saved_quiz(
             user_id=quiz.user_id,
-
             title=quiz.title,
-
             question_type=quiz.question_type,
-
             questions=quiz.questions,
             quiz_id=quiz.quiz_id,
-
         )
+        if created_quiz is None:
+            quiz_id = await save_quiz(
+                user_id=quiz.user_id,
+                title=quiz.title,
+                question_type=quiz.question_type,
+                questions=quiz.questions,
+                quiz_id=quiz.quiz_id,
+            )
+            return {"message": "Quiz saved successfully", "quiz_id": quiz_id}
 
-        return {"message": "Quiz saved successfully", "quiz_id": quiz_id}
+        return {
+            "message": "Quiz saved successfully",
+            "quiz_id": created_quiz["_id"],
+            "quiz": created_quiz,
+        }
 
 
     except Exception as e:
@@ -72,7 +81,9 @@ async def list_saved_quizzes(
 
     try:
 
-        quizzes = await get_saved_quizzes(user_id=str(current_user.id))
+        quizzes = await saved_quiz_management_service.list_saved_quizzes(
+            user_id=str(current_user.id)
+        )
 
         return quizzes
 
@@ -93,7 +104,10 @@ async def remove_saved_quiz(
 
     try:
 
-        deleted = await delete_saved_quiz(user_id=str(current_user.id), quiz_id=quiz_id)
+        deleted = await saved_quiz_management_service.delete_saved_quiz(
+            user_id=str(current_user.id),
+            quiz_id=quiz_id,
+        )
 
         if not deleted:
 
@@ -123,7 +137,10 @@ async def get_saved_quiz(
             raise HTTPException(status_code=400, detail="Invalid quiz ID")
 
 
-        quiz = await get_saved_quiz_by_id(quiz_id, user_id=str(current_user.id))
+        quiz = await saved_quiz_management_service.get_saved_quiz(
+            quiz_id,
+            user_id=str(current_user.id),
+        )
 
         if not quiz or quiz.get("user_id") != str(current_user.id):
 
@@ -134,4 +151,60 @@ async def get_saved_quiz(
 
     except Exception as e:
 
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{quiz_id}/duplicate", status_code=status.HTTP_201_CREATED)
+async def duplicate_saved_quiz_route(
+    quiz_id: str,
+    current_user: UserResponseSchema = Depends(get_current_user),
+):
+    try:
+        if not ObjectId.is_valid(quiz_id):
+            raise HTTPException(status_code=400, detail="Invalid quiz ID")
+
+        duplicated_quiz = await saved_quiz_management_service.duplicate_saved_quiz(
+            quiz_id=quiz_id,
+            user_id=str(current_user.id),
+        )
+        if not duplicated_quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+
+        return {
+            "message": "Quiz duplicated successfully",
+            "quiz": duplicated_quiz,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{quiz_id}/rename", status_code=status.HTTP_200_OK)
+async def rename_saved_quiz_route(
+    quiz_id: str,
+    payload: RenameSavedQuizRequest,
+    current_user: UserResponseSchema = Depends(get_current_user),
+):
+    try:
+        if not ObjectId.is_valid(quiz_id):
+            raise HTTPException(status_code=400, detail="Invalid quiz ID")
+
+        renamed_quiz = await saved_quiz_management_service.rename_saved_quiz(
+            quiz_id=quiz_id,
+            user_id=str(current_user.id),
+            new_title=payload.title,
+        )
+        if not renamed_quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+
+        return {
+            "message": "Quiz renamed successfully",
+            "quiz": renamed_quiz,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

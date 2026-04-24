@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   getSavedQuizzes,
   deleteSavedQuiz,
+  duplicateSavedQuiz,
+  renameSavedQuiz,
 } from "../../lib/functions/savedQuiz";
 import {
   getUserFolders,
@@ -228,11 +230,25 @@ const AddToFolderModal = ({
 const DisplaySavedQuizzesPage: React.FC<{
   savedQuizzes: SavedQuiz[];
   onDeleteClick: (quizId: string) => void;
+  onDuplicateCreate: (quiz: SavedQuiz) => void;
+  onRenameUpdate: (quiz: SavedQuiz) => void;
   token: string;
-}> = ({ savedQuizzes, onDeleteClick, token }) => {
+}> = ({
+  savedQuizzes,
+  onDeleteClick,
+  onDuplicateCreate,
+  onRenameUpdate,
+  token,
+}) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [duplicatingQuizId, setDuplicatingQuizId] = useState<string | null>(
+    null,
+  );
+  const [renameTarget, setRenameTarget] = useState<SavedQuiz | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
   const router = useRouter();
 
   const toggleSelectQuiz = (quizId: string) => {
@@ -264,6 +280,64 @@ const DisplaySavedQuizzesPage: React.FC<{
 
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
     router.push(`/quiz_display?id=${quiz._id}`);
+  };
+
+  const handleDuplicateQuiz = async (quizId: string) => {
+    try {
+      setDuplicatingQuizId(quizId);
+      const response = await duplicateSavedQuiz(quizId, token);
+      if (response?.quiz) {
+        const duplicatedQuiz = response.quiz as SavedQuiz;
+        onDuplicateCreate(duplicatedQuiz);
+        setRenameTarget(duplicatedQuiz);
+        setRenameValue(duplicatedQuiz.title);
+      }
+      toast.success("Quiz duplicated successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to duplicate quiz");
+    } finally {
+      setDuplicatingQuizId(null);
+    }
+  };
+
+  const openRenameModal = (quiz: SavedQuiz) => {
+    setRenameTarget(quiz);
+    setRenameValue(quiz.title);
+  };
+
+  const closeRenameModal = () => {
+    if (isRenaming) {
+      return;
+    }
+    setRenameTarget(null);
+    setRenameValue("");
+  };
+
+  const handleRenameQuiz = async () => {
+    if (!renameTarget) {
+      return;
+    }
+
+    try {
+      setIsRenaming(true);
+      const response = await renameSavedQuiz(
+        renameTarget._id,
+        renameValue,
+        token,
+      );
+      if (response?.quiz) {
+        onRenameUpdate(response.quiz as SavedQuiz);
+      }
+      toast.success("Quiz renamed successfully!");
+      setRenameTarget(null);
+      setRenameValue("");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to rename quiz");
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   return (
@@ -341,6 +415,21 @@ const DisplaySavedQuizzesPage: React.FC<{
 
                     <div className="flex gap-2">
                       <button
+                        onClick={() => handleDuplicateQuiz(quiz._id)}
+                        disabled={duplicatingQuizId === quiz._id}
+                        className="text-sm text-[#0F2654] hover:text-[#082952] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {duplicatingQuizId === quiz._id
+                          ? "Duplicating..."
+                          : "Duplicate"}
+                      </button>
+                      <button
+                        onClick={() => openRenameModal(quiz)}
+                        className="text-sm text-[#0F2654] hover:text-[#082952] font-semibold"
+                      >
+                        Rename
+                      </button>
+                      <button
                         onClick={() => setConfirmDeleteId(quiz._id)}
                         className="text-sm text-red-600 hover:text-red-800 font-semibold"
                       >
@@ -395,6 +484,44 @@ const DisplaySavedQuizzesPage: React.FC<{
           </div>
         </div>
       )}
+
+      {renameTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full">
+            <h2 className="text-lg font-bold mb-3 text-[#0a3264]">
+              Rename Quiz
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              The duplicate already has a unique name. Change it now if you want
+              something more specific.
+            </p>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              placeholder="Enter quiz title"
+              disabled={isRenaming}
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeRenameModal}
+                className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isRenaming}
+              >
+                Keep Current Name
+              </button>
+              <button
+                onClick={handleRenameQuiz}
+                className="px-4 py-2 rounded-lg bg-[#0a3264] text-white hover:bg-[#082952] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isRenaming}
+              >
+                {isRenaming ? "Saving..." : "Save Name"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -442,6 +569,14 @@ export default function SavedQuizzes() {
             savedQuizzes={savedQuizzes}
             onDeleteClick={(id) =>
               setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
+            }
+            onDuplicateCreate={(quiz) =>
+              setSavedQuizzes((prev) => [quiz, ...prev])
+            }
+            onRenameUpdate={(quiz) =>
+              setSavedQuizzes((prev) =>
+                prev.map((item) => (item._id === quiz._id ? quiz : item)),
+              )
             }
             token={token!}
           />
