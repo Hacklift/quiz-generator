@@ -83,6 +83,28 @@ class SavedQuizManagementService:
             if canonical_quiz:
                 return canonical_quiz
 
+        existing_reference = await self.reference_repository.saved_quizzes_collection.find_one(
+            {
+                "legacy_saved_quiz_id": legacy_saved_quiz["_id"],
+                "user_id": legacy_saved_quiz["user_id"],
+            }
+        )
+        if existing_reference:
+            canonical_quiz = await self.canonical_service.get_quiz_v2_by_id(
+                existing_reference["quiz_id"]
+            )
+            if canonical_quiz:
+                await self.legacy_collection.update_one(
+                    {"_id": ObjectId(legacy_saved_quiz["_id"])},
+                    {
+                        "$set": {
+                            "canonical_quiz_id": str(canonical_quiz.id),
+                            "quiz_id": str(canonical_quiz.id),
+                        }
+                    },
+                )
+                return canonical_quiz
+
         mirrored = await self.dual_write_service.mirror_saved_quiz(
             {
                 **legacy_saved_quiz,
