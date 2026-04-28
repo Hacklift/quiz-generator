@@ -11,6 +11,7 @@ import QuizDropdown from "./QuizDropdown";
 import PricingLink from "./PricingLink";
 import HowItWorksLink from "./HowItWorksLink";
 import NavGenerateQuizButton from "./NavGenerateQuizButton";
+import NotificationBell from "./NotificationBell";
 import Sidebar from "./Sidebar";
 import BrowseModal from "./modals/BrowseModal";
 import { useAuth } from "../../contexts/authContext";
@@ -74,6 +75,7 @@ const NavBar: React.FC = () => {
               <>
                 {isAuthenticated ? (
                   <>
+                    <NotificationBell />
                     <span className="text-[#0F2654] font-medium">
                       Hi, {user?.username || "User"} 👋
                     </span>
@@ -123,6 +125,12 @@ const NavBar: React.FC = () => {
             <>
               {isAuthenticated ? (
                 <>
+                  <div className="flex justify-center">
+                    <NotificationBell
+                      label="Notifications"
+                      panelAlign="center"
+                    />
+                  </div>
                   <span className="text-[#0F2654] text-center">
                     Hi, {user?.username || "User"} 👋
                   </span>

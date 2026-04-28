@@ -23,6 +23,8 @@ import redis
 from server.app.db.core.connection import users_collection, blacklisted_tokens_collection, get_blacklisted_tokens_collection
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.db.crud.user_crud import create_user, get_user_by_email
+from server.app.db.crud.notifications_crud import create_notification
+from server.app.db.models.notification_model import NotificationCreate
 from server.app.db.schemas.user_schemas import  UserRegisterSchema, UserResponseSchema, CreateUserRequest, PasswordResetRequest, PasswordResetResponse, RequestPasswordReset, ResendVerificationRequest, MessageResponse
 from server.app.db.crud.user_crud import delete_user
 import json
@@ -227,6 +229,17 @@ async def login_service(identifier: str, password: str, users_collection: AsyncI
             }
         }
     )
+
+    await create_notification(
+        NotificationCreate(
+            user_id=user_id,
+            title="New Login Detected",
+            message="A new login was detected on your account.",
+            type="security",
+            priority="high",
+            action_url="/profile",
+        )
+    )
     
     return {
         "message": "Login successful",
@@ -384,6 +397,17 @@ async def reset_password_service(request: PasswordResetRequest):
    
     await redis_client.delete(f"otp:{request.email}")
     await redis_client.delete(f"token:{request.email}")
+
+    await create_notification(
+        NotificationCreate(
+            user_id=str(user["_id"]),
+            title="Password Changed",
+            message="Your password was changed successfully.",
+            type="security",
+            priority="high",
+            action_url="/profile",
+        )
+    )
 
     return PasswordResetResponse(message="Password reset successful", success=True)
 
@@ -598,6 +622,16 @@ async def verify_email_change_service(
     )
 
     await redis_client.delete(f"email_change:{current_user.id}")
+    await create_notification(
+        NotificationCreate(
+            user_id=current_user.id,
+            title="Email Changed",
+            message="Your account email was changed successfully.",
+            type="security",
+            priority="high",
+            action_url="/profile",
+        )
+    )
     return MessageResponse(message="Email updated successfully.")
 
 

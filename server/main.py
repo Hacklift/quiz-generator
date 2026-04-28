@@ -26,7 +26,7 @@ from .app.db.core.connection import (
 from .app.db.core.rate_limiter import limiter, rate_limit_handler
 from .app.db.models.user_models import UserOut
 from .app.db.routes import router as db_router
-from .app.db.routes import saved_quizzes, token_router
+from .app.db.routes import notifications, saved_quizzes, token_router
 from .app.db.routes.folder_routes import router as folder_routes
 from .app.db.routes.get_categories import router as get_categories_router
 from .app.db.routes.get_quiz_history import router as get_quiz_history_router
@@ -87,6 +87,7 @@ app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 app.include_router(token_router.router, prefix="/api", tags=["Token"])
 app.include_router(saved_quizzes.router, prefix="/api", tags=["Saved Quizzes"])
 app.include_router(folder_routes, prefix="/api/folders", tags=["Folders"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(save_quiz_router, prefix="/api")
 app.include_router(get_quiz_history_router, prefix="/api")
 app.include_router(get_categories_router, prefix="/api")

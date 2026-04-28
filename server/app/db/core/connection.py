@@ -29,6 +29,7 @@ quiz_categories_collection = database["quizzes_category"]
 folders_collection = database["folders"]
 saved_quizzes_collection = database["saved_quizzes"]
 blacklisted_tokens_collection = database["blacklisted_tokens"]
+notifications_collection = database["notifications"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 user_tokens_collection = database["user_tokens"]
 quizzes_v2_collection = database["quizzes_v2"]
@@ -69,11 +70,19 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
     await user_tokens_collection.create_index("user_id", unique=True)
 
 
+async def ensure_notification_indexes(notifications_collection: AsyncIOMotorCollection):
+    """Indexes for user notification queries."""
+    await notifications_collection.create_index([("user_id", 1), ("created_at", -1)])
+    await notifications_collection.create_index([("user_id", 1), ("read", 1)])
+    await notifications_collection.create_index("expires_at", expireAfterSeconds=0)
+
+
 async def startUp():
     await ensure_user_indexes(users_collection)
     await ensure_blacklist_indexes(blacklisted_tokens_collection)
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_user_tokens_indexes(user_tokens_collection)
+    await ensure_notification_indexes(notifications_collection)
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -116,6 +125,12 @@ def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")
     return user_tokens_collection
+
+
+def get_notifications_collection() -> AsyncIOMotorCollection:
+    if notifications_collection is None:
+        raise RuntimeError("[DB Error] notifications_collection has not been initialized properly.")
+    return notifications_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:
