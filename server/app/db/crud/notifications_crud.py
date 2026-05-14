@@ -5,7 +5,16 @@ from bson import ObjectId
 from fastapi import HTTPException
 
 from ....app.db.core.connection import get_notifications_collection
+from ....app.db.core.connection import get_users_collection
 from ....app.db.models.notification_model import NotificationCreate, NotificationDB
+
+
+def _as_utc(value: Any) -> Any:
+    if not isinstance(value, datetime):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _serialize_notification(notification: dict[str, Any]) -> dict[str, Any]:
@@ -18,9 +27,9 @@ def _serialize_notification(notification: dict[str, Any]) -> dict[str, Any]:
         "priority": notification.get("priority", "medium"),
         "read": notification.get("read", False),
         "action_url": notification.get("action_url"),
-        "created_at": notification["created_at"],
-        "read_at": notification.get("read_at"),
-        "expires_at": notification.get("expires_at"),
+        "created_at": _as_utc(notification["created_at"]),
+        "read_at": _as_utc(notification.get("read_at")),
+        "expires_at": _as_utc(notification.get("expires_at")),
     }
 
 
@@ -57,6 +66,13 @@ async def create_notifications_for_users(
     ]
     result = await collection.insert_many(notifications)
     return len(result.inserted_ids)
+
+
+async def list_notification_target_user_ids(active_users_only: bool = True) -> list[str]:
+    collection = get_users_collection()
+    query = {"is_active": True} if active_users_only else {}
+    cursor = collection.find(query, {"_id": 1})
+    return [str(row["_id"]) for row in await cursor.to_list(length=None)]
 
 
 async def list_user_notifications(

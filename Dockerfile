@@ -15,11 +15,16 @@
     COPY client/ .
     
     # ---------- BACKEND SERVICE ----------
-    FROM python:3.12 AS backend-service
-    
+    FROM python:3.12-slim AS backend-service
+
+    ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+        PIP_NO_CACHE_DIR=1 \
+        PIP_DEFAULT_TIMEOUT=300 \
+        PIP_RETRIES=10
+
     WORKDIR /server
-    
-    RUN python3 -m pip install --upgrade pip pipenv
+
+    RUN python3 -m pip install pipenv==2023.12.1
     
     COPY server/Pipfile server/Pipfile.lock ./
     

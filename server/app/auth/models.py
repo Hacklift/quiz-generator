@@ -26,6 +26,8 @@ class LoginResponse(BaseModel):
 
     token_type: str = "bearer"
 
+    security_notice: Optional[str] = None
+
 
 class RefreshTokenRequest(BaseModel):
 

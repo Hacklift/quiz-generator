@@ -237,15 +237,15 @@ async def login_service(identifier: str, password: str, users_collection: AsyncI
             message="A new login was detected on your account.",
             type="security",
             priority="high",
-            action_url="/profile",
         )
     )
-    
+
     return {
         "message": "Login successful",
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "security_notice": "A sign-in just happened on your account. Confirm this was you.",
     }
 
 async def refresh_token_service(refresh_token: str, users_collection: AsyncIOMotorCollection):

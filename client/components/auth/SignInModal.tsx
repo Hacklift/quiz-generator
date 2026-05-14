@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import { ShieldAlert } from "lucide-react";
 import { login } from "../../lib";
 import { EMAIL_REGEX } from "../../constants/patterns/patterns";
 import { ROUTES } from "../../constants/patterns/routes";
@@ -23,6 +24,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [securityNotice, setSecurityNotice] = useState("");
 
   if (!isOpen) return null;
 
@@ -57,6 +59,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           response.token_type,
         );
 
+        if (response.security_notice) {
+          setSecurityNotice(response.security_notice);
+          return;
+        }
+
         router.push(ROUTES.HOME || "/");
         onClose();
       } else {
@@ -84,8 +91,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIdentifier("");
       setPassword("");
       setError("");
+      setSecurityNotice("");
       onClose();
     }
+  };
+
+  const handleConfirmLogin = () => {
+    setSecurityNotice("");
+    router.push(ROUTES.HOME || "/");
+    onClose();
+  };
+
+  const handleSecureAccount = () => {
+    setSecurityNotice("");
+    onClose();
+    router.push(ROUTES.REQUEST_PASSWORD_RESET || "/auth/request-reset-password");
   };
 
   const isEmail = identifier.includes("@");
@@ -99,6 +119,46 @@ const SignInModal: React.FC<SignInModalProps> = ({
         className="bg-white rounded-2xl w-full max-w-md p-8"
         onClick={(e) => e.stopPropagation()}
       >
+        {securityNotice ? (
+          <div>
+            <div className="mb-5 flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <ShieldAlert className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-xl font-semibold text-[#143E6F]">
+                  Confirm sign-in
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-gray-600">
+                  {securityNotice}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm leading-6 text-gray-700">
+              If this was you, continue to your account. If you do not
+              recognize this sign-in, secure your account now.
+            </div>
+
+            <div className="mt-6 grid gap-3">
+              <button
+                type="button"
+                onClick={handleConfirmLogin}
+                className="h-11 rounded-lg bg-[#143E6F] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0f2f54]"
+              >
+                Yes, this was me
+              </button>
+              <button
+                type="button"
+                onClick={handleSecureAccount}
+                className="h-11 rounded-lg border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+              >
+                No, secure my account
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         <h2 className="text-2xl font-semibold text-center mb-2 text-[#143E6F]">
           Sign In
         </h2>
@@ -205,6 +265,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         >
           Create Account
         </button>
+          </>
+        )}
       </div>
     </div>
   );

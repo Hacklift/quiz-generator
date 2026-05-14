@@ -1,8 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { Bell, CheckCheck, Trash2, X } from "lucide-react";
+import { useRouter } from "next/router";
+import {
+  Bell,
+  CheckCheck,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   AppNotification,
   deleteNotification,
@@ -10,11 +15,14 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../../lib";
+import { ROUTES } from "../../constants/patterns/routes";
 
 const PAGE_SIZE = 20;
 
 const formatRelativeTime = (value: string) => {
   const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return "";
+
   const seconds = Math.max(1, Math.floor((Date.now() - timestamp) / 1000));
 
   if (seconds < 60) return "just now";
@@ -56,6 +64,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
 
   const fetchNotifications = useCallback(async (skip = 0) => {
     const isFirstPage = skip === 0;
@@ -106,6 +115,12 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       );
       setUnreadCount((count) => Math.max(0, count - 1));
     }
+  };
+
+  const handleNotificationClick = async (notification: AppNotification) => {
+    await handleRead(notification);
+    setIsOpen(false);
+    router.push(ROUTES.NOTIFICATIONS);
   };
 
   const handleDelete = async (
@@ -174,8 +189,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-600">
             {notification.message}
           </p>
-          <div className="mt-1 text-xs text-gray-400">
-            {formatRelativeTime(notification.created_at)}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+            <span>{formatRelativeTime(notification.created_at)}</span>
+            {notification.type === "security" && (
+              <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">
+                Security
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -190,30 +210,22 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       </div>
     );
 
-    if (notification.action_url) {
-      return (
-        <Link
-          key={notification.id}
-          href={notification.action_url}
-          onClick={() => {
-            handleRead(notification);
-            setIsOpen(false);
-          }}
-        >
-          {content}
-        </Link>
-      );
-    }
-
     return (
-      <button
+      <div
         key={notification.id}
-        type="button"
-        onClick={() => handleRead(notification)}
-        className="block w-full"
+        onClick={() => handleNotificationClick(notification)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleNotificationClick(notification);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        className="block w-full cursor-pointer"
       >
         {content}
-      </button>
+      </div>
     );
   };
 
