@@ -1,6 +1,7 @@
 import { api } from "./auth";
 
 const API_BASE = `/api/folders`;
+const getResourceId = (resource: any) => resource?.id || resource?.quiz_id;
 
 export const getUserFolders = async () => {
   const res = await api.get(`${API_BASE}/`);
@@ -25,7 +26,7 @@ export const deleteFolder = async (folderId: string) => {
 };
 
 export const addQuizToFolder = async (folderId: string, quiz: any) => {
-  const quizId = quiz._id || quiz.id || quiz.quiz_id;
+  const quizId = getResourceId(quiz);
   const res = await api.post(`${API_BASE}/${folderId}/add_quiz`, {
     quiz_id: quizId,
   });
@@ -34,9 +35,12 @@ export const addQuizToFolder = async (folderId: string, quiz: any) => {
 
 export const removeQuizFromFolder = async (
   folderId: string,
-  quizId: string,
+  folderItemId: string,
 ) => {
-  const res = await api.post(`${API_BASE}/${folderId}/remove/${quizId}`, {});
+  const res = await api.post(
+    `${API_BASE}/${folderId}/remove/${folderItemId}`,
+    {},
+  );
   return res.data;
 };
 
@@ -46,12 +50,12 @@ export const getFolderById = async (folderId: string) => {
 };
 
 export const moveQuiz = async (
-  quizId: string,
+  folderItemId: string,
   sourceFolderId: string,
   targetFolderId: string,
 ) => {
   const res = await api.patch(`${API_BASE}/move_quiz`, {
-    quiz_id: quizId,
+    quiz_id: folderItemId,
     from_folder_id: sourceFolderId,
     to_folder_id: targetFolderId,
   });

@@ -14,12 +14,14 @@ router = APIRouter()
 
 async def save_quiz(quiz: QuizHistoryModel, current_user=Depends(get_current_user)):
 
-    quiz.user_id = current_user.id
+    quiz.user_id = str(current_user.id)
 
     quiz_dict = quiz.model_dump(by_alias=True, exclude_none=True)
 
-    inserted_id = await update_quiz_history(quiz_dict)
+    history_reference = await update_quiz_history(quiz_dict)
 
-    return {"message": "Quiz saved", "quiz_id": inserted_id}
-
-
+    return {
+        "message": "Quiz saved",
+        "id": str(history_reference.id),
+        "quiz_id": history_reference.quiz_id,
+    }

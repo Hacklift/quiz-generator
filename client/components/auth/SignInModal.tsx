@@ -10,12 +10,16 @@ interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
   switchToSignUp: () => void;
+  onSuccess?: () => void | Promise<void>;
+  redirectTo?: string | null;
 }
 
 const SignInModal: React.FC<SignInModalProps> = ({
   isOpen,
   onClose,
   switchToSignUp,
+  onSuccess,
+  redirectTo = null,
 }) => {
   const router = useRouter();
   const { login: authLogin } = useAuth();
@@ -57,7 +61,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           response.token_type,
         );
 
-        router.push(ROUTES.HOME || "/");
+        if (onSuccess) {
+          await onSuccess();
+        } else if (redirectTo) {
+          await router.push(redirectTo);
+        }
         onClose();
       } else {
         setError("Invalid response from server");

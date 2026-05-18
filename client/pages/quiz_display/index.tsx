@@ -20,21 +20,23 @@ import { TokenService } from "../../lib/functions/tokenService";
 
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
-  const savedQuizId = searchParams.get("id");
+  const savedQuizId = searchParams.get("savedId") || searchParams.get("id");
+  const canonicalQuizId = searchParams.get("quizId") || "";
   const questionType = searchParams.get("questionType") || "multichoice";
   const numQuestions = Number(searchParams.get("numQuestions")) || 1;
   const profession = searchParams.get("profession") || "general knowledge";
   const difficultyLevel = searchParams.get("difficultyLevel") || "easy";
   const audienceType = searchParams.get("audienceType") || "students";
   const customInstruction = searchParams.get("customInstruction") || "";
-  const userId = searchParams.get("userId") || "defaultUserId"; // ✅ dummy user until auth works
   const token = searchParams.get("token") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
-  const [quizId, setQuizId] = useState("");
+  const [quizId, setQuizId] = useState(canonicalQuizId);
+  const [quizTitle, setQuizTitle] = useState("");
+  const [quizDescription, setQuizDescription] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false); // ✅ Prevent double fetch
 
@@ -43,16 +45,6 @@ const QuizDisplayPage: React.FC = () => {
     hasFetchedRef.current = true;
 
     const fetchQuizQuestions = async () => {
-      const basePayload = {
-        question_type: questionType,
-        num_questions: numQuestions,
-        profession: profession,
-        difficulty_level: difficultyLevel,
-        audience_type: audienceType,
-        custom_instruction: customInstruction,
-        token: token,
-      };
-
       try {
         setIsLoading(true);
         let questions: any[] = [];
@@ -70,6 +62,13 @@ const QuizDisplayPage: React.FC = () => {
               : [];
 
           if (storedQuestions.length > 0) {
+            const resolvedStoredQuizId =
+              parsedQuiz?.quiz_id || canonicalQuizId || "";
+            setQuizTitle(
+              parsedQuiz?.title ||
+                `${parsedQuiz?.question_type || questionType} Quiz`,
+            );
+            setQuizDescription(parsedQuiz?.description || "");
             const normalizedQuestions = storedQuestions.map((q: any) => ({
               ...q,
               answer: q.answer || q.correct_answer,
@@ -77,6 +76,9 @@ const QuizDisplayPage: React.FC = () => {
             }));
             setQuizQuestions(normalizedQuestions);
             setUserAnswers(Array(normalizedQuestions.length).fill(""));
+            if (resolvedStoredQuizId) {
+              setQuizId(resolvedStoredQuizId);
+            }
             toast.success(`Loaded saved quiz: ${parsedQuiz.title}`);
             localStorage.removeItem("saved_quiz_view");
             setIsLoading(false);
@@ -97,8 +99,13 @@ const QuizDisplayPage: React.FC = () => {
             answer: q.answer || q.correct_answer,
             question_type: q.question_type || questionType,
           }));
-          setQuizId(savedQuizId);
-          resolvedQuizId = savedQuizId;
+          setQuizTitle(
+            data.title || `${data.question_type || questionType} Quiz`,
+          );
+          setQuizDescription(data.description || "");
+          const resolvedSavedQuizId = data.quiz_id || canonicalQuizId || "";
+          setQuizId(resolvedSavedQuizId);
+          resolvedQuizId = resolvedSavedQuizId;
           toast.success("Loaded saved quiz successfully!");
         } else {
           // ✅ Step 3: Fallback — generate a new quiz
@@ -134,6 +141,13 @@ const QuizDisplayPage: React.FC = () => {
               ...q,
               question_type: q.question_type || questionType,
             })) || [];
+          setQuizTitle(
+            `${profession || questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`,
+          );
+          setQuizDescription(
+            customInstruction ||
+              `A ${difficultyLevel} ${questionType} quiz for ${audienceType}.`,
+          );
           if (!Array.isArray(questions) || questions.length === 0) {
             throw new Error("No quiz questions returned.");
           }
@@ -175,12 +189,14 @@ const QuizDisplayPage: React.FC = () => {
     fetchQuizQuestions();
   }, [
     savedQuizId,
+    canonicalQuizId,
     questionType,
     numQuestions,
     profession,
     difficultyLevel,
     audienceType,
     customInstruction,
+    token,
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
@@ -286,6 +302,7 @@ const QuizDisplayPage: React.FC = () => {
                     index={i}
                     onAnswerChange={handleAnswerChange}
                     options={q.options || []}
+                    value={userAnswers[i]}
                   />
                 </div>
               ))}
@@ -296,9 +313,11 @@ const QuizDisplayPage: React.FC = () => {
               <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
-                userId={userId}
                 question_type={questionType}
                 numQuestion={numQuestions}
+                quizData={quizQuestions}
+                title={quizTitle}
+                description={quizDescription}
               />
               <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}

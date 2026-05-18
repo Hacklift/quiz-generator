@@ -43,7 +43,7 @@ from server.app.db.models.user_models import (
     UpdateProfileRequest,
     UpdateProfileResponse
     ) 
-from server.app.dependancies import get_current_user
+from server.app.dependancies import get_current_user, get_verified_user
 from server.app.auth.models import (
     LoginRequestModel, 
     LoginResponse,
@@ -128,6 +128,7 @@ async def login(
         "message": result.get("message", "Login successful"),
         "access_token": result["access_token"],
         "token_type": result.get("token_type", "bearer"),
+        "is_verified": result.get("is_verified", False),
     }
 
 @router.post("/refresh", response_model=RefreshTokenResponse)
@@ -178,7 +179,7 @@ async def update_profile(
     request: Request,
     response: Response,
     profile_data: UpdateProfileRequest,
-    current_user: UserDB = Depends(get_current_user),
+    current_user: UserDB = Depends(get_verified_user),
 ):
     users_collection = request.app.state.users_collection
     return await update_user_profile_service(profile_data, current_user, users_collection)
@@ -189,7 +190,7 @@ async def request_email_change(
     request: Request,
     response: Response,
     payload: EmailChangeRequest,
-    current_user: UserDB = Depends(get_current_user),
+    current_user: UserDB = Depends(get_verified_user),
     email_svc: EmailService = Depends(get_email_service),
 ):
     users_collection = request.app.state.users_collection
@@ -206,7 +207,7 @@ async def verify_email_change(
     request: Request,
     response: Response,
     payload: EmailChangeVerifyRequest,
-    current_user: UserDB = Depends(get_current_user),
+    current_user: UserDB = Depends(get_verified_user),
 ):
     users_collection = request.app.state.users_collection
     return await verify_email_change_service(

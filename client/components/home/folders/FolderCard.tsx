@@ -3,9 +3,11 @@
 import React from "react";
 
 export interface Folder {
-  _id: string;
+  id?: string;
+  _id?: string;
   name: string;
   quizzes?: any[];
+  quiz_count?: number;
 }
 
 interface FolderCardProps {
@@ -34,7 +36,7 @@ const FolderCard: React.FC<FolderCardProps> = ({
         <div>
           <h3 className="font-semibold text-navy-800">{folder.name}</h3>
           <p className="text-sm text-gray-500">
-            {folder.quizzes?.length || 0} quizzes
+            {folder.quizzes?.length ?? folder.quiz_count ?? 0} quizzes
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-gray-600">

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import ShareModal from "./ShareModal";
 import publicApi from "../../lib/functions/publicApi";
 
@@ -12,18 +13,13 @@ const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
       let id = activeQuizId?.trim() || "";
 
       if (!id) {
-        const response = await publicApi.get("/share/get-quiz-id");
-        id = response.data.id;
+        toast.error(
+          "This quiz must exist in the library before it can be shared.",
+        );
+        return;
       }
 
       setQuizId(id);
-
-      if (!id) {
-        throw new Error(
-          "Quiz ID is undefined. Cannot proceed to fetch sharable link.",
-        );
-      }
-
       const linkResponse = await publicApi.get(`/share/share-quiz/${id}`);
       const newShareableLink = linkResponse.data.link;
       setShareableLink(newShareableLink);
@@ -31,8 +27,8 @@ const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
       setIsModalOpen(true);
     } catch (error) {
       console.error("Error generating quiz or fetching sharable link:", error);
-      alert(
-        "An error occurred while generating the quiz or sharable link. Please try again.",
+      toast.error(
+        "An error occurred while generating the shareable link. Please try again.",
       );
     }
   };

@@ -88,6 +88,22 @@ class QuizV2Repository:
             return None
         return QuizDocumentV2(**document) if document else None
 
+    async def find_many_by_ids(self, quiz_ids: list[str]) -> list[QuizDocumentV2]:
+        object_ids: list[ObjectId] = []
+        order: list[ObjectId] = []
+        for quiz_id in quiz_ids:
+            try:
+                object_id = ObjectId(quiz_id)
+            except InvalidId:
+                continue
+            object_ids.append(object_id)
+            order.append(object_id)
+        if not object_ids:
+            return []
+        documents = await self.collection.find({"_id": {"$in": object_ids}}).to_list(length=len(object_ids))
+        by_id = {document["_id"]: document for document in documents}
+        return [QuizDocumentV2(**by_id[object_id]) for object_id in order if object_id in by_id]
+
     async def update_metadata(
         self,
         quiz_id: str,

@@ -206,9 +206,6 @@ async def login_service(identifier: str, password: str, users_collection: AsyncI
     if not user or not verify_password(password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    if not user.get("is_verified", False):
-        raise HTTPException(status_code=403, detail="Email not verified")
-    
     user_id = str(user["_id"])
     
     access_token = create_access_token({"sub": user_id})
@@ -232,7 +229,8 @@ async def login_service(identifier: str, password: str, users_collection: AsyncI
         "message": "Login successful",
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "is_verified": user.get("is_verified", False),
     }
 
 async def refresh_token_service(refresh_token: str, users_collection: AsyncIOMotorCollection):

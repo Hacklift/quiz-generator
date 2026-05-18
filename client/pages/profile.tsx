@@ -79,6 +79,11 @@ export default function ProfilePage() {
   };
 
   const handleSaveProfile = async () => {
+    if (user && user.is_verified === false) {
+      toast.error("Verify your email before editing your profile");
+      return;
+    }
+
     setIsSaving(true);
     setSaveError("");
     setSaveSuccess(false);

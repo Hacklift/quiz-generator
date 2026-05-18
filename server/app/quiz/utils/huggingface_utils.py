@@ -29,50 +29,57 @@ HF_FALLBACK_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 
 def parse_multichoice(response: str) -> List[Dict[str, Any]]:
+    """Parse multiple-choice questions with A-D options, including wrapped option lines."""
 
-    """Parse multiple-choice questions with A–D options."""
-
-    question_blocks = re.findall(
-
-        r"\*\*\d+\.\s*(.*?)\*\*\s*(.*?)\n+\*\*Answer:\*\*\s*([A-D])",
-
-        response,
-
-        re.DOTALL
-
+    block_pattern = re.compile(
+        r"\*\*(\d+)\.\s*(.*?)\*\*(.*?)(?=\n\*\*\d+\.\s.*?\*\*|\Z)",
+        re.DOTALL,
     )
-
+    answer_pattern = re.compile(r"\*\*Answer:\*\*\s*([A-D])", re.IGNORECASE)
+    option_pattern = re.compile(r"^([A-D])\)\s*(.*)$")
 
     questions = []
 
-    for question_text, options_block, correct_letter in question_blocks:
+    for _, question_text, block_body in block_pattern.findall(response):
+        answer_match = answer_pattern.search(block_body)
+        if not answer_match:
+            continue
 
-        options = re.findall(r"([A-D]\))\s*(.*?)\s{2,}", options_block + "  ", re.DOTALL)
+        options_section = answer_pattern.sub("", block_body).strip()
+        parsed_options: list[tuple[str, str]] = []
+        current_letter = None
+        current_text_parts: list[str] = []
 
-        if not options:
+        for raw_line in options_section.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
 
-            options = re.findall(r"([A-D]\))\s*(.*?)\n", options_block)
+            option_match = option_pattern.match(line)
+            if option_match:
+                if current_letter and current_text_parts:
+                    parsed_options.append((current_letter, " ".join(current_text_parts).strip()))
+                current_letter = option_match.group(1).upper()
+                current_text_parts = [option_match.group(2).strip()]
+            elif current_letter:
+                current_text_parts.append(line)
 
+        if current_letter and current_text_parts:
+            parsed_options.append((current_letter, " ".join(current_text_parts).strip()))
 
-        formatted_options = [f"{opt[0]} {opt[1].strip()}" for opt in options]
-
-
-        idx = ord(correct_letter.strip().upper()) - ord("A")
-
+        formatted_options = [f"{letter}) {text}" for letter, text in parsed_options if text]
+        correct_letter = answer_match.group(1).strip().upper()
+        idx = ord(correct_letter) - ord("A")
         correct_answer = formatted_options[idx] if 0 <= idx < len(formatted_options) else correct_letter
 
-
-        questions.append({
-
-            "question": question_text.strip(),
-
-            "options": formatted_options,
-
-            "answer": correct_answer,
-
-            "question_type": "multichoice"
-
-        })
+        questions.append(
+            {
+                "question": question_text.strip(),
+                "options": formatted_options,
+                "answer": correct_answer,
+                "question_type": "multichoice",
+            }
+        )
 
     return questions
 
@@ -362,4 +369,3 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
         )
 
     }
-

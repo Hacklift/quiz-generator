@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import publicApi from "../../lib/functions/publicApi";
 
 const ShareEmailModal = ({
@@ -30,14 +31,17 @@ const ShareEmailModal = ({
         shareableLink,
       });
       setStatus({ message: response.data.message, success: true });
+      toast.success(response.data.message || "Email sent successfully.");
       setRecipientEmail("");
     } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail ||
+        "Failed to send email. Please try again.";
       setStatus({
-        message:
-          error.response?.data?.detail ||
-          "Failed to send email. Please try again.",
+        message: errorMessage,
         success: false,
       });
+      toast.error(errorMessage);
     } finally {
       setIsSending(false);
     }

@@ -2,7 +2,8 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  isVerified: boolean;
+  is_verified: boolean;
+  isVerified?: boolean;
   full_name?: string;
   bio?: string;
   location?: string;
@@ -30,6 +31,7 @@ export interface LoginResponse {
   access_token: string;
   refresh_token?: string;
   token_type: string;
+  is_verified?: boolean;
 }
 
 export interface RefreshTokenPayload {

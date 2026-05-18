@@ -26,6 +26,8 @@ class LoginResponse(BaseModel):
 
     token_type: str = "bearer"
 
+    is_verified: bool = False
+
 
 class RefreshTokenRequest(BaseModel):
 
