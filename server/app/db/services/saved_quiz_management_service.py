@@ -70,11 +70,65 @@ class SavedQuizManagementService:
             "created_at": legacy_saved_quiz["created_at"],
         }
 
+    @staticmethod
+    def _serialize_saved_questions(canonical_quiz) -> list[dict]:
+        question_type = canonical_quiz.quiz_type.value
+        return [
+            {
+                "question": question.question,
+                "options": question.options,
+                "question_type": question_type,
+                "correct_answer": question.correct_answer,
+            }
+            for question in canonical_quiz.questions
+        ]
+
+    def _build_saved_payload(self, saved_reference: SavedQuizDocumentV2, canonical_quiz) -> dict:
+        return {
+            "id": str(saved_reference.id),
+            "user_id": saved_reference.user_id,
+            "quiz_id": str(canonical_quiz.id),
+            "title": saved_reference.display_title or canonical_quiz.title,
+            "question_type": canonical_quiz.quiz_type.value,
+            "is_deleted": False,
+            "questions": self._serialize_saved_questions(canonical_quiz),
+            "created_at": saved_reference.saved_at.isoformat(),
+        }
+
     async def _get_legacy_saved_quiz(self, quiz_id: str, user_id: str) -> dict | None:
+        if not ObjectId.is_valid(quiz_id):
+            return None
         legacy_quiz = await self.legacy_collection.find_one(
             {"_id": ObjectId(quiz_id), "user_id": user_id}
         )
         return self._normalize_legacy_saved_quiz(legacy_quiz)
+
+    async def _resolve_saved_reference_and_canonical(
+        self,
+        quiz_id: str,
+        user_id: str,
+    ) -> tuple[SavedQuizDocumentV2 | None, object | None]:
+        reference = await self.reference_repository.get_saved_quiz_by_public_id(
+            quiz_id,
+            user_id=user_id,
+        )
+        canonical_quiz = None
+        if reference is not None:
+            canonical_quiz = await self.canonical_service.get_quiz_v2_by_id(reference.quiz_id)
+
+        if reference is None or canonical_quiz is None:
+            legacy_saved_quiz = await self._get_legacy_saved_quiz(quiz_id, user_id)
+            if legacy_saved_quiz:
+                canonical_quiz = await self._ensure_canonical_quiz(legacy_saved_quiz)
+                reference = await self.reference_repository.get_saved_quiz_by_public_id(
+                    quiz_id,
+                    user_id=user_id,
+                )
+
+        if reference is not None and canonical_quiz is None:
+            canonical_quiz = await self.canonical_service.get_quiz_v2_by_id(reference.quiz_id)
+
+        return reference, canonical_quiz
 
     async def _ensure_canonical_quiz(self, legacy_saved_quiz: dict):
         canonical_quiz_id = legacy_saved_quiz.get("canonical_quiz_id")
@@ -167,13 +221,36 @@ class SavedQuizManagementService:
             rf"^{re.escape(base_title)}(?: (\d+))?$",
             re.IGNORECASE,
         )
-        existing_titles = await self.legacy_collection.distinct("title", {"user_id": user_id})
+        references = await self.reference_repository.list_saved_quizzes_for_user(user_id)
+        quizzes_by_id = {
+            str(quiz.id): quiz.title
+            for quiz in await self.canonical_service.repository.find_many_by_ids(
+                [reference.quiz_id for reference in references]
+            )
+        }
+        existing_titles = list(
+            {
+                *[
+                    reference.display_title.strip()
+                    for reference in references
+                    if reference.display_title and reference.display_title.strip()
+                ],
+                *[
+                    title.strip()
+                    for title in quizzes_by_id.values()
+                    if isinstance(title, str) and title.strip()
+                ],
+                *[
+                    title.strip()
+                    for title in await self.legacy_collection.distinct("title", {"user_id": user_id})
+                    if isinstance(title, str) and title.strip()
+                ],
+            }
+        )
 
         highest_suffix = 0
         base_exists = False
         for existing_title in existing_titles:
-            if not isinstance(existing_title, str):
-                continue
             match = title_pattern.match(existing_title.strip())
             if not match:
                 continue
@@ -328,82 +405,100 @@ class SavedQuizManagementService:
         return self._serialize_saved_quiz(synthesized, canonical_quiz)
 
     async def delete_saved_quiz(self, quiz_id: str, user_id: str):
-        legacy_saved_quiz = await self._get_legacy_saved_quiz(quiz_id, user_id)
-        if not legacy_saved_quiz:
+        saved_reference = await self.reference_repository.get_saved_quiz_by_public_id(
+            quiz_id,
+            user_id=user_id,
+        )
+        if saved_reference is None:
             return False
 
-        reference = await self.reference_repository.saved_quizzes_collection.find_one_and_delete(
-            {"legacy_saved_quiz_id": quiz_id, "user_id": user_id}
+        deleted_count = await self.reference_repository.delete_saved_quiz_by_id(
+            str(saved_reference.id),
+            user_id=user_id,
         )
-        await self.legacy_collection.delete_one(
-            {"_id": ObjectId(quiz_id), "user_id": user_id}
-        )
-        return reference is not None or legacy_saved_quiz is not None
+        if (
+            deleted_count > 0
+            and saved_reference.legacy_saved_quiz_id
+            and ObjectId.is_valid(saved_reference.legacy_saved_quiz_id)
+        ):
+            await self.legacy_collection.update_one(
+                {
+                    "_id": ObjectId(saved_reference.legacy_saved_quiz_id),
+                    "user_id": user_id,
+                },
+                {"$set": {"is_deleted": True}},
+            )
+        return deleted_count > 0
 
     async def duplicate_saved_quiz(self, quiz_id: str, user_id: str):
-        legacy_saved_quiz = await self._get_legacy_saved_quiz(quiz_id, user_id)
-        if not legacy_saved_quiz:
+        saved_reference, canonical_quiz = await self._resolve_saved_reference_and_canonical(
+            quiz_id,
+            user_id,
+        )
+        if saved_reference is None or canonical_quiz is None:
             return None
 
-        canonical_quiz = await self._ensure_canonical_quiz(legacy_saved_quiz)
-        duplicate_title = await self._build_duplicate_title(user_id, legacy_saved_quiz["title"])
+        duplicate_title = await self._build_duplicate_title(
+            user_id,
+            saved_reference.display_title or canonical_quiz.title,
+        )
         duplicated_canonical = await self._create_canonical_copy(
             canonical_quiz,
             title=duplicate_title,
             owner_user_id=user_id,
         )
-        legacy_duplicate, saved_at = await self._insert_legacy_saved_quiz(
-            user_id=user_id,
-            title=duplicate_title,
-            question_type=legacy_saved_quiz["question_type"],
-            canonical_quiz=duplicated_canonical,
-        )
-        await self.reference_repository.insert_saved_quiz(
+        duplicated_reference = await self.reference_repository.insert_saved_quiz(
             SavedQuizDocumentV2(
                 user_id=user_id,
                 quiz_id=str(duplicated_canonical.id),
-                legacy_saved_quiz_id=legacy_duplicate["_id"],
-                saved_at=saved_at,
+                display_title=duplicate_title,
+                saved_at=datetime.utcnow(),
             )
         )
-        return legacy_duplicate
+        return self._build_saved_payload(duplicated_reference, duplicated_canonical)
 
     async def rename_saved_quiz(self, quiz_id: str, user_id: str, new_title: str):
         sanitized_title = new_title.strip()
         if not sanitized_title:
             raise ValueError("Quiz title cannot be empty")
 
-        legacy_saved_quiz = await self._get_legacy_saved_quiz(quiz_id, user_id)
-        if not legacy_saved_quiz:
+        saved_reference, canonical_quiz = await self._resolve_saved_reference_and_canonical(
+            quiz_id,
+            user_id,
+        )
+        if saved_reference is None or canonical_quiz is None:
             return None
 
-        canonical_quiz = await self._ensure_canonical_quiz(legacy_saved_quiz)
         renamed_canonical = await self._create_canonical_copy(
             canonical_quiz,
             title=sanitized_title,
             owner_user_id=user_id,
         )
-        await self.reference_repository.update_saved_quiz_by_legacy_id(
-            legacy_saved_quiz["_id"],
+        updated_reference = await self.reference_repository.update_saved_quiz_by_id(
+            str(saved_reference.id),
             quiz_id=str(renamed_canonical.id),
+            display_title=sanitized_title,
         )
-        await self.legacy_collection.update_one(
-            {"_id": ObjectId(legacy_saved_quiz["_id"]), "user_id": user_id},
-            {
-                "$set": {
-                    "title": sanitized_title,
-                    "quiz_id": str(renamed_canonical.id),
-                    "canonical_quiz_id": str(renamed_canonical.id),
-                    "questions": [
-                        {
-                            "question": question.question,
-                            "options": question.options,
-                            "question_type": legacy_saved_quiz["question_type"],
-                        }
-                        for question in renamed_canonical.questions
-                    ],
-                }
-            },
-        )
-        updated_legacy = await self._get_legacy_saved_quiz(quiz_id, user_id)
-        return updated_legacy
+        if updated_reference is None:
+            return None
+
+        if (
+            saved_reference.legacy_saved_quiz_id
+            and ObjectId.is_valid(saved_reference.legacy_saved_quiz_id)
+        ):
+            await self.legacy_collection.update_one(
+                {
+                    "_id": ObjectId(saved_reference.legacy_saved_quiz_id),
+                    "user_id": user_id,
+                },
+                {
+                    "$set": {
+                        "title": sanitized_title,
+                        "quiz_id": str(renamed_canonical.id),
+                        "canonical_quiz_id": str(renamed_canonical.id),
+                        "questions": self._serialize_saved_questions(renamed_canonical),
+                    }
+                },
+            )
+
+        return self._build_saved_payload(updated_reference, renamed_canonical)

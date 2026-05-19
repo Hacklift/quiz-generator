@@ -11,6 +11,7 @@ const transformQuizHistory = (quizHistory: any[]) => {
   if (!quizHistory || quizHistory.length === 0) return [];
 
   return quizHistory.map((quizItem: any, quizIndex: number) => {
+    const quizHistoryId = quizItem.id || `${quizIndex}`;
     const createdAt = quizItem.created_at
       ? new Date(quizItem.created_at).toLocaleString()
       : "Unknown date";
@@ -48,7 +49,7 @@ const transformQuizHistory = (quizHistory: any[]) => {
     );
 
     return (
-      <div key={quizIndex}>
+      <div key={quizHistoryId}>
         <hr className="border-gray-300 my-4" />
         <p className="text-sm text-gray-500 mb-3">Generated on: {createdAt}</p>
         <div>{listedQuizQuestions}</div>

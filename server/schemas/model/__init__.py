@@ -7,4 +7,4 @@ from .user_model import UserModel
 from .quiz_questions_model import QuizQuestionsModel
 
 from .password_reset_model import PasswordResetRequest, PasswordResetResponse, RequestPasswordReset, ResetMethod, MessageResponse
-
+from .download_quiz_model import DownloadQuizQuestionModel, DownloadQuizRequestModel

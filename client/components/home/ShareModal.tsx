@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import ShareEmailModal from "./ShareEmailModal";
 import { ShareModalProps } from "../../interfaces/props/share-modal-props";
 
@@ -9,9 +10,13 @@ const ShareModal: React.FC<ShareModalProps> = ({
 }) => {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
-  const handleCopyToClipboard = () => {
-    navigator.clipboard.writeText(shareableLink);
-    alert("Quiz link copied to clipboard!");
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(shareableLink);
+      toast.success("Quiz link copied to clipboard.");
+    } catch (error) {
+      toast.error("Failed to copy quiz link.");
+    }
   };
 
   const handleShareViaEmail = () => {

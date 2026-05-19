@@ -1,61 +1,108 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
+import { api } from "../../lib/functions/auth";
 import publicApi from "../../lib/functions/publicApi";
-import { Observable } from "rxjs";
+import { useAuth } from "../../contexts/authContext";
 import { QueryPattern } from "../../constants/patterns";
 import { DownloadQuizProps } from "../../interfaces/props";
+import SignInModal from "../auth/SignInModal";
+import SignUpModal from "../auth/SignUpModal";
 
-type FileFormat = "txt" | "csv" | "pdf" | "docx";
+type FileFormat = "txt" | "json" | "pdf" | "docx";
 
 export default function DownloadQuiz({
+  quizId,
   question_type,
   numQuestion,
 }: DownloadQuizProps) {
+  const { user } = useAuth();
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>("txt");
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   const handleFormatChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedFormat(event.target.value as FileFormat);
   };
 
-  const handleDownload = () => {
+  const switchToSignUp = () => {
+    setShowSignInModal(false);
+    setShowSignUpModal(true);
+  };
+
+  const switchToSignIn = () => {
+    setShowSignUpModal(false);
+    setShowSignInModal(true);
+  };
+
+  const handleDownload = async () => {
+    const isRealQuiz = !!quizId?.trim();
+
+    if (isRealQuiz) {
+      if (!user) {
+        toast.error("Please sign up or sign in to download this quiz.");
+        setShowSignUpModal(true);
+        return;
+      }
+
+      if (user.is_verified === false) {
+        toast.error("Please verify your email to download this quiz.");
+        if (typeof window !== "undefined") {
+          window.location.assign("/auth/verify-email-notice");
+        }
+        return;
+      }
+    }
+
     setIsDownloading(true);
-    const observable = new Observable((subscriber) => {
-      publicApi
-        .get("/download-quiz", {
-          responseType: "blob",
-          params: {
+
+    try {
+      const params = isRealQuiz
+        ? {
+            quiz_id: quizId,
+            format: selectedFormat,
+          }
+        : {
             pattern: QueryPattern.DownloadQuiz,
             format: selectedFormat,
-            question_type: question_type,
+            question_type,
             num_question: numQuestion,
-          },
-        })
-        .then((response) => {
-          const url = window.URL.createObjectURL(new Blob([response.data]));
-          const link = document.createElement("a");
-          link.href = url;
-          link.setAttribute(
-            "download",
-            `${question_type}-quiz.${selectedFormat}`,
-          );
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          subscriber.next();
-          subscriber.complete();
-        })
-        .catch((error) => {
-          console.error("Download failed:", error);
-          subscriber.error(error);
-        })
-        .finally(() => {
-          setIsDownloading(false);
-        });
-    });
+          };
 
-    observable.subscribe({
-      error: (error) => console.error("Observable error:", error),
-    });
+      const client = isRealQuiz ? api : publicApi;
+      const response = await client.get("/download-quiz", {
+        responseType: "blob",
+        params,
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${question_type}-quiz.${selectedFormat}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Quiz download started.");
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+
+      if (status === 401) {
+        toast.error("Authentication required. Please sign up or sign in.");
+        setShowSignUpModal(true);
+      } else if (status === 403 && detail === "Email not verified") {
+        toast.error("Please verify your email before downloading quizzes.");
+        if (typeof window !== "undefined") {
+          window.location.assign("/auth/verify-email-notice");
+        }
+      } else {
+        toast.error("Download failed. Please try again.");
+        console.error("Download failed:", error);
+      }
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -80,7 +127,7 @@ export default function DownloadQuiz({
           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="txt">TXT</option>
-          <option value="csv">CSV</option>
+          <option value="json">JSON</option>
           <option value="pdf">PDF</option>
           <option value="docx">DOCX</option>
         </select>
@@ -96,6 +143,17 @@ export default function DownloadQuiz({
       >
         {isDownloading ? "Downloading..." : "Download Quiz"}
       </button>
+
+      <SignUpModal
+        isOpen={showSignUpModal}
+        onClose={() => setShowSignUpModal(false)}
+        switchToSignIn={switchToSignIn}
+      />
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+        switchToSignUp={switchToSignUp}
+      />
     </div>
   );
 }

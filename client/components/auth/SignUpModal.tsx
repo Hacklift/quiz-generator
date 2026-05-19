@@ -34,6 +34,19 @@ export default function SignUpModal({
   const [registeredEmail, setRegisteredEmail] = useState("");
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !loading && !showVerifyModal) {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOpen, loading, onClose, showVerifyModal]);
+
+  useEffect(() => {
     const newErrors: Record<string, string> = {};
     if (username && username.length < 3)
       newErrors.username = "Username must be at least 3 characters.";
@@ -113,15 +126,27 @@ export default function SignUpModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div className="bg-white rounded-2xl w-full max-w-md p-8">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4 py-6"
+        onClick={() => {
+          if (!loading && !showVerifyModal) {
+            onClose();
+          }
+        }}
+      >
+        <div
+          className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-8"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="relative">
             <h2 className="text-2xl font-semibold text-center text-[#143E6F] font-serif mb-6">
               Sign Up
             </h2>
             <button
               onClick={onClose}
-              className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 text-2xl"
+              type="button"
+              aria-label="Close sign up modal"
+              className="absolute right-0 top-0 rounded-full p-1 text-2xl text-gray-400 hover:text-gray-600"
             >
               &times;
             </button>
@@ -283,8 +308,8 @@ export default function SignUpModal({
               onClick={() => {
                 onClose();
                 switchToSignIn();
-                router.push(ROUTES.LOGIN);
               }}
+              type="button"
               className="text-gray-400 hover:text-gray-600 underline"
             >
               Login

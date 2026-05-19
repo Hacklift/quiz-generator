@@ -1,8 +1,12 @@
 node_modules
+client/node_modules
 build
 dist
 .next
+client/.next
 .env
+.git
+.pytest_cache
 *.pyc
 __pycache__
 Dockerfile

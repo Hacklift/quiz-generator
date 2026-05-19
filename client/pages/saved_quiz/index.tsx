@@ -26,7 +26,8 @@ interface QuizQuestion {
 }
 
 interface SavedQuiz {
-  _id: string;
+  id: string;
+  quiz_id: string;
   title: string;
   created_at: string;
   questions?: QuizQuestion[];
@@ -34,10 +35,13 @@ interface SavedQuiz {
 }
 
 interface Folder {
-  _id: string;
+  id: string;
   name: string;
   created_at: string;
 }
+
+const getSavedQuizId = (quiz: Partial<SavedQuiz>) => quiz.id || "";
+const getFolderId = (folder: Partial<Folder>) => folder.id || "";
 
 const AddToFolderModal = ({
   isOpen,
@@ -96,11 +100,11 @@ const AddToFolderModal = ({
 
       if (!targetFolderId && newFolderName) {
         const newFolder = await createFolder({ name: newFolderName });
-        targetFolderId = newFolder._id;
+        targetFolderId = getFolderId(newFolder);
       }
 
       for (const quizId of selectedQuizIds) {
-        await addQuizToFolder(targetFolderId!, { _id: quizId });
+        await addQuizToFolder(targetFolderId!, { id: quizId });
       }
 
       toast.success("Quiz(es) added to folder successfully!");
@@ -144,7 +148,8 @@ const AddToFolderModal = ({
                     <span>
                       {selectedFolderId
                         ? folders.find(
-                            (folder) => folder._id === selectedFolderId,
+                            (folder) =>
+                              getFolderId(folder) === selectedFolderId,
                           )?.name
                         : "Select a folder"}
                     </span>
@@ -170,16 +175,18 @@ const AddToFolderModal = ({
                     >
                       {folders.map((folder) => (
                         <button
-                          key={folder._id}
+                          key={getFolderId(folder)}
                           type="button"
                           role="option"
-                          aria-selected={folder._id === selectedFolderId}
+                          aria-selected={
+                            getFolderId(folder) === selectedFolderId
+                          }
                           onClick={() => {
-                            setSelectedFolderId(folder._id);
+                            setSelectedFolderId(getFolderId(folder));
                             setFolderMenuOpen(false);
                           }}
                           className={`w-full px-4 py-2 text-left text-sm ${
-                            folder._id === selectedFolderId
+                            getFolderId(folder) === selectedFolderId
                               ? "bg-[#0F2654] text-white"
                               : "text-[#2C3E50] hover:bg-[#0F2654]/10"
                           }`}
@@ -279,7 +286,9 @@ const DisplaySavedQuizzesPage: React.FC<{
     }
 
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
-    router.push(`/quiz_display?id=${quiz._id}`);
+    router.push(
+      `/quiz_display?savedId=${getSavedQuizId(quiz)}&quizId=${quiz.quiz_id}&questionType=${quiz.question_type || "multichoice"}`,
+    );
   };
 
   const handleDuplicateQuiz = async (quizId: string) => {
@@ -322,7 +331,7 @@ const DisplaySavedQuizzesPage: React.FC<{
     try {
       setIsRenaming(true);
       const response = await renameSavedQuiz(
-        renameTarget._id,
+        getSavedQuizId(renameTarget),
         renameValue,
         token,
       );
@@ -367,14 +376,14 @@ const DisplaySavedQuizzesPage: React.FC<{
           ) : (
             savedQuizzes.map((quiz) => (
               <div
-                key={quiz._id}
+                key={getSavedQuizId(quiz)}
                 className="bg-white p-6 rounded-xl shadow-md border border-gray-200 relative"
               >
                 <input
                   type="checkbox"
                   className="absolute top-4 left-4 w-4 h-4"
-                  checked={selectedQuizIds.includes(quiz._id)}
-                  onChange={() => toggleSelectQuiz(quiz._id)}
+                  checked={selectedQuizIds.includes(getSavedQuizId(quiz))}
+                  onChange={() => toggleSelectQuiz(getSavedQuizId(quiz))}
                 />
 
                 <div className="ml-6">
@@ -415,11 +424,13 @@ const DisplaySavedQuizzesPage: React.FC<{
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleDuplicateQuiz(quiz._id)}
-                        disabled={duplicatingQuizId === quiz._id}
+                        onClick={() =>
+                          handleDuplicateQuiz(getSavedQuizId(quiz))
+                        }
+                        disabled={duplicatingQuizId === getSavedQuizId(quiz)}
                         className="text-sm text-[#0F2654] hover:text-[#082952] font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {duplicatingQuizId === quiz._id
+                        {duplicatingQuizId === getSavedQuizId(quiz)
                           ? "Duplicating..."
                           : "Duplicate"}
                       </button>
@@ -430,7 +441,7 @@ const DisplaySavedQuizzesPage: React.FC<{
                         Rename
                       </button>
                       <button
-                        onClick={() => setConfirmDeleteId(quiz._id)}
+                        onClick={() => setConfirmDeleteId(getSavedQuizId(quiz))}
                         className="text-sm text-red-600 hover:text-red-800 font-semibold"
                       >
                         Delete
@@ -568,14 +579,18 @@ export default function SavedQuizzes() {
           <DisplaySavedQuizzesPage
             savedQuizzes={savedQuizzes}
             onDeleteClick={(id) =>
-              setSavedQuizzes((prev) => prev.filter((q) => q._id !== id))
+              setSavedQuizzes((prev) =>
+                prev.filter((q) => getSavedQuizId(q) !== id),
+              )
             }
             onDuplicateCreate={(quiz) =>
               setSavedQuizzes((prev) => [quiz, ...prev])
             }
             onRenameUpdate={(quiz) =>
               setSavedQuizzes((prev) =>
-                prev.map((item) => (item._id === quiz._id ? quiz : item)),
+                prev.map((item) =>
+                  getSavedQuizId(item) === getSavedQuizId(quiz) ? quiz : item,
+                ),
               )
             }
             token={token!}

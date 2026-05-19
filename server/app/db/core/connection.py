@@ -107,6 +107,11 @@ def get_saved_quizzes_collection() -> AsyncIOMotorCollection:
         raise RuntimeError("[DB Error] saved_quizzes_collection has not been initialized properly.")
     return saved_quizzes_collection
 
+def get_quiz_history_collection() -> AsyncIOMotorCollection:
+    if quiz_history_collection is None:
+        raise RuntimeError("[DB Error] quiz_history_collection has not been initialized properly.")
+    return quiz_history_collection
+
 def get_user_tokens_collection() -> AsyncIOMotorCollection:
     if user_tokens_collection is None:
         raise RuntimeError("[DB Error] user_tokens_collection has not been initialized properly.")

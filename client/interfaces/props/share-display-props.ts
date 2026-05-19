@@ -5,5 +5,6 @@ export interface DisplayQuizProps {
 }
 
 export interface SharePageProps {
-  quiz: Quiz;
+  quiz: Quiz | null;
+  notFoundQuiz?: boolean;
 }

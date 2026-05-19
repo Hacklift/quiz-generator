@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import toast from "react-hot-toast";
 import {
   LoginResponse,
   LoginPayload,
@@ -24,6 +25,30 @@ let failedQueue: Array<{
   resolve: (value?: unknown) => void;
   reject: (reason?: any) => void;
 }> = [];
+
+const handleVerificationRequired = (error: AxiosError): boolean => {
+  const detail = (error.response?.data as any)?.detail;
+  if (error.response?.status !== 403 || detail !== "Email not verified") {
+    return false;
+  }
+
+  if (typeof window !== "undefined") {
+    const mark = "__email_not_verified_toast__";
+    if (!(window as any)[mark]) {
+      (window as any)[mark] = true;
+      toast.error("Please verify your email to continue");
+      setTimeout(() => {
+        (window as any)[mark] = false;
+      }, 2000);
+    }
+
+    if (!window.location.pathname.startsWith("/auth/verify-email")) {
+      window.location.assign("/auth/verify-email-notice");
+    }
+  }
+
+  return true;
+};
 
 const processQueue = (
   error: AxiosError | null,
@@ -56,6 +81,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    if (handleVerificationRequired(error)) {
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };

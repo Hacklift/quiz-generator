@@ -171,3 +171,15 @@ async def get_current_user_optional(
         created_at=created_at,
         updated_at=updated_at,
     )
+
+
+async def get_verified_user(
+    current_user: UserOut = Depends(get_current_user),
+) -> UserOut:
+    """Ensure the current authenticated user has a verified email."""
+    if not current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified",
+        )
+    return current_user

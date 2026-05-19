@@ -163,3 +163,9 @@ node_modules/
 
 client/.pnpm-store/*
 server/tmp/
+.git
+.next
+__pycache__
+.pytest_cache
+client/node_modules
+client/.next

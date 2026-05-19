@@ -34,6 +34,7 @@ export default function LoginPage() {
       <SignInModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        redirectTo={ROUTES.HOME}
         switchToSignUp={() => {
           setIsModalOpen(false);
           router.push(ROUTES.REGISTER);

@@ -15,6 +15,8 @@ import Footer from "../../components/home/Footer";
 import { useAuth } from "../../contexts/authContext";
 import RequireAuth from "../../components/auth/RequireAuth";
 
+const getFolderItemId = (quiz: any) => quiz?.id || "";
+
 const FolderView = () => {
   const router = useRouter();
   const { folderId } = router.query;
@@ -64,7 +66,9 @@ const FolderView = () => {
         prev
           ? {
               ...prev,
-              quizzes: prev.quizzes.filter((q: any) => q._id !== quizId),
+              quizzes: prev.quizzes.filter(
+                (q: any) => getFolderItemId(q) !== quizId,
+              ),
             }
           : prev,
       );
@@ -86,7 +90,9 @@ const FolderView = () => {
 
   const handleViewQuiz = (quiz: any) => {
     localStorage.setItem("saved_quiz_view", JSON.stringify(quiz));
-    router.push("/quiz_display");
+    router.push(
+      `/quiz_display?quizId=${quiz.quiz_id || ""}&questionType=${quiz.question_type || quiz.quiz_data?.question_type || "multichoice"}`,
+    );
   };
 
   const formatDate = (date: string) => {
@@ -146,7 +152,7 @@ const FolderView = () => {
               ) : (
                 folder.quizzes.map((quiz: any) => (
                   <div
-                    key={quiz._id}
+                    key={getFolderItemId(quiz)}
                     className="quiz-card relative border rounded-2xl p-4 shadow-sm bg-white hover:shadow-md transition-all flex flex-col justify-between w-full max-w-3xl group"
                   >
                     <div>
@@ -200,7 +206,9 @@ const FolderView = () => {
                       <button
                         onClick={() =>
                           setOpenMenuId(
-                            openMenuId === quiz._id ? null : quiz._id,
+                            openMenuId === getFolderItemId(quiz)
+                              ? null
+                              : getFolderItemId(quiz),
                           )
                         }
                         className="p-2 hover:bg-gray-100 rounded-full"
@@ -208,7 +216,7 @@ const FolderView = () => {
                         <FaEllipsisV className="text-gray-600" />
                       </button>
 
-                      {openMenuId === quiz._id && (
+                      {openMenuId === getFolderItemId(quiz) && (
                         <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-10 flex flex-col">
                           <button
                             onClick={() => handleViewQuiz(quiz)}
@@ -223,7 +231,9 @@ const FolderView = () => {
                             Move
                           </button>
                           <button
-                            onClick={() => handleDeleteQuizClick(quiz._id)}
+                            onClick={() =>
+                              handleDeleteQuizClick(getFolderItemId(quiz))
+                            }
                             className="px-3 py-2 text-sm text-red-600 bg-red-100 hover:bg-red-200 rounded-b-lg"
                           >
                             Delete

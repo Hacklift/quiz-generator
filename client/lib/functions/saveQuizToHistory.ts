@@ -24,7 +24,7 @@ export async function saveQuizToHistory(
 
   const payload = {
     quiz_id: meta.quiz_id,
-    quiz_name: `${meta.question_type} Quiz`,
+    quiz_name: meta.profession || `${meta.question_type} Quiz`,
     question_type: meta.question_type,
     num_questions: meta.num_questions,
     difficulty_level: meta.difficulty_level,

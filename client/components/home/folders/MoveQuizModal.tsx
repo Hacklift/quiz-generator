@@ -9,6 +9,9 @@ import {
 } from "../../../lib/functions/folders";
 import { useAuth } from "../../../contexts/authContext";
 
+const getFolderId = (folder: any) => folder?.id || "";
+const getFolderItemId = (quiz: any) => quiz?.id || "";
+
 interface MoveQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,10 +71,10 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
 
       if (isCreatingNew && newFolderName.trim()) {
         const newFolder = await createFolder({ name: newFolderName });
-        targetFolderId = newFolder._id;
+        targetFolderId = getFolderId(newFolder);
       }
 
-      await moveQuiz(quiz._id, sourceFolderId, targetFolderId);
+      await moveQuiz(getFolderItemId(quiz), sourceFolderId, targetFolderId);
 
       toast.success("Quiz moved successfully");
       onQuizMoved?.();
@@ -110,10 +113,10 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
               <div className="space-y-2 overflow-y-auto max-h-[50vh] pr-1">
                 {folders.map((folder) => (
                   <div
-                    key={folder._id}
-                    onClick={() => setSelectedFolderId(folder._id)}
+                    key={getFolderId(folder)}
+                    onClick={() => setSelectedFolderId(getFolderId(folder))}
                     className={`p-3 border rounded-xl cursor-pointer ${
-                      selectedFolderId === folder._id
+                      selectedFolderId === getFolderId(folder)
                         ? "border-navy-600 bg-blue-50"
                         : "border-gray-200 hover:bg-gray-50"
                     }`}

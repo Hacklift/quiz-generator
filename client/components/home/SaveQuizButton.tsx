@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { saveQuiz } from "../../lib/functions/savedQuiz";
 import { useAuth } from "../../contexts/authContext";
 import SignInModal from "../auth/SignInModal";
+import SignUpModal from "../auth/SignUpModal";
 import { TokenService } from "../../lib/functions/tokenService";
 
 export default function SaveQuizButton({
@@ -19,6 +20,7 @@ export default function SaveQuizButton({
   const [quizTitle, setQuizTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
 
   const handleSave = async () => {
     if (!user) {
@@ -113,7 +115,18 @@ export default function SaveQuizButton({
       <SignInModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        switchToSignUp={() => {}}
+        switchToSignUp={() => {
+          setShowLoginModal(false);
+          setShowSignUpModal(true);
+        }}
+      />
+      <SignUpModal
+        isOpen={showSignUpModal}
+        onClose={() => setShowSignUpModal(false)}
+        switchToSignIn={() => {
+          setShowSignUpModal(false);
+          setShowLoginModal(true);
+        }}
       />
     </div>
   );

@@ -44,7 +44,8 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
             "num_questions": request.num_questions,
             "audience_type": request.audience_type,
             "custom_instruction": request.custom_instruction,
-            "questions": final_questions
+            "questions": final_questions,
+            "user_id": user_id,
 
         }
 
@@ -90,4 +91,3 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
 
     logging.warning(f"Final API Response: {result}")
     return result
-

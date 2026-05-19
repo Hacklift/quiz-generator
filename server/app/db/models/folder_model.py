@@ -27,7 +27,7 @@ class FolderModel(BaseModel):
 
     class Config:
 
-        orm_mode = True
+        from_attributes = True
 
         json_encoders = {ObjectId: str}
 
