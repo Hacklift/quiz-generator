@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     QUIZ_V2_WRITE_MODE: Literal["legacy_only", "dual_write", "v2_only"] = "v2_only"
     QUIZ_V2_FAIL_OPEN: bool = True
     QUIZ_V2_STRUCTURED_LOGGING: bool = True
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_PRICE_ID_MONTHLY: Optional[str] = None
+    STRIPE_PRICE_ID_YEARLY: Optional[str] = None
     V2_BACKFILL_BATCH_SIZE: int = 200
     V2_BACKFILL_DRY_RUN: bool = True
     V2_BACKFILL_START_AFTER_ID: Optional[str] = None

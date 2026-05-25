@@ -9,6 +9,13 @@ export interface User {
   location?: string;
   website?: string;
   avatar_color?: string;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  subscription_plan?: string;
+  subscription_status?: string;
+  current_period_end?: string | null;
+  created_at?: string;
+  updated_at?: string;
   role?: "user" | "admin" | string;
   createdAt?: string;
   updatedAt?: string;

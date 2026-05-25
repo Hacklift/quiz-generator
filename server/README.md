@@ -43,10 +43,16 @@ The project uses `direnv` to manage environment variables from the `.env` file. 
 direnv allow
 ```
 
-Make sure the `.env` file contains the following variable:
+Start from [server/.env.example](/home/glory/quiz-generator/server/.env.example:1) and provide values for the required variables.
+
+Payment-specific variables:
 
 ```plaintext
-PORT=8000
+FRONTEND_BASE_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+STRIPE_PRICE_ID_MONTHLY=price_replace_monthly
+STRIPE_PRICE_ID_YEARLY=price_replace_yearly
 ```
 
 ### 5. Run the Application
@@ -68,4 +74,3 @@ http://localhost:8000/api/healthcheck
 ```
 
 You should receive a JSON response confirming the server is up and running.
-

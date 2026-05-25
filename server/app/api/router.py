@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, Response
 
 from server.app.api.health import router as health_router
 from server.app.auth.routes import router as auth_router
+from server.app.billing.routes import router as billing_router
 from server.app.core.rate_limiter import limiter
 from server.app.notifications.routes import router as notifications_router
 from server.app.quiz.routes.categories import router as categories_router
@@ -38,6 +39,7 @@ async def ping_redis(request: Request, response: Response):
 
 router.include_router(health_router, prefix="/api", tags=["healthcheck"])
 router.include_router(auth_router, prefix="/auth", tags=["authentication"])
+router.include_router(billing_router)
 router.include_router(users_router)
 router.include_router(quiz_generation_router, prefix="/api", tags=["quiz"])
 router.include_router(grading_router, prefix="/api", tags=["quiz"])
