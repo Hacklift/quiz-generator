@@ -25,14 +25,12 @@ jest.mock('@features/auth/api/authApi', () => ({
 }));
 
 
-
-
 describe('SignInModal', () => {
   const mockOnClose = jest.fn();
   const mockSwitchToSignUp = jest.fn();
 
   beforeEach(() => {
-    mockOnClose.mockClear(); 
+    mockOnClose.mockClear();
     mockSwitchToSignUp.mockClear();
     mockRouterPush.mockClear();
     mockAuthLogin.mockClear();
@@ -46,8 +44,7 @@ describe('SignInModal', () => {
         switchToSignUp={mockSwitchToSignUp}
       />,
     );
-    
-    
+
     expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('email@example.com or username')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your password')).toBeInTheDocument();
@@ -62,7 +59,7 @@ describe('SignInModal', () => {
         switchToSignUp={mockSwitchToSignUp}
       />,
     );
-    
+
     expect(screen.queryByRole('heading', { name: /sign in/i })).not.toBeInTheDocument();
   });
 
@@ -74,7 +71,7 @@ describe('SignInModal', () => {
         switchToSignUp={mockSwitchToSignUp}
       />,
     );
-    
+
     const usernameInput = screen.getByPlaceholderText('email@example.com or username');
     const passwordInput = screen.getByPlaceholderText('Enter your password');
 
@@ -93,16 +90,14 @@ describe('SignInModal', () => {
         switchToSignUp={mockSwitchToSignUp}
       />,
     );
-    
+
     const usernameInput = screen.getByPlaceholderText('email@example.com or username');
     const passwordInput = screen.getByPlaceholderText('Enter your password');
     const signInButton = screen.getByRole('button', { name: /sign in/i });
 
-    
     fireEvent.change(usernameInput, { target: { value: 'testuser@example.com' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
 
-    
     fireEvent.click(signInButton);
 
     await waitFor(() => {
@@ -121,7 +116,6 @@ describe('SignInModal', () => {
 
     fireEvent.click(container.firstChild as Element);
 
-    
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 });

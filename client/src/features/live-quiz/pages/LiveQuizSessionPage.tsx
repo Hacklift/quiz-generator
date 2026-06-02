@@ -26,6 +26,19 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   const autoSubmitStartedRef = useRef(false);
   const isSubmittingRef = useRef(false);
 
+  useEffect(() => {
+    const disconnect = () => {
+      if (isSubmittingRef.current || session?.status === "submitted") return;
+      void liveQuizService.markDisconnected(sessionId);
+    };
+
+    window.addEventListener("beforeunload", disconnect);
+    return () => {
+      window.removeEventListener("beforeunload", disconnect);
+      disconnect();
+    };
+  }, [session?.status, sessionId]);
+
   const loadSession = useCallback(async () => {
     const data = await liveQuizService.getSession(sessionId);
     setSession(data);

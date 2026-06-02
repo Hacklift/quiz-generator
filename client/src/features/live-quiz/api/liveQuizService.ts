@@ -1,5 +1,6 @@
 import publicApi from "@shared/api/publicHttp";
 import { api } from "@shared/api/http";
+import { TokenService } from "@shared/auth/tokenService";
 
 const tokenStorageKey = (sessionId: string) => `live_quiz_token_${sessionId}`;
 
@@ -9,6 +10,7 @@ export interface LiveQuizPreview {
   total_questions: number;
   time_limit_minutes: number;
   access_code_expires_at: string;
+  participant_access_mode: string;
 }
 
 export interface StartLiveQuizResponse {
@@ -41,7 +43,7 @@ export interface LiveQuizSessionState {
   expires_at: string;
   server_now: string;
   submitted_at?: string | null;
-  status: "active" | "submitted" | "expired";
+  status: "active" | "joined" | "disconnected" | "submitted" | "expired";
   current_question_index: number;
   total_questions: number;
   time_limit_minutes: number;
@@ -67,13 +69,51 @@ export interface LiveQuizResult {
   auto_submitted: boolean;
 }
 
+export interface ParticipantRow {
+  session_id: string;
+  participant_name: string;
+  participant_email?: string | null;
+  score?: number | null;
+  total_questions: number;
+  percentage?: number | null;
+  joined_at?: string | null;
+  started_at?: string | null;
+  submitted_at?: string | null;
+  duration_seconds?: number | null;
+  progress?: number | null;
+  current_question_number?: number | null;
+  progress_percentage?: number | null;
+  status: string;
+  auto_submitted: boolean;
+}
+
 export interface AccessCodeResponse {
   quiz_id: string;
   access_code: string;
   live_quiz_enabled: boolean;
   time_limit_minutes: number;
   access_code_expires_at: string;
+  participant_access_mode: string;
+  invited_emails: string[];
+  invitations_created: number;
+  invitations_delivered: number;
 }
+
+export type LiveQuizParticipantsEvent =
+  | {
+      type: "participants_snapshot";
+      quiz_id: string;
+      participants: ParticipantRow[];
+    }
+  | {
+      type:
+        | "participant_joined"
+        | "participant_progress"
+        | "participant_submitted"
+        | "participant_disconnected";
+      quiz_id: string;
+      participant: ParticipantRow;
+    };
 
 const authHeaders = (sessionId: string) => {
   const token = getParticipantToken(sessionId);
@@ -99,6 +139,9 @@ export const liveQuizService = {
     quizId: string;
     time_limit_minutes: number;
     access_code_expires_at: string;
+    participant_access_mode?: "public" | "restricted" | "invited_only";
+    invited_emails?: string[];
+    send_email_invitations?: boolean;
   }): Promise<AccessCodeResponse> {
     const { quizId, ...body } = payload;
     const { data } = await api.post(
@@ -168,5 +211,53 @@ export const liveQuizService = {
       },
     );
     return data;
+  },
+
+  async markDisconnected(sessionId: string): Promise<void> {
+    await publicApi.post(
+      `/api/v1/live-quiz-sessions/${sessionId}/disconnect`,
+      null,
+      { headers: authHeaders(sessionId) },
+    );
+  },
+
+  async listParticipants(quizId: string): Promise<ParticipantRow[]> {
+    const { data } = await api.get(
+      `/api/v1/quizzes/${quizId}/live-sessions/participants`,
+    );
+    return data;
+  },
+
+  subscribeParticipants(
+    quizId: string,
+    onEvent: (event: LiveQuizParticipantsEvent) => void,
+    onClose?: () => void,
+  ): WebSocket | null {
+    if (typeof window === "undefined") return null;
+    const token = TokenService.getAccessToken();
+    if (!token) return null;
+
+    const baseUrl =
+      api.defaults.baseURL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL ||
+      "http://localhost:8000";
+    const wsBaseUrl = baseUrl.replace(/^http/i, "ws").replace(/\/$/, "");
+    const socket = new WebSocket(
+      `${wsBaseUrl}/api/v1/quizzes/${encodeURIComponent(
+        quizId,
+      )}/live-sessions/ws?token=${encodeURIComponent(token)}`,
+    );
+
+    socket.onmessage = (message) => {
+      try {
+        onEvent(JSON.parse(message.data));
+      } catch {
+        // Ignore malformed websocket payloads; polling fallback stays active.
+      }
+    };
+    socket.onclose = () => {
+      onClose?.();
+    };
+    return socket;
   },
 };
