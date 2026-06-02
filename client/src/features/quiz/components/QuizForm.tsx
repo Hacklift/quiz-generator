@@ -3,13 +3,26 @@
 import { useState, useEffect } from "react";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
+import {
+  DocumentQuizResponse,
+  generateDocumentQuiz,
+} from "@features/quiz/api/documentQuizApi";
 import { useAuth } from "@features/auth/context/authContext";
 import { useRouter } from "next/navigation";
 import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
 
 export default function QuizForm() {
+  const [generationMode, setGenerationMode] = useState<"document" | "topic">(
+    "topic",
+  );
   const [profession, setProfession] = useState("");
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentInputMode, setDocumentInputMode] = useState<
+    "paste" | "upload"
+  >("upload");
+  const [documentText, setDocumentText] = useState("");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [audienceType, setAudienceType] = useState("");
   const [customInstruction, setCustomInstruction] = useState("");
   const [numQuestions, setNumQuestions] = useState(1);
@@ -29,6 +42,10 @@ export default function QuizForm() {
 
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+
+  const handleDocumentFileChange = (file: File | null) => {
+    setDocumentFile(file);
+  };
 
   useEffect(() => {
     if (user === undefined) return;
@@ -67,8 +84,26 @@ export default function QuizForm() {
   }, [user, isAuthenticated]);
 
   const handleGenerateQuiz = async () => {
-    if (!profession) {
+    if (generationMode === "topic" && !profession) {
       setErrorMessage("Please enter a profession or topic for your quiz.");
+      return;
+    }
+
+    if (
+      generationMode === "document" &&
+      documentInputMode === "upload" &&
+      !documentFile
+    ) {
+      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
+      return;
+    }
+
+    if (
+      generationMode === "document" &&
+      documentInputMode === "paste" &&
+      !documentText.trim()
+    ) {
+      setErrorMessage("Please paste the learning material.");
       return;
     }
 
@@ -92,7 +127,10 @@ export default function QuizForm() {
       return;
     }
 
-    if (enableLiveQuiz && new Date(liveAccessExpiresAt).getTime() <= Date.now()) {
+    if (
+      enableLiveQuiz &&
+      new Date(liveAccessExpiresAt).getTime() <= Date.now()
+    ) {
       setErrorMessage("Please choose a future access code expiration time.");
       return;
     }
@@ -118,6 +156,84 @@ export default function QuizForm() {
         sessionStorage.setItem("user_api_token", token);
       }
 
+      if (generationMode === "document") {
+        const payload = new FormData();
+        payload.append("question_type", questionType);
+        payload.append("num_questions", numQuestions.toString());
+        payload.append("difficulty_level", difficultyLevel);
+        payload.append("audience_type", audienceType || "students");
+        payload.append("custom_instruction", customInstruction);
+        payload.append("token", token);
+        payload.append("document_title", documentTitle);
+        payload.append("focus_topic", profession);
+        payload.append("live_quiz_enabled", enableLiveQuiz ? "true" : "false");
+
+        if (enableLiveQuiz) {
+          payload.append("time_limit_minutes", liveDurationMinutes.toString());
+          payload.append(
+            "access_code_expires_at",
+            new Date(liveAccessExpiresAt).toISOString(),
+          );
+        }
+
+        if (documentInputMode === "upload" && documentFile) {
+          payload.append("document_file", documentFile);
+        } else {
+          payload.append("document_text", documentText);
+        }
+
+        const response: DocumentQuizResponse = await generateDocumentQuiz(
+          payload,
+          {
+            authenticated: enableLiveQuiz || isAuthenticated,
+          },
+        );
+        const generatedQuizKey = response.quiz_id
+          ? `generated_quiz_view:${response.quiz_id}`
+          : `generated_quiz_view:${Date.now()}`;
+
+        sessionStorage.setItem(
+          generatedQuizKey,
+          JSON.stringify({
+            ...response,
+            historyMeta: {
+              quiz_id: response.quiz_id,
+              question_type: questionType,
+              num_questions: numQuestions,
+              difficulty_level: difficultyLevel,
+              profession: response.title,
+              audience_type: audienceType || "students",
+              custom_instruction:
+                customInstruction ||
+                `Generated from ${response.source_document_type.toUpperCase()} material.`,
+            },
+          }),
+        );
+
+        const queryParams = new URLSearchParams({
+          generated: "document",
+          generatedQuizKey,
+          questionType,
+          numQuestions: numQuestions.toString(),
+          profession: response.title,
+          customInstruction:
+            customInstruction ||
+            `Generated from ${response.source_document_type.toUpperCase()} material.`,
+          audienceType: audienceType || "students",
+          difficultyLevel,
+        }).toString();
+
+        if (response.quiz_id) {
+          const enrichedParams = new URLSearchParams(queryParams);
+          enrichedParams.set("quizId", response.quiz_id);
+          router.push(`/quiz_display?${enrichedParams.toString()}`);
+          return;
+        }
+
+        router.push(`/quiz_display?${queryParams}`);
+        return;
+      }
+
       const queryParams = new URLSearchParams({
         questionType,
         numQuestions: numQuestions.toString(),
@@ -134,8 +250,12 @@ export default function QuizForm() {
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
-    } catch (error) {
-      setErrorMessage("Failed to generate quiz. Please try again.");
+    } catch (error: any) {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Failed to generate quiz. Please try again.";
+      setErrorMessage(detail);
     } finally {
       setLoading(false);
     }
@@ -145,8 +265,18 @@ export default function QuizForm() {
     <div className="max-w-3xl mx-auto bg-[#f7f8fa] rounded-xl p-10 shadow-lg">
       <form onSubmit={(e) => e.preventDefault()}>
         <QuizGenerationSection
+          generationMode={generationMode}
+          setGenerationMode={setGenerationMode}
           profession={profession}
           setProfession={setProfession}
+          documentTitle={documentTitle}
+          setDocumentTitle={setDocumentTitle}
+          documentInputMode={documentInputMode}
+          setDocumentInputMode={setDocumentInputMode}
+          documentText={documentText}
+          setDocumentText={setDocumentText}
+          documentFileName={documentFile?.name || ""}
+          onDocumentFileChange={handleDocumentFileChange}
           audienceType={audienceType}
           setAudienceType={setAudienceType}
           customInstruction={customInstruction}

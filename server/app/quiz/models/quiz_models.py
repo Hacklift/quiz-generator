@@ -37,6 +37,7 @@ class QuizQuestion(BaseModel):
     question_type: str
 
     answer: str
+    explanation: Optional[str] = None
 
 
 class QuizResponse(BaseModel):

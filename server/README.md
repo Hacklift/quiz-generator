@@ -18,11 +18,13 @@ cd quiz-generator/server
 ```
 
 ### 2. Create virtual enviroment
+
 Ensure you are in the server directory then run the following command
 
 ```bash
 python -m venv .venv
 ```
+
 ```bash
 source .venv/bin/activate
 ```
@@ -43,10 +45,17 @@ The project uses `direnv` to manage environment variables from the `.env` file. 
 direnv allow
 ```
 
-Make sure the `.env` file contains the following variable:
+Start from [server/.env.example](/home/glory/quiz-generator/server/.env.example:1) and provide values for the required variables.
+
+For document-based quiz generation with RAG, configure:
 
 ```plaintext
-PORT=8000
+HUGGINGFACEHUB_API_TOKEN=hf_replace_with_your_token
+HF_QUIZ_MODEL=Qwen/Qwen2.5-7B-Instruct
+HF_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+DOCUMENT_UPLOAD_MAX_BYTES=10485760
+DOCUMENT_RAG_MAX_CHUNKS=24
+DOCUMENT_RAG_TOP_K=8
 ```
 
 ### 5. Run the Application
@@ -68,4 +77,3 @@ http://localhost:8000/api/healthcheck
 ```
 
 You should receive a JSON response confirming the server is up and running.
-

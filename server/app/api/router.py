@@ -8,6 +8,7 @@ from server.app.auth.routes import router as auth_router
 from server.app.core.rate_limiter import limiter
 from server.app.notifications.routes import router as notifications_router
 from server.app.quiz.routes.categories import router as categories_router
+from server.app.quiz.routes.document_quiz import router as document_quiz_router
 from server.app.quiz.routes.downloads import router as downloads_router
 from server.app.quiz.routes.folders import router as folders_router
 from server.app.quiz.routes.generation import router as quiz_generation_router
@@ -40,6 +41,7 @@ router.include_router(health_router, prefix="/api", tags=["healthcheck"])
 router.include_router(auth_router, prefix="/auth", tags=["authentication"])
 router.include_router(users_router)
 router.include_router(quiz_generation_router, prefix="/api", tags=["quiz"])
+router.include_router(document_quiz_router, prefix="/api", tags=["quiz"])
 router.include_router(grading_router, prefix="/api", tags=["quiz"])
 router.include_router(downloads_router)
 router.include_router(token_router, prefix="/api", tags=["Token"])
