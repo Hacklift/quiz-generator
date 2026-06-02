@@ -99,6 +99,17 @@ export interface AccessCodeResponse {
   invitations_delivered: number;
 }
 
+export interface LiveQuizSummary {
+  quiz_id: string;
+  title: string;
+  access_code?: string | null;
+  status: string;
+  created_at?: string | null;
+  participant_count: number;
+  completed_count: number;
+  average_score?: number | null;
+}
+
 export type LiveQuizParticipantsEvent =
   | {
       type: "participants_snapshot";
@@ -225,6 +236,11 @@ export const liveQuizService = {
     const { data } = await api.get(
       `/api/v1/quizzes/${quizId}/live-sessions/participants`,
     );
+    return data;
+  },
+
+  async listLiveQuizzes(): Promise<LiveQuizSummary[]> {
+    const { data } = await api.get("/api/v1/quizzes/live");
     return data;
   },
 

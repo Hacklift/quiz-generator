@@ -54,18 +54,38 @@ class LiveQuizSessionService:
         email_service=None,
         frontend_origin: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if _as_utc(access_code_expires_at) <= _utc_now():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Access code expiration must be in the future",
-            )
-
         quiz = await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
         owner_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
         if not owner_id or str(owner_id) != creator_id:
             raise HTTPException(status_code=403, detail="Not allowed")
+
+        if quiz.get("live_quiz_enabled") and quiz.get("access_code"):
+            invited = [
+                email.strip().lower()
+                for email in quiz.get("invited_participant_emails", [])
+                if email
+            ]
+            return {
+                "quiz_id": str(quiz["_id"]),
+                "access_code": quiz["access_code"],
+                "live_quiz_enabled": True,
+                "time_limit_minutes": quiz.get("time_limit_minutes") or time_limit_minutes,
+                "access_code_expires_at": _as_utc(
+                    quiz.get("access_code_expires_at") or access_code_expires_at
+                ),
+                "participant_access_mode": quiz.get("participant_access_mode", "public"),
+                "invited_emails": invited,
+                "invitations_created": len(invited),
+                "invitations_delivered": 0,
+            }
+
+        if _as_utc(access_code_expires_at) <= _utc_now():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Access code expiration must be in the future",
+            )
 
         normalized_invited_emails = self._normalize_invited_emails(invited_emails or [])
         if participant_access_mode not in {"public", "restricted", "invited_only"}:
@@ -451,6 +471,41 @@ class LiveQuizSessionService:
         sessions = await self.repository.list_quiz_sessions(quiz_id)
         return [self._analytics_row(session) for session in sessions]
 
+    async def list_creator_live_quizzes(
+        self,
+        creator_user_id: str,
+    ) -> List[Dict[str, Any]]:
+        quizzes = await self.repository.list_live_quizzes_by_creator(creator_user_id)
+        rows = []
+        for quiz in quizzes:
+            quiz_id = str(quiz["_id"])
+            sessions = await self.repository.list_quiz_sessions(quiz_id)
+            completed = [
+                session
+                for session in sessions
+                if session.get("submitted_at") or session.get("status") == "submitted"
+            ]
+            scores = [
+                session.get("score")
+                for session in completed
+                if isinstance(session.get("score"), int)
+            ]
+            rows.append(
+                {
+                    "quiz_id": quiz_id,
+                    "title": quiz.get("title", "Live Quiz"),
+                    "access_code": quiz.get("access_code"),
+                    "status": self._quiz_status(quiz, sessions),
+                    "created_at": quiz.get("created_at"),
+                    "participant_count": len(sessions),
+                    "completed_count": len(completed),
+                    "average_score": round(sum(scores) / len(scores), 2)
+                    if scores
+                    else None,
+                }
+            )
+        return rows
+
     async def _generate_unique_code(self) -> str:
         alphabet = string.ascii_uppercase + string.digits
         for _ in range(20):
@@ -670,6 +725,20 @@ class LiveQuizSessionService:
             "status": status,
             "auto_submitted": session.get("auto_submitted", False),
         }
+
+    def _quiz_status(
+        self,
+        quiz: Dict[str, Any],
+        sessions: List[Dict[str, Any]],
+    ) -> str:
+        if any(session.get("status") in {"joined", "active"} for session in sessions):
+            return "in_progress"
+        expires_at = quiz.get("access_code_expires_at")
+        if expires_at and _as_utc(expires_at) <= _utc_now():
+            return "expired"
+        if sessions and all(session.get("submitted_at") for session in sessions):
+            return "completed"
+        return "active"
 
     def _normalize_invited_emails(self, emails: List[str]) -> List[str]:
         adapter = TypeAdapter(EmailStr)

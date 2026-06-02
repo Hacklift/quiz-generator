@@ -29,6 +29,24 @@ class LiveQuizSessionRepository:
     async def access_code_exists(self, access_code: str) -> bool:
         return await self.quiz_repository.access_code_exists(access_code)
 
+    async def list_live_quizzes_by_creator(
+        self,
+        creator_user_id: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        cursor = self.quiz_repository.collection.find(
+            {
+                "live_quiz_enabled": True,
+                "status": {"$ne": "deleted"},
+                "$or": [
+                    {"owner_user_id": creator_user_id},
+                    {"created_by": creator_user_id},
+                    {"owner_id": creator_user_id},
+                ],
+            }
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
     async def enable_live_quiz(
         self,
         quiz_id: str,

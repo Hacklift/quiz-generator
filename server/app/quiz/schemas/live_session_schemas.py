@@ -95,3 +95,14 @@ class LiveQuizAnalyticsRow(BaseModel):
     progress_percentage: Optional[float] = None
     status: str
     auto_submitted: bool = False
+
+
+class LiveQuizSummaryRow(BaseModel):
+    quiz_id: str
+    title: str
+    access_code: Optional[str] = None
+    status: str
+    created_at: Optional[datetime] = None
+    participant_count: int = 0
+    completed_count: int = 0
+    average_score: Optional[float] = None

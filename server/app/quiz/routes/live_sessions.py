@@ -33,6 +33,7 @@ from server.app.users.identity import ACTIVE_USER_STATUSES, coerce_user_status, 
 from server.app.users.repository import build_user_out_payload, get_active_session
 from server.app.quiz.schemas.live_session_schemas import (
     LiveQuizAnalyticsRow,
+    LiveQuizSummaryRow,
     LiveQuizSessionState,
     SaveLiveQuizAnswerRequest,
     SaveLiveQuizAnswerResponse,
@@ -114,6 +115,14 @@ async def validate_quiz_access_code(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
     return await service.validate_access_code(code)
+
+
+@router.get("/quizzes/live", response_model=List[LiveQuizSummaryRow])
+async def list_creator_live_quizzes(
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+):
+    return await service.list_creator_live_quizzes(current_user.id)
 
 
 @router.post(

@@ -278,6 +278,7 @@ class FakeAccessCodeRepository:
             "questions": [{"question": "Q1", "answer": "A"}],
         }
         self.updated = None
+        self.enable_calls = 0
 
     async def get_quiz_by_id(self, quiz_id):
         return self.quiz
@@ -286,8 +287,9 @@ class FakeAccessCodeRepository:
         return False
 
     async def enable_live_quiz(self, **kwargs):
+        self.enable_calls += 1
         self.updated = kwargs
-        return {
+        self.quiz = {
             **self.quiz,
             "live_quiz_enabled": True,
             "access_code": kwargs["access_code"],
@@ -295,6 +297,72 @@ class FakeAccessCodeRepository:
             "access_code_expires_at": kwargs["access_code_expires_at"],
             "participant_access_mode": kwargs["participant_access_mode"],
             "invited_participant_emails": kwargs["invited_participant_emails"],
+        }
+        return self.quiz
+
+
+class FakeExistingAccessCodeRepository(FakeAccessCodeRepository):
+    def __init__(self):
+        super().__init__()
+        self.quiz.update(
+            {
+                "live_quiz_enabled": True,
+                "access_code": "KEEP42",
+                "time_limit_minutes": 20,
+                "access_code_expires_at": datetime(2025, 6, 2, tzinfo=timezone.utc),
+                "participant_access_mode": "public",
+                "invited_participant_emails": [],
+            }
+        )
+
+
+class FakeCreatorLiveQuizzesRepository:
+    def __init__(self):
+        self.quizzes = [
+            {
+                "_id": "quiz-1",
+                "title": "Management Quiz",
+                "access_code": "LIVE01",
+                "access_code_expires_at": datetime(2025, 6, 2, tzinfo=timezone.utc),
+                "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+            }
+        ]
+        self.sessions = [
+            {
+                "_id": "session-1",
+                "quiz_id": "quiz-1",
+                "participant_name": "Alice",
+                "status": "submitted",
+                "submitted_at": datetime(2025, 6, 1, 10, 5, tzinfo=timezone.utc),
+                "score": 2,
+                "total_questions": 2,
+                "answers": [],
+            },
+            {
+                "_id": "session-2",
+                "quiz_id": "quiz-1",
+                "participant_name": "Bob",
+                "status": "active",
+                "submitted_at": None,
+                "score": None,
+                "total_questions": 2,
+                "answers": [],
+            },
+        ]
+
+    async def list_live_quizzes_by_creator(self, creator_user_id):
+        return self.quizzes
+
+    async def list_quiz_sessions(self, quiz_id):
+        return [
+            session for session in self.sessions if session.get("quiz_id") == quiz_id
+        ]
+
+    async def get_quiz_by_id(self, quiz_id):
+        return {
+            "_id": quiz_id,
+            "created_by": "creator-1",
+            "questions": [{"question": "Q1", "answer": "A"}],
         }
 
 
@@ -347,3 +415,41 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
     assert invitation_repository.invitations[0]["status"] == "pending"
     assert invitation_repository.deliveries[0]["status"] == "delivered"
     assert len(email_service.sent) == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_access_code_returns_existing_code_without_regenerating(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repository = FakeExistingAccessCodeRepository()
+    service = LiveQuizSessionService(repository)
+
+    response = await service.generate_access_code(
+        quiz_id="quiz-1",
+        access_code_expires_at=fixed_now + timedelta(days=7),
+        creator_id="creator-1",
+        time_limit_minutes=30,
+    )
+
+    assert response["access_code"] == "KEEP42"
+    assert response["time_limit_minutes"] == 20
+    assert repository.enable_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_creator_can_list_live_quizzes_with_stats(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    service = LiveQuizSessionService(FakeCreatorLiveQuizzesRepository())
+
+    rows = await service.list_creator_live_quizzes("creator-1")
+
+    assert len(rows) == 1
+    assert rows[0]["title"] == "Management Quiz"
+    assert rows[0]["access_code"] == "LIVE01"
+    assert rows[0]["status"] == "in_progress"
+    assert rows[0]["participant_count"] == 2
+    assert rows[0]["completed_count"] == 1
+    assert rows[0]["average_score"] == 2
