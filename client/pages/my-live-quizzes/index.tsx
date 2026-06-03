@@ -3,13 +3,13 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import RequireAuth from "../../components/auth/RequireAuth";
-import NavBar from "../../components/home/NavBar";
-import Footer from "../../components/home/Footer";
+import RequireAuth from "@features/auth/components/RequireAuth";
+import NavBar from "@features/quiz/components/NavBar";
+import Footer from "@features/quiz/components/Footer";
 import {
   LiveQuizSummary,
   liveQuizService,
-} from "../../src/services/liveQuizService";
+} from "@features/live-quiz/api/liveQuizService";
 
 const formatDateTime = (isoString: string | null | undefined): string => {
   if (!isoString) return "-";

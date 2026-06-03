@@ -218,10 +218,10 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
               Refresh Now
             </button>
             <button
-              onClick={() => router.push("/quiz_history")}
+              onClick={() => router.push("/my-live-quizzes")}
               className="text-sm text-[#0a3264] hover:underline"
             >
-              Back to History
+              Back to Live Quizzes History
             </button>
           </div>
         </div>

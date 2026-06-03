@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Radio } from "lucide-react";
-import { useAuth } from "../../../contexts/authContext";
-import SignInModal from "../../auth/SignInModal";
+import { useAuth } from "@features/auth/context/authContext";
+import SignInModal from "@features/auth/components/SignInModal";
 import SidebarButton from "./SidebarButton";
 
 const LiveQuizzesButton: React.FC = () => {
