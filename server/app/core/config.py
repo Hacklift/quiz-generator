@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal, Optional
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -17,8 +18,10 @@ class Settings(BaseSettings):
     email_host: str
     email_port: int
     share_url: str
-    db_name: str
-    mongo_url: str
+    db_name: str = "quizApp_db"
+    mongo_url: str = Field(
+        validation_alias=AliasChoices("mongo_url", "MONGO_URI"),
+    )
     HF_QUIZ_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
     HF_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     DOCUMENT_UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024

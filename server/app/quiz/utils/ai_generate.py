@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from huggingface_hub import InferenceClient
+from huggingface_hub.inference._providers import get_provider_helper
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.token_repository import get_user_token
@@ -68,6 +69,35 @@ def _mean_embedding(vectors: list[list[float]]) -> list[float]:
     ]
 
 
+def _normalize_embedding(values: list[float]) -> list[float]:
+    if not values:
+        return []
+    norm = math.sqrt(sum(value * value for value in values))
+    if norm == 0:
+        return values
+    return [value / norm for value in values]
+
+
+def _coerce_embedding_vector(payload: Any) -> list[float]:
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("Embedding response was empty or had an unexpected format.")
+
+    if all(isinstance(item, (int, float)) for item in payload):
+        return [float(item) for item in payload]
+
+    nested_vectors: list[list[float]] = []
+    for item in payload:
+        if isinstance(item, list) and item and all(
+            isinstance(value, (int, float)) for value in item
+        ):
+            nested_vectors.append([float(value) for value in item])
+
+    if not nested_vectors:
+        raise ValueError("Embedding response could not be converted into a vector.")
+
+    return _mean_embedding(nested_vectors)
+
+
 def _normalize_question_type(question_type: str) -> str:
     normalized = question_type.strip().lower()
     aliases = {
@@ -91,16 +121,29 @@ async def _feature_extract_text(
     model: str,
 ) -> list[float]:
     loop = asyncio.get_event_loop()
-    embedding = await loop.run_in_executor(
+
+    provider_helper = get_provider_helper(
+        getattr(client, "provider", "hf-inference"),
+        task="feature-extraction",
+        model=model,
+    )
+    request_parameters = provider_helper.prepare_request(
+        inputs=text,
+        parameters={"normalize": False},
+        headers=client.headers,
+        model=model,
+        api_key=client.token,
+    )
+
+    response = await loop.run_in_executor(
         None,
         functools.partial(
-            client.feature_extraction,
-            text,
-            model=model,
-            normalize=True,
+            client._inner_post,
+            request_parameters,
         ),
     )
-    return embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+    embedding_payload = provider_helper.get_response(response, request_parameters)
+    return _normalize_embedding(_coerce_embedding_vector(embedding_payload))
 
 
 def _build_retrieval_query(

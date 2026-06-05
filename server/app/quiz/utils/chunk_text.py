@@ -16,6 +16,37 @@ class TextChunk:
     char_count: int
 
 
+def _join_segments(segments: list[str]) -> str:
+    return "\n\n".join(segment.strip() for segment in segments if segment.strip()).strip()
+
+
+def _select_overlap_segments(segments: list[str], overlap_size: int) -> list[str]:
+    if overlap_size <= 0:
+        return []
+
+    overlap_segments: list[str] = []
+    total_length = 0
+
+    for segment in reversed(segments):
+        segment = segment.strip()
+        if not segment:
+            continue
+
+        separator_length = 2 if overlap_segments else 0
+        projected_length = total_length + separator_length + len(segment)
+
+        if overlap_segments and projected_length > overlap_size:
+            break
+
+        overlap_segments.append(segment)
+        total_length = projected_length
+
+        if total_length >= overlap_size:
+            break
+
+    return list(reversed(overlap_segments))
+
+
 def _split_long_paragraph(paragraph: str, max_chars: int) -> list[str]:
     sentences = _SENTENCE_BOUNDARY_PATTERN.split(paragraph)
     if len(sentences) == 1:
@@ -64,32 +95,40 @@ def split_text_into_chunks(
             prepared_segments.extend(_split_long_paragraph(paragraph, chunk_size))
 
     chunks: list[TextChunk] = []
-    current = ""
+    current_segments: list[str] = []
 
     for segment in prepared_segments:
-        candidate = f"{current}\n\n{segment}".strip() if current else segment
-        if current and len(candidate) > chunk_size:
+        candidate_segments = [*current_segments, segment]
+        candidate = _join_segments(candidate_segments)
+
+        if current_segments and len(candidate) > chunk_size:
+            current_content = _join_segments(current_segments)
             chunks.append(
                 TextChunk(
                     chunk_id=len(chunks),
-                    content=current.strip(),
-                    char_count=len(current.strip()),
+                    content=current_content,
+                    char_count=len(current_content),
                 )
             )
-            overlap_prefix = current[-overlap_size:].strip() if overlap_size else ""
-            current = f"{overlap_prefix}\n\n{segment}".strip() if overlap_prefix else segment
+
+            overlap_segments = _select_overlap_segments(current_segments, overlap_size)
+            current_segments = [*overlap_segments, segment]
+
+            while len(_join_segments(current_segments)) > chunk_size and len(current_segments) > 1:
+                current_segments = current_segments[1:]
         else:
-            current = candidate
+            current_segments = candidate_segments
 
         if len(chunks) >= chunk_limit:
             break
 
-    if current.strip() and len(chunks) < chunk_limit:
+    current_content = _join_segments(current_segments)
+    if current_content and len(chunks) < chunk_limit:
         chunks.append(
             TextChunk(
                 chunk_id=len(chunks),
-                content=current.strip(),
-                char_count=len(current.strip()),
+                content=current_content,
+                char_count=len(current_content),
             )
         )
 

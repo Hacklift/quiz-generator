@@ -24,7 +24,6 @@ huggingface-hub = "*"
 rapidfuzz = "*"
 cryptography = "*"
 slowapi = "*"
-pymupdf = "*"
 
 [dev-packages]
 pytest = "*"
