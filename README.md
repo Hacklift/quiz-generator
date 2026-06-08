@@ -27,7 +27,7 @@ The platform allows users to:
 
 # 🏗️ Project Architecture
 
-```bash
+```text
 quiz-generator/
 ├── client/                     # Next.js frontend
 │   ├── components/             # Reusable UI components
@@ -85,7 +85,7 @@ Before running the project, ensure you have:
 * Docker Desktop
 * WSL2 (Windows users)
 * Node.js v18+
-* Python v3.9+
+* Python 3.12+ (recommended)
 * Git
 
 ### Recommended System Specs
@@ -157,6 +157,7 @@ REDIS_URL=redis://localhost:6379/0
 HUGGINGFACEHUB_API_TOKEN=
 FERNET_KEY=
 ```
+> ⚠️ **Important:** The `EMAIL_PASSWORD` must be a **Google App Password**, not your regular Gmail login password. Regular passwords will fail with authentication errors.
 
 ---
 
@@ -165,7 +166,7 @@ FERNET_KEY=
 ## 1. Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Hacklift/quiz-generator.git
 cd quiz-generator
 ```
 
@@ -182,6 +183,7 @@ Create frontend environment file:
 ```bash
 touch client/.env.local
 ```
+Create `client/.env.local` and populate it using the values shown above.
 
 ---
 
@@ -331,17 +333,36 @@ Update ports inside `docker-compose.yml` if necessary.
 
 ---
 
-## API Key Errors
+## API Key & Service Errors
 
-* Ensure `.env` variables are correctly set
-* Avoid spaces around `=`
-* Restart Docker after changes:
+- Ensure `.env` variables are correctly set (no spaces around `=`)
+- Gmail: Must use **App Password**, not regular password
+- Redis: Must be running for Celery (`docker-compose ps`)
+- Restart Docker after changes:
 
 ```bash
 docker-compose down
 docker-compose up -d
 ```
 
+---
+
+## Redis / Celery Issues
+
+If Celery tasks are not executing:
+
+```bash
+# Check if Redis is running
+docker-compose ps
+
+# Redis should show "Up" status
+
+# Restart Celery if needed
+docker-compose restart celery
+
+# View Celery logs
+docker-compose logs celery
+```
 ---
 
 # 🤝 Contributing
