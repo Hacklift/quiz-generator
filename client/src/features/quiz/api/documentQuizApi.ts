@@ -26,6 +26,7 @@ export interface DocumentQuizResponse {
   retrieved_chunks: number;
   retrieval_query: string;
   rag_strategy?: string;
+  embedding_cache_hit?: boolean;
 }
 
 export async function generateDocumentQuiz(

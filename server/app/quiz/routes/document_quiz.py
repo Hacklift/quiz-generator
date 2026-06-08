@@ -33,6 +33,10 @@ def _to_iso_datetime(value: datetime | str | None) -> str | None:
     return str(value)
 
 
+def _format_max_size_message(max_bytes: int) -> str:
+    return f"{max_bytes:,} bytes"
+
+
 @router.post("/document-quizzes/generate", response_model=DocumentQuizResponse)
 async def generate_document_quiz(
     question_type: str = Form(...),
@@ -77,16 +81,32 @@ async def generate_document_quiz(
     try:
         if document_file is not None:
             file_bytes = await document_file.read()
+            if len(file_bytes) == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="The uploaded document is empty.",
+                )
             if len(file_bytes) > settings.DOCUMENT_UPLOAD_MAX_BYTES:
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail="The uploaded document is too large.",
+                    detail=(
+                        "The uploaded document is too large. "
+                        f"Maximum supported size is {_format_max_size_message(settings.DOCUMENT_UPLOAD_MAX_BYTES)}."
+                    ),
                 )
             document = extract_text_from_bytes(
                 file_bytes=file_bytes,
                 filename=document_file.filename or "document",
             )
         else:
+            if len(document_text or "") > settings.DOCUMENT_TEXT_MAX_CHARS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Pasted text is too long. "
+                        f"Maximum supported length is {settings.DOCUMENT_TEXT_MAX_CHARS:,} characters."
+                    ),
+                )
             document = extract_text_from_pasted_content(
                 text=document_text or "",
                 title=document_title,
@@ -204,5 +224,7 @@ async def generate_document_quiz(
         total_source_chunks=len(chunks),
         retrieved_chunks=len(rag_result.retrieved_chunks),
         retrieval_query=rag_result.retrieval_query,
+        rag_strategy=rag_result.rag_strategy,
+        embedding_cache_hit=rag_result.embedding_cache_hit,
         **category_metadata,
     )

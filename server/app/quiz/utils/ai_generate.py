@@ -12,6 +12,10 @@ from huggingface_hub import InferenceClient
 from huggingface_hub.inference._providers import get_provider_helper
 
 from server.app.core.config import settings
+from server.app.quiz.repositories.document_rag_repository import (
+    get_cached_document_embeddings,
+    upsert_document_embeddings,
+)
 from server.app.quiz.repositories.token_repository import get_user_token
 from server.app.quiz.utils.chunk_text import TextChunk
 from server.app.quiz.utils.extract_text import ExtractedDocument
@@ -30,6 +34,8 @@ class DocumentQuizGenerationResult:
     retrieval_query: str
     retrieved_chunks: list[RetrievedChunk]
     questions: list[dict[str, Any]]
+    rag_strategy: str
+    embedding_cache_hit: bool
 
 
 async def resolve_document_quiz_token(
@@ -282,6 +288,48 @@ Retrieved chunks:
 """.strip()
 
 
+async def _resolve_chunk_embeddings(
+    *,
+    client: InferenceClient,
+    document: ExtractedDocument,
+    chunks: list[TextChunk],
+) -> tuple[list[list[float]], bool]:
+    if settings.DOCUMENT_RAG_CACHE_ENABLED:
+        cached_embeddings = await get_cached_document_embeddings(
+            document=document,
+            chunks=chunks,
+            embedding_model=settings.HF_EMBEDDING_MODEL,
+            chunk_size_chars=settings.DOCUMENT_CHUNK_SIZE_CHARS,
+            chunk_overlap_chars=settings.DOCUMENT_CHUNK_OVERLAP_CHARS,
+            chunk_limit=settings.DOCUMENT_RAG_MAX_CHUNKS,
+        )
+        if cached_embeddings:
+            return cached_embeddings, True
+
+    chunk_embeddings: list[list[float]] = []
+    for chunk in chunks:
+        chunk_embeddings.append(
+            await _feature_extract_text(
+                client,
+                chunk.content,
+                model=settings.HF_EMBEDDING_MODEL,
+            )
+        )
+
+    if settings.DOCUMENT_RAG_CACHE_ENABLED:
+        await upsert_document_embeddings(
+            document=document,
+            chunks=chunks,
+            chunk_embeddings=chunk_embeddings,
+            embedding_model=settings.HF_EMBEDDING_MODEL,
+            chunk_size_chars=settings.DOCUMENT_CHUNK_SIZE_CHARS,
+            chunk_overlap_chars=settings.DOCUMENT_CHUNK_OVERLAP_CHARS,
+            chunk_limit=settings.DOCUMENT_RAG_MAX_CHUNKS,
+        )
+
+    return chunk_embeddings, False
+
+
 def _extract_first_json_object(raw_text: str) -> dict[str, Any]:
     decoder = json.JSONDecoder()
     for index, character in enumerate(raw_text):
@@ -410,15 +458,11 @@ async def generate_document_quiz_with_rag(
         focus_topic=focus_topic,
     )
 
-    chunk_embeddings = []
-    for chunk in chunks:
-        chunk_embeddings.append(
-            await _feature_extract_text(
-                client,
-                chunk.content,
-                model=settings.HF_EMBEDDING_MODEL,
-            )
-        )
+    chunk_embeddings, embedding_cache_hit = await _resolve_chunk_embeddings(
+        client=client,
+        document=document,
+        chunks=chunks,
+    )
 
     query_embedding = await _feature_extract_text(
         client,
@@ -470,4 +514,6 @@ async def generate_document_quiz_with_rag(
         retrieval_query=retrieval_query,
         retrieved_chunks=retrieved_chunks,
         questions=questions,
+        rag_strategy="persistent_embedding_mmr",
+        embedding_cache_hit=embedding_cache_hit,
     )

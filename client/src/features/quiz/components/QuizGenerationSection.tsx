@@ -21,6 +21,9 @@ export default function QuizGenerationSection({
   documentText,
   setDocumentText,
   documentFileName,
+  documentFileSizeBytes,
+  documentUploadMaxBytes,
+  documentTextLimit,
   onDocumentFileChange,
   audienceType,
   setAudienceType,
@@ -49,6 +52,23 @@ export default function QuizGenerationSection({
     { value: "medium", label: "Medium" },
     { value: "hard", label: "Hard" },
   ];
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) {
+      return `${bytes.toLocaleString()} B`;
+    }
+
+    const units = ["KB", "MB", "GB"];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+  };
 
   useEffect(() => {
     if (!difficultyOpen) return;
@@ -196,8 +216,13 @@ export default function QuizGenerationSection({
                     className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-[#0F2654] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#0a3264]"
                   />
                   <p className="mt-3 text-xs text-gray-500">
+                    Accepted range: 1 byte to{" "}
+                    {documentUploadMaxBytes.toLocaleString()} bytes (
+                    {formatBytes(documentUploadMaxBytes)}).
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
                     {documentFileName
-                      ? `Selected file: ${documentFileName}`
+                      ? `Selected file: ${documentFileName} (${documentFileSizeBytes.toLocaleString()} bytes / ${formatBytes(documentFileSizeBytes)})`
                       : "No file selected yet."}
                   </p>
                 </div>
@@ -210,9 +235,26 @@ export default function QuizGenerationSection({
                     rows={8}
                     value={documentText}
                     onChange={(event) => setDocumentText(event.target.value)}
+                    maxLength={documentTextLimit}
                     placeholder="Paste lecture notes, textbook excerpts, or study material here."
                     className="w-full border border-gray-300 rounded-md px-4 py-3 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
                   />
+                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                    <span>
+                      Max {documentTextLimit.toLocaleString()} characters for
+                      pasted material.
+                    </span>
+                    <span
+                      className={
+                        documentText.length >= documentTextLimit * 0.9
+                          ? "font-semibold text-[#0F2654]"
+                          : ""
+                      }
+                    >
+                      {documentText.length.toLocaleString()} /{" "}
+                      {documentTextLimit.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               )}
 

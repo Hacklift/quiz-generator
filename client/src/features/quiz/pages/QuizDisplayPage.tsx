@@ -51,6 +51,7 @@ const QuizDisplayPage: React.FC = () => {
     retrievedChunks: number;
     sourceCharacters: number;
     ragStrategy: string;
+    embeddingCacheHit: boolean;
   } | null>(null);
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
@@ -111,6 +112,9 @@ const QuizDisplayPage: React.FC = () => {
                 ),
                 ragStrategy:
                   parsedGeneratedQuiz.rag_strategy || "embedding_mmr",
+                embeddingCacheHit: Boolean(
+                  parsedGeneratedQuiz.embedding_cache_hit,
+                ),
               });
             }
             setQuizQuestions(normalizedQuestions);
@@ -436,6 +440,12 @@ const QuizDisplayPage: React.FC = () => {
                   <span className="font-semibold text-[#0F2654]">RAG:</span>{" "}
                   {documentContext.retrievedChunks} of{" "}
                   {documentContext.totalSourceChunks} chunks retrieved
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">Cache:</span>{" "}
+                  {documentContext.embeddingCacheHit
+                    ? "Reused stored document embeddings"
+                    : "Generated fresh document embeddings"}
                 </p>
                 <p>
                   <span className="font-semibold text-[#0F2654]">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
 import {
@@ -11,6 +12,27 @@ import { useAuth } from "@features/auth/context/authContext";
 import { useRouter } from "next/navigation";
 import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
+
+const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const DOCUMENT_TEXT_MAX_CHARS = 50_000;
+const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes.toLocaleString()} B`;
+  }
+
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
 
 export default function QuizForm() {
   const [generationMode, setGenerationMode] = useState<"document" | "topic">(
@@ -44,7 +66,42 @@ export default function QuizForm() {
   const { user, isAuthenticated } = useAuth();
 
   const handleDocumentFileChange = (file: File | null) => {
+    if (!file) {
+      setDocumentFile(null);
+      return;
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension || !SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
+      setDocumentFile(null);
+      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
+      toast.error("Unsupported file type. Upload PDF, DOCX, or TXT.");
+      return;
+    }
+
+    if (file.size <= 0) {
+      setDocumentFile(null);
+      setErrorMessage("The selected file is empty.");
+      toast.error("The selected file is empty.");
+      return;
+    }
+
+    if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
+      setDocumentFile(null);
+      setErrorMessage(
+        `The selected file is too large. Maximum size is ${DOCUMENT_UPLOAD_MAX_BYTES.toLocaleString()} bytes.`,
+      );
+      toast.error(
+        `File too large. Maximum size is ${formatBytes(DOCUMENT_UPLOAD_MAX_BYTES)}.`,
+      );
+      return;
+    }
+
     setDocumentFile(file);
+    setErrorMessage("");
+    toast.success(
+      `${file.name} uploaded successfully. Ready for quiz generation.`,
+    );
   };
 
   useEffect(() => {
@@ -104,6 +161,17 @@ export default function QuizForm() {
       !documentText.trim()
     ) {
       setErrorMessage("Please paste the learning material.");
+      return;
+    }
+
+    if (
+      generationMode === "document" &&
+      documentInputMode === "paste" &&
+      documentText.length > DOCUMENT_TEXT_MAX_CHARS
+    ) {
+      setErrorMessage(
+        `Pasted text is too long. Maximum length is ${DOCUMENT_TEXT_MAX_CHARS.toLocaleString()} characters.`,
+      );
       return;
     }
 
@@ -276,6 +344,9 @@ export default function QuizForm() {
           documentText={documentText}
           setDocumentText={setDocumentText}
           documentFileName={documentFile?.name || ""}
+          documentFileSizeBytes={documentFile?.size || 0}
+          documentUploadMaxBytes={DOCUMENT_UPLOAD_MAX_BYTES}
+          documentTextLimit={DOCUMENT_TEXT_MAX_CHARS}
           onDocumentFileChange={handleDocumentFileChange}
           audienceType={audienceType}
           setAudienceType={setAudienceType}

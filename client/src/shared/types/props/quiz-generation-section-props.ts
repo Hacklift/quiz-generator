@@ -12,6 +12,9 @@ export interface QuizGenerationSectionProps {
   documentText: string;
   setDocumentText: Dispatch<SetStateAction<string>>;
   documentFileName: string;
+  documentFileSizeBytes: number;
+  documentUploadMaxBytes: number;
+  documentTextLimit: number;
   onDocumentFileChange: (file: File | null) => void;
   audienceType: string;
   setAudienceType: Dispatch<SetStateAction<string>>;

@@ -25,10 +25,12 @@ class Settings(BaseSettings):
     HF_QUIZ_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
     HF_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     DOCUMENT_UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024
+    DOCUMENT_TEXT_MAX_CHARS: int = 50_000
     DOCUMENT_RAG_MAX_CHUNKS: int = 24
     DOCUMENT_RAG_TOP_K: int = 8
     DOCUMENT_CHUNK_SIZE_CHARS: int = 1600
     DOCUMENT_CHUNK_OVERLAP_CHARS: int = 220
+    DOCUMENT_RAG_CACHE_ENABLED: bool = True
     QUIZ_V2_WRITE_MODE: Literal["legacy_only", "dual_write", "v2_only"] = "v2_only"
     QUIZ_V2_FAIL_OPEN: bool = True
     QUIZ_V2_STRUCTURED_LOGGING: bool = True

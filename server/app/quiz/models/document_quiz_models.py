@@ -30,3 +30,4 @@ class DocumentQuizResponse(BaseModel):
     retrieved_chunks: int
     retrieval_query: str
     rag_strategy: str = "embedding_mmr"
+    embedding_cache_hit: Optional[bool] = False
