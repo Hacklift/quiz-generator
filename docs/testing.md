@@ -130,6 +130,10 @@ The frontend uses:
 At the time of writing:
 
 * One frontend test suite is currently passing.
+- **Passing**: QuizAnswerField.test.tsx (2 tests)
+- **Failing**: 4 test suites (outdated import paths)
+- **Total test files**: 9
+- **Currently failing**: All (missing dependencies)
 * Several test suites fail due to outdated import paths.
 
 Recommended actions:
