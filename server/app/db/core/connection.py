@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 
 import os
+import logging
 
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
@@ -8,6 +9,7 @@ from server.app.quiz.repositories.v2.setup import ensure_v2_collections_and_vali
 from server.app.users.validators import ensure_user_collections
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 FERNET_KEY = os.getenv("FERNET_KEY")
@@ -107,6 +109,11 @@ async def startUp():
         saved_quizzes_v2_collection,
         quiz_history_v2_collection,
     )
+    from server.app.quiz.services.quiz_user_library_service import QuizUserLibraryService
+
+    backfilled_folder_items = await QuizUserLibraryService().backfill_folder_item_saved_quiz_ids()
+    if backfilled_folder_items:
+        logger.info("Backfilled saved_quiz_id onto %s folder items.", backfilled_folder_items)
 
 def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:

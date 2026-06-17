@@ -38,6 +38,8 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: ASSISTANT_INTERNAL_MCP_SECRET
+        sync: false
       - key: MONGO_URL
         sync: false
       - key: HUGGINGFACEHUB_API_TOKEN
@@ -51,6 +53,12 @@ services:
       - key: MAILGUN_SENDER_EMAIL
         sync: false
       - key: PRIMARY_EMAIL_PROVIDER
+        sync: false
+      - key: PORT
+        value: "10000"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
         sync: false
 
     plan: free

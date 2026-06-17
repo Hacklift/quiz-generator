@@ -11,6 +11,19 @@ import { DownloadQuizProps } from "@shared/types/props";
 
 type FileFormat = "txt" | "json" | "pdf" | "docx";
 
+const buildDownloadFilename = (
+  title: string | undefined,
+  questionType: string,
+  format: FileFormat,
+) => {
+  const baseName = (title || `${questionType} quiz` || "Quiz").trim();
+  const safeName = baseName
+    .replace(/[\\/:*?"<>|\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${safeName || "Quiz"}.${format}`;
+};
+
 export default function DownloadQuizButton({
   quizId,
   question_type,
@@ -89,7 +102,7 @@ export default function DownloadQuizButton({
 
         downloadBlob(
           new Blob([response.data]),
-          `${question_type}-quiz.${selectedFormat}`,
+          buildDownloadFilename(title, question_type, selectedFormat),
           response.headers["content-disposition"],
         );
       } else {
@@ -117,7 +130,7 @@ export default function DownloadQuizButton({
 
         downloadBlob(
           new Blob([response.data]),
-          `${question_type}-quiz.${selectedFormat}`,
+          buildDownloadFilename(title, question_type, selectedFormat),
           response.headers["content-disposition"],
         );
       }

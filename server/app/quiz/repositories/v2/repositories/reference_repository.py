@@ -227,6 +227,11 @@ class ReferenceV2Repository:
                 or target_match.get("display_title")
                 or legacy_match.get("display_title")
             )
+            merged_saved_quiz_id = (
+                payload.get("saved_quiz_id")
+                or target_match.get("saved_quiz_id")
+                or legacy_match.get("saved_quiz_id")
+            )
             merged_deleted_at = target_match.get("deleted_at")
             if revive_deleted:
                 merged_deleted_at = None
@@ -238,6 +243,7 @@ class ReferenceV2Repository:
                         "created_at": merged_created_at,
                         "position": merged_position,
                         "display_title": merged_display_title,
+                        "saved_quiz_id": merged_saved_quiz_id,
                         "legacy_folder_item_id": target_legacy_item_id or folder_item.legacy_folder_item_id,
                         "deleted_at": merged_deleted_at,
                     }
@@ -255,6 +261,7 @@ class ReferenceV2Repository:
                 payload["legacy_folder_item_id"] = target_match["legacy_folder_item_id"]
             payload["position"] = self._merge_position(payload.get("position"), target_match.get("position"))
             payload["display_title"] = payload.get("display_title") or target_match.get("display_title")
+            payload["saved_quiz_id"] = payload.get("saved_quiz_id") or target_match.get("saved_quiz_id")
         else:
             filter_query = (
                 {"legacy_folder_item_id": folder_item.legacy_folder_item_id}
@@ -324,6 +331,7 @@ class ReferenceV2Repository:
         *,
         folder_id: Optional[str] = None,
         quiz_id: Optional[str] = None,
+        saved_quiz_id: Optional[str] = None,
         added_by: Optional[str] = None,
         position: Optional[int] = None,
         display_title: Optional[str] = None,
@@ -333,6 +341,7 @@ class ReferenceV2Repository:
             for key, value in {
                 "folder_id": folder_id,
                 "quiz_id": quiz_id,
+                "saved_quiz_id": saved_quiz_id,
                 "added_by": added_by,
                 "position": position,
                 "display_title": display_title,
@@ -348,6 +357,71 @@ class ReferenceV2Repository:
         except InvalidId:
             return None
         return FolderItemDocumentV2(**updated) if updated else None
+
+    async def backfill_folder_item_saved_quiz_ids(self, *, limit: int = 100_000) -> int:
+        documents = await self.folder_items_collection.find(
+            {
+                "$and": [
+                    {
+                        "$or": [
+                            {"saved_quiz_id": {"$exists": False}},
+                            {"saved_quiz_id": None},
+                            {"saved_quiz_id": ""},
+                        ]
+                    },
+                    self._active_query(),
+                ]
+            }
+        ).to_list(length=limit)
+        if not documents:
+            return 0
+
+        folder_ids = sorted({document.get("folder_id") for document in documents if document.get("folder_id")})
+        folders = await self.folders_collection.find(
+            {"$and": [{"_id": {"$in": [ObjectId(folder_id) for folder_id in folder_ids if ObjectId.is_valid(folder_id)]}}, self._active_query()]}
+        ).to_list(length=len(folder_ids))
+        user_by_folder_id = {str(folder["_id"]): folder.get("user_id") for folder in folders}
+
+        user_quiz_pairs = {
+            (user_by_folder_id.get(document.get("folder_id")), document.get("quiz_id"))
+            for document in documents
+            if user_by_folder_id.get(document.get("folder_id")) and document.get("quiz_id")
+        }
+        if not user_quiz_pairs:
+            return 0
+
+        saved_queries = [
+            {"user_id": user_id, "quiz_id": quiz_id}
+            for user_id, quiz_id in user_quiz_pairs
+            if user_id and quiz_id
+        ]
+        saved_documents = await self.saved_quizzes_collection.find(
+            {"$and": [{"$or": saved_queries}, self._active_query()]}
+        ).to_list(length=len(saved_queries))
+        saved_by_user_quiz = {
+            (document.get("user_id"), document.get("quiz_id")): str(document["_id"])
+            for document in saved_documents
+        }
+
+        updated_count = 0
+        for document in documents:
+            user_id = user_by_folder_id.get(document.get("folder_id"))
+            saved_quiz_id = saved_by_user_quiz.get((user_id, document.get("quiz_id")))
+            if not saved_quiz_id:
+                continue
+            result = await self.folder_items_collection.update_one(
+                {
+                    "_id": document["_id"],
+                    "$or": [
+                        {"saved_quiz_id": {"$exists": False}},
+                        {"saved_quiz_id": None},
+                        {"saved_quiz_id": ""},
+                    ],
+                },
+                {"$set": {"saved_quiz_id": saved_quiz_id}},
+            )
+            updated_count += result.modified_count
+        return updated_count
 
     async def delete_folder_item_by_id(self, folder_item_id: str):
         try:
@@ -447,6 +521,23 @@ class ReferenceV2Repository:
         documents = await self.saved_quizzes_collection.find(
             {"$and": [{"user_id": user_id}, self._active_query()]}
         ).to_list(length=limit)
+        return [SavedQuizDocumentV2(**document) for document in documents]
+
+    async def list_saved_quizzes_by_ids(
+        self,
+        saved_quiz_ids: list[str],
+        *,
+        user_id: Optional[str] = None,
+    ) -> list[SavedQuizDocumentV2]:
+        object_ids = [ObjectId(saved_quiz_id) for saved_quiz_id in saved_quiz_ids if ObjectId.is_valid(saved_quiz_id)]
+        if not object_ids:
+            return []
+        query: dict[str, object] = {"_id": {"$in": object_ids}}
+        if user_id is not None:
+            query["user_id"] = user_id
+        documents = await self.saved_quizzes_collection.find(
+            {"$and": [query, self._active_query()]}
+        ).to_list(length=len(object_ids))
         return [SavedQuizDocumentV2(**document) for document in documents]
 
     async def get_saved_quiz_by_legacy_id(

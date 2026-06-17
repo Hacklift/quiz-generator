@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 import SplashScreen from "@app/components/SplashScreen";
 import { AuthProvider } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
+import AssistantLauncher from "@features/assistant/components/AssistantLauncher";
 import { ROUTES } from "@shared/config/patterns/routes";
 import EmailVerificationBanner from "@features/auth/components/EmailVerificationBanner";
 import "@shared/styles/global.css";
@@ -33,6 +34,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
       <EmailVerificationBanner />
 
       <Component {...pageProps} openLoginModal={openSignInModal} />
+      <AssistantLauncher />
 
       <SignInModal
         isOpen={showSignInModal}
