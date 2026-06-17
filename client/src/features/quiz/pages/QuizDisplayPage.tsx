@@ -13,10 +13,8 @@ import {
   ShareButton,
   SaveQuizButton,
 } from "@features/quiz/components";
-import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
-import { TokenService } from "@shared/auth/tokenService";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 
 const QuizDisplayPage: React.FC = () => {
@@ -24,16 +22,7 @@ const QuizDisplayPage: React.FC = () => {
   const savedQuizId = searchParams?.get("savedId") || searchParams?.get("id");
   const canonicalQuizId = searchParams?.get("quizId") || "";
   const questionType = searchParams?.get("questionType") || "multichoice";
-  const numQuestions = Number(searchParams?.get("numQuestions")) || 1;
-  const profession = searchParams?.get("profession") || "general knowledge";
-  const difficultyLevel = searchParams?.get("difficultyLevel") || "easy";
-  const audienceType = searchParams?.get("audienceType") || "students";
-  const customInstruction = searchParams?.get("customInstruction") || "";
-  const token = searchParams?.get("token") || "";
-  const liveQuizRequested = searchParams?.get("liveQuiz") === "true";
-  const liveDurationMinutes =
-    Number(searchParams?.get("liveDurationMinutes")) || 20;
-  const liveAccessExpiresAt = searchParams?.get("liveAccessExpiresAt") || "";
+  const source = searchParams?.get("source") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
@@ -42,163 +31,130 @@ const QuizDisplayPage: React.FC = () => {
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
+  const [activeQuestionType, setActiveQuestionType] = useState(questionType);
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const hasFetchedRef = useRef(false); 
+  const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+    const fetchKey = JSON.stringify({
+      savedQuizId,
+      canonicalQuizId,
+      questionType,
+      source,
+    });
+    if (lastFetchKeyRef.current === fetchKey) return;
+    lastFetchKeyRef.current = fetchKey;
 
     const fetchQuizQuestions = async () => {
       try {
         setIsLoading(true);
-        let questions: any[] = [];
-        let resolvedQuizId = "";
+        const applyQuizData = (
+          quizData: any,
+          options: {
+          successMessage?: string;
+          clearGeneratedSession?: boolean;
+          clearSavedLocal?: boolean;
+          } = {},
+        ) => {
+          const {
+            successMessage,
+            clearGeneratedSession = false,
+            clearSavedLocal = false,
+          } = options;
+          const rawQuestions = Array.isArray(quizData?.questions)
+            ? quizData.questions
+            : Array.isArray(quizData?.quiz_data?.questions)
+              ? quizData.quiz_data.questions
+              : [];
+          if (!rawQuestions.length) {
+            throw new Error("No quiz questions found.");
+          }
+
+          const resolvedQuestionType =
+            quizData?.question_type || quizData?.quiz_type || questionType;
+          const normalizedQuestions = rawQuestions.map((q: any) => ({
+            ...q,
+            answer: q.answer || q.correct_answer,
+            question_type: q.question_type || resolvedQuestionType,
+          }));
+
+          setQuizTitle(
+            quizData?.title ||
+              `${resolvedQuestionType.charAt(0).toUpperCase() + resolvedQuestionType.slice(1)} Quiz`,
+          );
+          setQuizDescription(quizData?.description || "");
+          setActiveQuestionType(resolvedQuestionType);
+          setQuizQuestions(normalizedQuestions);
+          setUserAnswers(Array(normalizedQuestions.length).fill(""));
+          if (quizData?.quiz_id || quizData?.id || canonicalQuizId) {
+            setQuizId(quizData?.quiz_id || quizData?.id || canonicalQuizId);
+          }
+          if (quizData?.access_code) {
+            setLiveAccessCode(quizData.access_code);
+            setLiveAccessUrl(`${window.location.origin}/quiz-access/${quizData.access_code}`);
+          }
+          if (clearGeneratedSession) {
+            sessionStorage.removeItem("generated_quiz_view");
+          }
+          if (clearSavedLocal) {
+            localStorage.removeItem("saved_quiz_view");
+          }
+          if (successMessage) {
+            toast.success(successMessage);
+          }
+        };
 
         // ✅ Step 1: Check if a saved quiz was passed via localStorage
         const storedQuiz = localStorage.getItem("saved_quiz_view");
 
         if (storedQuiz) {
           const parsedQuiz = JSON.parse(storedQuiz);
-          const storedQuestions = Array.isArray(parsedQuiz?.questions)
-            ? parsedQuiz.questions
-            : Array.isArray(parsedQuiz?.quiz_data?.questions)
-              ? parsedQuiz.quiz_data.questions
-              : [];
+          applyQuizData(parsedQuiz, {
+            successMessage: `Loaded saved quiz: ${parsedQuiz.title || "Quiz"}`,
+            clearSavedLocal: true,
+          });
+          setIsLoading(false);
+          return;
+        }
 
-          if (storedQuestions.length > 0) {
-            const resolvedStoredQuizId =
-              parsedQuiz?.quiz_id || canonicalQuizId || "";
-            setQuizTitle(
-              parsedQuiz?.title ||
-                `${parsedQuiz?.question_type || questionType} Quiz`,
-            );
-            setQuizDescription(parsedQuiz?.description || "");
-            const normalizedQuestions = storedQuestions.map((q: any) => ({
-              ...q,
-              answer: q.answer || q.correct_answer,
-              question_type: q.question_type || questionType,
-            }));
-            setQuizQuestions(normalizedQuestions);
-            setUserAnswers(Array(normalizedQuestions.length).fill(""));
-            if (resolvedStoredQuizId) {
-              setQuizId(resolvedStoredQuizId);
-            }
-            toast.success(`Loaded saved quiz: ${parsedQuiz.title}`);
-            localStorage.removeItem("saved_quiz_view");
-            setIsLoading(false);
-            return;
+        if (source === "generated-session") {
+          const generatedQuiz = sessionStorage.getItem("generated_quiz_view");
+          if (!generatedQuiz) {
+            throw new Error("Generated quiz data is unavailable.");
           }
+          applyQuizData(JSON.parse(generatedQuiz), {
+            successMessage: "Loaded generated quiz successfully!",
+            clearGeneratedSession: true,
+          });
+          setIsLoading(false);
+          return;
         }
 
         // ✅ Step 2: If there’s a savedQuizId in URL, fetch from API
         if (savedQuizId) {
           const { data } = await api.get(`/api/saved-quizzes/${savedQuizId}`);
-
-          if (!data || !data.questions || data.questions.length === 0) {
-            throw new Error("No questions found for this saved quiz.");
-          }
-
-          questions = data.questions.map((q: any) => ({
-            ...q,
-            answer: q.answer || q.correct_answer,
-            question_type: q.question_type || questionType,
-          }));
-          setQuizTitle(
-            data.title || `${data.question_type || questionType} Quiz`,
-          );
-          setQuizDescription(data.description || "");
-          const resolvedSavedQuizId = data.quiz_id || canonicalQuizId || "";
-          setQuizId(resolvedSavedQuizId);
-          resolvedQuizId = resolvedSavedQuizId;
-          toast.success("Loaded saved quiz successfully!");
-        } else {
-          // ✅ Step 3: Fallback — generate a new quiz
-          const basePayload = {
-            question_type: questionType,
-            num_questions: numQuestions,
-            profession,
-            difficulty_level: difficultyLevel,
-            audience_type: audienceType,
-            custom_instruction: customInstruction,
-            token,
-            live_quiz_enabled: liveQuizRequested,
-            time_limit_minutes: liveQuizRequested
-              ? liveDurationMinutes
-              : undefined,
-            access_code_expires_at: liveQuizRequested
-              ? liveAccessExpiresAt
-              : undefined,
-          };
-
-          const client = liveQuizRequested ? api : publicApi;
-          const { data } = await client.post(
-            "/api/get-questions",
-            basePayload,
-          );
-
-          if (data?.quiz_id && !data?.ai_down) {
-            setQuizId(data.quiz_id);
-            resolvedQuizId = data.quiz_id;
-          }
-          if (data?.access_code) {
-            setLiveAccessCode(data.access_code);
-            setLiveAccessUrl(`${window.location.origin}/quiz-access/${data.access_code}`);
-            toast.success("Live quiz access code generated!");
-          }
-          if (data?.ai_down) {
-            toast.error(data.notification_message || "AI model unavailable.", {
-              duration: 4000,
-            });
-            setQuizId("");
-            resolvedQuizId = "";
-          }
-
-          questions =
-            data?.questions?.map((q: any) => ({
-              ...q,
-              question_type: q.question_type || questionType,
-            })) || [];
-          setQuizTitle(
-            `${profession || questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`,
-          );
-          setQuizDescription(
-            customInstruction ||
-              `A ${difficultyLevel} ${questionType} quiz for ${audienceType}.`,
-          );
-          if (!Array.isArray(questions) || questions.length === 0) {
-            throw new Error("No quiz questions returned.");
-          }
-
-          toast.success("Generated new quiz successfully!");
+          applyQuizData(data, {
+            successMessage: "Loaded saved quiz successfully!",
+          });
+          setIsLoading(false);
+          return;
         }
 
-        setQuizQuestions(questions);
-        setUserAnswers(Array(questions.length).fill(""));
-
-        if (!savedQuizId && TokenService.hasTokens()) {
-          try {
-            await saveQuizToHistory(
-              {
-                quiz_id: resolvedQuizId || undefined,
-                question_type: questionType,
-                num_questions: numQuestions,
-                difficulty_level: difficultyLevel,
-                profession: profession,
-                audience_type: audienceType,
-                custom_instruction: customInstruction,
-              },
-              questions,
-            );
-          } catch (err) {
-            console.error("Error saving quiz history:", err);
-          }
+        if (canonicalQuizId) {
+          const { data } = await api.get(`/api/quizzes/${canonicalQuizId}`);
+          applyQuizData(data, {
+            successMessage: "Loaded quiz successfully!",
+          });
+          setIsLoading(false);
+          return;
         }
+
+        throw new Error("Quiz data is unavailable.");
       } catch (error: any) {
         console.error("❌ Failed to fetch quiz questions:", error);
-        toast.error(error.message || "Failed to fetch quiz questions.");
+        toast.error(error.message || "Failed to load quiz questions.");
         setQuizQuestions([]);
         setUserAnswers([]);
       } finally {
@@ -211,15 +167,7 @@ const QuizDisplayPage: React.FC = () => {
     savedQuizId,
     canonicalQuizId,
     questionType,
-    numQuestions,
-    profession,
-    difficultyLevel,
-    audienceType,
-    customInstruction,
-    token,
-    liveQuizRequested,
-    liveDurationMinutes,
-    liveAccessExpiresAt,
+    source,
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
@@ -308,7 +256,7 @@ const QuizDisplayPage: React.FC = () => {
           {/* Quiz Questions */}
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
-              {`${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
+              {quizTitle || `${activeQuestionType.charAt(0).toUpperCase() + activeQuestionType.slice(1)} Quiz`}
             </h1>
 
             <div className="space-y-6">
@@ -336,8 +284,8 @@ const QuizDisplayPage: React.FC = () => {
               <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
-                question_type={questionType}
-                numQuestion={numQuestions}
+                question_type={activeQuestionType}
+                numQuestion={quizQuestions.length}
                 quizData={quizQuestions}
                 title={quizTitle}
                 description={quizDescription}

@@ -9,12 +9,41 @@ def render_email(template_id: str, to: str, vars: dict) -> MIMEText:
     Returns a MIMEText with Subject/From/To set.
     Supported template vars:
       - quiz_link:      title, description, link
+      - live_quiz_invite: title, link, message, time_limit_minutes, access_code_expires_at
       - verification:   code, token  (renderer builds verify_link)
       - password_reset: code, token  (renderer builds reset_link)
       - custom:         subject, body
     """
     if template_id == "quiz_link":
         return compose_quiz_email(to, vars["title"], vars["description"], vars["link"])
+
+    if template_id == "live_quiz_invite":
+        title = vars.get("title", "Live Quiz")
+        link = vars.get("link", "")
+        message = vars.get("message", "").strip()
+        time_limit_minutes = vars.get("time_limit_minutes", "")
+        access_code_expires_at = vars.get("access_code_expires_at", "")
+        subject = f"You're invited to take a live quiz: {title}"
+        details = []
+        if time_limit_minutes:
+            details.append(f"Quiz duration: {time_limit_minutes} minutes")
+        if access_code_expires_at:
+            details.append(f"Access expires: {access_code_expires_at}")
+        details_text = "\n".join(details)
+        body = f"""You've been invited to take a live quiz on Quiz Generator.
+
+Quiz: {title}
+{message + chr(10) if message else ""}
+Open the live quiz link:
+{link}
+
+{details_text}
+"""
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = to
+        return msg
 
     if template_id == "verification":
         code  = vars.get("code", "")

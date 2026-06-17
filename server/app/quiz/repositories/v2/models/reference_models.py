@@ -43,6 +43,7 @@ class FolderItemDocumentV2(BaseModel):
     id: ObjectId = Field(default_factory=ObjectId, alias="_id")
     folder_id: str
     quiz_id: str
+    saved_quiz_id: Optional[str] = None
     added_by: Optional[str] = None
     position: Optional[int] = None
     display_title: Optional[str] = None
