@@ -268,7 +268,7 @@ export const liveQuizService = {
       try {
         onEvent(JSON.parse(message.data));
       } catch {
-        // Ignore malformed websocket payloads; polling fallback stays active.
+        // Ignore malformed websocket payloads.
       }
     };
     socket.onclose = () => {
