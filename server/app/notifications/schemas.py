@@ -57,6 +57,10 @@ class NotificationListResponse(BaseModel):
     has_more: bool
 
 
+class NotificationUnreadCountResponse(BaseModel):
+    unread_count: int
+
+
 class NotificationMutationResponse(BaseModel):
     message: str
 

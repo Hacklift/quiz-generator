@@ -19,6 +19,7 @@ from server.app.notifications.schemas import (
     NotificationListResponse,
     NotificationMutationResponse,
     NotificationResponse,
+    NotificationUnreadCountResponse,
 )
 from server.app.users.models import UserOut
 
@@ -46,6 +47,14 @@ async def get_notifications_for_user(
         unread_count=unread_count,
         has_more=has_more,
     )
+
+
+async def get_unread_count_for_user(
+    notifications_collection: AsyncIOMotorCollection,
+    user: UserOut,
+) -> NotificationUnreadCountResponse:
+    unread_count = await count_unread_notifications(notifications_collection, user.id)
+    return NotificationUnreadCountResponse(unread_count=unread_count)
 
 
 async def create_admin_notification(

@@ -12,6 +12,7 @@ from server.app.notifications.schemas import (
     NotificationListResponse,
     NotificationMutationResponse,
     NotificationResponse,
+    NotificationUnreadCountResponse,
 )
 from server.app.users.models import UserOut
 from server.app.notifications.services import (
@@ -19,6 +20,7 @@ from server.app.notifications.services import (
     create_admin_notification,
     delete_user_notification,
     get_notifications_for_user,
+    get_unread_count_for_user,
     mark_user_notification_read,
     mark_user_notifications_read,
 )
@@ -40,6 +42,17 @@ async def get_notifications(
         user=current_user,
         limit=limit,
         skip=skip,
+    )
+
+
+@router.get("/unread-count", response_model=NotificationUnreadCountResponse)
+async def get_unread_count(
+    current_user: UserOut = Depends(get_current_user),
+    notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
+):
+    return await get_unread_count_for_user(
+        notifications_collection=notifications_collection,
+        user=current_user,
     )
 
 
