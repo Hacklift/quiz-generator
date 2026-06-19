@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Any
 
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 
 
 class LiveQuizRealtimeBroadcaster:
@@ -25,7 +26,7 @@ class LiveQuizRealtimeBroadcaster:
         stale: list[WebSocket] = []
         for websocket in connections:
             try:
-                await websocket.send_json(event)
+                await websocket.send_json(jsonable_encoder(event))
             except Exception:
                 stale.append(websocket)
 

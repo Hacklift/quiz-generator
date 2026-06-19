@@ -3,6 +3,7 @@ from typing import List, Optional
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
@@ -311,11 +312,11 @@ async def live_quiz_participants_ws(
     await live_quiz_realtime_broadcaster.connect(quiz_id, websocket)
     try:
         await websocket.send_json(
-            {
+            jsonable_encoder({
                 "type": "participants_snapshot",
                 "quiz_id": quiz_id,
                 "participants": rows,
-            }
+            })
         )
         while True:
             await websocket.receive_text()

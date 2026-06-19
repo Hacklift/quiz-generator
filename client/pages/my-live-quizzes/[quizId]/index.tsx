@@ -12,8 +12,6 @@ interface LiveQuizCreatorDashboardProps {
   quizId: string;
 }
 
-const POLL_INTERVAL_MS = 5000;
-
 const statusBadgeColor: Record<string, string> = {
   joined: "bg-gray-100 text-gray-700",
   in_progress: "bg-blue-100 text-blue-700",
@@ -59,7 +57,6 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
 
@@ -122,16 +119,8 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
       },
     );
 
-    intervalRef.current = setInterval(() => {
-      fetchParticipants(false);
-    }, POLL_INTERVAL_MS);
-
     return () => {
       mountedRef.current = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
@@ -140,13 +129,7 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
   }, [fetchParticipants, quizId, upsertParticipant]);
 
   const handleRefreshClick = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
     fetchParticipants(true);
-    intervalRef.current = setInterval(() => {
-      fetchParticipants(false);
-    }, POLL_INTERVAL_MS);
   };
 
   if (loading) {
@@ -206,7 +189,7 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
                   realtimeConnected ? "text-green-700" : "text-amber-700"
                 }
               >
-                {realtimeConnected ? "Real time" : "Polling fallback"}
+                {realtimeConnected ? "Real time" : "Connecting"}
               </span>
             </p>
           </div>
