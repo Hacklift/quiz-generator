@@ -83,7 +83,7 @@ User's saved quiz library.
 | POST | `/api/saved-quizzes/` | Save a quiz to library | Yes |
 | GET | `/api/saved-quizzes/{quiz_id}` | Get saved quiz by ID | Yes |
 | DELETE | `/api/saved-quizzes/{quiz_id}` | Remove saved quiz | Yes |
-| PUT | `/api/saved-quizzes/{quiz_id}/rename` | Rename saved quiz | Yes |
+| PATCH | `/api/saved-quizzes/{quiz_id}/rename` | Rename saved quiz | Yes |
 
 ---
 
