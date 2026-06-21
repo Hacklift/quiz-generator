@@ -27,55 +27,86 @@ The platform allows users to:
 
 # 🏗️ Project Architecture
 
-```text
-# 🏗️ Project Architecture
-
 ```
 quiz-generator/
 ├── client/                           # Next.js frontend
-│   ├── components/                   # Reusable UI components
-│   ├── constants/                    # App constants
-│   ├── contexts/                     # React contexts (auth, etc.)
-│   ├── hooks/                        # Custom React hooks
-│   ├── interfaces/                   # TypeScript interfaces
-│   ├── layouts/                      # Layout components
-│   ├── lib/                          # API utilities & helpers
 │   ├── pages/                        # Next.js routes
-│   │   ├── index.tsx                 # Homepage
-│   │   ├── generate/                 # Quiz generation
-│   │   ├── quiz_history/             # Quiz history
-│   │   ├── folders/                  # Folder management
+│   │   ├── admin/                    # Admin pages
 │   │   ├── auth/                     # Authentication pages
-│   │   ├── company.tsx               # Company page
-│   │   ├── terms.tsx                 # Terms of service
-│   │   ├── privacy.tsx               # Privacy policy
-│   │   └── contact.tsx               # Contact page
+│   │   ├── folders/                  # Folder management
+│   │   ├── generate/                 # Quiz generation
+│   │   ├── live-quiz/                # Live quiz sessions
+│   │   ├── popular/                  # Popular quizzes
+│   │   ├── quiz-access/              # Quiz access
+│   │   ├── quiz_display/             # Quiz display
+│   │   ├── quiz_history/             # Quiz history
+│   │   ├── saved_quiz/               # Saved quizzes
+│   │   ├── share/                    # Quiz sharing
+│   │   ├── _app.tsx                  # App wrapper
+│   │   ├── _document.tsx             # Document wrapper
+│   │   ├── index.tsx                 # Homepage
+│   │   ├── notifications.tsx         # Notifications page
+│   │   ├── profile.tsx               # User profile
+│   │   └── quiz.tsx                  # Quiz page
+│   ├── src/                          # Source files
+│   │   ├── app/                      # App-level code
+│   │   ├── features/                 # Domain features
+│   │   └── shared/                   # Shared utilities
 │   ├── public/                       # Static assets
-│   └── src/                          # Additional source files
+│   ├── __tests__/                    # Frontend tests
+│   └── config files                  # Config files
 │
 ├── server/                           # FastAPI backend
-│   ├── api/                          # API route handlers
-│   │   └── v1/                       # API version 1
 │   ├── app/                          # Core application
-│   │   ├── auth/                     # Authentication logic
+│   │   ├── api/                      # API routes
+│   │   ├── auth/                     # Authentication
+│   │   ├── core/                     # Shared infrastructure
 │   │   ├── db/                       # Database layer
-│   │   │   ├── models/               # MongoDB models
+│   │   │   ├── core/                 # DB core
 │   │   │   ├── crud/                 # CRUD operations
-│   │   │   ├── routes/               # Database API routes
-│   │   │   ├── seed_data/            # Seed data categories
-│   │   │   └── v2/                   # Database version 2
+│   │   │   ├── models/               # MongoDB models
+│   │   │   ├── routes/               # DB routes
+│   │   │   ├── schemas/              # DB schemas
+│   │   │   ├── seed_data/            # Seed data
+│   │   │   ├── services/             # DB services
+│   │   │   └── v2/                   # Database v2
 │   │   ├── email_platform/           # Email services
-│   │   └── quiz/                     # Quiz generation engine
+│   │   ├── notifications/            # Notifications module
+│   │   ├── quiz/                     # Quiz module
+│   │   │   ├── mock_data/            # Mock data
+│   │   │   ├── models/               # Quiz models
+│   │   │   ├── repositories/         # Quiz repositories
+│   │   │   ├── routers/              # Quiz routers
+│   │   │   ├── routes/               # Quiz routes
+│   │   │   ├── schemas/              # Quiz schemas
+│   │   │   ├── seed_data/            # Quiz seed data
+│   │   │   ├── services/             # Quiz services
+│   │   │   └── utils/                # Quiz utilities
+│   │   ├── schemas/                  # Pydantic schemas
+│   │   ├── services/                 # Business logic
+│   │   ├── share/                    # Quiz sharing
+│   │   ├── users/                    # Users module
+│   │   ├── databaseSeeding.py        # DB seeding
+│   │   ├── restoreDataSeed.py        # Restore seed
+│   │   ├── seed.py                   # Seed script
+│   │   └── seed_data.py              # Seed data
+│   ├── api/                          # API route handlers
 │   ├── core/                         # Core utilities
 │   ├── schemas/                      # Pydantic schemas
 │   ├── scripts/                      # Helper scripts
 │   ├── tests/                        # Backend tests
 │   └── main.py                       # FastAPI entry point
 │
+├── docs/                             # Documentation
+│   ├── API.md                        # API documentation
+│   └── testing.md                    # Testing guide
+│
 ├── docker-compose.yml                # Container orchestration
+├── Dockerfile                        # Main Dockerfile
+├── Dockerfile.mongo                  # MongoDB Dockerfile
+├── README.md                         # This file
 ├── .env-example                      # Example environment variables
 └── generator.py                      # Utility scripts
-```
 ```
 
 ---
