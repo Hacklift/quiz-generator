@@ -28,38 +28,54 @@ The platform allows users to:
 # 🏗️ Project Architecture
 
 ```text
+# 🏗️ Project Architecture
+
+```
 quiz-generator/
-├── client/                     # Next.js frontend
-│   ├── components/             # Reusable UI components
-│   ├── contexts/               # React contexts
-│   ├── hooks/                  # Custom hooks
-│   ├── lib/                    # API utilities & helpers
-│   ├── pages/                  # Next.js routes
-│   │   ├── index.tsx
-│   │   ├── generate/
-│   │   ├── quiz_history/
-│   │   ├── folders/
-│   │   └── auth/
-│   └── public/                 # Static assets
+├── client/                           # Next.js frontend
+│   ├── components/                   # Reusable UI components
+│   ├── constants/                    # App constants
+│   ├── contexts/                     # React contexts (auth, etc.)
+│   ├── hooks/                        # Custom React hooks
+│   ├── interfaces/                   # TypeScript interfaces
+│   ├── layouts/                      # Layout components
+│   ├── lib/                          # API utilities & helpers
+│   ├── pages/                        # Next.js routes
+│   │   ├── index.tsx                 # Homepage
+│   │   ├── generate/                 # Quiz generation
+│   │   ├── quiz_history/             # Quiz history
+│   │   ├── folders/                  # Folder management
+│   │   ├── auth/                     # Authentication pages
+│   │   ├── company.tsx               # Company page
+│   │   ├── terms.tsx                 # Terms of service
+│   │   ├── privacy.tsx               # Privacy policy
+│   │   └── contact.tsx               # Contact page
+│   ├── public/                       # Static assets
+│   └── src/                          # Additional source files
 │
-├── server/                     # FastAPI backend
-│   ├── api/                    # API route handlers
-│   │   └── v1/
-│   ├── app/
-│   │   ├── auth/               # Authentication logic
-│   │   ├── db/
-│   │   │   ├── models/
-│   │   │   ├── crud/
-│   │   │   └── routes/
-│   │   ├── email_platform/     # Email services
-│   │   └── quiz/               # Quiz generation engine
-│   ├── schemas/                # Pydantic schemas
-│   ├── tests/
-│   └── main.py                 # FastAPI entry point
+├── server/                           # FastAPI backend
+│   ├── api/                          # API route handlers
+│   │   └── v1/                       # API version 1
+│   ├── app/                          # Core application
+│   │   ├── auth/                     # Authentication logic
+│   │   ├── db/                       # Database layer
+│   │   │   ├── models/               # MongoDB models
+│   │   │   ├── crud/                 # CRUD operations
+│   │   │   ├── routes/               # Database API routes
+│   │   │   ├── seed_data/            # Seed data categories
+│   │   │   └── v2/                   # Database version 2
+│   │   ├── email_platform/           # Email services
+│   │   └── quiz/                     # Quiz generation engine
+│   ├── core/                         # Core utilities
+│   ├── schemas/                      # Pydantic schemas
+│   ├── scripts/                      # Helper scripts
+│   ├── tests/                        # Backend tests
+│   └── main.py                       # FastAPI entry point
 │
-├── docker-compose.yml
-├── .env-example
-└── generator.py
+├── docker-compose.yml                # Container orchestration
+├── .env-example                      # Example environment variables
+└── generator.py                      # Utility scripts
+```
 ```
 
 ---
