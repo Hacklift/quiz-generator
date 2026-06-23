@@ -18,11 +18,13 @@ cd quiz-generator/server
 ```
 
 ### 2. Create virtual enviroment
+
 Ensure you are in the server directory then run the following command
 
 ```bash
 python -m venv .venv
 ```
+
 ```bash
 source .venv/bin/activate
 ```
@@ -53,6 +55,18 @@ STRIPE_SECRET_KEY=sk_test_replace_me
 STRIPE_WEBHOOK_SECRET=whsec_replace_me
 STRIPE_PRICE_ID_MONTHLY=price_replace_monthly
 STRIPE_PRICE_ID_YEARLY=price_replace_yearly
+```
+
+For document-based quiz generation with RAG, configure:
+
+```plaintext
+HUGGINGFACEHUB_API_TOKEN=hf_replace_with_your_token
+HF_QUIZ_MODEL=Qwen/Qwen2.5-7B-Instruct
+HF_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+DOCUMENT_UPLOAD_MAX_BYTES=10485760
+DOCUMENT_TEXT_MAX_CHARS=50000
+DOCUMENT_RAG_MAX_CHUNKS=24
+DOCUMENT_RAG_TOP_K=8
 ```
 
 ### 5. Run the Application
