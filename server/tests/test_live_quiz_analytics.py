@@ -316,6 +316,13 @@ class FakeExistingAccessCodeRepository(FakeAccessCodeRepository):
         )
 
 
+class FakeAccessCodeLifecycleRepository(FakeExistingAccessCodeRepository):
+    async def get_quiz_by_access_code(self, access_code):
+        if access_code == self.quiz.get("access_code"):
+            return self.quiz
+        return None
+
+
 class FakeCreatorLiveQuizzesRepository:
     def __init__(self):
         self.quizzes = [
@@ -438,6 +445,36 @@ async def test_generate_access_code_returns_existing_code_without_regenerating(m
 
 
 @pytest.mark.asyncio
+async def test_expired_access_code_is_replaced_only_by_explicit_generation(monkeypatch):
+    fixed_now = datetime(2025, 6, 3, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repository = FakeAccessCodeLifecycleRepository()
+    service = LiveQuizSessionService(repository)
+
+    with pytest.raises(HTTPException) as expired:
+        await service.validate_access_code("KEEP42")
+    assert expired.value.status_code == 410
+
+    response = await service.generate_access_code(
+        quiz_id="quiz-1",
+        access_code_expires_at=fixed_now + timedelta(days=1),
+        creator_id="creator-1",
+        time_limit_minutes=30,
+    )
+
+    assert response["access_code"] != "KEEP42"
+    assert repository.enable_calls == 1
+
+    replacement = await service.validate_access_code(response["access_code"])
+    assert replacement["quiz_id"] == "quiz-1"
+
+    with pytest.raises(HTTPException) as old_code:
+        await service.validate_access_code("KEEP42")
+    assert old_code.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_creator_can_list_live_quizzes_with_stats(monkeypatch):
     fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
     monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
@@ -449,6 +486,9 @@ async def test_creator_can_list_live_quizzes_with_stats(monkeypatch):
     assert len(rows) == 1
     assert rows[0]["title"] == "Management Quiz"
     assert rows[0]["access_code"] == "LIVE01"
+    assert rows[0]["access_code_expires_at"] == datetime(
+        2025, 6, 2, tzinfo=timezone.utc
+    )
     assert rows[0]["status"] == "in_progress"
     assert rows[0]["participant_count"] == 2
     assert rows[0]["completed_count"] == 1

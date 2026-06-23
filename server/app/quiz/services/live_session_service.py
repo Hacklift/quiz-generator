@@ -61,7 +61,14 @@ class LiveQuizSessionService:
         if not owner_id or str(owner_id) != creator_id:
             raise HTTPException(status_code=403, detail="Not allowed")
 
-        if quiz.get("live_quiz_enabled") and quiz.get("access_code"):
+        existing_access_code = quiz.get("access_code")
+        existing_expiration = quiz.get("access_code_expires_at")
+        if (
+            quiz.get("live_quiz_enabled")
+            and existing_access_code
+            and existing_expiration
+            and _as_utc(existing_expiration) > _utc_now()
+        ):
             invited = [
                 email.strip().lower()
                 for email in quiz.get("invited_participant_emails", [])
@@ -69,12 +76,10 @@ class LiveQuizSessionService:
             ]
             return {
                 "quiz_id": str(quiz["_id"]),
-                "access_code": quiz["access_code"],
+                "access_code": existing_access_code,
                 "live_quiz_enabled": True,
                 "time_limit_minutes": quiz.get("time_limit_minutes") or time_limit_minutes,
-                "access_code_expires_at": _as_utc(
-                    quiz.get("access_code_expires_at") or access_code_expires_at
-                ),
+                "access_code_expires_at": _as_utc(existing_expiration),
                 "participant_access_mode": quiz.get("participant_access_mode", "public"),
                 "invited_emails": invited,
                 "invitations_created": len(invited),
@@ -495,6 +500,12 @@ class LiveQuizSessionService:
                     "quiz_id": quiz_id,
                     "title": quiz.get("title", "Live Quiz"),
                     "access_code": quiz.get("access_code"),
+                    "access_code_expires_at": quiz.get("access_code_expires_at"),
+                    "time_limit_minutes": quiz.get("time_limit_minutes"),
+                    "participant_access_mode": quiz.get(
+                        "participant_access_mode", "public"
+                    ),
+                    "invited_emails": quiz.get("invited_participant_emails", []),
                     "status": self._quiz_status(quiz, sessions),
                     "created_at": quiz.get("created_at"),
                     "participant_count": len(sessions),

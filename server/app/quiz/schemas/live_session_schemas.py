@@ -101,6 +101,10 @@ class LiveQuizSummaryRow(BaseModel):
     quiz_id: str
     title: str
     access_code: Optional[str] = None
+    access_code_expires_at: Optional[datetime] = None
+    time_limit_minutes: Optional[int] = None
+    participant_access_mode: str = "public"
+    invited_emails: List[str] = []
     status: str
     created_at: Optional[datetime] = None
     participant_count: int = 0

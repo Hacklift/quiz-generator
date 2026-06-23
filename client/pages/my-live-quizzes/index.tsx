@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import RequireAuth from "@features/auth/components/RequireAuth";
@@ -20,6 +20,15 @@ const formatDateTime = (isoString: string | null | undefined): string => {
   }
 };
 
+const tomorrowLocalValue = () => {
+  const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+};
+
+const isExpired = (expiresAt: string | null | undefined) =>
+  !expiresAt || new Date(expiresAt).getTime() <= Date.now();
+
 const statusLabel: Record<string, string> = {
   active: "Active",
   in_progress: "In Progress",
@@ -38,24 +47,61 @@ const MyLiveQuizzesPage: React.FC = () => {
   const router = useRouter();
   const [quizzes, setQuizzes] = useState<LiveQuizSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [quizToGenerateFor, setQuizToGenerateFor] =
+    useState<LiveQuizSummary | null>(null);
+  const [duration, setDuration] = useState(20);
+  const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const loadLiveQuizzes = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await liveQuizService.listLiveQuizzes();
+      setQuizzes(data);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.detail || "Could not load live quizzes.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadLiveQuizzes = async () => {
-      try {
-        setIsLoading(true);
-        const data = await liveQuizService.listLiveQuizzes();
-        setQuizzes(data);
-      } catch (error: any) {
-        toast.error(
-          error?.response?.data?.detail || "Could not load live quizzes.",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    void loadLiveQuizzes();
+  }, [loadLiveQuizzes]);
 
-    loadLiveQuizzes();
-  }, []);
+  const openGenerationDialog = (quiz: LiveQuizSummary) => {
+    setQuizToGenerateFor(quiz);
+    setDuration(quiz.time_limit_minutes || 20);
+    setExpiresAt(tomorrowLocalValue());
+  };
+
+  const generateAccessCode = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!quizToGenerateFor) return;
+
+    try {
+      setIsGenerating(true);
+      const response = await liveQuizService.createAccessCode({
+        quizId: quizToGenerateFor.quiz_id,
+        time_limit_minutes: duration,
+        access_code_expires_at: new Date(expiresAt).toISOString(),
+        participant_access_mode:
+          quizToGenerateFor.participant_access_mode || "public",
+        invited_emails: quizToGenerateFor.invited_emails || [],
+      });
+      setQuizToGenerateFor(null);
+      await loadLiveQuizzes();
+      toast.success(`Access code ${response.access_code} generated.`);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.detail || "Could not generate access code.",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <RequireAuth
@@ -129,8 +175,24 @@ const MyLiveQuizzesPage: React.FC = () => {
                         <td className="px-5 py-4 text-sm font-semibold text-slate-900">
                           {quiz.title}
                         </td>
-                        <td className="px-5 py-4 font-mono text-sm tracking-wider text-[#0F2654]">
-                          {quiz.access_code || "-"}
+                        <td className="px-5 py-4 text-sm text-slate-700">
+                          {quiz.access_code ? (
+                            <div className="space-y-1">
+                              <p className="font-mono tracking-wider text-[#0F2654]">
+                                {quiz.access_code}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Expires {formatDateTime(quiz.access_code_expires_at)}
+                              </p>
+                              {isExpired(quiz.access_code_expires_at) && (
+                                <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                                  Expired
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-500">No code</span>
+                          )}
                         </td>
                         <td className="px-5 py-4 text-sm">
                           <span
@@ -155,15 +217,29 @@ const MyLiveQuizzesPage: React.FC = () => {
                           {quiz.average_score ?? "-"}
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push(`/my-live-quizzes/${quiz.quiz_id}`)
-                            }
-                            className="rounded-md border border-[#0a3264] px-3 py-1.5 text-sm font-semibold text-[#0a3264] hover:bg-blue-50"
-                          >
-                            View Details
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            {(!quiz.access_code ||
+                              isExpired(quiz.access_code_expires_at)) && (
+                              <button
+                                type="button"
+                                onClick={() => openGenerationDialog(quiz)}
+                                className="rounded-md bg-[#0a3264] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#082952]"
+                              >
+                                {quiz.access_code
+                                  ? "Generate New Access Code"
+                                  : "Generate Access Code"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                router.push(`/my-live-quizzes/${quiz.quiz_id}`)
+                              }
+                              className="rounded-md border border-[#0a3264] px-3 py-1.5 text-sm font-semibold text-[#0a3264] hover:bg-blue-50"
+                            >
+                              View Details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -173,6 +249,59 @@ const MyLiveQuizzesPage: React.FC = () => {
             )}
           </div>
         </main>
+        {quizToGenerateFor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+            <form
+              onSubmit={generateAccessCode}
+              className="w-full max-w-md rounded-md bg-white p-5 shadow-xl"
+            >
+              <h2 className="text-lg font-bold text-[#0F2654]">
+                {quizToGenerateFor.access_code
+                  ? "Generate New Access Code"
+                  : "Generate Access Code"}
+              </h2>
+              <div className="mt-4 space-y-4">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Duration minutes
+                  <input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={duration}
+                    onChange={(event) => setDuration(Number(event.target.value))}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Access code expires
+                  <input
+                    type="datetime-local"
+                    value={expiresAt}
+                    onChange={(event) => setExpiresAt(event.target.value)}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setQuizToGenerateFor(null)}
+                  disabled={isGenerating}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isGenerating}
+                  className="rounded-md bg-[#0a3264] px-3 py-2 text-sm font-semibold text-white hover:bg-[#082952] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isGenerating ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         <Footer />
       </div>
     </RequireAuth>

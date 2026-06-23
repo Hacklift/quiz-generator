@@ -103,6 +103,10 @@ export interface LiveQuizSummary {
   quiz_id: string;
   title: string;
   access_code?: string | null;
+  access_code_expires_at?: string | null;
+  time_limit_minutes?: number | null;
+  participant_access_mode?: "public" | "restricted" | "invited_only";
+  invited_emails?: string[];
   status: string;
   created_at?: string | null;
   participant_count: number;
@@ -247,7 +251,7 @@ export const liveQuizService = {
   subscribeParticipants(
     quizId: string,
     onEvent: (event: LiveQuizParticipantsEvent) => void,
-    onClose?: () => void,
+    onClose?: (event: CloseEvent) => void,
   ): WebSocket | null {
     if (typeof window === "undefined") return null;
     const token = TokenService.getAccessToken();
@@ -271,8 +275,8 @@ export const liveQuizService = {
         // Ignore malformed websocket payloads.
       }
     };
-    socket.onclose = () => {
-      onClose?.();
+    socket.onclose = (event) => {
+      onClose?.(event);
     };
     return socket;
   },

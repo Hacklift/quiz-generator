@@ -32,6 +32,8 @@ const statusLabel: Record<string, string> = {
   expired: "Expired",
 };
 
+const reconnectDelays = [1000, 2000, 5000, 10000];
+
 const formatDateTime = (isoString: string | null | undefined): string => {
   if (!isoString) return "—";
   try {
@@ -58,7 +60,10 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
-  const mountedRef = useRef(true);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const mountedRef = useRef(false);
+  const shouldReconnectRef = useRef(false);
 
   const upsertParticipant = useCallback((participant: ParticipantRow) => {
     setParticipants((current) => {
@@ -101,26 +106,83 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchParticipants(true);
+    shouldReconnectRef.current = true;
+    reconnectAttemptRef.current = 0;
+    void fetchParticipants(true);
 
-    socketRef.current = liveQuizService.subscribeParticipants(
-      quizId,
-      (event) => {
-        if (!mountedRef.current) return;
+    const scheduleReconnect = () => {
+      if (
+        !shouldReconnectRef.current ||
+        reconnectTimerRef.current !== null
+      ) {
+        return;
+      }
+
+      const delay =
+        reconnectDelays[
+          Math.min(reconnectAttemptRef.current, reconnectDelays.length - 1)
+        ];
+      reconnectAttemptRef.current += 1;
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        connectSocket();
+      }, delay);
+    };
+
+    const connectSocket = () => {
+      if (!shouldReconnectRef.current || socketRef.current) return;
+
+      let socket: WebSocket | null = null;
+      socket = liveQuizService.subscribeParticipants(
+        quizId,
+        (event) => {
+          if (!mountedRef.current) return;
+          setRealtimeConnected(true);
+          setError(null);
+          if (event.type === "participants_snapshot") {
+            setParticipants(event.participants);
+            return;
+          }
+          upsertParticipant(event.participant);
+        },
+        (event) => {
+          if (socketRef.current !== socket) return;
+
+          socketRef.current = null;
+          if (!mountedRef.current || !shouldReconnectRef.current) return;
+
+          setRealtimeConnected(false);
+          if (event.code === 1008) {
+            setError("Could not establish real-time updates for this quiz.");
+            return;
+          }
+          scheduleReconnect();
+        },
+      );
+
+      if (!socket) {
+        setRealtimeConnected(false);
+        scheduleReconnect();
+        return;
+      }
+
+      socketRef.current = socket;
+      socket.onopen = () => {
+        if (socketRef.current !== socket || !mountedRef.current) return;
+        reconnectAttemptRef.current = 0;
         setRealtimeConnected(true);
-        if (event.type === "participants_snapshot") {
-          setParticipants(event.participants);
-          return;
-        }
-        upsertParticipant(event.participant);
-      },
-      () => {
-        if (mountedRef.current) setRealtimeConnected(false);
-      },
-    );
+      };
+    };
+
+    connectSocket();
 
     return () => {
       mountedRef.current = false;
+      shouldReconnectRef.current = false;
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
