@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /server
 
@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
 
 COPY Pipfile Pipfile.lock ./
 
-RUN pipenv install --deploy --system
+RUN pipenv install --system --skip-lock
 
 COPY . .
 
