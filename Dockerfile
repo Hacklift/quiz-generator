@@ -28,7 +28,7 @@
     
     COPY server/Pipfile server/Pipfile.lock ./
     
-    RUN pipenv install --system --deploy
+    RUN pipenv install --system --skip-lock
     
     COPY server/ .
     
