@@ -252,6 +252,8 @@ class QuizV2Repository:
         access_code: str,
         time_limit_minutes: int,
         access_code_expires_at: datetime,
+        participant_access_mode: str = "public",
+        invited_participant_emails: Optional[list[str]] = None,
     ) -> Optional[QuizDocumentV2]:
         try:
             updated = await self.collection.find_one_and_update(
@@ -262,6 +264,8 @@ class QuizV2Repository:
                         "time_limit_minutes": time_limit_minutes,
                         "access_code": access_code,
                         "access_code_expires_at": access_code_expires_at,
+                        "participant_access_mode": participant_access_mode,
+                        "invited_participant_emails": invited_participant_emails or [],
                         "updated_at": datetime.utcnow(),
                     }
                 },

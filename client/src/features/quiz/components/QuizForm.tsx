@@ -59,6 +59,11 @@ export default function QuizForm() {
     tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
     return tomorrow.toISOString().slice(0, 16);
   });
+  const [participantAccessMode, setParticipantAccessMode] = useState<
+    "public" | "restricted" | "invited_only"
+  >("public");
+  const [invitedEmailsText, setInvitedEmailsText] = useState("");
+  const [sendEmailInvitations, setSendEmailInvitations] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -203,6 +208,21 @@ export default function QuizForm() {
       return;
     }
 
+    const invitedEmails = invitedEmailsText
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (
+      enableLiveQuiz &&
+      (participantAccessMode === "restricted" ||
+        participantAccessMode === "invited_only") &&
+      invitedEmails.length === 0
+    ) {
+      setErrorMessage("Please add at least one invited email for restricted access.");
+      return;
+    }
+
     setErrorMessage("");
     setLoading(true);
 
@@ -315,6 +335,10 @@ export default function QuizForm() {
         liveAccessExpiresAt: enableLiveQuiz
           ? new Date(liveAccessExpiresAt).toISOString()
           : "",
+        participantAccessMode: enableLiveQuiz ? participantAccessMode : "public",
+        invitedEmails: enableLiveQuiz ? invitedEmails.join(",") : "",
+        sendEmailInvitations:
+          enableLiveQuiz && sendEmailInvitations ? "true" : "false",
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
@@ -407,6 +431,46 @@ export default function QuizForm() {
                   }
                   className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
                 />
+              </label>
+              <label className="block text-sm font-semibold text-[#2C3E50]">
+                Participant access
+                <select
+                  value={participantAccessMode}
+                  onChange={(event) =>
+                    setParticipantAccessMode(
+                      event.target.value as
+                        | "public"
+                        | "restricted"
+                        | "invited_only",
+                    )
+                  }
+                  className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
+                >
+                  <option value="public">Public link</option>
+                  <option value="restricted">Invited emails only</option>
+                  <option value="invited_only">Invited emails only (strict)</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-[#2C3E50] md:col-span-2">
+                Invitation emails
+                <textarea
+                  value={invitedEmailsText}
+                  onChange={(event) => setInvitedEmailsText(event.target.value)}
+                  placeholder="ada@example.com, grace@example.com"
+                  rows={3}
+                  className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-[#2C3E50]">
+                <input
+                  type="checkbox"
+                  checked={sendEmailInvitations}
+                  onChange={(event) =>
+                    setSendEmailInvitations(event.target.checked)
+                  }
+                  className="h-4 w-4 accent-[#0F2654]"
+                />
+                Send invitation emails
               </label>
             </div>
           )}

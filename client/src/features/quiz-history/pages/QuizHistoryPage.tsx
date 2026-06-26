@@ -18,15 +18,33 @@ interface QuizHistoryQuestion {
   answer: string;
 }
 
+interface LiveQuizStats {
+  invited_participants: number;
+  joined_participants: number;
+  completed_participants: number;
+  average_score?: number | null;
+  best_score?: number | null;
+  quiz_status: string;
+}
+
 interface QuizHistoryItem {
   id?: string;
   _id?: string;
+  quiz_id?: string;
   created_at?: string;
   quiz_name?: string;
   question_type: string;
   difficulty_level?: string;
   profession?: string;
   audience_type?: string;
+  live_quiz_enabled?: boolean;
+  live_quiz_stats?: LiveQuizStats | null;
+  invited_participants?: number;
+  joined_participants?: number;
+  completed_participants?: number;
+  average_score?: number | null;
+  best_score?: number | null;
+  quiz_status?: string;
   questions: QuizHistoryQuestion[];
 }
 
@@ -97,6 +115,16 @@ const DisplayQuizHistoryPage = ({
                   </div>
 
                   <div className="flex gap-2">
+                    {quizItem.live_quiz_enabled && quizItem.quiz_id && (
+                      <button
+                        onClick={() =>
+                          router.push(`/my-live-quizzes/${quizItem.quiz_id}`)
+                        }
+                        className="px-3 py-1 rounded-lg border border-[#0a3264] text-[#0a3264] text-sm hover:bg-blue-50"
+                      >
+                        Live Dashboard
+                      </button>
+                    )}
                     <button
                       onClick={() =>
                         router.push(
@@ -120,6 +148,59 @@ const DisplayQuizHistoryPage = ({
                     </button>
                   </div>
                 </div>
+
+                {quizItem.live_quiz_enabled && (
+                  <div className="mb-4 grid gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 sm:grid-cols-3">
+                    <span>
+                      Invited:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.invited_participants ??
+                          quizItem.invited_participants ??
+                          0}
+                      </strong>
+                    </span>
+                    <span>
+                      Joined:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.joined_participants ??
+                          quizItem.joined_participants ??
+                          0}
+                      </strong>
+                    </span>
+                    <span>
+                      Completed:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.completed_participants ??
+                          quizItem.completed_participants ??
+                          0}
+                      </strong>
+                    </span>
+                    <span>
+                      Average:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.average_score ??
+                          quizItem.average_score ??
+                          "-"}
+                      </strong>
+                    </span>
+                    <span>
+                      Best:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.best_score ??
+                          quizItem.best_score ??
+                          "-"}
+                      </strong>
+                    </span>
+                    <span>
+                      Status:{" "}
+                      <strong>
+                        {quizItem.live_quiz_stats?.quiz_status ??
+                          quizItem.quiz_status ??
+                          "not_live"}
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {quizItem.questions.map((quizQuestion, qIndex) => (

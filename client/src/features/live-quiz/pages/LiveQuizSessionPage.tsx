@@ -23,18 +23,67 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAutoSubmitted, setHasAutoSubmitted] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isTimerStopped, setIsTimerStopped] = useState(false);
   const autoSubmitStartedRef = useRef(false);
   const isSubmittingRef = useRef(false);
+  const hasSubmittedRef = useRef(false);
+  const hasRedirectedRef = useRef(false);
+
+  const redirectToResults = useCallback(
+    (completed = false) => {
+      if (hasRedirectedRef.current) return;
+      hasRedirectedRef.current = true;
+      setIsTimerStopped(true);
+      router.replace(
+        `/live-quiz/${sessionId}/results${completed ? "?completed=1" : ""}`,
+      );
+    },
+    [router, sessionId],
+  );
+
+  useEffect(() => {
+    const disconnect = () => {
+      if (
+        isSubmittingRef.current ||
+        hasSubmittedRef.current ||
+        session?.status === "submitted"
+      ) {
+        return;
+      }
+      void liveQuizService.markDisconnected(sessionId);
+    };
+
+    window.addEventListener("beforeunload", disconnect);
+    return () => {
+      window.removeEventListener("beforeunload", disconnect);
+      disconnect();
+    };
+  }, [session?.status, sessionId]);
+
+  useEffect(() => {
+    const stopTimer = () => {
+      setIsTimerStopped(true);
+    };
+
+    router.events.on("routeChangeStart", stopTimer);
+    return () => {
+      router.events.off("routeChangeStart", stopTimer);
+    };
+  }, [router.events]);
 
   const loadSession = useCallback(async () => {
     const data = await liveQuizService.getSession(sessionId);
     setSession(data);
     setSelectedAnswer(data.question?.selected_answer || "");
     if (data.status === "submitted") {
-      router.replace(`/live-quiz/${sessionId}/results`);
+      hasSubmittedRef.current = true;
+      setHasSubmitted(true);
+      setIsTimerStopped(true);
+      redirectToResults();
     }
     return data;
-  }, [router, sessionId]);
+  }, [redirectToResults, sessionId]);
 
   useEffect(() => {
     const load = async () => {
@@ -53,37 +102,57 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
 
   const submit = useCallback(
     async (autoSubmitted = false) => {
-      if (isSubmittingRef.current) return;
+      if (
+        isSubmittingRef.current ||
+        hasSubmittedRef.current ||
+        session?.status === "submitted"
+      ) {
+        redirectToResults();
+        return;
+      }
       if (autoSubmitted) {
         if (autoSubmitStartedRef.current) return;
         autoSubmitStartedRef.current = true;
         setHasAutoSubmitted(true);
       }
       try {
+        setIsTimerStopped(true);
         isSubmittingRef.current = true;
         setIsSubmitting(true);
         await liveQuizService.submitSession(sessionId, autoSubmitted);
-        router.replace(`/live-quiz/${sessionId}/results?completed=1`);
+        hasSubmittedRef.current = true;
+        setHasSubmitted(true);
+        redirectToResults(true);
       } catch (error: any) {
-        if (autoSubmitted) {
+        if (error?.response?.status === 409 || autoSubmitted) {
           try {
-            await loadSession();
+            const data = await loadSession();
+            if (data.status === "submitted") {
+              hasSubmittedRef.current = true;
+              setHasSubmitted(true);
+              redirectToResults();
+            }
           } catch {
-            router.replace(`/live-quiz/${sessionId}/results`);
+            redirectToResults();
           }
           return;
         }
+        setIsTimerStopped(false);
         toast.error(error?.response?.data?.detail || "Could not submit quiz.");
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
       }
     },
-    [loadSession, router, sessionId],
+    [loadSession, redirectToResults, session?.status, sessionId],
   );
 
   const isTimerRunning =
-    session?.status === "active" && !hasAutoSubmitted && !isSubmitting;
+    session?.status === "active" &&
+    !hasAutoSubmitted &&
+    !hasSubmitted &&
+    !isSubmitting &&
+    !isTimerStopped;
 
   const remainingSeconds = useLiveQuizTimer(
     session?.expires_at,
@@ -98,6 +167,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
       !session?.question ||
       !selectedAnswer.trim() ||
       hasAutoSubmitted ||
+      hasSubmitted ||
       remainingSeconds === 0
     ) {
       return;
@@ -131,7 +201,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   };
 
   const handleSelect = async (answer: string) => {
-    if (hasAutoSubmitted || remainingSeconds === 0) return;
+    if (hasAutoSubmitted || hasSubmitted || remainingSeconds === 0) return;
     setSelectedAnswer(answer);
     if (!session?.question) return;
     try {
@@ -188,14 +258,23 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         <QuestionCard
           question={session.question}
           selectedAnswer={selectedAnswer}
-          disabled={isSubmitting || hasAutoSubmitted || remainingSeconds === 0}
+          disabled={
+            isSubmitting ||
+            hasAutoSubmitted ||
+            hasSubmitted ||
+            remainingSeconds === 0
+          }
           onSelect={handleSelect}
         />
         <QuizNavigation
           isFirst={session.question.question_index === 0}
           isLast={isLast}
           disabled={
-            isSaving || isSubmitting || hasAutoSubmitted || remainingSeconds === 0
+            isSaving ||
+            isSubmitting ||
+            hasAutoSubmitted ||
+            hasSubmitted ||
+            remainingSeconds === 0
           }
           onNext={handleNext}
           onSubmit={() => submit(false)}

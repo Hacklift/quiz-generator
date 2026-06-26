@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -36,6 +36,26 @@ const QuizDisplayPage: React.FC = () => {
   const liveDurationMinutes =
     Number(searchParams?.get("liveDurationMinutes")) || 20;
   const liveAccessExpiresAt = searchParams?.get("liveAccessExpiresAt") || "";
+  const participantAccessModeParam = searchParams?.get("participantAccessMode");
+  const participantAccessMode:
+    | "public"
+    | "restricted"
+    | "invited_only" =
+    participantAccessModeParam === "restricted" ||
+    participantAccessModeParam === "invited_only"
+      ? participantAccessModeParam
+      : "public";
+  const invitedEmailsParam = searchParams?.get("invitedEmails") || "";
+  const invitedEmails = useMemo(
+    () =>
+      invitedEmailsParam
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    [invitedEmailsParam],
+  );
+  const sendEmailInvitations =
+    searchParams?.get("sendEmailInvitations") === "true";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
@@ -240,10 +260,21 @@ const QuizDisplayPage: React.FC = () => {
             access_code_expires_at: liveQuizRequested
               ? liveAccessExpiresAt
               : undefined,
+            participant_access_mode: liveQuizRequested
+              ? participantAccessMode
+              : undefined,
+            invited_emails: liveQuizRequested ? invitedEmails : undefined,
+            send_email_invitations: liveQuizRequested
+              ? sendEmailInvitations
+              : undefined,
           };
 
-          const client = liveQuizRequested ? api : publicApi;
-          const { data } = await client.post("/api/get-questions", basePayload);
+          const client =
+            liveQuizRequested || TokenService.hasTokens() ? api : publicApi;
+          const { data } = await client.post(
+            "/api/get-questions",
+            basePayload,
+          );
 
           if (data?.quiz_id && !data?.ai_down) {
             setQuizId(data.quiz_id);
@@ -330,6 +361,9 @@ const QuizDisplayPage: React.FC = () => {
     liveQuizRequested,
     liveDurationMinutes,
     liveAccessExpiresAt,
+    participantAccessMode,
+    invitedEmails,
+    sendEmailInvitations,
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
