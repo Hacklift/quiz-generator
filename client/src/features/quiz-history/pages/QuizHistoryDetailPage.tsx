@@ -14,9 +14,19 @@ interface QuizHistoryQuestion {
   answer: string;
 }
 
+interface LiveQuizStats {
+  invited_participants: number;
+  joined_participants: number;
+  completed_participants: number;
+  average_score?: number | null;
+  best_score?: number | null;
+  quiz_status: string;
+}
+
 interface QuizHistoryItem {
   id?: string;
   _id?: string;
+  quiz_id?: string;
   created_at?: string;
   quiz_name?: string;
   question_type: string;
@@ -24,6 +34,8 @@ interface QuizHistoryItem {
   profession?: string;
   audience_type?: string;
   custom_instruction?: string;
+  live_quiz_enabled?: boolean;
+  live_quiz_stats?: LiveQuizStats | null;
   questions: QuizHistoryQuestion[];
 }
 
@@ -95,6 +107,54 @@ export default function QuizHistoryDetailsPage() {
                 <p className="text-sm text-gray-600 mb-4">
                   Audience: {item.audience_type || "N/A"}
                 </p>
+                {item.live_quiz_enabled && item.quiz_id && (
+                  <div className="mb-6">
+                    {item.live_quiz_stats && (
+                      <div className="mb-4 grid gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 sm:grid-cols-3">
+                        <span>
+                          Invited:{" "}
+                          <strong>
+                            {item.live_quiz_stats.invited_participants}
+                          </strong>
+                        </span>
+                        <span>
+                          Joined:{" "}
+                          <strong>
+                            {item.live_quiz_stats.joined_participants}
+                          </strong>
+                        </span>
+                        <span>
+                          Completed:{" "}
+                          <strong>
+                            {item.live_quiz_stats.completed_participants}
+                          </strong>
+                        </span>
+                        <span>
+                          Average:{" "}
+                          <strong>
+                            {item.live_quiz_stats.average_score ?? "-"}
+                          </strong>
+                        </span>
+                        <span>
+                          Best:{" "}
+                          <strong>{item.live_quiz_stats.best_score ?? "-"}</strong>
+                        </span>
+                        <span>
+                          Status:{" "}
+                          <strong>{item.live_quiz_stats.quiz_status}</strong>
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() =>
+                        router.push(`/my-live-quizzes/${item.quiz_id}`)
+                      }
+                      className="rounded-lg border border-[#0a3264] px-4 py-2 text-sm font-medium text-[#0a3264] hover:bg-blue-50"
+                    >
+                      Open Live Dashboard
+                    </button>
+                  </div>
+                )}
                 {item.custom_instruction && (
                   <p className="text-sm text-gray-700 mb-6">
                     <strong>Custom instruction:</strong>{" "}

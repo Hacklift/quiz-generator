@@ -27,6 +27,7 @@ auth_events_collection = database["auth_events"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
+live_quiz_invitations_collection = database["live_quiz_invitations"]
 
 
 folders_collection = database["folders"]
@@ -86,6 +87,19 @@ async def drop_removed_collections():
         await database.drop_collection("quizzes_category")
 
 
+async def ensure_live_quiz_invitation_indexes(
+    live_quiz_invitations_collection: AsyncIOMotorCollection,
+):
+    """Indexes for live quiz invitations."""
+    await live_quiz_invitations_collection.create_index("quiz_id")
+    await live_quiz_invitations_collection.create_index("creator_user_id")
+    await live_quiz_invitations_collection.create_index("status")
+    await live_quiz_invitations_collection.create_index(
+        [("quiz_id", 1), ("email", 1)],
+        unique=True,
+    )
+
+
 async def startUp():
     await ensure_user_collections(
         database,
@@ -99,6 +113,7 @@ async def startUp():
     await ensure_user_tokens_indexes(user_tokens_collection)
     await ensure_notification_indexes(notifications_collection)
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
+    await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -163,6 +178,12 @@ def get_live_quiz_sessions_collection() -> AsyncIOMotorCollection:
     if live_quiz_sessions_collection is None:
         raise RuntimeError("[DB Error] live_quiz_sessions_collection has not been initialized properly.")
     return live_quiz_sessions_collection
+
+
+def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
+    if live_quiz_invitations_collection is None:
+        raise RuntimeError("[DB Error] live_quiz_invitations_collection has not been initialized properly.")
+    return live_quiz_invitations_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:

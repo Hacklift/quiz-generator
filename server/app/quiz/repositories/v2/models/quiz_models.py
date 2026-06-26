@@ -104,6 +104,10 @@ class QuizQuestionsUpdateV2(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+class ParticipantAccessModeV2(str, Enum):
+    PUBLIC = "public"
+    RESTRICTED = "restricted"
+    INVITED_ONLY = "invited_only"
 
 class QuizDocumentV2(BaseModel):
     id: ObjectId = Field(default_factory=ObjectId, alias="_id")
@@ -129,6 +133,8 @@ class QuizDocumentV2(BaseModel):
     time_limit_minutes: Optional[int] = None
     access_code: Optional[str] = None
     access_code_expires_at: Optional[datetime] = None
+    participant_access_mode: ParticipantAccessModeV2 = ParticipantAccessModeV2.PUBLIC
+    invited_participant_emails: List[str] = Field(default_factory=list)
     schema_version: int = QUIZ_SCHEMA_VERSION
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
