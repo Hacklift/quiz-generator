@@ -34,8 +34,10 @@ services:
       - PYTHONPATH=/
     command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}", "--reload"]
     depends_on:
-      - mongodb
-      - redis
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery:
     build:
@@ -56,13 +58,20 @@ services:
               "-Q", "email,celery",
               "--loglevel=info", "--pool=solo", "--concurrency=1"]
     depends_on:
-      - redis
-      - server 
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
 
   mongodb:
     image: mongo:latest
     ports:
       - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
       - mongo_data:/data/db
 
@@ -78,13 +87,18 @@ services:
       - PYTHONPATH=/
     command: ["python", "-m", "server.app.seed"]
     depends_on:
-      - server
-      - mongodb
+      mongodb:
+        condition: service_healthy
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - redis_data:/data
 
