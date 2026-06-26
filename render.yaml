@@ -30,6 +30,8 @@ services:
         sync: false
       - key: DB_NAME
         sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
       - key: EMAIL_PASSWORD
         sync: false
       - key: EMAIL_SENDER
@@ -51,6 +53,14 @@ services:
       - key: MAILGUN_SENDER_EMAIL
         sync: false
       - key: PRIMARY_EMAIL_PROVIDER
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ID_YEARLY
         sync: false
 
     plan: free
