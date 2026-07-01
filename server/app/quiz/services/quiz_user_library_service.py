@@ -79,6 +79,41 @@ class QuizUserLibraryService:
         quizzes = await self.quiz_repository.find_many_by_ids(quiz_ids)
         return {str(quiz.id): quiz for quiz in quizzes}
 
+    async def get_owned_or_library_quiz(
+        self,
+        *,
+        user_id: str,
+        quiz_id: str,
+    ) -> QuizDocumentV2 | None:
+        quiz = await self.quiz_repository.find_by_id(quiz_id)
+        if quiz is None:
+            return None
+
+        if quiz.owner_user_id == user_id:
+            return quiz
+
+        saved_references = await self.reference_repository.list_saved_quizzes_for_user(
+            user_id,
+            limit=1000,
+        )
+        if any(reference.quiz_id == quiz_id for reference in saved_references):
+            return quiz
+
+        history_references = await self.reference_repository.list_quiz_history_for_user(
+            user_id,
+            limit=1000,
+        )
+        if any(reference.quiz_id == quiz_id for reference in history_references):
+            return quiz
+
+        folders = await self.reference_repository.list_folders_for_user(user_id)
+        for folder in folders:
+            items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
+            if any(item.quiz_id == quiz_id for item in items):
+                return quiz
+
+        return None
+
     async def _get_saved_quizzes_by_ids(
         self,
         saved_quiz_ids: list[str],
@@ -95,9 +130,9 @@ class QuizUserLibraryService:
         self,
         *,
         quiz_id: str | None,
-        title: str,
-        question_type: str,
-        questions: list[Any],
+        title: str | None,
+        question_type: str | None,
+        questions: list[Any] | None,
         description: str | None = None,
         owner_user_id: str | None = None,
         source: str = "manual",
@@ -106,6 +141,11 @@ class QuizUserLibraryService:
             quiz = await self.quiz_repository.find_by_id(quiz_id)
             if quiz:
                 return quiz
+
+        if not title or not question_type or not questions:
+            raise ValueError(
+                "title, question_type, and questions are required when quiz_id is not an existing canonical quiz."
+            )
 
         quiz_document = self.canonical_service.build_quiz_document(
             title=title,
@@ -138,9 +178,9 @@ class QuizUserLibraryService:
         self,
         *,
         user_id: str,
-        title: str,
-        question_type: str,
-        questions: list[Any],
+        title: str | None = None,
+        question_type: str | None = None,
+        questions: list[Any] | None = None,
         quiz_id: str | None = None,
     ) -> SavedQuizDocumentV2:
         quiz = await self._resolve_or_create_quiz(

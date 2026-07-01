@@ -10,6 +10,15 @@ import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
+type ApiErrorLike = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+  message?: string;
+};
+
 export default function QuizForm() {
   const [profession, setProfession] = useState("");
   const [audienceType, setAudienceType] = useState("");
@@ -57,11 +66,12 @@ export default function QuizForm() {
           setPreviousToken(res.data.token);
           sessionStorage.setItem("user_api_token", res.data.token);
         }
-      } catch (e: any) {
-        if (e?.response?.status === 404) {
+      } catch (e: unknown) {
+        const typedError = e as ApiErrorLike & { response?: { status?: number } };
+        if (typedError?.response?.status === 404) {
           return;
         }
-        console.warn("Error fetching user token:", e);
+        console.warn("Error fetching user token:", typedError);
       }
     };
 
@@ -185,8 +195,13 @@ export default function QuizForm() {
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
-    } catch (error: any) {
-      setErrorMessage(error?.message || "Failed to generate quiz. Please try again.");
+    } catch (error: unknown) {
+      const typedError = error as ApiErrorLike;
+      setErrorMessage(
+        typedError?.response?.data?.detail ||
+          typedError?.message ||
+          "Failed to generate quiz. Please try again.",
+      );
     } finally {
       setLoading(false);
     }

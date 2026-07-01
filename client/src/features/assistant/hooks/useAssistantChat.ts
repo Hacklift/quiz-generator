@@ -41,6 +41,17 @@ const normalizeAssistantError = (detail: unknown, fallback: string): string => {
   return message;
 };
 
+type AssistantApiError = {
+  response?: {
+    data?: {
+      detail?: unknown;
+    };
+  };
+};
+
+const getAssistantErrorDetail = (error: unknown): unknown =>
+  (error as AssistantApiError)?.response?.data?.detail;
+
 export const useAssistantChat = () => {
   const router = useRouter();
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -86,9 +97,9 @@ export const useAssistantChat = () => {
           actions: response.actions,
         },
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const detail = normalizeAssistantError(
-        error?.response?.data?.detail,
+        getAssistantErrorDetail(error),
         "Assistant request failed.",
       );
       toast.error(detail);
@@ -145,9 +156,9 @@ export const useAssistantChat = () => {
           actions: response.actions,
         },
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const detail = normalizeAssistantError(
-        error?.response?.data?.detail,
+        getAssistantErrorDetail(error),
         "Assistant action failed.",
       );
       toast.error(detail);

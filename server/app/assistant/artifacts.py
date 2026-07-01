@@ -206,6 +206,29 @@ def infer_artifacts_from_results(
                 )
             )
 
+        if result.tool_name == "quiz_get_answers":
+            answers = data.get("answers")
+            if isinstance(answers, list):
+                items = [
+                    {
+                        "id": str(item.get("question_number") or index),
+                        "label": (
+                            f"{item.get('question_number') or index}. "
+                            f"{item.get('question') or 'Question'} - {item.get('answer') or 'No answer'}"
+                        ),
+                        "metadata": item,
+                    }
+                    for index, item in enumerate(answers, start=1)
+                    if isinstance(item, dict)
+                ]
+                artifacts.append(
+                    _resource_list_artifact(
+                        resource="quiz_answer",
+                        title=f"Answer Key: {data.get('title') or 'Quiz'}",
+                        items=items,
+                    )
+                )
+
         if result.tool_name == "library_list_saved_quizzes":
             saved_items = [
                 {

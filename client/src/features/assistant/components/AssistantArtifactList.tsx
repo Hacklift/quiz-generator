@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { AssistantArtifact } from "@features/assistant/types";
+import {
+  AssistantArtifact,
+  AssistantArtifactAction,
+  AssistantFileActionArtifact,
+  AssistantResourceItem,
+} from "@features/assistant/types";
 import { api } from "@shared/api/http";
 
 interface AssistantArtifactListProps {
@@ -13,13 +18,79 @@ type DownloadState = {
   attempts: number;
 };
 
+type ApiErrorLike = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+  message?: string;
+};
+
+const DOWNLOAD_STATE_STORAGE_PREFIX = "quizapp.assistant.download.";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const getString = (value: unknown): string | null =>
+  typeof value === "string" && value.trim() ? value : null;
+
+const getNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const isAssistantArtifactAction = (value: unknown): value is AssistantArtifactAction =>
+  isRecord(value) && value.type === "copy_to_clipboard";
+
+const readPersistedDownloadState = (artifactKey: string): DownloadState | null => {
+  if (typeof window === "undefined") return null;
+  const raw = window.sessionStorage.getItem(`${DOWNLOAD_STATE_STORAGE_PREFIX}${artifactKey}`);
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    const status = parsed.status;
+    const attempts = parsed.attempts;
+    if (
+      (status === "downloading" || status === "started" || status === "failed") &&
+      typeof attempts === "number"
+    ) {
+      return {
+        status: status === "downloading" ? "failed" : status,
+        attempts,
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+const persistDownloadState = (artifactKey: string, state: DownloadState) => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(
+    `${DOWNLOAD_STATE_STORAGE_PREFIX}${artifactKey}`,
+    JSON.stringify(state),
+  );
+};
+
 const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
   const [expandedArtifacts, setExpandedArtifacts] = useState<Record<string, boolean>>({});
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
   const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
   const autoDownloadAttemptsRef = useRef<Record<string, boolean>>({});
 
-  const getVisibleItems = (artifactKey: string, items: any[]) => {
+  const getDownloadState = (artifactKey: string): DownloadState | undefined =>
+    downloadStates[artifactKey] || readPersistedDownloadState(artifactKey) || undefined;
+
+  const setDownloadState = (artifactKey: string, state: DownloadState) => {
+    persistDownloadState(artifactKey, state);
+    setDownloadStates((current) => ({
+      ...current,
+      [artifactKey]: state,
+    }));
+  };
+
+  const getVisibleItems = (artifactKey: string, items: AssistantResourceItem[]) => {
     if (expandedArtifacts[artifactKey]) return items;
     return items.slice(0, 8);
   };
@@ -59,9 +130,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
 
   const renderArtifactActions = (actions: unknown) => {
     if (!Array.isArray(actions) || actions.length === 0) return null;
+    const typedActions = actions.filter(isAssistantArtifactAction);
     return (
       <div className="mt-2 flex flex-wrap gap-2">
-        {actions.map((action: any, actionIndex) => {
+        {typedActions.map((action, actionIndex) => {
           if (action?.type !== "copy_to_clipboard") return null;
           return (
             <button
@@ -78,14 +150,17 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
     );
   };
 
-  const downloadFileAction = async (artifactKey: string, data: Record<string, any>) => {
-    const href = typeof data.href === "string" ? data.href : null;
-    const metadata = (data.metadata || {}) as Record<string, any>;
-    const quizId = typeof metadata.quiz_id === "string" ? metadata.quiz_id : null;
-    const format = typeof metadata.format === "string" ? metadata.format : "pdf";
-    const currentState = downloadStates[artifactKey];
+  const downloadFileAction = async (
+    artifactKey: string,
+    data: AssistantFileActionArtifact["data"],
+  ) => {
+    const href = getString(data.href);
+    const metadata = isRecord(data.metadata) ? data.metadata : {};
+    const quizId = getString(metadata.quiz_id);
+    const format = getString(metadata.format) || "pdf";
+    const currentState = getDownloadState(artifactKey);
     const attempts = currentState?.attempts || 0;
-    const maxRetries = typeof data.max_retries === "number" ? data.max_retries : 3;
+    const maxRetries = getNumber(data.max_retries) || 3;
     if (!href || !quizId) {
       toast.error("Download details are incomplete.");
       return;
@@ -96,13 +171,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
     }
 
     setDownloadingArtifact(artifactKey);
-    setDownloadStates((current) => ({
-      ...current,
-      [artifactKey]: {
-        status: "downloading",
-        attempts: (current[artifactKey]?.attempts || 0) + 1,
-      },
-    }));
+    setDownloadState(artifactKey, {
+      status: "downloading",
+      attempts: attempts + 1,
+    });
     try {
       const response = await api.get(href, {
         responseType: "blob",
@@ -113,7 +185,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
       });
       const contentDisposition = response.headers["content-disposition"];
       const matchedFilename = contentDisposition?.match(/filename=([^;]+)/i)?.[1];
-      const fallbackName = typeof metadata.filename === "string" ? metadata.filename : `quiz.${format}`;
+      const fallbackName = getString(metadata.filename) || `quiz.${format}`;
       const resolvedName = matchedFilename?.replace(/"/g, "") || fallbackName;
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -124,22 +196,17 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
       link.remove();
       window.URL.revokeObjectURL(url);
       toast.success("Quiz download started.");
-      setDownloadStates((current) => ({
-        ...current,
-        [artifactKey]: {
-          status: "started",
-          attempts: current[artifactKey]?.attempts || 1,
-        },
-      }));
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || error?.message || "Failed to download quiz.");
-      setDownloadStates((current) => ({
-        ...current,
-        [artifactKey]: {
-          status: "failed",
-          attempts: current[artifactKey]?.attempts || 1,
-        },
-      }));
+      setDownloadState(artifactKey, {
+        status: "started",
+        attempts: attempts + 1,
+      });
+    } catch (error: unknown) {
+      const typedError = error as ApiErrorLike;
+      toast.error(typedError?.response?.data?.detail || typedError?.message || "Failed to download quiz.");
+      setDownloadState(artifactKey, {
+        status: "failed",
+        attempts: attempts + 1,
+      });
     } finally {
       setDownloadingArtifact(null);
     }
@@ -149,10 +216,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
     if (!artifacts?.length) return;
     artifacts.forEach((artifact, index) => {
       if (artifact.type !== "file_action") return;
-      const actionId = typeof artifact.data.action_id === "string" ? artifact.data.action_id : null;
+      const actionId = getString(artifact.data.action_id);
       const artifactKey = actionId || `${artifact.type}-${index}`;
       if (!artifact.data.auto_execute) return;
-      if (downloadStates[artifactKey]?.status === "started") return;
+      if (getDownloadState(artifactKey)) return;
       if (autoDownloadAttemptsRef.current[artifactKey]) return;
       autoDownloadAttemptsRef.current[artifactKey] = true;
       void downloadFileAction(artifactKey, artifact.data);
@@ -162,7 +229,9 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
   if (!artifacts?.length) return null;
 
   const renderResourceList = (artifact: AssistantArtifact, artifactKey: string) => {
-    const items = Array.isArray(artifact.data.items) ? artifact.data.items : [];
+    const items = Array.isArray(artifact.data.items)
+      ? (artifact.data.items.filter(isRecord) as AssistantResourceItem[])
+      : [];
     return (
       <div key={artifactKey} className="space-y-2">
         {typeof artifact.data.title === "string" && (
@@ -170,7 +239,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
             {artifact.data.title}
           </p>
         )}
-        {getVisibleItems(artifactKey, items).map((item: any, itemIndex) => {
+        {getVisibleItems(artifactKey, items).map((item: AssistantResourceItem, itemIndex) => {
           const label = String(item.label || item.title || item.name || "Open");
           const href = typeof item.href === "string" ? item.href : null;
           const key = String(item.id || item.href || `${artifactKey}-${itemIndex}`);
@@ -202,7 +271,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
   return (
     <div className="mt-3 space-y-2">
       {artifacts.map((artifact, index) => {
-        const actionId = typeof artifact.data.action_id === "string" ? artifact.data.action_id : null;
+        const actionId = getString(artifact.data.action_id);
         const artifactKey = actionId || `${artifact.type}-${index}`;
 
         if (artifact.type === "resource_list") {
@@ -237,7 +306,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
         }
 
         if (artifact.type === "file_action") {
-          const downloadState = downloadStates[artifactKey];
+          const downloadState = getDownloadState(artifactKey);
           if (downloadState?.status === "started") {
             return (
               <div
@@ -251,7 +320,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
 
           const label = String(artifact.data.label || "Download");
           const isDownloading = downloadingArtifact === artifactKey;
-          const maxRetries = typeof artifact.data.max_retries === "number" ? artifact.data.max_retries : 3;
+          const maxRetries = getNumber(artifact.data.max_retries) || 3;
           const attempts = downloadState?.attempts || 0;
           const hasReachedRetryLimit = attempts >= maxRetries;
           if (hasReachedRetryLimit && downloadState?.status === "failed") {

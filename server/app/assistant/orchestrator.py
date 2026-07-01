@@ -7,8 +7,10 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 from server.app.assistant.artifacts import infer_artifacts_from_results
+from server.app.assistant.error_mapper import tool_error_message
 from server.app.assistant.mcp_client import AssistantMcpClient
 from server.app.assistant.model_router import AssistantModelRouter
+from server.app.assistant.plan_compiler import AssistantPlanCompiler
 from server.app.assistant.prompts import (
     build_executor_prompt,
     build_final_response_prompt,
@@ -128,6 +130,7 @@ REQUIRED_TOOL_ARGUMENTS = {
     "category_list_quiz_types": ("category", "subcategory"),
     "category_browse_questions": ("category", "subcategory", "question_type"),
     "share_get_quiz": ("quiz_id",),
+    "quiz_get_answers": ("quiz_id",),
     "share_create_link": ("quiz_id",),
     "share_send_email": ("quiz_id", "recipient_email"),
     "quiz_export_link": ("quiz_id",),
@@ -194,6 +197,7 @@ class AssistantOrchestrator:
         self.model_router = model_router
         self.mcp_client = mcp_client
         self.pending_run_store = pending_run_store or RedisAssistantRunStore()
+        self.plan_compiler = AssistantPlanCompiler()
 
     async def run(
         self,
@@ -490,6 +494,20 @@ class AssistantOrchestrator:
         if supplied_arguments:
             step.arguments = {**step.arguments, **supplied_arguments}
             run.user_message = f"{run.user_message}\nFollow-up details: {message}"
+        elif self._should_replan_missing_argument_follow_up(
+            tool_name=step.tool_name,
+            missing_arguments=missing_arguments,
+            message=message,
+        ):
+            return await self.run(
+                message=message,
+                conversation_id=pending_run.conversation_id,
+                page_context=pending_run.page_context,
+                recent_messages=[],
+                recent_artifacts=pending_run.recent_artifacts,
+                user=user,
+                authorization_header=authorization_header,
+            )
 
         if step.tool_name in LIVE_QUIZ_TOOLS:
             run.plan = self._normalize_live_quiz_identity(
@@ -1012,6 +1030,12 @@ class AssistantOrchestrator:
         planner.steps = self._normalize_live_quiz_identity(
             planner.steps,
             message,
+            page_context=page_context,
+            recent_artifacts=recent_artifacts,
+        )
+        planner.steps = self.plan_compiler.compile(
+            steps=planner.steps,
+            message=message,
             page_context=page_context,
             recent_artifacts=recent_artifacts,
         )
@@ -1646,6 +1670,14 @@ class AssistantOrchestrator:
         )
 
     def _missing_required_tool_arguments(self, tool_name: str, arguments: dict[str, Any]) -> list[str]:
+        if tool_name == "library_save_quiz":
+            if self._has_generation_argument(arguments.get("quiz_id")):
+                return []
+            return [
+                argument_name
+                for argument_name in ("title", "question_type", "questions")
+                if not self._has_generation_argument(arguments.get(argument_name))
+            ]
         return [
             argument_name
             for argument_name in REQUIRED_TOOL_ARGUMENTS.get(tool_name, ())
@@ -1714,6 +1746,38 @@ class AssistantOrchestrator:
             if folder_name is not None:
                 arguments["name"] = folder_name
         return arguments
+
+    def _should_replan_missing_argument_follow_up(
+        self,
+        *,
+        tool_name: str,
+        missing_arguments: list[str],
+        message: str,
+    ) -> bool:
+        normalized = message.casefold()
+        if any(
+            phrase in normalized
+            for phrase in (
+                "you just",
+                "above",
+                "from my history",
+                "from history",
+                "from my saved",
+                "from saved",
+                "from my folder",
+                "pull",
+                "pulled",
+                "are you saying",
+                "i said",
+                "not generate",
+            )
+        ):
+            return True
+        if tool_name == "library_save_quiz" and "questions" in missing_arguments:
+            return True
+        if DOWNLOAD_INTENT_PATTERN.search(message) or FOLDER_ADD_INTENT_PATTERN.search(message) or LIVE_QUIZ_LINK_INTENT_PATTERN.search(message):
+            return True
+        return False
 
     def _first_unexecuted_step_index(self, run: AssistantRun) -> int:
         completed_step_ids = {result.step_id for result in run.tool_results if result.ok}
@@ -1928,18 +1992,7 @@ class AssistantOrchestrator:
         return True
 
     def _tool_error_message(self, result: ToolResult) -> str:
-        error = (
-            result.data.get("error")
-            or result.data.get("message")
-            or result.data.get("detail")
-            or result.data.get("result")
-            or "The tool returned an error."
-        )
-        if isinstance(error, list):
-            error = "; ".join(str(item) for item in error)
-        if result.tool_name == "quiz_generate":
-            return f"I could not generate the quiz: {error}"
-        return f"I could not complete `{result.tool_name}`: {error}"
+        return tool_error_message(result.tool_name, result.data)
 
     def _normalize_tool_result(
         self,
@@ -2153,6 +2206,15 @@ class AssistantOrchestrator:
         if last.tool_name == "quiz_generate":
             title = data.get("title") or "quiz"
             return AssistantFinalResponse(message=f"I generated {title}.")
+
+        if last.tool_name == "quiz_get_answers":
+            title = data.get("title") or "the quiz"
+            count = data.get("answer_count") or 0
+            warning = data.get("model_warning")
+            message = f"I found {count} answer{'s' if count != 1 else ''} for {title}."
+            if warning:
+                message = f"{message} {warning}"
+            return AssistantFinalResponse(message=message)
 
         if last.tool_name == "library_save_quiz":
             title = data.get("title") or "the quiz"

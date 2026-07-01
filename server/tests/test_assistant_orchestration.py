@@ -214,6 +214,16 @@ class ErrorMcpClient(FakeMcpClient):
         return {"isError": True, "error": "Generation provider failed."}
 
 
+class LimitErrorMcpClient(FakeMcpClient):
+    async def call_tool(self, **kwargs):
+        self.called = True
+        self.calls.append(kwargs)
+        return {
+            "isError": True,
+            "error": "Error executing tool quiz_generate: 422: Quiz generation is limited to 10 questions.",
+        }
+
+
 class MissingFolderMcpClient(FakeMcpClient):
     async def call_tool(self, **kwargs):
         tool_name = kwargs["tool_name"]
@@ -401,6 +411,60 @@ class GenerationModelRouter:
 
     async def final_response(self, prompt: str) -> AssistantFinalResponse:
         raise AssertionError("Final response model should not run for deterministic generation result.")
+
+
+class SaveHistoryArtifactModelRouter:
+    async def plan(self, prompt: str) -> PlannerDecision:
+        return PlannerDecision(
+            intent="save_history_quiz",
+            needs_tools=True,
+            steps=[
+                PlanStep(
+                    step_id="step_1",
+                    tool_name="library_save_quiz",
+                    arguments={"title": "Nigerian Insecurity"},
+                    requires_confirmation=True,
+                    reason="Save the selected history quiz.",
+                )
+            ],
+        )
+
+    async def execute(self, prompt: str) -> ExecutorDecision:
+        raise AssertionError("Executor should not be needed for artifact-backed save.")
+
+    async def final_response(self, prompt: str) -> AssistantFinalResponse:
+        return AssistantFinalResponse(message="Saved and prepared the download.", artifacts=[])
+
+
+class MissingArgumentLoopModelRouter:
+    def __init__(self):
+        self.plan_calls = 0
+
+    async def plan(self, prompt: str) -> PlannerDecision:
+        self.plan_calls += 1
+        if self.plan_calls == 1:
+            return PlannerDecision(
+                intent="save_quiz",
+                needs_tools=True,
+                steps=[
+                    PlanStep(
+                        step_id="step_1",
+                        tool_name="library_save_quiz",
+                        arguments={"title": "Nigerian Insecurity"},
+                        requires_confirmation=True,
+                    )
+                ],
+            )
+        return PlannerDecision(intent="general_chat", needs_tools=False, steps=[])
+
+    async def execute(self, prompt: str) -> ExecutorDecision:
+        raise AssertionError("Executor should not be needed.")
+
+    async def final_response(self, prompt: str) -> AssistantFinalResponse:
+        return AssistantFinalResponse(
+            message="I can use quiz history items when they include a quiz reference.",
+            artifacts=[],
+        )
 
 
 class IncompleteCompoundGenerationModelRouter:
@@ -840,6 +904,109 @@ async def test_assistant_returns_polished_login_prompt_for_authenticated_tools(m
     )
     assert response.actions == []
     assert response.artifacts == []
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_returns_generation_specific_login_prompt(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    service = make_service(GenerationModelRouter(), mcp_client)
+
+    response = await service.chat(
+        request=AssistantChatRequest(message="Generate a multichoice quiz on Biology with 3 questions."),
+        user=None,
+        authorization_header=None,
+    )
+
+    assert response.message == "Please log in to generate quizzes."
+    assert response.actions == []
+    assert response.artifacts == []
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_reuses_history_artifact_for_save_and_download(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    service = make_service(SaveHistoryArtifactModelRouter(), mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    response = await service.chat(
+        request=AssistantChatRequest(
+            message="Go ahead and save the Nigerian Insecurity quiz from history and also download it for me.",
+            recent_artifacts=[
+                {
+                    "type": "resource_list",
+                    "data": {
+                        "resource": "quiz_history",
+                        "title": "Quiz History",
+                        "items": [
+                            {
+                                "id": "history-1",
+                                "label": "Nigerian Insecurity",
+                                "href": "/quiz_history/history-1",
+                                "metadata": {
+                                    "id": "history-1",
+                                    "quiz_id": "quiz-history-1",
+                                    "title": "Nigerian Insecurity",
+                                    "question_type": "multichoice",
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
+        ),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert response.message == "Please confirm: save Nigerian Insecurity to your library."
+    assert response.actions[0].tool_name == "library_save_quiz"
+    assert response.actions[0].arguments["quiz_id"] == "quiz-history-1"
+    assert response.actions[0].arguments["title"] == "Nigerian Insecurity"
+    assert "questions" not in response.actions[0].arguments
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_replans_missing_argument_follow_up_instead_of_looping(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    router = MissingArgumentLoopModelRouter()
+    service = make_service(router, mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    first_response = await service.chat(
+        request=AssistantChatRequest(message="Save the Nigerian Insecurity quiz."),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert "questions before I can save the quiz" in first_response.message
+
+    second_response = await service.chat(
+        request=AssistantChatRequest(
+            message="Are you saying you cannot pull the quiz from my history?",
+            conversation_id=first_response.conversation_id,
+        ),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert second_response.message == "I can use quiz history items when they include a quiz reference."
+    assert router.plan_calls == 2
     assert mcp_client.called is False
 
 
@@ -1585,6 +1752,29 @@ async def test_assistant_does_not_report_generation_success_for_mcp_error(monkey
 
     assert response.message == "I could not generate the quiz: Generation provider failed."
     assert mcp_client.called is True
+
+
+@pytest.mark.asyncio
+async def test_assistant_sanitizes_generation_limit_errors(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = LimitErrorMcpClient()
+    service = make_service(GenerationModelRouter(), mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    response = await service.chat(
+        request=AssistantChatRequest(message="Generate an open ended quiz on Electricity with 15 questions."),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert response.message == "This quiz can have up to 10 questions. Try again with 10 or fewer."
+    assert "quiz_generate" not in response.message
+    assert "Error executing tool" not in response.message
 
 
 @pytest.mark.asyncio

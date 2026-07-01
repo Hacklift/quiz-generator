@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from server.app.core.config import settings
 from server.app.assistant.tool_policy import public_tool_catalog
 
 
@@ -40,6 +41,7 @@ def build_planner_prompt(
         "short answer -> short-answer; open ended -> open-ended. "
         "Map the requested question count into num_questions. In this app, a phrase like '4 quizzes' "
         "normally means 4 questions unless the user explicitly asks for multiple separate quiz documents. "
+        f"Never plan more than {settings.QUIZ_GENERATION_MAX_QUESTIONS} questions for quiz_generate. "
         "If difficulty_level or audience_type is missing, omit them or use the catalog defaults; "
         "they are not required for generation. "
         "For generate-and-folder workflows, use quiz_generate -> library_save_quiz -> "
@@ -56,6 +58,8 @@ def build_planner_prompt(
         "unless share_send_email is in the plan. "
         "For download/export requests, use quiz_export_link with the quiz_id from recent artifacts, page context, "
         "or a lookup step. Do not tell the user downloads are available unless the tool can produce an action. "
+        "For answer-key or get-answers requests, use quiz_get_answers with the quiz_id from recent artifacts, "
+        "page context, or a lookup step. Do not expose answers without quiz_get_answers. "
         "For live quiz link, participant link, attempt link, or access code requests, use "
         "live_quiz_get_access_link when the user asks for an existing link and live_quiz_create_access_link "
         "when the user asks only to create, generate, set up, or regenerate one. "
