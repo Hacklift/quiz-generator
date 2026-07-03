@@ -45,7 +45,7 @@ class LiveQuizSessionState(BaseModel):
     expires_at: datetime
     server_now: datetime
     submitted_at: Optional[datetime] = None
-    status: Literal["active", "submitted", "expired"]
+    status: Literal["active", "joined", "disconnected", "submitted", "expired"]
     current_question_index: int
     total_questions: int
     time_limit_minutes: int
@@ -86,7 +86,27 @@ class LiveQuizAnalyticsRow(BaseModel):
     score: Optional[int] = None
     total_questions: int
     percentage: Optional[float] = None
+    joined_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
+    progress: Optional[int] = None
+    current_question_number: Optional[int] = None
+    progress_percentage: Optional[float] = None
     status: str
     auto_submitted: bool = False
+
+
+class LiveQuizSummaryRow(BaseModel):
+    quiz_id: str
+    title: str
+    access_code: Optional[str] = None
+    access_code_expires_at: Optional[datetime] = None
+    time_limit_minutes: Optional[int] = None
+    participant_access_mode: str = "public"
+    invited_emails: List[str] = []
+    status: str
+    created_at: Optional[datetime] = None
+    participant_count: int = 0
+    completed_count: int = 0
+    average_score: Optional[float] = None

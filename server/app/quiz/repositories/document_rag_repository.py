@@ -173,7 +173,6 @@ async def upsert_document_embeddings(
             },
             "$setOnInsert": {
                 "created_at": now,
-                "access_count": 0,
             },
             "$inc": {"access_count": 1},
         },

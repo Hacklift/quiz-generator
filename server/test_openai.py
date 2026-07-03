@@ -2,7 +2,8 @@ import os
 
 import pytest
 
-from openai import OpenAI
+openai = pytest.importorskip("openai")
+OpenAI = openai.OpenAI
 
 from dotenv import load_dotenv
 
@@ -46,4 +47,3 @@ def test_openai_chat_completion():
 
 
     assert response.choices[0].message.content
-
