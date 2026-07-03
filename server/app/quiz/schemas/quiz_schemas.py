@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from datetime import datetime, timezone
 
@@ -75,6 +75,9 @@ class DeleteQuizResponse(BaseModel):
 class AccessCodeCreateRequest(BaseModel):
     time_limit_minutes: int = Field(gt=0, le=1440)
     access_code_expires_at: datetime
+    participant_access_mode: Literal["public", "restricted", "invited_only"] = "public"
+    invited_emails: List[str] = []
+    send_email_invitations: bool = False
 
 
 class AccessCodeResponse(BaseModel):
@@ -83,6 +86,10 @@ class AccessCodeResponse(BaseModel):
     live_quiz_enabled: bool
     time_limit_minutes: int
     access_code_expires_at: datetime
+    participant_access_mode: str = "public"
+    invited_emails: List[str] = []
+    invitations_created: int = 0
+    invitations_delivered: int = 0
 
 
 class QuizAccessPreview(BaseModel):
@@ -91,3 +98,4 @@ class QuizAccessPreview(BaseModel):
     total_questions: int
     time_limit_minutes: int
     access_code_expires_at: datetime
+    participant_access_mode: str = "public"

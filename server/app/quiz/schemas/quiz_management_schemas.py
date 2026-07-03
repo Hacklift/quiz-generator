@@ -29,8 +29,18 @@ class QuizHistoryQuestionResponse(BaseModel):
     answer: str
 
 
+class LiveQuizStatsResponse(BaseModel):
+    invited_participants: int = 0
+    joined_participants: int = 0
+    completed_participants: int = 0
+    average_score: Optional[float] = None
+    best_score: Optional[int] = None
+    quiz_status: str = "not_live"
+
+
 class QuizHistoryDetailResponse(BaseModel):
     id: str = Field(alias="_id")
+    quiz_id: Optional[str] = None
     created_at: Optional[datetime] = None
     quiz_name: Optional[str] = None
     question_type: str
@@ -38,6 +48,8 @@ class QuizHistoryDetailResponse(BaseModel):
     profession: Optional[str] = None
     audience_type: Optional[str] = None
     custom_instruction: Optional[str] = None
+    live_quiz_enabled: bool = False
+    live_quiz_stats: Optional[LiveQuizStatsResponse] = None
     questions: list[QuizHistoryQuestionResponse]
 
     model_config = ConfigDict(populate_by_name=True)

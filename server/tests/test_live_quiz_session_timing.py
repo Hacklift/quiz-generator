@@ -107,7 +107,7 @@ async def test_auto_submit_does_not_expire_before_expires_at(monkeypatch):
         )
 
     assert exc.value.status_code == 409
-    assert repository.session["status"] == "active"
+    assert repository.session["status"] == "joined"
 
 
 @pytest.mark.asyncio
