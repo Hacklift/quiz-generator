@@ -24,6 +24,9 @@ huggingface-hub = "*"
 rapidfuzz = "*"
 cryptography = "*"
 slowapi = "*"
+mcp = "*"
+google-genai = "*"
+groq = "*"
 
 [dev-packages]
 pytest = "*"

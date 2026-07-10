@@ -238,6 +238,44 @@ async def test_reference_repository_folder_item_soft_delete_and_revive(test_db):
 
 
 @pytest.mark.asyncio
+async def test_reference_repository_backfills_folder_item_saved_quiz_id(test_db):
+    repository = ReferenceV2Repository(
+        test_db["folders_v2"],
+        test_db["folder_items_v2"],
+        test_db["saved_quizzes_v2"],
+        test_db["quiz_history_v2"],
+    )
+
+    folder = await repository.insert_folder(FolderDocumentV2(user_id="user-folder", name="Systems"))
+    saved = await repository.upsert_saved_quiz(
+        SavedQuizDocumentV2(
+            user_id="user-folder",
+            quiz_id="quiz-2",
+            display_title="Saved quiz title",
+        ),
+        revive_deleted=True,
+    )
+    item = await repository.upsert_folder_item(
+        FolderItemDocumentV2(
+            folder_id=str(folder.id),
+            quiz_id="quiz-2",
+            display_title="Stale folder title",
+            position=0,
+        ),
+        revive_deleted=True,
+    )
+
+    assert item.saved_quiz_id is None
+
+    updated_count = await repository.backfill_folder_item_saved_quiz_ids()
+    updated_item = await repository.get_folder_item_by_id(str(item.id))
+
+    assert updated_count == 1
+    assert updated_item is not None
+    assert updated_item.saved_quiz_id == str(saved.id)
+
+
+@pytest.mark.asyncio
 async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy_state(test_db):
     repository = ReferenceV2Repository(
         test_db["folders_v2"],

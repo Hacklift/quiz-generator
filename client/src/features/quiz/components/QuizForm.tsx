@@ -12,6 +12,8 @@ import { useAuth } from "@features/auth/context/authContext";
 import { useRouter } from "next/navigation";
 import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
+import publicApi from "@shared/api/publicHttp";
+import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
@@ -324,6 +326,73 @@ export default function QuizForm() {
         return;
       }
 
+      const payload = {
+        question_type: questionType,
+        num_questions: numQuestions,
+        profession,
+        custom_instruction: customInstruction,
+        audience_type: audienceType,
+        difficulty_level: difficultyLevel,
+        token,
+        live_quiz_enabled: enableLiveQuiz,
+        time_limit_minutes: enableLiveQuiz ? liveDurationMinutes : undefined,
+        access_code_expires_at: enableLiveQuiz
+          ? new Date(liveAccessExpiresAt).toISOString()
+          : undefined,
+        participant_access_mode: enableLiveQuiz ? participantAccessMode : undefined,
+        invited_emails: enableLiveQuiz ? invitedEmails : undefined,
+        send_email_invitations: enableLiveQuiz
+          ? sendEmailInvitations
+          : undefined,
+      };
+
+      const client = enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
+      const { data } = await client.post("/api/get-questions", payload);
+      const questions = Array.isArray(data?.questions) ? data.questions : [];
+      if (!questions.length) {
+        throw new Error("No quiz questions returned.");
+      }
+
+      let canonicalQuizId = data?.quiz_id || "";
+      if (TokenService.hasTokens()) {
+        try {
+          const historyResponse = await saveQuizToHistory(
+            {
+              quiz_id: canonicalQuizId || undefined,
+              question_type: questionType,
+              num_questions: numQuestions,
+              difficulty_level: difficultyLevel,
+              profession,
+              audience_type: audienceType,
+              custom_instruction: customInstruction,
+            },
+            questions,
+          );
+          canonicalQuizId = canonicalQuizId || historyResponse?.data?.quiz_id || "";
+        } catch (historyError) {
+          console.error("Error saving quiz history:", historyError);
+        }
+      }
+
+      const generatedQuizView = {
+        id: canonicalQuizId || undefined,
+        quiz_id: canonicalQuizId || undefined,
+        title: profession || `${questionType} Quiz`,
+        description:
+          customInstruction ||
+          `A ${difficultyLevel} ${questionType} quiz for ${audienceType || "students"}.`,
+        question_type: questionType,
+        questions,
+        live_quiz_enabled: data?.live_quiz_enabled,
+        access_code: data?.access_code,
+        time_limit_minutes: data?.time_limit_minutes,
+        access_code_expires_at: data?.access_code_expires_at,
+      };
+      sessionStorage.setItem(
+        "generated_quiz_view",
+        JSON.stringify(generatedQuizView),
+      );
+
       const queryParams = new URLSearchParams({
         questionType,
         numQuestions: numQuestions.toString(),
@@ -343,6 +412,8 @@ export default function QuizForm() {
         invitedEmails: enableLiveQuiz ? invitedEmails.join(",") : "",
         sendEmailInvitations:
           enableLiveQuiz && sendEmailInvitations ? "true" : "false",
+        source: "generated-session",
+        ...(canonicalQuizId ? { quizId: canonicalQuizId } : {}),
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);

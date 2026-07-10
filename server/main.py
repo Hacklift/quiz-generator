@@ -3,6 +3,11 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
@@ -18,6 +23,8 @@ from server.app.db.core.connection import (
     get_users_collection,
     startUp,
 )
+from server.app.mcp.middleware import McpAuthorizationHeaderMiddleware
+from server.app.mcp.server import create_mcp_server
 
 
 logging.basicConfig(
@@ -26,13 +33,10 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(BASE_DIR, ".env"))
-load_dotenv()
-
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 raw_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 origins = [origin.strip() for origin in raw_origins if origin.strip() and origin.strip() != "*"]
+mcp_server = create_mcp_server()
 
 
 @asynccontextmanager
@@ -45,7 +49,8 @@ async def lifespan(app: FastAPI):
     app.state.auth_events_collection = get_auth_events_collection()
     app.state.quizzes_collection = get_quizzes_collection()
 
-    yield
+    async with mcp_server.session_manager.run():
+        yield
 
     get_users_collection().database.client.close()
     await redis_client.close()
@@ -61,5 +66,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 app.include_router(app_router)
+app.mount("/internal", McpAuthorizationHeaderMiddleware(mcp_server.streamable_http_app()))
