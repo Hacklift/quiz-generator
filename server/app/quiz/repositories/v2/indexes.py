@@ -97,6 +97,10 @@ async def ensure_folder_items_v2_indexes(collection: AsyncIOMotorCollection):
     )
     await collection.create_index([("folder_id", 1), ("position", 1)])
     await collection.create_index(
+        "saved_quiz_id",
+        partialFilterExpression={"saved_quiz_id": {"$exists": True, "$type": "string"}},
+    )
+    await collection.create_index(
         "legacy_folder_item_id",
         unique=True,
         partialFilterExpression={"legacy_folder_item_id": {"$exists": True, "$type": "string"}},

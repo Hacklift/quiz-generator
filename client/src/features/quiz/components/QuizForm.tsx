@@ -12,6 +12,17 @@ import { useAuth } from "@features/auth/context/authContext";
 import { useRouter } from "next/navigation";
 import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
+import publicApi from "@shared/api/publicHttp";
+import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
+
+type ApiErrorLike = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+  message?: string;
+};
 
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
@@ -134,11 +145,12 @@ export default function QuizForm() {
           setPreviousToken(res.data.token);
           sessionStorage.setItem("user_api_token", res.data.token);
         }
-      } catch (e: any) {
-        if (e?.response?.status === 404) {
+      } catch (e: unknown) {
+        const typedError = e as ApiErrorLike & { response?: { status?: number } };
+        if (typedError?.response?.status === 404) {
           return;
         }
-        console.warn("Error fetching user token:", e);
+        console.warn("Error fetching user token:", typedError);
       }
     };
 
@@ -219,7 +231,9 @@ export default function QuizForm() {
         participantAccessMode === "invited_only") &&
       invitedEmails.length === 0
     ) {
-      setErrorMessage("Please add at least one invited email for restricted access.");
+      setErrorMessage(
+        "Please add at least one invited email for restricted access.",
+      );
       return;
     }
 
@@ -322,6 +336,73 @@ export default function QuizForm() {
         return;
       }
 
+      const payload = {
+        question_type: questionType,
+        num_questions: numQuestions,
+        profession,
+        custom_instruction: customInstruction,
+        audience_type: audienceType,
+        difficulty_level: difficultyLevel,
+        token,
+        live_quiz_enabled: enableLiveQuiz,
+        time_limit_minutes: enableLiveQuiz ? liveDurationMinutes : undefined,
+        access_code_expires_at: enableLiveQuiz
+          ? new Date(liveAccessExpiresAt).toISOString()
+          : undefined,
+        participant_access_mode: enableLiveQuiz ? participantAccessMode : undefined,
+        invited_emails: enableLiveQuiz ? invitedEmails : undefined,
+        send_email_invitations: enableLiveQuiz
+          ? sendEmailInvitations
+          : undefined,
+      };
+
+      const client = enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
+      const { data } = await client.post("/api/get-questions", payload);
+      const questions = Array.isArray(data?.questions) ? data.questions : [];
+      if (!questions.length) {
+        throw new Error("No quiz questions returned.");
+      }
+
+      let canonicalQuizId = data?.quiz_id || "";
+      if (TokenService.hasTokens()) {
+        try {
+          const historyResponse = await saveQuizToHistory(
+            {
+              quiz_id: canonicalQuizId || undefined,
+              question_type: questionType,
+              num_questions: numQuestions,
+              difficulty_level: difficultyLevel,
+              profession,
+              audience_type: audienceType,
+              custom_instruction: customInstruction,
+            },
+            questions,
+          );
+          canonicalQuizId = canonicalQuizId || historyResponse?.data?.quiz_id || "";
+        } catch (historyError) {
+          console.error("Error saving quiz history:", historyError);
+        }
+      }
+
+      const generatedQuizView = {
+        id: canonicalQuizId || undefined,
+        quiz_id: canonicalQuizId || undefined,
+        title: profession || `${questionType} Quiz`,
+        description:
+          customInstruction ||
+          `A ${difficultyLevel} ${questionType} quiz for ${audienceType || "students"}.`,
+        question_type: questionType,
+        questions,
+        live_quiz_enabled: data?.live_quiz_enabled,
+        access_code: data?.access_code,
+        time_limit_minutes: data?.time_limit_minutes,
+        access_code_expires_at: data?.access_code_expires_at,
+      };
+      sessionStorage.setItem(
+        "generated_quiz_view",
+        JSON.stringify(generatedQuizView),
+      );
+
       const queryParams = new URLSearchParams({
         questionType,
         numQuestions: numQuestions.toString(),
@@ -335,19 +416,24 @@ export default function QuizForm() {
         liveAccessExpiresAt: enableLiveQuiz
           ? new Date(liveAccessExpiresAt).toISOString()
           : "",
-        participantAccessMode: enableLiveQuiz ? participantAccessMode : "public",
+        participantAccessMode: enableLiveQuiz
+          ? participantAccessMode
+          : "public",
         invitedEmails: enableLiveQuiz ? invitedEmails.join(",") : "",
         sendEmailInvitations:
           enableLiveQuiz && sendEmailInvitations ? "true" : "false",
+        source: "generated-session",
+        ...(canonicalQuizId ? { quizId: canonicalQuizId } : {}),
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
-    } catch (error: any) {
-      const detail =
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Failed to generate quiz. Please try again.";
-      setErrorMessage(detail);
+    } catch (error: unknown) {
+      const typedError = error as ApiErrorLike;
+      setErrorMessage(
+        typedError?.response?.data?.detail ||
+          typedError?.message ||
+          "Failed to generate quiz. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -448,7 +534,9 @@ export default function QuizForm() {
                 >
                   <option value="public">Public link</option>
                   <option value="restricted">Invited emails only</option>
-                  <option value="invited_only">Invited emails only (strict)</option>
+                  <option value="invited_only">
+                    Invited emails only (strict)
+                  </option>
                 </select>
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50] md:col-span-2">

@@ -24,6 +24,7 @@ from docx import Document
 from pypdf import PdfReader
 
 from server.app.quiz.services.download_service import (
+    build_download_filename,
     download_mock_quiz,
     download_quiz_by_id,
 )
@@ -87,7 +88,15 @@ def test_download_quiz_valid_formats(
 
     assert response.media_type == content_type
 
-    assert response.headers["Content-Disposition"] == f"attachment; filename=quiz_data.{format}"
+    assert response.headers["Content-Disposition"] == f'attachment; filename="Multichoice Quiz.{format}"'
+
+
+def test_build_download_filename_preserves_readable_quiz_title():
+    assert (
+        build_download_filename("Circuit Breaker in systems design", "pdf")
+        == "Circuit Breaker in systems design.pdf"
+    )
+    assert build_download_filename('Circuit/Breaker: "Retry"', "txt") == "Circuit Breaker Retry.txt"
 
 
 @pytest.mark.parametrize("question_type", ["invalid-type", "random"])
@@ -155,7 +164,12 @@ async def test_download_quiz_api_valid(format, question_type, num_question):
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }[format]
     assert "Content-Disposition" in response.headers
-    assert f"attachment; filename=quiz_data.{format}" in response.headers["Content-Disposition"]
+    expected_title = {
+        "multichoice": "Multichoice Quiz",
+        "true-false": "True False Quiz",
+        "open-ended": "Open Ended Quiz",
+    }[question_type]
+    assert response.headers["Content-Disposition"] == f'attachment; filename="{expected_title}.{format}"'
 
 
 
@@ -361,6 +375,7 @@ async def test_download_quiz_from_payload_supports_current_displayed_quiz():
 
     assert isinstance(response, StreamingResponse)
     assert response.media_type == "application/json"
+    assert response.headers["Content-Disposition"] == 'attachment; filename="Current Quiz.json"'
 
 
 @pytest.mark.asyncio
@@ -369,6 +384,8 @@ async def test_download_quiz_by_id_reads_canonical_v2_quiz_and_normalizes_answer
 
     v2_collection.find_one.return_value = {
         "_id": ObjectId("69e78f93594339fd166131ea"),
+        "title": "AI Automation Basics",
+        "quiz_type": "multichoice",
         "questions": [
             {
                 "question": "What is the main goal of AI automation?",
@@ -394,3 +411,4 @@ async def test_download_quiz_by_id_reads_canonical_v2_quiz_and_normalizes_answer
 
     assert isinstance(response, StreamingResponse)
     assert response.media_type == "text/plain"
+    assert response.headers["Content-Disposition"] == 'attachment; filename="AI Automation Basics.txt"'

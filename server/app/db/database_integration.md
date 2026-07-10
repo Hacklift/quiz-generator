@@ -31,7 +31,7 @@ Ensure the following are installed on your development environment:
 
 - MongoDB (local)
 - Python 3.12
-- Required Python packages listed in `requirements.txt`
+- Required Python packages installed from `Pipfile` and `Pipfile.lock`
 - Access to the `seed_data.py` and `seed.py` files located in the `app` folder
 
 ---

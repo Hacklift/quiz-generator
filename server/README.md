@@ -32,6 +32,8 @@ source .venv/bin/activate
 ### 3. Install Dependencies
 
 Ensure you have Python 3.12 installed. Then, install the required dependencies using `pipenv`.
+The backend dependency source of truth is `Pipfile` and `Pipfile.lock`.
+Do not treat `server/requirements.txt` as the primary manifest for backend feature work.
 
 ```bash
 pipenv install
@@ -61,13 +63,15 @@ For document-based quiz generation with RAG, configure:
 
 ```plaintext
 HUGGINGFACEHUB_API_TOKEN=hf_replace_with_your_token
-HF_QUIZ_MODEL=Qwen/Qwen2.5-7B-Instruct
-HF_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-DOCUMENT_UPLOAD_MAX_BYTES=10485760
-DOCUMENT_TEXT_MAX_CHARS=50000
-DOCUMENT_RAG_MAX_CHUNKS=24
-DOCUMENT_RAG_TOP_K=8
 ```
+
+The remaining document quiz model and chunking settings already have defaults in
+[server/app/core/config.py](/home/glory/quiz-generator/server/app/core/config.py:25).
+Only add them to `.env` when you need to override those defaults for a specific environment.
+
+The remaining document quiz model and chunking settings already have defaults in
+[server/app/core/config.py](/home/glory/quiz-generator/server/app/core/config.py:25).
+Only add them to `.env` when you need to override those defaults for a specific environment.
 
 ### 5. Run the Application
 

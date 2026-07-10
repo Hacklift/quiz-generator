@@ -25,6 +25,9 @@ rapidfuzz = "*"
 cryptography = "*"
 slowapi = "*"
 stripe = "*"
+mcp = "*"
+google-genai = "*"
+groq = "*"
 
 [dev-packages]
 pytest = "*"

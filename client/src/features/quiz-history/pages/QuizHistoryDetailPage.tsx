@@ -137,7 +137,9 @@ export default function QuizHistoryDetailsPage() {
                         </span>
                         <span>
                           Best:{" "}
-                          <strong>{item.live_quiz_stats.best_score ?? "-"}</strong>
+                          <strong>
+                            {item.live_quiz_stats.best_score ?? "-"}
+                          </strong>
                         </span>
                         <span>
                           Status:{" "}
