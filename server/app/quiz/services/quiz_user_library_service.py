@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Any
 
+from rapidfuzz import fuzz
+
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
     get_folders_v2_collection,
@@ -76,6 +78,18 @@ class QuizUserLibraryService:
     async def _get_quizzes_by_ids(self, quiz_ids: list[str]) -> dict[str, QuizDocumentV2]:
         quizzes = await self.quiz_repository.find_many_by_ids(quiz_ids)
         return {str(quiz.id): quiz for quiz in quizzes}
+
+    async def _get_saved_quizzes_by_ids(
+        self,
+        saved_quiz_ids: list[str],
+        *,
+        user_id: str | None = None,
+    ) -> dict[str, SavedQuizDocumentV2]:
+        references = await self.reference_repository.list_saved_quizzes_by_ids(
+            saved_quiz_ids,
+            user_id=user_id,
+        )
+        return {str(reference.id): reference for reference in references}
 
     async def _resolve_or_create_quiz(
         self,
@@ -167,6 +181,31 @@ class QuizUserLibraryService:
 
     async def get_saved_quiz_by_id(self, saved_quiz_id: str, user_id: str) -> dict[str, Any] | None:
         return await self.get_saved_quiz(user_id=user_id, saved_quiz_id=saved_quiz_id)
+
+    async def find_saved_quiz_by_title(self, *, user_id: str, title: str, limit: int = 10) -> dict[str, Any]:
+        normalized_title = title.strip().casefold()
+        saved_quizzes = await self.list_saved_quizzes(user_id=user_id, limit=500)
+        matches: list[dict[str, Any]] = []
+        for saved_quiz in saved_quizzes:
+            saved_title = str(saved_quiz.get("title") or "")
+            normalized_saved_title = saved_title.casefold()
+            similarity = max(
+                fuzz.partial_ratio(normalized_title, normalized_saved_title),
+                fuzz.token_set_ratio(normalized_title, normalized_saved_title),
+            )
+            if normalized_title in normalized_saved_title or similarity >= 85:
+                matches.append({**saved_quiz, "match_score": similarity})
+        matches = sorted(matches, key=lambda item: item.get("match_score", 0), reverse=True)
+        best_match = matches[0] if matches else None
+        return {
+            "query": title,
+            "found": bool(matches),
+            "saved_quiz_id": best_match.get("id") if best_match else None,
+            "quiz_id": best_match.get("quiz_id") if best_match else None,
+            "title": best_match.get("title") if best_match else None,
+            "question_type": best_match.get("question_type") if best_match else None,
+            "matches": matches[:limit],
+        }
 
     async def delete_saved_quiz(self, *, user_id: str, saved_quiz_id: str) -> bool:
         return await self.reference_repository.delete_saved_quiz_for_user(user_id, saved_quiz_id)
@@ -318,16 +357,30 @@ class QuizUserLibraryService:
             raise PermissionError("Unauthorized access to folder")
         items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
         quizzes_by_id = await self._get_quizzes_by_ids([item.quiz_id for item in items])
+        saved_quizzes_by_id = await self._get_saved_quizzes_by_ids(
+            [
+                item.saved_quiz_id
+                for item in items
+                if item.saved_quiz_id
+            ],
+            user_id=user_id,
+        )
         quiz_items = []
         for item in sorted(items, key=lambda value: (value.position if value.position is not None else 10**9, value.created_at)):
             quiz = quizzes_by_id.get(item.quiz_id)
             if quiz is None:
                 continue
+            saved_reference = saved_quizzes_by_id.get(item.saved_quiz_id or "")
             quiz_items.append(
                 {
                     "id": str(item.id),
                     "quiz_id": str(quiz.id),
-                    "title": item.display_title or quiz.title,
+                    "saved_quiz_id": item.saved_quiz_id,
+                    "title": (
+                        saved_reference.display_title
+                        if saved_reference and saved_reference.display_title
+                        else item.display_title or quiz.title
+                    ),
                     "question_type": self._quiz_type(quiz),
                     "questions": self._saved_questions(quiz),
                     "created_at": self._isoformat(item.created_at),
@@ -341,6 +394,48 @@ class QuizUserLibraryService:
             "created_at": self._isoformat(folder.created_at),
             "updated_at": self._isoformat(folder.updated_at),
             "quizzes": quiz_items,
+        }
+
+    async def get_folder_by_name(self, *, user_id: str, name: str) -> dict[str, Any] | None:
+        normalized_name = name.strip().casefold()
+        folders = await self.reference_repository.list_folders_for_user(user_id)
+        for folder in folders:
+            if folder.name.strip().casefold() == normalized_name:
+                return await self.get_folder(folder_id=str(folder.id), user_id=user_id)
+        return None
+
+    async def find_quiz_in_folders_by_title(self, *, user_id: str, title: str) -> dict[str, Any]:
+        normalized_title = title.strip().casefold()
+        matches: list[dict[str, Any]] = []
+        folders = await self.reference_repository.list_folders_for_user(user_id)
+        for folder in folders:
+            folder_payload = await self.get_folder(folder_id=str(folder.id), user_id=user_id)
+            if not folder_payload:
+                continue
+            for quiz in folder_payload.get("quizzes", []):
+                quiz_title = str(quiz.get("title") or "")
+                normalized_quiz_title = quiz_title.casefold()
+                similarity = max(
+                    fuzz.partial_ratio(normalized_title, normalized_quiz_title),
+                    fuzz.token_set_ratio(normalized_title, normalized_quiz_title),
+                )
+                if normalized_title in normalized_quiz_title or similarity >= 85:
+                    matches.append(
+                        {
+                            "folder_id": folder_payload["id"],
+                            "folder_name": folder_payload["name"],
+                            "folder_item_id": quiz.get("id"),
+                            "quiz_id": quiz.get("quiz_id"),
+                            "title": quiz_title,
+                            "question_type": quiz.get("question_type"),
+                            "questions": quiz.get("questions") or [],
+                            "match_score": similarity,
+                        }
+                    )
+        return {
+            "query": title,
+            "found": bool(matches),
+            "matches": matches,
         }
 
     async def get_folder_by_id(self, folder_id: str, user_id: str) -> dict[str, Any] | None:
@@ -384,6 +479,7 @@ class QuizUserLibraryService:
             FolderItemDocumentV2(
                 folder_id=str(folder.id),
                 quiz_id=str(quiz.id),
+                saved_quiz_id=str(saved_quiz.id),
                 added_by=user_id,
                 position=len(existing_items),
                 display_title=saved_quiz.display_title or quiz.title,
@@ -430,3 +526,6 @@ class QuizUserLibraryService:
             position=len(target_items),
         )
         return updated is not None
+
+    async def backfill_folder_item_saved_quiz_ids(self, *, limit: int = 100_000) -> int:
+        return await self.reference_repository.backfill_folder_item_saved_quiz_ids(limit=limit)

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -15,6 +16,13 @@ from server.app.quiz.utils.generate_pdf import generate_pdf
 from server.app.quiz.utils.generate_txt import generate_txt
 
 logger = logging.getLogger(__name__)
+
+
+def build_download_filename(title: str | None, file_format: str) -> str:
+    base_name = (title or "Quiz").strip() or "Quiz"
+    safe_name = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", base_name)
+    safe_name = re.sub(r"\s+", " ", safe_name).strip() or "Quiz"
+    return f"{safe_name}.{file_format}"
 
 
 def _build_default_title(question_type: str | None) -> str:
@@ -104,10 +112,11 @@ def download_mock_quiz(format: str, question_type: str, num_question: int) -> St
         questions=sliced_quiz_data,
     )
     response = _render_download_stream(payload, format)
+    filename = build_download_filename(payload["title"], format)
 
     response.headers.update(
         {
-            "Content-Disposition": f"attachment; filename=quiz_data.{format}"
+            "Content-Disposition": f'attachment; filename="{filename}"'
         }
     )
     return response
@@ -131,10 +140,10 @@ def download_quiz_from_payload(
         questions=questions,
     )
     response = _render_download_stream(payload, file_format)
-    filename_base = (payload["title"] or "quiz").strip().replace(" ", "_").lower()
+    filename = build_download_filename(payload["title"], file_format)
     response.headers.update(
         {
-            "Content-Disposition": f"attachment; filename={filename_base}.{file_format}"
+            "Content-Disposition": f'attachment; filename="{filename}"'
         }
     )
     return response
@@ -192,9 +201,10 @@ async def download_quiz_by_id(
     # STEP 4 — Generate the downloadable file
     response = _render_download_stream(payload, file_format)
     logger.info(f"download of quiz {quiz_id} should commence immediately!")
+    filename = build_download_filename(payload["title"], file_format)
     response.headers.update(
         {
-            "Content-Disposition": f"attachment; filename=quiz_{quiz_id}.{file_format}"
+            "Content-Disposition": f'attachment; filename="{filename}"'
         }
     )
     return response

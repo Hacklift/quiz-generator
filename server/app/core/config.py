@@ -1,7 +1,8 @@
+import os
 from functools import lru_cache
 from typing import Literal, Optional
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -46,6 +47,33 @@ class Settings(BaseSettings):
     V2_BACKFILL_COLLECTIONS: str = "quizzes,saved,history,folders"
     V2_BACKFILL_RUN_ID: Optional[str] = None
     V2_BACKFILL_LOCK_LEASE_SECONDS: int = 600
+    ASSISTANT_ENABLED: bool = True
+    ASSISTANT_INTERNAL_MCP_URL: Optional[str] = None
+    ASSISTANT_INTERNAL_MCP_SECRET: str
+    ASSISTANT_PLANNER_PROVIDER: str = "gemini"
+    ASSISTANT_PLANNER_MODEL: str = "gemini-2.5-flash"
+    ASSISTANT_PLANNER_FALLBACK_MODEL: str = "gemini-2.5-flash-lite"
+    GEMINI_API_KEY: Optional[str] = None
+    ASSISTANT_EXECUTOR_PROVIDER: str = "groq"
+    ASSISTANT_EXECUTOR_MODEL: str = "openai/gpt-oss-20b"
+    ASSISTANT_EXECUTOR_FALLBACK_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    GROQ_API_KEY: Optional[str] = None
+    ASSISTANT_MAX_TOOL_CALLS: int = 6
+    ASSISTANT_REQUIRE_CONFIRMATION_FOR_WRITES: bool = True
+    ASSISTANT_PENDING_RUN_TTL_SECONDS: int = 900
+
+    @property
+    def resolved_assistant_internal_mcp_secret(self) -> str:
+        return self.ASSISTANT_INTERNAL_MCP_SECRET
+
+    @model_validator(mode="after")
+    def resolve_internal_mcp_url(self):
+        if not self.ASSISTANT_INTERNAL_MCP_SECRET.strip():
+            raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
+        if not self.ASSISTANT_INTERNAL_MCP_URL:
+            port = os.getenv("PORT", "8000")
+            self.ASSISTANT_INTERNAL_MCP_URL = f"http://127.0.0.1:{port}/internal/mcp"
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

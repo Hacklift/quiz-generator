@@ -112,6 +112,7 @@ async def add_quiz_to_folder_route(folder_id: str, quiz_data: QuizData, user=Dep
         "message": "Quiz added to folder successfully",
         "quiz": {
             "id": str(folder_item.id),
+            "saved_quiz_id": folder_item.saved_quiz_id,
             "title": folder_item.display_title,
             "quiz_id": folder_item.quiz_id,
         },

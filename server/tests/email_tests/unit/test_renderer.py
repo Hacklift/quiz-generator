@@ -53,6 +53,23 @@ def test_render_custom_template():
     assert body_text in msg.get_payload()
 
 
+def test_render_live_quiz_invite_uses_quiz_duration_wording():
+    msg = render_email(
+        "live_quiz_invite",
+        "user@example.com",
+        {
+            "title": "Database Sharding",
+            "link": "http://localhost:3000/quiz-access/ABC123",
+            "message": "Please attempt this quiz.",
+            "time_limit_minutes": 20,
+        },
+    )
+
+    body = msg.get_payload()
+    assert "Quiz duration: 20 minutes" in body
+    assert "Time limit" not in body
+
+
 def test_render_quiz_link_missing_vars_raises_keyerror():
     try:
         render_email("quiz_link", "user@example.com", {"description": "D", "link": "http://x"})
