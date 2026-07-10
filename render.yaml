@@ -6,7 +6,7 @@ services:
       cd server && \
       pip install --upgrade pip && \
       pip install "pipenv==2026.0.3" && \
-      pipenv install --system --deploy
+      pipenv install --system --skip-lock
     startCommand: bash server/start_server_and_celery.sh
     envVars:
       - key: PYTHON_VERSION
@@ -29,6 +29,8 @@ services:
       - key: ALLOWED_ORIGINS
         sync: false
       - key: DB_NAME
+        sync: false
+      - key: FRONTEND_BASE_URL
         sync: false
       - key: EMAIL_PASSWORD
         sync: false
@@ -54,6 +56,13 @@ services:
         sync: false
       - key: PRIMARY_EMAIL_PROVIDER
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ID_YEARLY
       - key: PORT
         value: "10000"
       - key: GROQ_API_KEY

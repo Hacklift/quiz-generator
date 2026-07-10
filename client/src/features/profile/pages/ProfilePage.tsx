@@ -9,6 +9,12 @@ import {
   verifyEmailChange,
   deleteAccount,
 } from "@features/auth/api/authApi";
+import {
+  SubscriptionSummary,
+  createPortalSession,
+  getBillingErrorMessage,
+  getSubscriptionSummary,
+} from "@features/profile/api/billingApi";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
@@ -29,8 +35,15 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [activeSettingSection, setActiveSettingSection] = useState<
-    "account" | "profile" | null
+    "account" | "billing" | "profile" | null
   >(null);
+  const [paymentNotice, setPaymentNotice] = useState<{
+    type: "cancelled" | "success";
+    message: string;
+  } | null>(null);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [billingSummary, setBillingSummary] =
+    useState<SubscriptionSummary | null>(null);
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -59,6 +72,93 @@ export default function ProfilePage() {
       setPublicProfile(storedPublicProfile === "true");
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setBillingSummary(null);
+      return;
+    }
+
+    setBillingSummary({
+      subscription_plan: user.subscription_plan || "free",
+      subscription_status: user.subscription_status || "inactive",
+      stripe_customer_id: user.stripe_customer_id,
+      stripe_subscription_id: user.stripe_subscription_id,
+      current_period_end: user.current_period_end,
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const paymentState = Array.isArray(router.query.payment)
+      ? router.query.payment[0]
+      : router.query.payment;
+
+    if (paymentState === "success") {
+      setPaymentNotice({
+        type: "success",
+        message:
+          "Payment completed. Your subscription status has been refreshed.",
+      });
+
+      void (async () => {
+        try {
+          let latestSummary: SubscriptionSummary | null = null;
+
+          for (let attempt = 0; attempt < 4; attempt += 1) {
+            latestSummary = await getSubscriptionSummary();
+            setBillingSummary(latestSummary);
+
+            if (
+              latestSummary.current_period_end ||
+              latestSummary.subscription_status === "active"
+            ) {
+              break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+
+          await refreshUser();
+        } catch (error: any) {
+          toast.error(
+            getBillingErrorMessage(
+              error,
+              "Payment succeeded, but the profile refresh failed.",
+            ),
+          );
+        } finally {
+          void router.replace("/profile", undefined, { shallow: true });
+        }
+      })();
+      return;
+    }
+
+    if (paymentState === "cancelled") {
+      setPaymentNotice({
+        type: "cancelled",
+        message: "Checkout was cancelled. No changes were made to your plan.",
+      });
+      void router.replace("/profile", undefined, { shallow: true });
+    }
+  }, [refreshUser, router, router.isReady, router.query.payment]);
+
+  useEffect(() => {
+    if (!user?.stripe_customer_id || user.current_period_end) {
+      return;
+    }
+
+    void getSubscriptionSummary()
+      .then((summary) => {
+        setBillingSummary(summary);
+      })
+      .catch(() => {
+        // Keep the current profile snapshot if reconciliation fails.
+      });
+  }, [user?.current_period_end, user?.stripe_customer_id]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -156,6 +256,20 @@ export default function ProfilePage() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    try {
+      setIsOpeningPortal(true);
+      const { portal_url } = await createPortalSession();
+      window.location.assign(portal_url);
+    } catch (error: any) {
+      toast.error(
+        getBillingErrorMessage(error, "Unable to open the billing portal."),
+      );
+    } finally {
+      setIsOpeningPortal(false);
+    }
+  };
+
   const handleCancelEdit = () => {
     if (user) {
       setFormData({
@@ -182,6 +296,39 @@ export default function ProfilePage() {
     "#0891b2",
     "#6366f1",
   ];
+
+  const billingPlan = billingSummary?.subscription_plan || user?.subscription_plan || "free";
+  const billingStatus =
+    billingSummary?.subscription_status || user?.subscription_status || "inactive";
+  const billingRenewalDate =
+    billingSummary?.current_period_end || user?.current_period_end || null;
+  const hasBillingPortalAccess = Boolean(
+    billingSummary?.stripe_customer_id || user?.stripe_customer_id,
+  );
+
+  const formatPlanLabel = (plan?: string) => {
+    if (!plan || plan === "free") {
+      return "Free";
+    }
+    return plan.charAt(0).toUpperCase() + plan.slice(1);
+  };
+
+  const formatStatusLabel = (status?: string) => {
+    if (!status || status === "inactive") {
+      return "Inactive";
+    }
+    return status
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const subscriptionStatusClassName =
+    billingStatus === "active"
+      ? "bg-green-100 text-green-800"
+      : billingStatus === "past_due"
+        ? "bg-amber-100 text-amber-800"
+        : "bg-gray-100 text-gray-700";
 
   if (isLoading) {
     return (
@@ -254,6 +401,18 @@ export default function ProfilePage() {
                 />
               </svg>
               <span className="text-red-800">{saveError}</span>
+            </div>
+          )}
+
+          {paymentNotice && (
+            <div
+              className={`mb-6 rounded-lg border p-4 ${
+                paymentNotice.type === "success"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {paymentNotice.message}
             </div>
           )}
 
@@ -462,6 +621,60 @@ export default function ProfilePage() {
                     Active
                   </span>
                 </div>
+                <div className="border-t pt-4">
+                  <div className="rounded-2xl border border-[#143E6F]/10 bg-[#f8fbff] p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#143E6F]/70">
+                          Billing
+                        </p>
+                        <h4 className="mt-2 text-lg font-semibold text-[#102347]">
+                          {formatPlanLabel(billingPlan)} plan
+                        </h4>
+                        <div className="mt-3">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
+                          >
+                            {formatStatusLabel(billingStatus)}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm text-gray-600">
+                          {billingRenewalDate
+                            ? `Renews on ${new Date(billingRenewalDate).toLocaleDateString()}`
+                            : billingPlan === "free"
+                              ? "Upgrade to unlock paid billing features and higher quiz capacity."
+                              : "Your renewal date will appear after Stripe confirms the subscription."}
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {hasBillingPortalAccess ? (
+                          <button
+                            onClick={handleManageSubscription}
+                            disabled={isOpeningPortal}
+                            className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isOpeningPortal
+                              ? "Opening portal..."
+                              : "Manage subscription"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push("/#pricing")}
+                            className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54]"
+                          >
+                            View plans
+                          </button>
+                        )}
+                        <button
+                          onClick={() => router.push("/billing_history")}
+                          className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5"
+                        >
+                          Billing history
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -497,6 +710,98 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-4">
+                <div className="border border-[#143E6F]/20 rounded-xl">
+                  <button
+                    onClick={() =>
+                      setActiveSettingSection((prev) =>
+                        prev === "billing" ? null : "billing",
+                      )
+                    }
+                    className="w-full px-5 py-4 flex items-center justify-between text-left"
+                  >
+                    <h4 className="text-lg font-semibold text-[#143E6F]">
+                      Billing
+                    </h4>
+                    <span className="text-[#143E6F]">
+                      {activeSettingSection === "billing" ? "-" : "+"}
+                    </span>
+                  </button>
+                  {activeSettingSection === "billing" && (
+                    <div className="border-t border-[#143E6F]/10 p-5 space-y-4">
+                      <div className="rounded-xl border border-[#143E6F]/10 bg-[#f8fbff] p-4">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">
+                              Current plan
+                            </p>
+                            <h5 className="mt-1 text-xl font-semibold text-[#102347]">
+                              {formatPlanLabel(billingPlan)}
+                            </h5>
+                            <p className="mt-2 text-sm text-gray-600">
+                              Status: {formatStatusLabel(billingStatus)}
+                            </p>
+                            {billingRenewalDate ? (
+                              <p className="mt-1 text-sm text-gray-600">
+                                Renewal date:{" "}
+                                {new Date(
+                                  billingRenewalDate,
+                                ).toLocaleDateString()}
+                              </p>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`inline-flex self-start rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
+                          >
+                            {formatStatusLabel(billingStatus)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {hasBillingPortalAccess ? (
+                          <button
+                            onClick={handleManageSubscription}
+                            disabled={isOpeningPortal}
+                            className="rounded-lg bg-[#143E6F] px-4 py-3 text-left text-white hover:bg-[#0f2f54] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <p className="font-medium">
+                              {isOpeningPortal
+                                ? "Opening portal..."
+                                : "Manage subscription"}
+                            </p>
+                            <p className="mt-1 text-sm text-white/80">
+                              Open the Stripe customer portal to update your
+                              billing details.
+                            </p>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => router.push("/#pricing")}
+                            className="rounded-lg bg-[#143E6F] px-4 py-3 text-left text-white hover:bg-[#0f2f54]"
+                          >
+                            <p className="font-medium">Upgrade plan</p>
+                            <p className="mt-1 text-sm text-white/80">
+                              Return to pricing and start a paid subscription.
+                            </p>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => router.push("/billing_history")}
+                          className="rounded-lg border border-gray-200 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <p className="font-medium text-gray-900">
+                            Billing history
+                          </p>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Review invoices, receipts, and subscription charges.
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="border border-[#143E6F]/20 rounded-xl">
                   <button
                     onClick={() =>

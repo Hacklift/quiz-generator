@@ -49,11 +49,25 @@ direnv allow
 
 Start from [server/.env.example](/home/glory/quiz-generator/server/.env.example:1) and provide values for the required variables.
 
+Payment-specific variables:
+
+```plaintext
+FRONTEND_BASE_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+STRIPE_PRICE_ID_MONTHLY=price_replace_monthly
+STRIPE_PRICE_ID_YEARLY=price_replace_yearly
+```
+
 For document-based quiz generation with RAG, configure:
 
 ```plaintext
 HUGGINGFACEHUB_API_TOKEN=hf_replace_with_your_token
 ```
+
+The remaining document quiz model and chunking settings already have defaults in
+[server/app/core/config.py](/home/glory/quiz-generator/server/app/core/config.py:25).
+Only add them to `.env` when you need to override those defaults for a specific environment.
 
 The remaining document quiz model and chunking settings already have defaults in
 [server/app/core/config.py](/home/glory/quiz-generator/server/app/core/config.py:25).
