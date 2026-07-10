@@ -77,10 +77,7 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
   return (
     <section className="rounded-md border border-slate-200 bg-white px-4 py-5 shadow-sm">
       <h2 className="text-lg font-bold text-[#0F2654]">Live Quiz Mode</h2>
-      <form
-        onSubmit={handleSubmit}
-        className="mt-4 grid gap-4 md:grid-cols-2"
-      >
+      <form onSubmit={handleSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="block text-sm font-semibold text-slate-700">
           Duration minutes
           <input

@@ -211,7 +211,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         answer,
       );
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not autosave answer.");
+      toast.error(
+        error?.response?.data?.detail || "Could not autosave answer.",
+      );
     }
   };
 
@@ -284,9 +286,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<LiveQuizPageProps> = async ({
-  params,
-}) => ({
+export const getServerSideProps: GetServerSideProps<
+  LiveQuizPageProps
+> = async ({ params }) => ({
   props: {
     sessionId: String(params?.sessionId || ""),
   },

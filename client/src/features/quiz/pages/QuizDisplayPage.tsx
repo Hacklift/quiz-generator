@@ -21,6 +21,8 @@ import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAcce
 
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
+  const isDocumentGenerated = searchParams?.get("generated") === "document";
+  const generatedQuizKey = searchParams?.get("generatedQuizKey") || "";
   const savedQuizId = searchParams?.get("savedId") || searchParams?.get("id");
   const canonicalQuizId = searchParams?.get("quizId") || "";
   const questionType = searchParams?.get("questionType") || "multichoice";
@@ -35,10 +37,7 @@ const QuizDisplayPage: React.FC = () => {
     Number(searchParams?.get("liveDurationMinutes")) || 20;
   const liveAccessExpiresAt = searchParams?.get("liveAccessExpiresAt") || "";
   const participantAccessModeParam = searchParams?.get("participantAccessMode");
-  const participantAccessMode:
-    | "public"
-    | "restricted"
-    | "invited_only" =
+  const participantAccessMode: "public" | "restricted" | "invited_only" =
     participantAccessModeParam === "restricted" ||
     participantAccessModeParam === "invited_only"
       ? participantAccessModeParam
@@ -62,10 +61,19 @@ const QuizDisplayPage: React.FC = () => {
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
+  const [documentContext, setDocumentContext] = useState<{
+    sourceDocumentName: string;
+    sourceDocumentType: string;
+    totalSourceChunks: number;
+    retrievedChunks: number;
+    sourceCharacters: number;
+    ragStrategy: string;
+    embeddingCacheHit: boolean;
+  } | null>(null);
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const hasFetchedRef = useRef(false); 
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -74,8 +82,106 @@ const QuizDisplayPage: React.FC = () => {
     const fetchQuizQuestions = async () => {
       try {
         setIsLoading(true);
+        setDocumentContext(null);
         let questions: any[] = [];
         let resolvedQuizId = "";
+
+        const generatedQuiz = generatedQuizKey
+          ? sessionStorage.getItem(generatedQuizKey)
+          : null;
+        if (generatedQuiz) {
+          const parsedGeneratedQuiz = JSON.parse(generatedQuiz);
+          const generatedQuestions = Array.isArray(
+            parsedGeneratedQuiz?.questions,
+          )
+            ? parsedGeneratedQuiz.questions
+            : [];
+
+          if (generatedQuestions.length > 0) {
+            const resolvedGeneratedQuizId =
+              parsedGeneratedQuiz?.quiz_id || canonicalQuizId || "";
+            const normalizedQuestions = generatedQuestions.map((q: any) => ({
+              ...q,
+              answer: q.answer || q.correct_answer,
+              question_type: q.question_type || questionType,
+            }));
+
+            setQuizTitle(
+              parsedGeneratedQuiz?.title || `${profession || "Document"} Quiz`,
+            );
+            setQuizDescription(
+              parsedGeneratedQuiz?.description ||
+                customInstruction ||
+                "Generated from uploaded learning material.",
+            );
+            if (parsedGeneratedQuiz?.source_document_name) {
+              setDocumentContext({
+                sourceDocumentName: parsedGeneratedQuiz.source_document_name,
+                sourceDocumentType: parsedGeneratedQuiz.source_document_type,
+                totalSourceChunks: Number(
+                  parsedGeneratedQuiz.total_source_chunks || 0,
+                ),
+                retrievedChunks: Number(
+                  parsedGeneratedQuiz.retrieved_chunks || 0,
+                ),
+                sourceCharacters: Number(
+                  parsedGeneratedQuiz.source_characters || 0,
+                ),
+                ragStrategy:
+                  parsedGeneratedQuiz.rag_strategy || "embedding_mmr",
+                embeddingCacheHit: Boolean(
+                  parsedGeneratedQuiz.embedding_cache_hit,
+                ),
+              });
+            }
+            setQuizQuestions(normalizedQuestions);
+            setUserAnswers(Array(normalizedQuestions.length).fill(""));
+            if (resolvedGeneratedQuizId) {
+              setQuizId(resolvedGeneratedQuizId);
+              resolvedQuizId = resolvedGeneratedQuizId;
+            }
+            if (parsedGeneratedQuiz?.access_code) {
+              setLiveAccessCode(parsedGeneratedQuiz.access_code);
+              setLiveAccessUrl(
+                `${window.location.origin}/quiz-access/${parsedGeneratedQuiz.access_code}`,
+              );
+            }
+
+            if (TokenService.hasTokens() && parsedGeneratedQuiz?.historyMeta) {
+              try {
+                if (!parsedGeneratedQuiz.historySaved) {
+                  await saveQuizToHistory(
+                    parsedGeneratedQuiz.historyMeta,
+                    normalizedQuestions,
+                  );
+                  if (generatedQuizKey) {
+                    sessionStorage.setItem(
+                      generatedQuizKey,
+                      JSON.stringify({
+                        ...parsedGeneratedQuiz,
+                        historySaved: true,
+                      }),
+                    );
+                  }
+                }
+              } catch (historyError) {
+                console.error(
+                  "Error saving document quiz history:",
+                  historyError,
+                );
+              }
+            }
+
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        if (isDocumentGenerated) {
+          throw new Error(
+            "This document quiz is no longer available in this browser session. Generate it again to continue.",
+          );
+        }
 
         // ✅ Step 1: Check if a saved quiz was passed via localStorage
         const storedQuiz = localStorage.getItem("saved_quiz_view");
@@ -162,10 +268,7 @@ const QuizDisplayPage: React.FC = () => {
 
           const client =
             liveQuizRequested || TokenService.hasTokens() ? api : publicApi;
-          const { data } = await client.post(
-            "/api/get-questions",
-            basePayload,
-          );
+          const { data } = await client.post("/api/get-questions", basePayload);
 
           if (data?.quiz_id && !data?.ai_down) {
             setQuizId(data.quiz_id);
@@ -173,7 +276,9 @@ const QuizDisplayPage: React.FC = () => {
           }
           if (data?.access_code) {
             setLiveAccessCode(data.access_code);
-            setLiveAccessUrl(`${window.location.origin}/quiz-access/${data.access_code}`);
+            setLiveAccessUrl(
+              `${window.location.origin}/quiz-access/${data.access_code}`,
+            );
             toast.success("Live quiz access code generated!");
           }
           if (data?.ai_down) {
@@ -245,6 +350,8 @@ const QuizDisplayPage: React.FC = () => {
     audienceType,
     customInstruction,
     token,
+    isDocumentGenerated,
+    generatedQuizKey,
     liveQuizRequested,
     liveDurationMinutes,
     liveAccessExpiresAt,
@@ -339,8 +446,49 @@ const QuizDisplayPage: React.FC = () => {
           {/* Quiz Questions */}
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
-              {`${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
+              {quizTitle ||
+                `${questionType.charAt(0).toUpperCase() + questionType.slice(1)} Quiz`}
             </h1>
+            {quizDescription && (
+              <p className="mb-6 text-sm leading-6 text-slate-600">
+                {quizDescription}
+              </p>
+            )}
+            {documentContext && (
+              <div className="mb-6 grid gap-3 rounded-xl border border-[#0F2654]/10 bg-[#f8fbff] p-4 text-sm text-slate-700 md:grid-cols-2">
+                <p>
+                  <span className="font-semibold text-[#0F2654]">Source:</span>{" "}
+                  {documentContext.sourceDocumentName}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">Type:</span>{" "}
+                  {documentContext.sourceDocumentType.toUpperCase()}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">RAG:</span>{" "}
+                  {documentContext.retrievedChunks} of{" "}
+                  {documentContext.totalSourceChunks} chunks retrieved
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">Cache:</span>{" "}
+                  {documentContext.embeddingCacheHit
+                    ? "Reused stored document embeddings"
+                    : "Generated fresh document embeddings"}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">
+                    Strategy:
+                  </span>{" "}
+                  {documentContext.ragStrategy}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">
+                    Content size:
+                  </span>{" "}
+                  {documentContext.sourceCharacters.toLocaleString()} characters
+                </p>
+              </div>
+            )}
 
             <div className="space-y-6">
               {quizQuestions.map((q, i) => (
