@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from typing import Optional, List
+from typing import Literal, Optional, List
 
 
 class QuizRequest(BaseModel):
@@ -25,6 +25,9 @@ class QuizRequest(BaseModel):
     live_quiz_enabled: bool = False
     time_limit_minutes: Optional[int] = Field(default=None, gt=0, le=1440)
     access_code_expires_at: Optional[datetime] = None
+    participant_access_mode: Literal["public", "restricted", "invited_only"] = "public"
+    invited_emails: List[str] = []
+    send_email_invitations: bool = False
 
 
 
@@ -37,6 +40,7 @@ class QuizQuestion(BaseModel):
     question_type: str
 
     answer: str
+    explanation: Optional[str] = None
 
 
 class QuizResponse(BaseModel):
@@ -59,3 +63,7 @@ class QuizResponse(BaseModel):
     subcategory_slug: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     classification: Optional[dict] = None
+    participant_access_mode: Optional[str] = None
+    invited_emails: List[str] = Field(default_factory=list)
+    invitations_created: int = 0
+    invitations_delivered: int = 0

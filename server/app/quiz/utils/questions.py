@@ -14,7 +14,13 @@ from server.app.quiz.repositories.live_session_repository import LiveQuizSession
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 
 
-async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dict:
+async def get_questions(
+    request: QuizRequest,
+    user_id: str | None = None,
+    invitation_repository=None,
+    email_service=None,
+    frontend_origin: str | None = None,
+) -> Dict:
 
     ai_down = False
     notification_message = None
@@ -31,6 +37,21 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
         "subcategory_slug": None,
         "tags": [],
         "classification": None,
+    }
+    live_participant_access_mode = None
+    live_invited_emails = []
+    live_invitations_created = 0
+    live_invitations_delivered = 0
+
+    base_quiz_payload = {
+        "profession": request.profession,
+        "question_type": request.question_type,
+        "difficulty_level": request.difficulty_level,
+        "num_questions": request.num_questions,
+        "audience_type": request.audience_type,
+        "custom_instruction": request.custom_instruction,
+        "token": request.token,
+        "user_id": user_id,
     }
 
     try:
@@ -55,15 +76,8 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
         source = "huggingface"
 
         ai_quiz_payload = {
-            "profession": request.profession,
-            "question_type": request.question_type,
-            "difficulty_level": request.difficulty_level,
-            "num_questions": request.num_questions,
-            "audience_type": request.audience_type,
-            "custom_instruction": request.custom_instruction,
-            "token": request.token,
+            **base_quiz_payload,
             "questions": final_questions,
-            "user_id": user_id,
 
         }
 
@@ -91,9 +105,15 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
             q["question_type"] = request.question_type
         source = "mock"
 
-    if source == "huggingface" and ai_quiz_payload:
+    if user_id:
         try:
-            save_result = await save_ai_generated_quiz(ai_quiz_payload)
+            save_result = await save_ai_generated_quiz(
+                ai_quiz_payload
+                or {
+                    **base_quiz_payload,
+                    "questions": final_questions,
+                }
+            )
             if save_result and "quiz_id" in save_result:
                 quiz_id = save_result.get("quiz_id")
                 category_metadata = {
@@ -105,7 +125,7 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
                     "classification": save_result.get("classification"),
                 }
         except Exception as db_error:
-            logging.error(f"Failed to save AI-generated quiz to DB: {db_error}")
+            logging.error(f"Failed to save generated quiz to DB: {db_error}")
 
     if request.live_quiz_enabled:
         if not user_id:
@@ -117,15 +137,8 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
             try:
                 save_result = await save_ai_generated_quiz(
                     {
-                        "profession": request.profession,
-                        "question_type": request.question_type,
-                        "difficulty_level": request.difficulty_level,
-                        "num_questions": request.num_questions,
-                        "audience_type": request.audience_type,
-                        "custom_instruction": request.custom_instruction,
-                        "token": request.token,
+                        **base_quiz_payload,
                         "questions": final_questions,
-                        "user_id": user_id,
                     }
                 )
                 if save_result and "quiz_id" in save_result:
@@ -162,10 +175,20 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
             access_code_expires_at=request.access_code_expires_at,
             creator_id=user_id,
             time_limit_minutes=request.time_limit_minutes,
+            participant_access_mode=request.participant_access_mode,
+            invited_emails=request.invited_emails,
+            send_email_invitations=request.send_email_invitations,
+            invitation_repository=invitation_repository,
+            email_service=email_service,
+            frontend_origin=frontend_origin,
         )
         live_access_code = live_config["access_code"]
         live_access_code_expires_at = live_config["access_code_expires_at"]
         live_time_limit_minutes = live_config["time_limit_minutes"]
+        live_participant_access_mode = live_config["participant_access_mode"]
+        live_invited_emails = live_config["invited_emails"]
+        live_invitations_created = live_config["invitations_created"]
+        live_invitations_delivered = live_config["invitations_delivered"]
 
     result = {
         "source": source,
@@ -178,6 +201,10 @@ async def get_questions(request: QuizRequest, user_id: str | None = None) -> Dic
         "time_limit_minutes": live_time_limit_minutes,
         "access_code_expires_at": live_access_code_expires_at,
         **category_metadata,
+        "participant_access_mode": live_participant_access_mode,
+        "invited_emails": live_invited_emails,
+        "invitations_created": live_invitations_created,
+        "invitations_delivered": live_invitations_delivered,
     }
 
     logging.warning(f"Final API Response: {result}")
