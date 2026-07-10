@@ -22,6 +22,17 @@ class ToolDefinition:
     requires_confirmation: bool = False
     is_write: bool = False
 
+    @property
+    def required_arguments(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name, definition in self.argument_schema.items()
+            if definition.get("required") is True
+        )
+
+    def argument_definition(self, name: str) -> dict[str, Any] | None:
+        return self.argument_schema.get(name)
+
 
 TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     "category_list": ToolDefinition(
@@ -236,6 +247,13 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
                 "required": False,
                 "allowed_values": ["txt", "json", "pdf", "docx"],
                 "description": "Requested export format. If the user does not specify a format, ask them to choose.",
+                "choice_prompt": "Choose a file format for the quiz download.",
+                "choices": [
+                    {"label": "PDF", "value": "pdf"},
+                    {"label": "DOCX", "value": "docx"},
+                    {"label": "TXT", "value": "txt"},
+                    {"label": "JSON", "value": "json"},
+                ],
             },
         },
         requires_auth=True,

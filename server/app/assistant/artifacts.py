@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from server.app.assistant.schemas import AssistantArtifact, ToolResult
+from server.app.assistant.outcomes import project_tool_outcomes
+from server.app.assistant.response_presenter import outcome_artifact_label
 from server.app.quiz.services.category_taxonomy_service import slugify
 
 
@@ -44,6 +46,7 @@ def _resource_list_artifact(
     resource: str,
     title: str,
     items: list[dict[str, Any]],
+    metadata: dict[str, Any] | None = None,
 ) -> AssistantArtifact:
     return AssistantArtifact(
         type="resource_list",
@@ -51,6 +54,7 @@ def _resource_list_artifact(
             "resource": resource,
             "title": title,
             "items": items,
+            "metadata": metadata or {},
             "pagination": {
                 "shown": len(items),
                 "total": len(items),
@@ -58,6 +62,11 @@ def _resource_list_artifact(
             },
         },
     )
+
+
+def _folder_display_title(folder_name: Any) -> str:
+    name = str(folder_name or "Folder").strip() or "Folder"
+    return name if name.casefold().endswith(" folder") else f"{name} Folder"
 
 
 def _resource_artifact(
@@ -101,8 +110,18 @@ def infer_artifacts_from_results(
     *,
     suppress_internal_lookup: bool = False,
     suppress_final_status_tools: set[str] | None = None,
+    page_context: dict[str, Any] | None = None,
+    recent_artifacts: list[dict[str, Any]] | None = None,
 ) -> list[AssistantArtifact]:
     artifacts: list[AssistantArtifact] = []
+    outcomes = {
+        outcome.step_id: outcome
+        for outcome in project_tool_outcomes(
+            results,
+            page_context=page_context,
+            recent_artifacts=recent_artifacts,
+        )
+    }
     has_write_result = any(result.tool_name in WRITE_TOOLS for result in results)
     final_result = results[-1] if results else None
     suppress_final_status_tools = suppress_final_status_tools or set()
@@ -209,6 +228,8 @@ def infer_artifacts_from_results(
         if result.tool_name == "quiz_get_answers":
             answers = data.get("answers")
             if isinstance(answers, list):
+                outcome = outcomes[result.step_id]
+                display_title = outcome.subject.title if outcome.subject else str(data.get("title") or "Quiz")
                 items = [
                     {
                         "id": str(item.get("question_number") or index),
@@ -224,8 +245,16 @@ def infer_artifacts_from_results(
                 artifacts.append(
                     _resource_list_artifact(
                         resource="quiz_answer",
-                        title=f"Answer Key: {data.get('title') or 'Quiz'}",
+                        title=f"Answer Key: {display_title}",
                         items=items,
+                        metadata={
+                            "quiz_id": data.get("quiz_id"),
+                            "title": display_title,
+                            "display_title": display_title,
+                            "canonical_title": data.get("title"),
+                            "question_type": data.get("question_type"),
+                            "answer_count": data.get("answer_count"),
+                        },
                     )
                 )
 
@@ -322,11 +351,15 @@ def infer_artifacts_from_results(
             quizzes = data.get("quizzes")
             if isinstance(quizzes, list):
                 folder_name = data.get("name") or "Folder"
+                folder_display_title = _folder_display_title(folder_name)
                 folder_items = [
                     {
                         "id": item.get("id"),
+                        "folder_id": data.get("folder_id") or data.get("id"),
+                        "folder_name": folder_name,
                         "quiz_id": item.get("quiz_id"),
                         "title": item.get("title") or "Quiz",
+                        "display_title": item.get("title") or "Quiz",
                         "question_type": item.get("question_type"),
                         "questions": item.get("questions") or [],
                     }
@@ -349,8 +382,13 @@ def infer_artifacts_from_results(
                 artifacts.append(
                     _resource_list_artifact(
                         resource="folder_quiz",
-                        title=f"{folder_name} Folder",
+                        title=folder_display_title,
                         items=generic_items,
+                        metadata={
+                            "folder_id": data.get("folder_id") or data.get("id"),
+                            "folder_name": folder_name,
+                            "display_title": folder_display_title,
+                        },
                     )
                 )
 
@@ -364,6 +402,7 @@ def infer_artifacts_from_results(
                         "folder_item_id": item.get("folder_item_id"),
                         "quiz_id": item.get("quiz_id"),
                         "title": item.get("title") or "Quiz",
+                        "display_title": item.get("title") or "Quiz",
                         "question_type": item.get("question_type"),
                         "questions": item.get("questions") or [],
                     }
@@ -436,63 +475,61 @@ def infer_artifacts_from_results(
             )
 
         if result.tool_name == "share_send_email":
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="share_email",
-                    label=data.get("message") or "Share email sent",
+                    label=outcome_artifact_label(outcome) or "Share email sent",
                     metadata=data,
                 )
             )
 
         if result.tool_name == "folder_add_saved_quiz":
-            title = data.get("title") or "Quiz"
-            folder_name = data.get("folder_name") or "the folder"
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="folder_item",
-                    label=f"Added {title} to {folder_name}.",
+                    label=outcome_artifact_label(outcome) or "Quiz added to folder.",
                     metadata=data,
                 )
             )
 
         if result.tool_name == "folder_move_quiz":
-            title = data.get("title") or "Quiz"
-            target_folder_name = data.get("target_folder_name") or "the target folder"
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="folder_item",
-                    label=f"Moved {title} to {target_folder_name}.",
+                    label=outcome_artifact_label(outcome) or "Quiz moved.",
                     metadata=data,
                 )
             )
 
         if result.tool_name == "folder_delete":
-            folder_name = data.get("folder_name") or "Folder"
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="folder",
-                    label=f"Deleted {folder_name} folder.",
+                    label=outcome_artifact_label(outcome) or "Folder deleted.",
                     metadata=data,
                 )
             )
 
         if result.tool_name == "folder_remove_quiz":
-            title = data.get("title") or "Quiz"
-            folder_name = data.get("folder_name") or "the folder"
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="folder_item",
-                    label=f"Removed {title} from {folder_name}.",
+                    label=outcome_artifact_label(outcome) or "Quiz removed from folder.",
                     metadata=data,
                 )
             )
 
         if result.tool_name == "folder_rename":
-            folder_name = data.get("name") or "Folder"
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="folder",
-                    label=f"Renamed folder to {folder_name}.",
+                    label=outcome_artifact_label(outcome) or "Folder renamed.",
                     metadata=data,
                 )
             )
@@ -546,20 +583,11 @@ def infer_artifacts_from_results(
         if result.tool_name == "live_quiz_send_invites":
             if final_result is result and result.tool_name in suppress_final_status_tools:
                 continue
-            sent_count = data.get("sent_count") or 0
-            failed_count = data.get("failed_count") or 0
-            label = (
-                f"Sent quiz invite{'s' if sent_count != 1 else ''} to {sent_count} recipient{'s' if sent_count != 1 else ''}."
-                if not failed_count
-                else (
-                    f"Sent quiz invite{'s' if sent_count != 1 else ''} to "
-                    f"{sent_count} recipient{'s' if sent_count != 1 else ''}; {failed_count} failed."
-                )
-            )
+            outcome = outcomes[result.step_id]
             artifacts.append(
                 _status_artifact(
                     resource="live_quiz_invite",
-                    label=label,
+                    label=outcome_artifact_label(outcome) or "Live quiz invites sent.",
                     metadata=data,
                 )
             )

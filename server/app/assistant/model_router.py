@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -98,13 +99,47 @@ class AssistantModelRouter:
         raise AssistantProviderError(f"{role_name} model failed after retry and fallback: {last_error}")
 
     def _parse_json_model(self, raw_response: str, response_model: type[TModel]) -> TModel:
-        payload = raw_response.strip()
-        if payload.startswith("```"):
-            lines = payload.splitlines()
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            payload = "\n".join(lines).strip()
-        data = json.loads(payload)
+        payload = _strip_json_payload(raw_response)
+        data = _loads_json_lenient(payload)
+        if isinstance(data, list) and len(data) == 1:
+            data = data[0]
         return response_model.model_validate(data)
+
+
+def _strip_json_payload(raw_response: str) -> str:
+    payload = raw_response.strip()
+    if payload.startswith("```"):
+        lines = payload.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        payload = "\n".join(lines).strip()
+    return payload
+
+
+def _loads_json_lenient(payload: str) -> object:
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        extracted = _extract_json_container(payload)
+        if extracted and extracted != payload:
+            try:
+                return json.loads(extracted)
+            except json.JSONDecodeError:
+                payload = extracted
+        repaired = re.sub(r",(\s*[}\]])", r"\1", payload)
+        return json.loads(repaired)
+
+
+def _extract_json_container(payload: str) -> str | None:
+    starts = [index for index in (payload.find("{"), payload.find("[")) if index >= 0]
+    if not starts:
+        return None
+    start = min(starts)
+    opening = payload[start]
+    closing = "}" if opening == "{" else "]"
+    end = payload.rfind(closing)
+    if end <= start:
+        return None
+    return payload[start : end + 1].strip()

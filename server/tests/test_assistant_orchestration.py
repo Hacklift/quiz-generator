@@ -13,6 +13,7 @@ import pytest
 from fastapi import HTTPException
 
 from server.app.assistant.artifacts import infer_artifacts_from_results
+from server.app.assistant.error_mapper import tool_error_message
 from server.app.assistant.model_router import AssistantModelRouter
 from server.app.assistant.orchestrator import GENERATION_INTENT_PATTERN, QUESTION_TYPE_PATTERNS
 from server.app.assistant.pending_runs import InMemoryAssistantRunStore
@@ -861,6 +862,39 @@ async def test_model_router_retries_primary_then_uses_valid_response():
     assert provider.calls == ["primary-model", "primary-model"]
 
 
+def test_model_router_accepts_single_item_array_for_object_response():
+    router = AssistantModelRouter.__new__(AssistantModelRouter)
+
+    decision = router._parse_json_model(
+        '[{"step_id":"step_2","tool_name":"quiz_export_link","arguments":{"quiz_id":"quiz-1","format":"pdf"}}]',
+        ExecutorDecision,
+    )
+
+    assert decision.step_id == "step_2"
+    assert decision.tool_name == "quiz_export_link"
+    assert decision.arguments == {"quiz_id": "quiz-1", "format": "pdf"}
+
+
+def test_model_router_repairs_trailing_commas_in_json_response():
+    router = AssistantModelRouter.__new__(AssistantModelRouter)
+
+    decision = router._parse_json_model(
+        '{"intent":"answer","needs_tools":true,"summary":null,'
+        '"steps":[{"step_id":"step_1","tool_name":"quiz_get_answers","arguments":{"quiz_id":"quiz-1",},'
+        '"requires_confirmation":false,"depends_on":[],"reason":null,},],'
+        '"final_response_style":"concise",}',
+        PlannerDecision,
+    )
+
+    assert decision.tool_name == "quiz_get_answers"
+
+
+def test_expired_token_tool_error_is_polished():
+    message = tool_error_message("quiz_get_answers", {"error": "Token has expired"})
+
+    assert message == "Your session expired. Please log in again, then retry this request."
+
+
 @pytest.mark.asyncio
 async def test_assistant_requests_confirmation_before_write_tool(monkeypatch):
     monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
@@ -1046,7 +1080,7 @@ async def test_assistant_executes_multi_step_plan_with_resolved_placeholders(mon
         authorization_header="Bearer token",
     )
 
-    assert response.message == "I generated and saved the quiz."
+    assert response.message == "I generated Biology and saved it."
     assert [call["tool_name"] for call in mcp_client.calls] == ["quiz_generate", "library_save_quiz"]
     assert mcp_client.calls[1]["arguments"]["quiz_id"] == "quiz-1"
     assert mcp_client.calls[1]["arguments"]["questions"][0]["question"] == "What is biology?"
@@ -1125,11 +1159,13 @@ async def test_assistant_resumes_pending_plan_after_write_confirmation(monkeypat
         "library_find_saved_quiz_by_title",
         "folder_add_saved_quiz",
     ]
-    assert final_response.message == "I added Nigerian Geopolitics to the folder."
+    assert final_response.message == (
+        "I created Geopolitics and added Nigerian Geopolitics to Geopolitics."
+    )
     assert len(final_response.artifacts) == 1
     assert final_response.artifacts[0].type == "status"
     assert final_response.artifacts[0].data["resource"] == "folder_item"
-    assert final_response.artifacts[0].data["label"] == "Added Nigerian Geopolitics to the folder."
+    assert final_response.artifacts[0].data["label"] == "Added Nigerian Geopolitics to Geopolitics."
 
 
 @pytest.mark.asyncio
@@ -1255,7 +1291,9 @@ async def test_assistant_recovers_missing_folder_before_add_saved_quiz(monkeypat
         "folder_create",
         "folder_add_saved_quiz",
     ]
-    assert final_response.message == "I added Nigerian Geopolitics to the folder."
+    assert final_response.message == (
+        "I saved the quiz, created Thermodynamics, and added Nigerian Geopolitics to Thermodynamics."
+    )
 
 
 @pytest.mark.asyncio
@@ -2041,3 +2079,109 @@ def test_live_quiz_invite_status_artifact_can_be_suppressed_for_final_summary():
     )
 
     assert artifacts == []
+
+
+def test_answer_key_artifact_uses_recent_display_title_over_canonical_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="quiz_get_answers",
+                data={
+                    "quiz_id": "quiz-1",
+                    "title": "Physics",
+                    "question_type": "multichoice",
+                    "answer_count": 1,
+                    "answers": [
+                        {
+                            "question_number": 1,
+                            "question": "What is specific heat?",
+                            "answer": "Stored answer",
+                        }
+                    ],
+                },
+            )
+        ],
+        recent_artifacts=[
+            {
+                "type": "resource_list",
+                "data": {
+                    "resource": "folder_quiz",
+                    "title": "Thermodynamics Folder",
+                    "metadata": {
+                        "folder_name": "Thermodynamics",
+                        "display_title": "Thermodynamics Folder",
+                    },
+                    "items": [
+                        {
+                            "id": "folder-item-1",
+                            "label": "Specific Heat",
+                            "metadata": {
+                                "folder_item_id": "folder-item-1",
+                                "folder_name": "Thermodynamics",
+                                "quiz_id": "quiz-1",
+                                "title": "Specific Heat",
+                                "display_title": "Specific Heat",
+                                "question_type": "multichoice",
+                            },
+                        }
+                    ],
+                },
+            }
+        ],
+    )
+
+    assert artifacts[0].data["title"] == "Answer Key: Specific Heat"
+    assert artifacts[0].data["metadata"]["title"] == "Specific Heat"
+    assert artifacts[0].data["metadata"]["canonical_title"] == "Physics"
+    assert artifacts[0].data["metadata"]["quiz_id"] == "quiz-1"
+
+
+def test_folder_artifact_keeps_canonical_folder_name_separate_from_display_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="folder_get_by_name",
+                data={
+                    "found": True,
+                    "folder_id": "folder-1",
+                    "id": "folder-1",
+                    "name": "Thermodynamics",
+                    "quizzes": [
+                        {
+                            "id": "folder-item-1",
+                            "quiz_id": "quiz-1",
+                            "title": "Specific Heat",
+                            "question_type": "multichoice",
+                        }
+                    ],
+                },
+            )
+        ]
+    )
+
+    assert artifacts[0].data["title"] == "Thermodynamics Folder"
+    assert artifacts[0].data["metadata"]["folder_name"] == "Thermodynamics"
+    assert artifacts[0].data["items"][0]["metadata"]["folder_name"] == "Thermodynamics"
+
+
+def test_folder_artifact_does_not_double_suffix_folder_display_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="folder_get_by_name",
+                data={
+                    "found": True,
+                    "folder_id": "folder-1",
+                    "id": "folder-1",
+                    "name": "Thermodynamics Folder",
+                    "quizzes": [],
+                },
+            )
+        ]
+    )
+
+    assert artifacts[0].data["title"] == "Thermodynamics Folder"
+    assert artifacts[0].data["metadata"]["folder_name"] == "Thermodynamics Folder"

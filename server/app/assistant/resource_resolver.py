@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from rapidfuzz import fuzz
@@ -8,6 +9,7 @@ from rapidfuzz import fuzz
 
 QUIZ_RESOURCES = {
     "quiz",
+    "quiz_answer",
     "quiz_history",
     "saved_quiz",
     "folder_quiz",
@@ -28,6 +30,19 @@ class ResolvedQuizResource:
     score: int = 0
 
 
+class ResourceResolutionStatus(StrEnum):
+    RESOLVED = "resolved"
+    MISSING = "missing"
+    AMBIGUOUS = "ambiguous"
+
+
+@dataclass(frozen=True)
+class QuizResourceResolution:
+    status: ResourceResolutionStatus
+    resource: ResolvedQuizResource | None = None
+    candidates: tuple[ResolvedQuizResource, ...] = ()
+
+
 class AssistantResourceResolver:
     def resolve_quiz(
         self,
@@ -36,13 +51,31 @@ class AssistantResourceResolver:
         page_context: dict[str, Any] | None = None,
         recent_artifacts: list[dict[str, Any]] | None = None,
     ) -> ResolvedQuizResource | None:
+        resolution = self.resolve_quiz_result(
+            message=message,
+            page_context=page_context,
+            recent_artifacts=recent_artifacts,
+        )
+        return resolution.resource if resolution.status is ResourceResolutionStatus.RESOLVED else None
+
+    def resolve_quiz_result(
+        self,
+        *,
+        message: str,
+        page_context: dict[str, Any] | None = None,
+        recent_artifacts: list[dict[str, Any]] | None = None,
+    ) -> QuizResourceResolution:
         candidates = self._quiz_candidates(page_context=page_context, recent_artifacts=recent_artifacts)
         if not candidates:
-            return None
+            return QuizResourceResolution(status=ResourceResolutionStatus.MISSING)
 
         direct_context = self._direct_context_quiz(page_context)
         if direct_context and self._message_refers_to_current_quiz(message):
-            return direct_context
+            return QuizResourceResolution(
+                status=ResourceResolutionStatus.RESOLVED,
+                resource=direct_context,
+                candidates=(direct_context,),
+            )
 
         scored = [
             self._score_candidate(candidate, message)
@@ -51,9 +84,27 @@ class AssistantResourceResolver:
         scored = [candidate for candidate in scored if candidate.score >= 72]
         if not scored:
             if self._message_refers_to_current_quiz(message):
-                return direct_context or candidates[0]
-            return None
-        return max(scored, key=lambda candidate: candidate.score)
+                selected = direct_context or candidates[0]
+                return QuizResourceResolution(
+                    status=ResourceResolutionStatus.RESOLVED,
+                    resource=selected,
+                    candidates=(selected,),
+                )
+            return QuizResourceResolution(status=ResourceResolutionStatus.MISSING)
+
+        ranked = sorted(scored, key=lambda candidate: candidate.score, reverse=True)
+        top = ranked[0]
+        competing = tuple(candidate for candidate in ranked if top.score - candidate.score < 8)
+        if len(competing) > 1:
+            return QuizResourceResolution(
+                status=ResourceResolutionStatus.AMBIGUOUS,
+                candidates=competing,
+            )
+        return QuizResourceResolution(
+            status=ResourceResolutionStatus.RESOLVED,
+            resource=top,
+            candidates=(top,),
+        )
 
     def _quiz_candidates(
         self,
@@ -77,6 +128,20 @@ class AssistantResourceResolver:
                 continue
 
             if artifact.get("type") == "resource_list":
+                if resource == "quiz_answer":
+                    candidate = self._candidate_from_item(
+                        resource=resource,
+                        item={
+                            "id": data.get("id"),
+                            "label": data.get("label") or data.get("title"),
+                            "href": data.get("href"),
+                            "metadata": data.get("metadata"),
+                        },
+                    )
+                    if candidate is not None:
+                        candidates.append(candidate)
+                    continue
+
                 items = data.get("items")
                 if isinstance(items, list):
                     for item in items:
@@ -120,9 +185,12 @@ class AssistantResourceResolver:
             return None
         metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
         title = (
-            item.get("label")
+            item.get("display_title")
+            or item.get("label")
             or item.get("title")
+            or metadata.get("display_title")
             or metadata.get("title")
+            or metadata.get("canonical_title")
             or metadata.get("quiz_name")
             or metadata.get("label")
         )

@@ -47,6 +47,9 @@ def tool_error_message(tool_name: str, data: dict[str, Any]) -> str:
     raw_error = _extract_error_text(data)
     clean_error = _clean_internal_error(raw_error)
 
+    if _is_expired_session_error(clean_error):
+        return "Your session expired. Please log in again, then retry this request."
+
     question_limit = _question_limit_from_error(clean_error)
     if tool_name == "quiz_generate" and question_limit is not None:
         return f"This quiz can have up to {question_limit} questions. Try again with {question_limit} or fewer."
@@ -108,6 +111,11 @@ def _question_limit_from_error(error: str) -> int | None:
     if match:
         return int(match.group(1))
     return None
+
+
+def _is_expired_session_error(error: str) -> bool:
+    normalized = error.casefold()
+    return "token has expired" in normalized or "signature has expired" in normalized
 
 
 def _not_found_message(tool_name: str, error: str) -> str:
