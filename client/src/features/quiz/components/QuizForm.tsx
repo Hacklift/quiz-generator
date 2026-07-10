@@ -15,6 +15,15 @@ import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
+type ApiErrorLike = {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+  message?: string;
+};
+
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
@@ -136,11 +145,12 @@ export default function QuizForm() {
           setPreviousToken(res.data.token);
           sessionStorage.setItem("user_api_token", res.data.token);
         }
-      } catch (e: any) {
-        if (e?.response?.status === 404) {
+      } catch (e: unknown) {
+        const typedError = e as ApiErrorLike & { response?: { status?: number } };
+        if (typedError?.response?.status === 404) {
           return;
         }
-        console.warn("Error fetching user token:", e);
+        console.warn("Error fetching user token:", typedError);
       }
     };
 
@@ -417,12 +427,13 @@ export default function QuizForm() {
       }).toString();
 
       router.push(`/quiz_display?${queryParams}`);
-    } catch (error: any) {
-      const detail =
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Failed to generate quiz. Please try again.";
-      setErrorMessage(detail);
+    } catch (error: unknown) {
+      const typedError = error as ApiErrorLike;
+      setErrorMessage(
+        typedError?.response?.data?.detail ||
+          typedError?.message ||
+          "Failed to generate quiz. Please try again.",
+      );
     } finally {
       setLoading(false);
     }

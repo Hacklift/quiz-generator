@@ -14,6 +14,7 @@ from server.app.mcp.resources.library_resources import (
 )
 from server.app.mcp.resources.quiz_resources import quiz_resource, shared_quiz_resource
 from server.app.mcp.telemetry import instrument_mcp_call
+from server.app.mcp.tools.answer_tools import quiz_get_answers
 from server.app.mcp.tools.category_tools import (
     category_browse_questions,
     category_list,
@@ -90,6 +91,10 @@ def create_mcp_server() -> FastMCP:
         name="quiz_generate",
         description="Generate a quiz through the existing QuizApp generation pipeline.",
     )(instrument_mcp_call("quiz_generate")(quiz_generate))
+    mcp.tool(
+        name="quiz_get_answers",
+        description="Return an authenticated user's answer key for an owned or library quiz.",
+    )(instrument_mcp_call("quiz_get_answers")(quiz_get_answers))
 
     mcp.tool(
         name="share_get_quiz",

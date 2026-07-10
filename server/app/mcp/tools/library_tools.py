@@ -45,9 +45,9 @@ async def library_get_history_detail(history_id: str) -> dict | None:
 
 
 async def library_save_quiz(
-    title: str,
-    question_type: str,
-    questions: list[dict],
+    title: str | None = None,
+    question_type: str | None = None,
+    questions: list[dict] | None = None,
     quiz_id: str | None = None,
 ) -> dict:
     context = await get_mcp_request_context(require_auth=True, require_verified=True)

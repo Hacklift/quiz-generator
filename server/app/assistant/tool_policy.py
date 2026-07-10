@@ -3,6 +3,11 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from server.app.assistant.error_mapper import (
+    AUTH_REQUIRED_CODE,
+    VERIFICATION_REQUIRED_CODE,
+    assistant_policy_error_detail,
+)
 from server.app.core.config import settings
 from server.app.users.models import UserOut
 
@@ -16,6 +21,17 @@ class ToolDefinition:
     requires_verified: bool = False
     requires_confirmation: bool = False
     is_write: bool = False
+
+    @property
+    def required_arguments(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name, definition in self.argument_schema.items()
+            if definition.get("required") is True
+        )
+
+    def argument_definition(self, name: str) -> dict[str, Any] | None:
+        return self.argument_schema.get(name)
 
 
 TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
@@ -107,6 +123,7 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
                     "usually mean 4 questions unless the user explicitly asks for separate quiz documents."
                 ),
                 "minimum": 1,
+                "maximum": settings.QUIZ_GENERATION_MAX_QUESTIONS,
             },
             "question_type": {
                 "type": "string",
@@ -143,6 +160,8 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
                 "description": "Extra generation constraint from the user, such as exam board, tone, or coverage.",
             },
         },
+        requires_auth=True,
+        requires_verified=True,
     ),
     "share_get_quiz": ToolDefinition(
         name="share_get_quiz",
@@ -154,6 +173,22 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
                 "description": "Canonical quiz id or shared quiz id supplied by the user/artifact/context.",
             }
         },
+    ),
+    "quiz_get_answers": ToolDefinition(
+        name="quiz_get_answers",
+        description=(
+            "Return the answer key for an authenticated user's owned, generated, saved, "
+            "history, or folder quiz. Use when the user asks for answers or answer key."
+        ),
+        argument_schema={
+            "quiz_id": {
+                "type": "string",
+                "required": True,
+                "description": "Canonical quiz id from a generated, saved, history, folder, or page-context quiz.",
+            }
+        },
+        requires_auth=True,
+        requires_verified=True,
     ),
     "share_create_link": ToolDefinition(
         name="share_create_link",
@@ -212,6 +247,13 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
                 "required": False,
                 "allowed_values": ["txt", "json", "pdf", "docx"],
                 "description": "Requested export format. If the user does not specify a format, ask them to choose.",
+                "choice_prompt": "Choose a file format for the quiz download.",
+                "choices": [
+                    {"label": "PDF", "value": "pdf"},
+                    {"label": "DOCX", "value": "docx"},
+                    {"label": "TXT", "value": "txt"},
+                    {"label": "JSON", "value": "json"},
+                ],
             },
         },
         requires_auth=True,
@@ -398,23 +440,27 @@ TOOL_DEFINITIONS: dict[str, ToolDefinition] = {
     ),
     "library_save_quiz": ToolDefinition(
         name="library_save_quiz",
-        description="Save a quiz to the authenticated user's library.",
+        description=(
+            "Save a quiz to the authenticated user's library. Prefer quiz_id when saving an existing "
+            "generated, history, saved, folder, or artifact quiz. Only send title, question_type, and "
+            "questions when creating a saved quiz from a raw quiz payload."
+        ),
         argument_schema={
             "title": {
                 "type": "string",
-                "required": True,
-                "description": "Quiz title.",
+                "required": False,
+                "description": "Quiz title. Optional when quiz_id points to an existing canonical quiz.",
             },
             "question_type": {
                 "type": "string",
-                "required": True,
+                "required": False,
                 "allowed_values": ["multichoice", "true-false", "short-answer", "open-ended"],
-                "description": "Canonical question type from the quiz being saved.",
+                "description": "Canonical question type from the quiz being saved. Optional when quiz_id is supplied.",
             },
             "questions": {
                 "type": "array",
-                "required": True,
-                "description": "Questions array from quiz_generate or an existing quiz artifact.",
+                "required": False,
+                "description": "Questions array from quiz_generate or a raw quiz payload. Not required when quiz_id is supplied.",
             },
             "quiz_id": {
                 "type": "string",
@@ -715,12 +761,12 @@ def enforce_tool_policy(tool_name: str, user: UserOut | None) -> ToolDefinition:
     if tool.requires_auth and user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication is required for this assistant action.",
+            detail=assistant_policy_error_detail(code=AUTH_REQUIRED_CODE, tool_name=tool_name),
         )
     if tool.requires_verified and user is not None and not user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email verification is required for this assistant action.",
+            detail=assistant_policy_error_detail(code=VERIFICATION_REQUIRED_CODE, tool_name=tool_name),
         )
     return tool
 

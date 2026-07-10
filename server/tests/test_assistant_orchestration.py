@@ -13,6 +13,7 @@ import pytest
 from fastapi import HTTPException
 
 from server.app.assistant.artifacts import infer_artifacts_from_results
+from server.app.assistant.error_mapper import tool_error_message
 from server.app.assistant.model_router import AssistantModelRouter
 from server.app.assistant.orchestrator import GENERATION_INTENT_PATTERN, QUESTION_TYPE_PATTERNS
 from server.app.assistant.pending_runs import InMemoryAssistantRunStore
@@ -214,6 +215,16 @@ class ErrorMcpClient(FakeMcpClient):
         return {"isError": True, "error": "Generation provider failed."}
 
 
+class LimitErrorMcpClient(FakeMcpClient):
+    async def call_tool(self, **kwargs):
+        self.called = True
+        self.calls.append(kwargs)
+        return {
+            "isError": True,
+            "error": "Error executing tool quiz_generate: 422: Quiz generation is limited to 10 questions.",
+        }
+
+
 class MissingFolderMcpClient(FakeMcpClient):
     async def call_tool(self, **kwargs):
         tool_name = kwargs["tool_name"]
@@ -401,6 +412,60 @@ class GenerationModelRouter:
 
     async def final_response(self, prompt: str) -> AssistantFinalResponse:
         raise AssertionError("Final response model should not run for deterministic generation result.")
+
+
+class SaveHistoryArtifactModelRouter:
+    async def plan(self, prompt: str) -> PlannerDecision:
+        return PlannerDecision(
+            intent="save_history_quiz",
+            needs_tools=True,
+            steps=[
+                PlanStep(
+                    step_id="step_1",
+                    tool_name="library_save_quiz",
+                    arguments={"title": "Nigerian Insecurity"},
+                    requires_confirmation=True,
+                    reason="Save the selected history quiz.",
+                )
+            ],
+        )
+
+    async def execute(self, prompt: str) -> ExecutorDecision:
+        raise AssertionError("Executor should not be needed for artifact-backed save.")
+
+    async def final_response(self, prompt: str) -> AssistantFinalResponse:
+        return AssistantFinalResponse(message="Saved and prepared the download.", artifacts=[])
+
+
+class MissingArgumentLoopModelRouter:
+    def __init__(self):
+        self.plan_calls = 0
+
+    async def plan(self, prompt: str) -> PlannerDecision:
+        self.plan_calls += 1
+        if self.plan_calls == 1:
+            return PlannerDecision(
+                intent="save_quiz",
+                needs_tools=True,
+                steps=[
+                    PlanStep(
+                        step_id="step_1",
+                        tool_name="library_save_quiz",
+                        arguments={"title": "Nigerian Insecurity"},
+                        requires_confirmation=True,
+                    )
+                ],
+            )
+        return PlannerDecision(intent="general_chat", needs_tools=False, steps=[])
+
+    async def execute(self, prompt: str) -> ExecutorDecision:
+        raise AssertionError("Executor should not be needed.")
+
+    async def final_response(self, prompt: str) -> AssistantFinalResponse:
+        return AssistantFinalResponse(
+            message="I can use quiz history items when they include a quiz reference.",
+            artifacts=[],
+        )
 
 
 class IncompleteCompoundGenerationModelRouter:
@@ -797,6 +862,39 @@ async def test_model_router_retries_primary_then_uses_valid_response():
     assert provider.calls == ["primary-model", "primary-model"]
 
 
+def test_model_router_accepts_single_item_array_for_object_response():
+    router = AssistantModelRouter.__new__(AssistantModelRouter)
+
+    decision = router._parse_json_model(
+        '[{"step_id":"step_2","tool_name":"quiz_export_link","arguments":{"quiz_id":"quiz-1","format":"pdf"}}]',
+        ExecutorDecision,
+    )
+
+    assert decision.step_id == "step_2"
+    assert decision.tool_name == "quiz_export_link"
+    assert decision.arguments == {"quiz_id": "quiz-1", "format": "pdf"}
+
+
+def test_model_router_repairs_trailing_commas_in_json_response():
+    router = AssistantModelRouter.__new__(AssistantModelRouter)
+
+    decision = router._parse_json_model(
+        '{"intent":"answer","needs_tools":true,"summary":null,'
+        '"steps":[{"step_id":"step_1","tool_name":"quiz_get_answers","arguments":{"quiz_id":"quiz-1",},'
+        '"requires_confirmation":false,"depends_on":[],"reason":null,},],'
+        '"final_response_style":"concise",}',
+        PlannerDecision,
+    )
+
+    assert decision.tool_name == "quiz_get_answers"
+
+
+def test_expired_token_tool_error_is_polished():
+    message = tool_error_message("quiz_get_answers", {"error": "Token has expired"})
+
+    assert message == "Your session expired. Please log in again, then retry this request."
+
+
 @pytest.mark.asyncio
 async def test_assistant_requests_confirmation_before_write_tool(monkeypatch):
     monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
@@ -844,6 +942,109 @@ async def test_assistant_returns_polished_login_prompt_for_authenticated_tools(m
 
 
 @pytest.mark.asyncio
+async def test_assistant_returns_generation_specific_login_prompt(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    service = make_service(GenerationModelRouter(), mcp_client)
+
+    response = await service.chat(
+        request=AssistantChatRequest(message="Generate a multichoice quiz on Biology with 3 questions."),
+        user=None,
+        authorization_header=None,
+    )
+
+    assert response.message == "Please log in to generate quizzes."
+    assert response.actions == []
+    assert response.artifacts == []
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_reuses_history_artifact_for_save_and_download(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    service = make_service(SaveHistoryArtifactModelRouter(), mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    response = await service.chat(
+        request=AssistantChatRequest(
+            message="Go ahead and save the Nigerian Insecurity quiz from history and also download it for me.",
+            recent_artifacts=[
+                {
+                    "type": "resource_list",
+                    "data": {
+                        "resource": "quiz_history",
+                        "title": "Quiz History",
+                        "items": [
+                            {
+                                "id": "history-1",
+                                "label": "Nigerian Insecurity",
+                                "href": "/quiz_history/history-1",
+                                "metadata": {
+                                    "id": "history-1",
+                                    "quiz_id": "quiz-history-1",
+                                    "title": "Nigerian Insecurity",
+                                    "question_type": "multichoice",
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
+        ),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert response.message == "Please confirm: save Nigerian Insecurity to your library."
+    assert response.actions[0].tool_name == "library_save_quiz"
+    assert response.actions[0].arguments["quiz_id"] == "quiz-history-1"
+    assert response.actions[0].arguments["title"] == "Nigerian Insecurity"
+    assert "questions" not in response.actions[0].arguments
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_replans_missing_argument_follow_up_instead_of_looping(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = FakeMcpClient()
+    router = MissingArgumentLoopModelRouter()
+    service = make_service(router, mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    first_response = await service.chat(
+        request=AssistantChatRequest(message="Save the Nigerian Insecurity quiz."),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert "questions before I can save the quiz" in first_response.message
+
+    second_response = await service.chat(
+        request=AssistantChatRequest(
+            message="Are you saying you cannot pull the quiz from my history?",
+            conversation_id=first_response.conversation_id,
+        ),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert second_response.message == "I can use quiz history items when they include a quiz reference."
+    assert router.plan_calls == 2
+    assert mcp_client.called is False
+
+
+@pytest.mark.asyncio
 async def test_assistant_sanitizes_provider_errors(monkeypatch):
     monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
     service = make_service(ProviderErrorModelRouter(), FakeMcpClient())
@@ -879,7 +1080,7 @@ async def test_assistant_executes_multi_step_plan_with_resolved_placeholders(mon
         authorization_header="Bearer token",
     )
 
-    assert response.message == "I generated and saved the quiz."
+    assert response.message == "I generated Biology and saved it."
     assert [call["tool_name"] for call in mcp_client.calls] == ["quiz_generate", "library_save_quiz"]
     assert mcp_client.calls[1]["arguments"]["quiz_id"] == "quiz-1"
     assert mcp_client.calls[1]["arguments"]["questions"][0]["question"] == "What is biology?"
@@ -958,11 +1159,13 @@ async def test_assistant_resumes_pending_plan_after_write_confirmation(monkeypat
         "library_find_saved_quiz_by_title",
         "folder_add_saved_quiz",
     ]
-    assert final_response.message == "I added Nigerian Geopolitics to the folder."
+    assert final_response.message == (
+        "I created Geopolitics and added Nigerian Geopolitics to Geopolitics."
+    )
     assert len(final_response.artifacts) == 1
     assert final_response.artifacts[0].type == "status"
     assert final_response.artifacts[0].data["resource"] == "folder_item"
-    assert final_response.artifacts[0].data["label"] == "Added Nigerian Geopolitics to the folder."
+    assert final_response.artifacts[0].data["label"] == "Added Nigerian Geopolitics to Geopolitics."
 
 
 @pytest.mark.asyncio
@@ -1088,7 +1291,9 @@ async def test_assistant_recovers_missing_folder_before_add_saved_quiz(monkeypat
         "folder_create",
         "folder_add_saved_quiz",
     ]
-    assert final_response.message == "I added Nigerian Geopolitics to the folder."
+    assert final_response.message == (
+        "I saved the quiz, created Thermodynamics, and added Nigerian Geopolitics to Thermodynamics."
+    )
 
 
 @pytest.mark.asyncio
@@ -1588,6 +1793,29 @@ async def test_assistant_does_not_report_generation_success_for_mcp_error(monkey
 
 
 @pytest.mark.asyncio
+async def test_assistant_sanitizes_generation_limit_errors(monkeypatch):
+    monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
+    mcp_client = LimitErrorMcpClient()
+    service = make_service(GenerationModelRouter(), mcp_client)
+    user = UserOut(
+        id="user-1",
+        username="tester",
+        email="tester@example.com",
+        is_verified=True,
+    )
+
+    response = await service.chat(
+        request=AssistantChatRequest(message="Generate an open ended quiz on Electricity with 15 questions."),
+        user=user,
+        authorization_header="Bearer token",
+    )
+
+    assert response.message == "This quiz can have up to 10 questions. Try again with 10 or fewer."
+    assert "quiz_generate" not in response.message
+    assert "Error executing tool" not in response.message
+
+
+@pytest.mark.asyncio
 async def test_assistant_blocks_accidental_quiz_generation_for_follow_up_action(monkeypatch):
     monkeypatch.setattr(settings, "ASSISTANT_ENABLED", True)
     mcp_client = FakeMcpClient()
@@ -1851,3 +2079,109 @@ def test_live_quiz_invite_status_artifact_can_be_suppressed_for_final_summary():
     )
 
     assert artifacts == []
+
+
+def test_answer_key_artifact_uses_recent_display_title_over_canonical_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="quiz_get_answers",
+                data={
+                    "quiz_id": "quiz-1",
+                    "title": "Physics",
+                    "question_type": "multichoice",
+                    "answer_count": 1,
+                    "answers": [
+                        {
+                            "question_number": 1,
+                            "question": "What is specific heat?",
+                            "answer": "Stored answer",
+                        }
+                    ],
+                },
+            )
+        ],
+        recent_artifacts=[
+            {
+                "type": "resource_list",
+                "data": {
+                    "resource": "folder_quiz",
+                    "title": "Thermodynamics Folder",
+                    "metadata": {
+                        "folder_name": "Thermodynamics",
+                        "display_title": "Thermodynamics Folder",
+                    },
+                    "items": [
+                        {
+                            "id": "folder-item-1",
+                            "label": "Specific Heat",
+                            "metadata": {
+                                "folder_item_id": "folder-item-1",
+                                "folder_name": "Thermodynamics",
+                                "quiz_id": "quiz-1",
+                                "title": "Specific Heat",
+                                "display_title": "Specific Heat",
+                                "question_type": "multichoice",
+                            },
+                        }
+                    ],
+                },
+            }
+        ],
+    )
+
+    assert artifacts[0].data["title"] == "Answer Key: Specific Heat"
+    assert artifacts[0].data["metadata"]["title"] == "Specific Heat"
+    assert artifacts[0].data["metadata"]["canonical_title"] == "Physics"
+    assert artifacts[0].data["metadata"]["quiz_id"] == "quiz-1"
+
+
+def test_folder_artifact_keeps_canonical_folder_name_separate_from_display_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="folder_get_by_name",
+                data={
+                    "found": True,
+                    "folder_id": "folder-1",
+                    "id": "folder-1",
+                    "name": "Thermodynamics",
+                    "quizzes": [
+                        {
+                            "id": "folder-item-1",
+                            "quiz_id": "quiz-1",
+                            "title": "Specific Heat",
+                            "question_type": "multichoice",
+                        }
+                    ],
+                },
+            )
+        ]
+    )
+
+    assert artifacts[0].data["title"] == "Thermodynamics Folder"
+    assert artifacts[0].data["metadata"]["folder_name"] == "Thermodynamics"
+    assert artifacts[0].data["items"][0]["metadata"]["folder_name"] == "Thermodynamics"
+
+
+def test_folder_artifact_does_not_double_suffix_folder_display_title():
+    artifacts = infer_artifacts_from_results(
+        [
+            ToolResult(
+                step_id="step_1",
+                tool_name="folder_get_by_name",
+                data={
+                    "found": True,
+                    "folder_id": "folder-1",
+                    "id": "folder-1",
+                    "name": "Thermodynamics Folder",
+                    "quizzes": [],
+                },
+            )
+        ]
+    )
+
+    assert artifacts[0].data["title"] == "Thermodynamics Folder"
+    assert artifacts[0].data["metadata"]["folder_name"] == "Thermodynamics Folder"

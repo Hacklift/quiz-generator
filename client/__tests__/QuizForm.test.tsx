@@ -24,9 +24,18 @@ jest.mock("@shared/api/http", () => ({
   },
 }));
 
+jest.mock("@shared/api/publicHttp", () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+  },
+}));
+
 describe("QuizForm", () => {
   beforeEach(() => {
     mockPush.mockClear();
+    const publicApi = require("@shared/api/publicHttp").default;
+    publicApi.post.mockReset();
   });
 
   test("renders the quiz form with initial state", () => {
@@ -52,6 +61,20 @@ describe("QuizForm", () => {
   });
 
   test("generates quiz and redirects to quiz display", async () => {
+    const publicApi = require("@shared/api/publicHttp").default;
+    publicApi.post.mockResolvedValue({
+      data: {
+        quiz_id: "quiz-1",
+        questions: [
+          {
+            question: "What is your favorite color?",
+            options: ["Blue", "Green", "Red", "Yellow"],
+            answer: "Blue",
+          },
+        ],
+      },
+    });
+
     render(<QuizForm />);
 
     const input = screen.getByPlaceholderText("Enter the concept/context here");

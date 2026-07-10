@@ -17,10 +17,87 @@ export interface AssistantConversationMessage {
   content: string;
 }
 
-export interface AssistantArtifact {
+export interface AssistantArtifactAction {
+  type: "copy_to_clipboard";
+  label?: string;
+  value?: string;
+}
+
+export interface AssistantResourceItem {
+  id?: string;
+  label?: string;
+  title?: string;
+  name?: string;
+  href?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface AssistantResourceArtifact {
+  type: "resource";
+  data: {
+    resource?: string;
+    label?: string;
+    href?: string;
+    metadata?: Record<string, unknown>;
+    actions?: AssistantArtifactAction[];
+    [key: string]: unknown;
+  };
+}
+
+export interface AssistantResourceListArtifact {
+  type: "resource_list";
+  data: {
+    resource?: string;
+    title?: string;
+    items?: AssistantResourceItem[];
+    pagination?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+}
+
+export interface AssistantFileActionArtifact {
+  type: "file_action";
+  data: {
+    resource?: string;
+    action_id?: string;
+    label?: string;
+    href?: string;
+    method?: "GET" | "POST";
+    auto_execute?: boolean;
+    max_retries?: number;
+    metadata?: {
+      quiz_id?: string;
+      format?: string;
+      filename?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+}
+
+export interface AssistantStatusArtifact {
+  type: "status";
+  data: {
+    resource?: string;
+    label?: string;
+    message?: string;
+    metadata?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+}
+
+export interface AssistantUnknownArtifact {
   type: string;
   data: Record<string, unknown>;
 }
+
+export type AssistantArtifact =
+  | AssistantResourceArtifact
+  | AssistantResourceListArtifact
+  | AssistantFileActionArtifact
+  | AssistantStatusArtifact
+  | AssistantUnknownArtifact;
 
 export interface AssistantChatRequest {
   message: string;

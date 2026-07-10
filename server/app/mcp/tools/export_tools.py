@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from server.app.db.core.connection import get_quizzes_v2_collection
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
@@ -22,7 +24,7 @@ async def quiz_export_link(quiz_id: str, format: str = "pdf") -> dict[str, str]:
             raise PermissionError("Quiz access is required to export this quiz.")
 
     return {
-        "action_id": f"quiz_export:{quiz_id}:{file_format}",
+        "action_id": f"quiz_export:{quiz_id}:{file_format}:{uuid4()}",
         "quiz_id": quiz_id,
         "format": file_format,
         "href": "/download-quiz",

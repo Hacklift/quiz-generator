@@ -4,6 +4,8 @@ from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any
 
+from server.app.mcp.auth import McpAuthenticationError, McpAuthorizationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,15 @@ def instrument_mcp_call(name: str):
                     },
                 )
                 return result
+            except (McpAuthenticationError, McpAuthorizationError):
+                logger.warning(
+                    "mcp_call_auth_error",
+                    extra={
+                        "mcp_name": name,
+                        "latency_ms": round((time.perf_counter() - started_at) * 1000, 2),
+                    },
+                )
+                raise
             except Exception:
                 logger.exception(
                     "mcp_call_error",

@@ -9,6 +9,10 @@ const QUESTION_TYPES = [
   { label: "Open Ended", value: "open-ended" },
 ];
 
+const QUIZ_GENERATION_MAX_QUESTIONS = Number(
+  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
+);
+
 export default function QuizGenerationSection({
   generationMode,
   setGenerationMode,
@@ -442,12 +446,15 @@ export default function QuizGenerationSection({
               value={numQuestions}
               onChange={(e) =>
                 setNumQuestions(
-                  Math.min(10, Math.max(1, Number(e.target.value))),
+                  Math.min(
+                    QUIZ_GENERATION_MAX_QUESTIONS,
+                    Math.max(1, Number(e.target.value)),
+                  ),
                 )
               }
               placeholder="Number of questions"
               min={1}
-              max={10}
+              max={QUIZ_GENERATION_MAX_QUESTIONS}
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
             />
           </div>

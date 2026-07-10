@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
+from server.app.assistant.error_mapper import user_message_for_policy_error
 from server.app.assistant.mcp_client import AssistantMcpClient
 from server.app.assistant.model_router import AssistantModelRouter
 from server.app.assistant.orchestrator import AssistantOrchestrator
@@ -101,10 +102,8 @@ class AssistantService:
             if exc.status_code == status.HTTP_401_UNAUTHORIZED:
                 telemetry.fail(exc)
                 return AssistantChatResponse(
-                    message=(
-                        "Please log in to access your folders, saved quizzes, history, "
-                        "downloads, sharing, and other personal assistant features."
-                    ),
+                    message=user_message_for_policy_error(exc.detail)
+                    or "Please log in to use this assistant action.",
                     conversation_id=conversation_id,
                     artifacts=[],
                     actions=[],
@@ -112,7 +111,8 @@ class AssistantService:
             if exc.status_code == status.HTTP_403_FORBIDDEN:
                 telemetry.fail(exc)
                 return AssistantChatResponse(
-                    message="Please verify your email before using this assistant action.",
+                    message=user_message_for_policy_error(exc.detail)
+                    or "Please verify your email before using this assistant action.",
                     conversation_id=conversation_id,
                     artifacts=[],
                     actions=[],
