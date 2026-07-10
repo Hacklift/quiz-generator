@@ -67,3 +67,4 @@ class QuizResponse(BaseModel):
     invited_emails: List[str] = Field(default_factory=list)
     invitations_created: int = 0
     invitations_delivered: int = 0
+    invitations_queued: int = 0

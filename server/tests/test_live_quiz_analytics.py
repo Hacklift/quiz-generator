@@ -9,12 +9,19 @@ Tests cover:
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
+import jwt
 import pytest
+from bson import ObjectId
 from fastapi import HTTPException
+from starlette.websockets import WebSocketDisconnect
 
 import server.app.quiz.services.live_session_service as live_quiz_session_service
+from server.app.core.config import settings
+from server.app.quiz.routes import live_sessions as live_sessions_routes
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
+from server.app.users.models import UserOut
 
 
 class FakeAnalyticsRepository:
@@ -392,12 +399,18 @@ class FakeEmailService:
 
     async def send_email(self, **kwargs):
         self.sent.append(kwargs)
+        return SimpleNamespace(ok=True, adapter="background")
 
 
 @pytest.mark.asyncio
 async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
     fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
     monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    monkeypatch.setattr(
+        live_quiz_session_service.settings,
+        "FRONTEND_BASE_URL",
+        "https://quiz.example",
+    )
 
     invitation_repository = FakeInvitationRepository()
     email_service = FakeEmailService()
@@ -413,15 +426,160 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
         send_email_invitations=True,
         invitation_repository=invitation_repository,
         email_service=email_service,
-        frontend_origin="https://quiz.example",
     )
 
     assert response["invitations_created"] == 2
-    assert response["invitations_delivered"] == 2
+    assert response["invitations_queued"] == 2
+    assert response["invitations_delivered"] == 0
     assert response["invited_emails"] == ["ada@example.com", "grace@example.com"]
     assert invitation_repository.invitations[0]["status"] == "pending"
-    assert invitation_repository.deliveries[0]["status"] == "delivered"
+    assert invitation_repository.deliveries[0]["status"] == "queued"
     assert len(email_service.sent) == 2
+    assert "https://quiz.example/quiz-access/" in email_service.sent[0]["template_vars"]["body"]
+
+
+@pytest.mark.asyncio
+async def test_generate_access_code_route_uses_configured_frontend_url(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    monkeypatch.setattr(
+        live_quiz_session_service.settings,
+        "FRONTEND_BASE_URL",
+        "https://trusted.example",
+    )
+
+    invitation_repository = FakeInvitationRepository()
+    email_service = FakeEmailService()
+    service = LiveQuizSessionService(FakeAccessCodeRepository())
+    payload = live_sessions_routes.AccessCodeCreateRequest(
+        time_limit_minutes=15,
+        access_code_expires_at=fixed_now + timedelta(days=1),
+        participant_access_mode="restricted",
+        invited_emails=["ada@example.com"],
+        send_email_invitations=True,
+    )
+    current_user = UserOut(
+        id="creator-1",
+        username="creator",
+        email="creator@example.com",
+        is_verified=True,
+        status="active",
+    )
+
+    await live_sessions_routes.generate_quiz_access_code(
+        quiz_id="quiz-1",
+        payload=payload,
+        current_user=current_user,
+        service=service,
+        invitation_repository=invitation_repository,
+        email_service=email_service,
+    )
+
+    body = email_service.sent[0]["template_vars"]["body"]
+    assert "https://trusted.example/quiz-access/" in body
+    assert "https://attacker.example" not in body
+
+
+class FakeWebSocket:
+    def __init__(self, auth_message):
+        self.auth_message = auth_message
+        self.accepted = False
+        self.close_code = None
+        self.sent_json = []
+
+    async def accept(self):
+        self.accepted = True
+
+    async def receive_json(self):
+        return self.auth_message
+
+    async def close(self, code):
+        self.close_code = code
+
+    async def send_json(self, payload):
+        self.sent_json.append(payload)
+
+    async def receive_text(self):
+        raise WebSocketDisconnect()
+
+
+@pytest.mark.asyncio
+async def test_live_quiz_websocket_rejects_missing_auth_message():
+    websocket = FakeWebSocket({"type": "authenticate"})
+
+    await live_sessions_routes.live_quiz_participants_ws(
+        websocket,
+        "quiz-1",
+        service=object(),
+        users_collection=object(),
+        sessions_collection=object(),
+    )
+
+    assert websocket.accepted is True
+    assert websocket.close_code == 1008
+    assert websocket.sent_json == []
+
+
+@pytest.mark.asyncio
+async def test_live_quiz_websocket_authenticates_with_first_message():
+    user_id = ObjectId()
+    user = {
+        "_id": user_id,
+        "username": "creator",
+        "email": "creator@example.com",
+        "is_active": True,
+        "is_verified": True,
+        "status": "active",
+        "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+        "updated_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+    }
+    token = jwt.encode(
+        {
+            "sub": str(user_id),
+            "jti": "jti-1",
+            "sid": "session-1",
+            "type": "access",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        settings.JWT_SECRET,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    class FakeCollection:
+        async def find_one(self, query):
+            if query.get("_id") == user_id:
+                return user
+            if query.get("session_id") == "session-1":
+                return {"session_id": "session-1", "user_id": str(user_id)}
+            return None
+
+        async def update_one(self, *_args, **_kwargs):
+            return None
+
+    class FakeLiveQuizService:
+        async def list_analytics(self, quiz_id, creator_id):
+            assert quiz_id == "quiz-1"
+            assert creator_id == str(user_id)
+            return []
+
+    websocket = FakeWebSocket({"type": "authenticate", "token": token})
+
+    await live_sessions_routes.live_quiz_participants_ws(
+        websocket,
+        "quiz-1",
+        service=FakeLiveQuizService(),
+        users_collection=FakeCollection(),
+        sessions_collection=FakeCollection(),
+    )
+
+    assert websocket.close_code is None
+    assert websocket.sent_json == [
+        {
+            "type": "participants_snapshot",
+            "quiz_id": "quiz-1",
+            "participants": [],
+        }
+    ]
 
 
 @pytest.mark.asyncio

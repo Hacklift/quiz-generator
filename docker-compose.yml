@@ -14,6 +14,7 @@ services:
       - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
       - NEXT_PUBLIC_SSR_API_BASE_URL=http://server:8000
       - SHARE_URL=${SHARE_URL}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
     command: ["pnpm", "run", "dev"]
     depends_on:
       - server
@@ -31,6 +32,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
       - PYTHONPATH=/
     command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}", "--reload"]
     depends_on:
@@ -51,6 +53,7 @@ services:
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
       - SHARE_URL=${SHARE_URL}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
       - REDIS_URL=redis://redis:6379/0
       - PYTHONPATH=/

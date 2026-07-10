@@ -1,8 +1,9 @@
 import os
 from functools import lru_cache
 from typing import Literal, Optional
+from urllib.parse import urlparse, urlunparse
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -84,6 +85,27 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    @field_validator("FRONTEND_BASE_URL")
+    @classmethod
+    def validate_frontend_base_url(cls, value: str) -> str:
+        parsed = urlparse((value or "").strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("FRONTEND_BASE_URL must be an absolute http(s) URL")
+        if parsed.username or parsed.password:
+            raise ValueError("FRONTEND_BASE_URL must not include credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("FRONTEND_BASE_URL must not include query or fragment")
+        return urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path.rstrip("/"),
+                "",
+                "",
+                "",
+            )
+        )
 
 @lru_cache()
 def get_settings():
