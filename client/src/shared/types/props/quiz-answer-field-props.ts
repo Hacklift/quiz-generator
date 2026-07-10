@@ -4,4 +4,5 @@ export interface QuizAnswerFieldProps {
   onAnswerChange: (index: number, answer: string | number) => void;
   options: string[];
   value?: string | number;
+  disabled?: boolean;
 }

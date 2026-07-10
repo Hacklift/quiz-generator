@@ -19,6 +19,14 @@ import publicApi from "@shared/api/publicHttp";
 import { TokenService } from "@shared/auth/tokenService";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 
+const isAnswerProvided = (answer: string | number | undefined) => {
+  if (typeof answer === "number") {
+    return true;
+  }
+
+  return typeof answer === "string" && answer.trim().length > 0;
+};
+
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
   const savedQuizId = searchParams?.get("savedId") || searchParams?.get("id");
@@ -35,10 +43,7 @@ const QuizDisplayPage: React.FC = () => {
     Number(searchParams?.get("liveDurationMinutes")) || 20;
   const liveAccessExpiresAt = searchParams?.get("liveAccessExpiresAt") || "";
   const participantAccessModeParam = searchParams?.get("participantAccessMode");
-  const participantAccessMode:
-    | "public"
-    | "restricted"
-    | "invited_only" =
+  const participantAccessMode: "public" | "restricted" | "invited_only" =
     participantAccessModeParam === "restricted" ||
     participantAccessModeParam === "invited_only"
       ? participantAccessModeParam
@@ -65,7 +70,7 @@ const QuizDisplayPage: React.FC = () => {
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const hasFetchedRef = useRef(false); 
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -162,10 +167,7 @@ const QuizDisplayPage: React.FC = () => {
 
           const client =
             liveQuizRequested || TokenService.hasTokens() ? api : publicApi;
-          const { data } = await client.post(
-            "/api/get-questions",
-            basePayload,
-          );
+          const { data } = await client.post("/api/get-questions", basePayload);
 
           if (data?.quiz_id && !data?.ai_down) {
             setQuizId(data.quiz_id);
@@ -173,7 +175,9 @@ const QuizDisplayPage: React.FC = () => {
           }
           if (data?.access_code) {
             setLiveAccessCode(data.access_code);
-            setLiveAccessUrl(`${window.location.origin}/quiz-access/${data.access_code}`);
+            setLiveAccessUrl(
+              `${window.location.origin}/quiz-access/${data.access_code}`,
+            );
             toast.success("Live quiz access code generated!");
           }
           if (data?.ai_down) {
@@ -254,12 +258,29 @@ const QuizDisplayPage: React.FC = () => {
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
+    if (isQuizChecked) {
+      return;
+    }
+
     const updated = [...userAnswers];
     updated[index] = answer;
     setUserAnswers(updated);
   };
 
   const checkAnswers = async () => {
+    const unansweredQuestions = quizQuestions
+      .map((_, index) => index)
+      .filter((index) => !isAnswerProvided(userAnswers[index]));
+
+    if (unansweredQuestions.length > 0) {
+      const message =
+        unansweredQuestions.length === quizQuestions.length
+          ? "Answer the quiz before submitting it for grading."
+          : `Answer all questions before submitting. ${unansweredQuestions.length} unanswered question${unansweredQuestions.length === 1 ? "" : "s"} left.`;
+      toast.error(message);
+      return;
+    }
+
     try {
       const payload = quizQuestions.map((q, i) => {
         const correct = q.answer ?? q.correct_answer;
@@ -357,13 +378,14 @@ const QuizDisplayPage: React.FC = () => {
                     onAnswerChange={handleAnswerChange}
                     options={q.options || []}
                     value={userAnswers[i]}
+                    disabled={isQuizChecked}
                   />
                 </div>
               ))}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-              <CheckButton onClick={checkAnswers} />
+              {!isQuizChecked && <CheckButton onClick={checkAnswers} />}
               <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
@@ -376,6 +398,11 @@ const QuizDisplayPage: React.FC = () => {
               <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}
             </div>
+            {isQuizChecked && (
+              <p className="mt-4 text-sm font-medium text-slate-600">
+                Answers are locked after submission and grading.
+              </p>
+            )}
           </section>
 
           {liveAccessCode && (

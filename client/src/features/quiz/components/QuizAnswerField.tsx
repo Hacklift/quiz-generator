@@ -7,6 +7,7 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
   onAnswerChange,
   options,
   value,
+  disabled = false,
 }) => {
   const stripOptionPrefix = (option: string) =>
     option.replace(/^[A-D][\)\.]\s*/i, "").trim();
@@ -39,6 +40,7 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
               value={option}
               onChange={handleInputChange}
               checked={value === option}
+              disabled={disabled}
               className="mt-1 h-4 w-4 shrink-0 accent-[#0F2654]"
             />
             <span className="inline-flex min-w-0 items-start gap-3">
@@ -69,6 +71,7 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
               value={option}
               onChange={handleInputChange}
               checked={value === (option === "true" ? 1 : 0)}
+              disabled={disabled}
               className="h-4 w-4 shrink-0 accent-[#0F2654]"
             />
             <span className="font-medium capitalize">{option}</span>
@@ -81,6 +84,8 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
       <input
         type="text"
         onChange={handleInputChange}
+        value={value ?? ""}
+        disabled={disabled}
         placeholder="Type your short answer here"
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
@@ -90,6 +95,8 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
       <textarea
         rows={4}
         onChange={handleInputChange}
+        value={value ?? ""}
+        disabled={disabled}
         placeholder="Write your detailed answer here"
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
