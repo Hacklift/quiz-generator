@@ -29,6 +29,24 @@ class LiveQuizSessionRepository:
     async def access_code_exists(self, access_code: str) -> bool:
         return await self.quiz_repository.access_code_exists(access_code)
 
+    async def list_live_quizzes_by_creator(
+        self,
+        creator_user_id: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        cursor = self.quiz_repository.collection.find(
+            {
+                "live_quiz_enabled": True,
+                "status": {"$ne": "deleted"},
+                "$or": [
+                    {"owner_user_id": creator_user_id},
+                    {"created_by": creator_user_id},
+                    {"owner_id": creator_user_id},
+                ],
+            }
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
     async def enable_live_quiz(
         self,
         quiz_id: str,
@@ -36,12 +54,16 @@ class LiveQuizSessionRepository:
         time_limit_minutes: int,
         access_code_expires_at: datetime,
         creator_id: str,
+        participant_access_mode: str = "public",
+        invited_participant_emails: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         updated = await self.quiz_repository.enable_live_quiz(
             quiz_id,
             access_code=access_code,
             time_limit_minutes=time_limit_minutes,
             access_code_expires_at=access_code_expires_at,
+            participant_access_mode=participant_access_mode,
+            invited_participant_emails=invited_participant_emails or [],
         )
         return updated.model_dump(by_alias=True) if updated else None
 
@@ -100,12 +122,39 @@ class LiveQuizSessionRepository:
             {
                 "answers": answers,
                 "current_question_index": next_question_index,
+                "status": "active",
             },
         )
 
     async def list_quiz_sessions(self, quiz_id: str) -> List[Dict[str, Any]]:
         cursor = self.sessions_collection.find({"quiz_id": quiz_id}).sort(
-            "created_at",
-            -1,
+            "created_at", -1,
         )
         return await cursor.to_list(length=500)
+
+    async def list_quiz_sessions_by_creator(self, quiz_id: str, creator_user_id: str) -> List[Dict[str, Any]]:
+        """List sessions for a quiz, filtered by creator_user_id for security."""
+        cursor = self.sessions_collection.find(
+            {"quiz_id": quiz_id, "creator_user_id": creator_user_id}
+        ).sort("created_at", -1)
+        return await cursor.to_list(length=500)
+
+    async def get_session_by_id_and_creator(self, session_id: str, creator_user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a session ensuring it belongs to the creator."""
+        try:
+            return await self.sessions_collection.find_one(
+                {"_id": ObjectId(session_id), "creator_user_id": creator_user_id}
+            )
+        except InvalidId:
+            return None
+
+    async def find_live_quiz_sessions_for_user(
+        self,
+        user_email: str,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Find sessions where the participant email matches a user's email."""
+        cursor = self.sessions_collection.find(
+            {"participant_email": user_email.strip().lower()}
+        ).sort("submitted_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)

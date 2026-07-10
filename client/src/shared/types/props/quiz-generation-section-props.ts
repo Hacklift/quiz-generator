@@ -1,8 +1,21 @@
 import { Dispatch, SetStateAction } from "react";
 
 export interface QuizGenerationSectionProps {
+  generationMode: "document" | "topic";
+  setGenerationMode: Dispatch<SetStateAction<"document" | "topic">>;
   profession: string;
   setProfession: Dispatch<SetStateAction<string>>;
+  documentTitle: string;
+  setDocumentTitle: Dispatch<SetStateAction<string>>;
+  documentInputMode: "paste" | "upload";
+  setDocumentInputMode: Dispatch<SetStateAction<"paste" | "upload">>;
+  documentText: string;
+  setDocumentText: Dispatch<SetStateAction<string>>;
+  documentFileName: string;
+  documentFileSizeBytes: number;
+  documentUploadMaxBytes: number;
+  documentTextLimit: number;
+  onDocumentFileChange: (file: File | null) => void;
   audienceType: string;
   setAudienceType: Dispatch<SetStateAction<string>>;
   customInstruction: string;

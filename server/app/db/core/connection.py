@@ -12,6 +12,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "quizApp_db")
 FERNET_KEY = os.getenv("FERNET_KEY")
 if not FERNET_KEY:
     raise RuntimeError("FERNET_KEY is not set in .env")
@@ -20,7 +21,7 @@ fernet = Fernet(FERNET_KEY)
 
 client = AsyncIOMotorClient(MONGO_URI)
 
-database = client["quizApp_db"]
+database = client[DB_NAME]
 
 quizzes_collection = database["quizzes"]
 users_collection = database["users"]
@@ -29,6 +30,7 @@ auth_events_collection = database["auth_events"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
+live_quiz_invitations_collection = database["live_quiz_invitations"]
 
 
 folders_collection = database["folders"]
@@ -41,6 +43,7 @@ folders_v2_collection = database["folders_v2"]
 folder_items_v2_collection = database["folder_items_v2"]
 saved_quizzes_v2_collection = database["saved_quizzes_v2"]
 quiz_history_v2_collection = database["quiz_history_v2"]
+document_rag_cache_collection = database["document_rag_cache"]
 
 
 async def ensure_ai_quiz_indexes(ai_generated_quizzes_collection: AsyncIOMotorCollection):
@@ -81,11 +84,48 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index("expires_at")
 
 
+async def ensure_document_rag_cache_indexes(
+    document_rag_cache_collection: AsyncIOMotorCollection,
+):
+    await document_rag_cache_collection.create_index(
+        [
+            ("document_fingerprint", 1),
+            ("embedding_model", 1),
+            ("chunk_size_chars", 1),
+            ("chunk_overlap_chars", 1),
+            ("chunk_limit", 1),
+        ],
+        unique=True,
+        name="document_rag_cache_key",
+    )
+    await document_rag_cache_collection.create_index(
+        [("last_accessed_at", -1)],
+        name="document_rag_cache_last_accessed_at",
+    )
+    await document_rag_cache_collection.create_index(
+        [("updated_at", -1)],
+        name="document_rag_cache_updated_at",
+    )
+
+
 async def drop_removed_collections():
     if "blacklisted_tokens" in await database.list_collection_names():
         await database.drop_collection("blacklisted_tokens")
     if "quizzes_category" in await database.list_collection_names():
         await database.drop_collection("quizzes_category")
+
+
+async def ensure_live_quiz_invitation_indexes(
+    live_quiz_invitations_collection: AsyncIOMotorCollection,
+):
+    """Indexes for live quiz invitations."""
+    await live_quiz_invitations_collection.create_index("quiz_id")
+    await live_quiz_invitations_collection.create_index("creator_user_id")
+    await live_quiz_invitations_collection.create_index("status")
+    await live_quiz_invitations_collection.create_index(
+        [("quiz_id", 1), ("email", 1)],
+        unique=True,
+    )
 
 
 async def startUp():
@@ -101,6 +141,8 @@ async def startUp():
     await ensure_user_tokens_indexes(user_tokens_collection)
     await ensure_notification_indexes(notifications_collection)
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
+    await ensure_document_rag_cache_indexes(document_rag_cache_collection)
+    await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -172,6 +214,12 @@ def get_live_quiz_sessions_collection() -> AsyncIOMotorCollection:
     return live_quiz_sessions_collection
 
 
+def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
+    if live_quiz_invitations_collection is None:
+        raise RuntimeError("[DB Error] live_quiz_invitations_collection has not been initialized properly.")
+    return live_quiz_invitations_collection
+
+
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:
     if quizzes_v2_collection is None:
         raise RuntimeError("[DB Error] quizzes_v2_collection has not been initialized properly.")
@@ -200,3 +248,9 @@ def get_quiz_history_v2_collection() -> AsyncIOMotorCollection:
     if quiz_history_v2_collection is None:
         raise RuntimeError("[DB Error] quiz_history_v2_collection has not been initialized properly.")
     return quiz_history_v2_collection
+
+
+def get_document_rag_cache_collection() -> AsyncIOMotorCollection:
+    if document_rag_cache_collection is None:
+        raise RuntimeError("[DB Error] document_rag_cache_collection has not been initialized properly.")
+    return document_rag_cache_collection

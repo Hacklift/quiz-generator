@@ -34,6 +34,11 @@ def get_user_profile_service(current_user: UserOut) -> dict:
         "status": current_user.status,
         "is_active": current_user.is_active,
         "is_verified": current_user.is_verified,
+        "stripe_customer_id": current_user.stripe_customer_id,
+        "stripe_subscription_id": current_user.stripe_subscription_id,
+        "subscription_plan": current_user.subscription_plan,
+        "subscription_status": current_user.subscription_status,
+        "current_period_end": current_user.current_period_end,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
     }

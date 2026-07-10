@@ -6,6 +6,7 @@ import FoldersButton from "./sidebar/FoldersButton";
 import UpgradePlanButton from "./sidebar/UpgradePlanButton";
 import QuizHistoryButton from "./sidebar/QuizHistoryButton";
 import ProfileButton from "./sidebar/ProfileButton";
+import LiveQuizzesButton from "./sidebar/LiveQuizzesButton";
 
 interface SidebarProps {
   onBrowseClick: () => void;
@@ -21,6 +22,7 @@ export default function Sidebar({ onBrowseClick }: SidebarProps) {
         <BrowseByCategoryButton onBrowseClick={onBrowseClick} />
         <PopularQuizzesButton />
         <FoldersButton />
+        <LiveQuizzesButton />
         <QuizHistoryButton />
       </div>
 

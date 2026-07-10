@@ -41,6 +41,11 @@ class UserDB(BaseModel):
     is_verified: bool 
     status: str = "pending_verification"
     role: str = "user"
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     password_changed_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
@@ -90,6 +95,11 @@ class SeedUser(BaseModel):
     is_verified: bool = False
     status: str = "pending_verification"
     role: str = "user"
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     password_changed_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
@@ -120,6 +130,11 @@ class UserOut(BaseModel):
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
     is_active: Optional[bool] = True
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    subscription_plan: Optional[str] = "free"
+    subscription_status: Optional[str] = "inactive"
+    current_period_end: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
