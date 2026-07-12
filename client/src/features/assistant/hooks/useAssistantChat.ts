@@ -26,7 +26,9 @@ const buildRecentMessages = (
 const buildRecentArtifacts = (
   messages: AssistantMessage[],
 ): AssistantArtifact[] =>
-  messages.flatMap((message) => message.artifacts || []).slice(-16);
+  messages
+    .flatMap((message) => message.artifacts || [])
+    .slice(-16);
 
 const normalizeAssistantError = (detail: unknown, fallback: string): string => {
   const message = typeof detail === "string" ? detail : fallback;
@@ -57,8 +59,7 @@ export const useAssistantChat = () => {
     {
       id: createMessageId(),
       role: "assistant",
-      content:
-        "Ask me to generate quizzes, browse categories, manage saved quizzes, or create live quiz links.",
+      content: "Ask me to generate quizzes, browse categories, manage saved quizzes, or create live quiz links.",
     },
   ]);
   const [isSending, setIsSending] = useState(false);

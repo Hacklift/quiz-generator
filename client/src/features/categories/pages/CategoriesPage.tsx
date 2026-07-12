@@ -49,9 +49,7 @@ export default function CategoriesPage() {
         {isLoading ? (
           <p className="text-sm text-slate-500">Loading categories...</p>
         ) : categories.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No categories are available yet.
-          </p>
+          <p className="text-sm text-slate-500">No categories are available yet.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {categories.map((category) => (
@@ -61,9 +59,7 @@ export default function CategoriesPage() {
                 className="rounded-2xl border border-blue-100 bg-blue-50 p-5 transition hover:border-blue-300 hover:bg-blue-100"
               >
                 <h2 className="text-lg font-semibold">{category}</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  View subcategories and quiz types.
-                </p>
+                <p className="mt-2 text-sm text-slate-600">View subcategories and quiz types.</p>
               </Link>
             ))}
           </div>

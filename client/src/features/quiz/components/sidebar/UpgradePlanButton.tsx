@@ -11,7 +11,7 @@ const UpgradePlanButton: React.FC = () => {
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const activePlanConfig = billingPlans.find(
-    (bp) => bp.action === user?.subscription_plan,
+    (bp) => bp.action === user?.subscription_plan
   );
 
   const isPremium =

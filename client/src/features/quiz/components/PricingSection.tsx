@@ -7,7 +7,10 @@ import {
   createCheckoutSession,
   getBillingErrorMessage,
 } from "@features/profile/api/billingApi";
-import { BillingPlanAction, billingPlans } from "@shared/config/billingPlans";
+import {
+  BillingPlanAction,
+  billingPlans,
+} from "@shared/config/billingPlans";
 
 export default function PricingSection() {
   const { isAuthenticated, isLoading, user } = useAuth();

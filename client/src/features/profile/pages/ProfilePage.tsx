@@ -297,12 +297,9 @@ export default function ProfilePage() {
     "#6366f1",
   ];
 
-  const billingPlan =
-    billingSummary?.subscription_plan || user?.subscription_plan || "free";
+  const billingPlan = billingSummary?.subscription_plan || user?.subscription_plan || "free";
   const billingStatus =
-    billingSummary?.subscription_status ||
-    user?.subscription_status ||
-    "inactive";
+    billingSummary?.subscription_status || user?.subscription_status || "inactive";
   const billingRenewalDate =
     billingSummary?.current_period_end || user?.current_period_end || null;
   const hasBillingPortalAccess = Boolean(

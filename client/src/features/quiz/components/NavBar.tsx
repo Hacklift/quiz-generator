@@ -70,44 +70,32 @@ const NavBar: React.FC = () => {
           <div className="hidden md:flex items-center space-x-8">
             <Link
               href="/"
-              className={`text-sm font-medium transition-all ${
-                router.pathname === "/" && !router.asPath.includes("#")
-                  ? "text-[#0F2654] font-semibold"
-                  : "text-gray-500 hover:text-[#0F2654]"
-              }`}
+              className={`text-sm font-medium transition-all ${router.pathname === "/" && !router.asPath.includes("#") ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
+                }`}
             >
               Home
             </Link>
 
             <Link
               href="/generate"
-              className={`text-sm font-medium transition-all ${
-                router.pathname === "/generate"
-                  ? "text-[#0F2654] font-semibold"
-                  : "text-gray-500 hover:text-[#0F2654]"
-              }`}
+              className={`text-sm font-medium transition-all ${router.pathname === "/generate" ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
+                }`}
             >
               Generate Quiz
             </Link>
 
             <button
               onClick={() => setIsBrowseModalOpen(true)}
-              className={`text-sm font-medium transition-all ${
-                isBrowseModalOpen
-                  ? "text-[#0F2654] font-semibold"
-                  : "text-gray-500 hover:text-[#0F2654]"
-              }`}
+              className={`text-sm font-medium transition-all ${isBrowseModalOpen ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
+                }`}
             >
               Categories
             </button>
 
             <Link
               href="/#pricing"
-              className={`text-sm font-medium transition-all ${
-                router.asPath.endsWith("#pricing")
-                  ? "text-[#0F2654] font-semibold"
-                  : "text-gray-500 hover:text-[#0F2654]"
-              }`}
+              className={`text-sm font-medium transition-all ${router.asPath.endsWith("#pricing") ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
+                }`}
             >
               Pricing
             </Link>
@@ -163,11 +151,8 @@ const NavBar: React.FC = () => {
           <Link
             href="/"
             onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${
-              router.pathname === "/" && !router.asPath.includes("#")
-                ? "bg-[#0F2654] text-white font-semibold shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.pathname === "/" && !router.asPath.includes("#") ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Home
           </Link>
@@ -175,11 +160,8 @@ const NavBar: React.FC = () => {
           <Link
             href="/generate"
             onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${
-              router.pathname === "/generate"
-                ? "bg-[#0F2654] text-white font-semibold shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.pathname === "/generate" ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Generate Quiz
           </Link>
@@ -189,11 +171,8 @@ const NavBar: React.FC = () => {
               setIsMobileNavOpen(false);
               setIsBrowseModalOpen(true);
             }}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all text-left ${
-              isBrowseModalOpen
-                ? "bg-[#0F2654] text-white font-semibold shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`text-base font-medium px-3 py-2 rounded-md transition-all text-left ${isBrowseModalOpen ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Categories
           </button>
@@ -201,11 +180,8 @@ const NavBar: React.FC = () => {
           <Link
             href="/#pricing"
             onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${
-              router.asPath.endsWith("#pricing")
-                ? "bg-[#0F2654] text-white font-semibold shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
+            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.asPath.endsWith("#pricing") ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
             Pricing
           </Link>

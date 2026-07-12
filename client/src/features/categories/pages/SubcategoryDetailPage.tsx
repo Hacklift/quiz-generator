@@ -21,24 +21,14 @@ const titleize = (value: string) =>
 
 export default function SubcategoryDetailPage() {
   const router = useRouter();
-  const categorySlug =
-    typeof router.query.categorySlug === "string"
-      ? router.query.categorySlug
-      : "";
+  const categorySlug = typeof router.query.categorySlug === "string" ? router.query.categorySlug : "";
   const subcategorySlug =
-    typeof router.query.subcategorySlug === "string"
-      ? router.query.subcategorySlug
-      : "";
-  const queryType =
-    typeof router.query.type === "string" ? router.query.type : "";
-  const pageQuery =
-    typeof router.query.page === "string" ? Number(router.query.page) : 1;
+    typeof router.query.subcategorySlug === "string" ? router.query.subcategorySlug : "";
+  const queryType = typeof router.query.type === "string" ? router.query.type : "";
+  const pageQuery = typeof router.query.page === "string" ? Number(router.query.page) : 1;
   const page = Number.isFinite(pageQuery) && pageQuery > 0 ? pageQuery : 1;
   const categoryLabel = useMemo(() => titleize(categorySlug), [categorySlug]);
-  const subcategoryLabel = useMemo(
-    () => titleize(subcategorySlug),
-    [subcategorySlug],
-  );
+  const subcategoryLabel = useMemo(() => titleize(subcategorySlug), [subcategorySlug]);
   const [quizTypes, setQuizTypes] = useState<string[]>([]);
   const [questions, setQuestions] = useState<CategoryQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,9 +138,7 @@ export default function SubcategoryDetailPage() {
         {isLoading ? (
           <p className="text-sm text-slate-500">Loading questions...</p>
         ) : questions.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No questions are available for this selection.
-          </p>
+          <p className="text-sm text-slate-500">No questions are available for this selection.</p>
         ) : (
           <div className="space-y-4">
             {questions.map((question, index) => (
@@ -159,19 +147,15 @@ export default function SubcategoryDetailPage() {
                 className="rounded-2xl border border-blue-100 bg-blue-50 p-5"
               >
                 <h2 className="font-semibold">{question.question}</h2>
-                {Array.isArray(question.options) &&
-                  question.options.length > 0 && (
-                    <ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                      {question.options.map((option) => (
-                        <li
-                          key={option}
-                          className="rounded-xl bg-white px-3 py-2"
-                        >
-                          {option}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                {Array.isArray(question.options) && question.options.length > 0 && (
+                  <ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                    {question.options.map((option) => (
+                      <li key={option} className="rounded-xl bg-white px-3 py-2">
+                        {option}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </article>
             ))}
             <div className="flex items-center justify-between pt-2">

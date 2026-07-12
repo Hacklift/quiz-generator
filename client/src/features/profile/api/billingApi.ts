@@ -33,7 +33,10 @@ export interface BillingHistoryResponse {
   invoices: BillingHistoryItem[];
 }
 
-export const getBillingErrorMessage = (error: any, fallback: string): string =>
+export const getBillingErrorMessage = (
+  error: any,
+  fallback: string,
+): string =>
   error?.response?.data?.detail || error?.message || fallback;
 
 export const createCheckoutSession = async (
