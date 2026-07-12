@@ -77,32 +77,35 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
     });
   }, []);
 
-  const fetchParticipants = useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    setError(null);
-    try {
-      const data = await liveQuizService.listParticipants(quizId);
-      if (mountedRef.current) {
-        setParticipants(data);
+  const fetchParticipants = useCallback(
+    async (showLoading = false) => {
+      if (showLoading) setLoading(true);
+      setError(null);
+      try {
+        const data = await liveQuizService.listParticipants(quizId);
+        if (mountedRef.current) {
+          setParticipants(data);
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 403) {
+          setError("You are not the owner of this quiz.");
+          return;
+        }
+        if (err?.response?.status === 404) {
+          setError("Quiz not found.");
+          return;
+        }
+        if (mountedRef.current && !showLoading) {
+          setError("Could not load participants.");
+        }
+      } finally {
+        if (mountedRef.current && showLoading) {
+          setLoading(false);
+        }
       }
-    } catch (err: any) {
-      if (err?.response?.status === 403) {
-        setError("You are not the owner of this quiz.");
-        return;
-      }
-      if (err?.response?.status === 404) {
-        setError("Quiz not found.");
-        return;
-      }
-      if (mountedRef.current && !showLoading) {
-        setError("Could not load participants.");
-      }
-    } finally {
-      if (mountedRef.current && showLoading) {
-        setLoading(false);
-      }
-    }
-  }, [quizId]);
+    },
+    [quizId],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -111,10 +114,7 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
     void fetchParticipants(true);
 
     const scheduleReconnect = () => {
-      if (
-        !shouldReconnectRef.current ||
-        reconnectTimerRef.current !== null
-      ) {
+      if (!shouldReconnectRef.current || reconnectTimerRef.current !== null) {
         return;
       }
 
@@ -296,9 +296,7 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
         {/* Participants Table */}
         {participants.length === 0 ? (
           <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-            <p className="text-lg text-gray-500">
-              No participants yet.
-            </p>
+            <p className="text-lg text-gray-500">No participants yet.</p>
             <p className="mt-2 text-sm text-gray-400">
               Participants will appear here once they join the quiz.
             </p>

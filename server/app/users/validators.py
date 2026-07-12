@@ -55,6 +55,8 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
     await users_collection.create_index("created_at")
     await users_collection.create_index("last_login_at")
     await users_collection.create_index("is_active")
+    await users_collection.create_index("stripe_customer_id", sparse=True)
+    await users_collection.create_index("stripe_subscription_id", sparse=True)
 
 
 async def ensure_users_validator(database):
@@ -85,6 +87,11 @@ async def ensure_users_validator(database):
                 "is_verified": {"bsonType": "bool"},
                 "is_active": {"bsonType": "bool"},
                 "role": {"bsonType": "string"},
+                "stripe_customer_id": {"bsonType": ["string", "null"]},
+                "stripe_subscription_id": {"bsonType": ["string", "null"]},
+                "subscription_plan": {"bsonType": ["string", "null"]},
+                "subscription_status": {"bsonType": ["string", "null"]},
+                "current_period_end": {"bsonType": ["string", "null"]},
                 "profile": {
                     "bsonType": ["object", "null"],
                     "properties": {

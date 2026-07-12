@@ -97,6 +97,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                 "properties": {
                     "folder_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
+                    "saved_quiz_id": {"bsonType": ["string", "null"]},
                     "added_by": {"bsonType": ["string", "null"]},
                     "position": {"bsonType": ["int", "null"]},
                     "display_title": {"bsonType": ["string", "null"]},

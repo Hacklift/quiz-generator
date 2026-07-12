@@ -182,7 +182,8 @@ const MyLiveQuizzesPage: React.FC = () => {
                                 {quiz.access_code}
                               </p>
                               <p className="text-xs text-slate-500">
-                                Expires {formatDateTime(quiz.access_code_expires_at)}
+                                Expires{" "}
+                                {formatDateTime(quiz.access_code_expires_at)}
                               </p>
                               {isExpired(quiz.access_code_expires_at) && (
                                 <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
@@ -268,7 +269,9 @@ const MyLiveQuizzesPage: React.FC = () => {
                     min={1}
                     max={1440}
                     value={duration}
-                    onChange={(event) => setDuration(Number(event.target.value))}
+                    onChange={(event) =>
+                      setDuration(Number(event.target.value))
+                    }
                     className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
                   />
                 </label>

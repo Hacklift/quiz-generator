@@ -9,9 +9,26 @@ const QUESTION_TYPES = [
   { label: "Open Ended", value: "open-ended" },
 ];
 
+const QUIZ_GENERATION_MAX_QUESTIONS = Number(
+  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
+);
+
 export default function QuizGenerationSection({
+  generationMode,
+  setGenerationMode,
   profession,
   setProfession,
+  documentTitle,
+  setDocumentTitle,
+  documentInputMode,
+  setDocumentInputMode,
+  documentText,
+  setDocumentText,
+  documentFileName,
+  documentFileSizeBytes,
+  documentUploadMaxBytes,
+  documentTextLimit,
+  onDocumentFileChange,
   audienceType,
   setAudienceType,
   customInstruction,
@@ -40,6 +57,23 @@ export default function QuizGenerationSection({
     { value: "hard", label: "Hard" },
   ];
 
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) {
+      return `${bytes.toLocaleString()} B`;
+    }
+
+    const units = ["KB", "MB", "GB"];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+  };
+
   useEffect(() => {
     if (!difficultyOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
@@ -63,20 +97,189 @@ export default function QuizGenerationSection({
         Effortlessly create customized quizzes on any topic
       </p>
 
+      <div className="mb-8">
+        <RequiredLabel text="Quiz source" required />
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setGenerationMode("topic")}
+            className={`rounded-xl border px-4 py-4 text-left transition ${
+              generationMode === "topic"
+                ? "border-[#0F2654] bg-[#0F2654] text-white"
+                : "border-gray-300 bg-white text-[#2C3E50] hover:border-[#0F2654]/40"
+            }`}
+          >
+            <span className="block text-sm font-semibold">Topic prompt</span>
+            <span
+              className={`mt-1 block text-xs ${
+                generationMode === "topic" ? "text-white/80" : "text-gray-500"
+              }`}
+            >
+              Generate from a concept, profession, or learning context.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setGenerationMode("document")}
+            className={`rounded-xl border px-4 py-4 text-left transition ${
+              generationMode === "document"
+                ? "border-[#0F2654] bg-[#0F2654] text-white"
+                : "border-gray-300 bg-white text-[#2C3E50] hover:border-[#0F2654]/40"
+            }`}
+          >
+            <span className="block text-sm font-semibold">
+              Document or pasted text
+            </span>
+            <span
+              className={`mt-1 block text-xs ${
+                generationMode === "document"
+                  ? "text-white/80"
+                  : "text-gray-500"
+              }`}
+            >
+              Upload PDF, DOCX, TXT, or paste study notes for RAG-based quiz
+              generation.
+            </span>
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="md:col-span-2">
-          <RequiredLabel
-            text="Enter The Concept/Context For This Quiz"
-            required
-          />
-          <input
-            type="text"
-            value={profession}
-            onChange={(e) => setProfession(e.target.value)}
-            placeholder="Enter the concept/context here"
-            className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
-            required
-          />
+          {generationMode === "topic" ? (
+            <>
+              <RequiredLabel
+                text="Enter The Concept/Context For This Quiz"
+                required
+              />
+              <input
+                type="text"
+                value={profession}
+                onChange={(e) => setProfession(e.target.value)}
+                placeholder="Enter the concept/context here"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
+                required
+              />
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
+                  Material title
+                </label>
+                <input
+                  type="text"
+                  value={documentTitle}
+                  onChange={(event) => setDocumentTitle(event.target.value)}
+                  placeholder="Optional title for this material"
+                  className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-[#2C3E50] mb-2">
+                  Learning material input
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDocumentInputMode("upload")}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                      documentInputMode === "upload"
+                        ? "bg-[#0F2654] text-white"
+                        : "bg-gray-100 text-[#2C3E50] hover:bg-gray-200"
+                    }`}
+                  >
+                    Upload file
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocumentInputMode("paste")}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                      documentInputMode === "paste"
+                        ? "bg-[#0F2654] text-white"
+                        : "bg-gray-100 text-[#2C3E50] hover:bg-gray-200"
+                    }`}
+                  >
+                    Paste text
+                  </button>
+                </div>
+              </div>
+
+              {documentInputMode === "upload" ? (
+                <div className="rounded-xl border border-dashed border-[#0F2654]/30 bg-[#f8fbff] p-5">
+                  <label className="block text-sm font-semibold text-[#2C3E50] mb-2">
+                    Upload PDF, DOCX, or TXT
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    onChange={(event) =>
+                      onDocumentFileChange(event.target.files?.[0] || null)
+                    }
+                    className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-[#0F2654] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#0a3264]"
+                  />
+                  <p className="mt-3 text-xs text-gray-500">
+                    Accepted range: 1 byte to{" "}
+                    {documentUploadMaxBytes.toLocaleString()} bytes (
+                    {formatBytes(documentUploadMaxBytes)}).
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {documentFileName
+                      ? `Selected file: ${documentFileName} (${documentFileSizeBytes.toLocaleString()} bytes / ${formatBytes(documentFileSizeBytes)})`
+                      : "No file selected yet."}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
+                    Paste the learning material
+                  </label>
+                  <textarea
+                    rows={8}
+                    value={documentText}
+                    onChange={(event) => setDocumentText(event.target.value)}
+                    maxLength={documentTextLimit}
+                    placeholder="Paste lecture notes, textbook excerpts, or study material here."
+                    className="w-full border border-gray-300 rounded-md px-4 py-3 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
+                  />
+                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                    <span>
+                      Max {documentTextLimit.toLocaleString()} characters for
+                      pasted material.
+                    </span>
+                    <span
+                      className={
+                        documentText.length >= documentTextLimit * 0.9
+                          ? "font-semibold text-[#0F2654]"
+                          : ""
+                      }
+                    >
+                      {documentText.length.toLocaleString()} /{" "}
+                      {documentTextLimit.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
+                  Focus area in this material (optional)
+                </label>
+                <input
+                  type="text"
+                  value={profession}
+                  onChange={(e) => setProfession(e.target.value)}
+                  placeholder="Example: chapter 3 definitions or respiratory system"
+                  className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Leave blank to generate from the most central ideas in the
+                  material.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="md:col-span-2 relative">
@@ -201,6 +404,12 @@ export default function QuizGenerationSection({
               placeholder="Add specific instruction"
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
             />
+            {generationMode === "document" && (
+              <p className="mt-1 text-xs text-gray-500">
+                The backend uses RAG retrieval first, then generates questions
+                only from the retrieved document chunks.
+              </p>
+            )}
           </div>
         </div>
 
@@ -237,12 +446,15 @@ export default function QuizGenerationSection({
               value={numQuestions}
               onChange={(e) =>
                 setNumQuestions(
-                  Math.min(10, Math.max(1, Number(e.target.value))),
+                  Math.min(
+                    QUIZ_GENERATION_MAX_QUESTIONS,
+                    Math.max(1, Number(e.target.value)),
+                  ),
                 )
               }
               placeholder="Number of questions"
               min={1}
-              max={10}
+              max={QUIZ_GENERATION_MAX_QUESTIONS}
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
             />
           </div>
