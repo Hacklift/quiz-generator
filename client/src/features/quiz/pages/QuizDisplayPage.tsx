@@ -29,6 +29,14 @@ type DocumentContext = {
   embeddingCacheHit: boolean;
 };
 
+const isAnswerProvided = (answer: string | number | undefined) => {
+  if (typeof answer === "number") {
+    return true;
+  }
+
+  return typeof answer === "string" && answer.trim().length > 0;
+};
+
 const QuizDisplayPage: React.FC = () => {
   const searchParams = useSearchParams();
   const isDocumentGenerated = searchParams?.get("generated") === "document";
@@ -48,9 +56,8 @@ const QuizDisplayPage: React.FC = () => {
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
   const [activeQuestionType, setActiveQuestionType] = useState(questionType);
-  const [documentContext, setDocumentContext] = useState<DocumentContext | null>(
-    null,
-  );
+  const [documentContext, setDocumentContext] =
+    useState<DocumentContext | null>(null);
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -96,7 +103,8 @@ const QuizDisplayPage: React.FC = () => {
           answer: q.answer || q.correct_answer,
           question_type: q.question_type || resolvedQuestionType,
         }));
-        const resolvedQuizId = quizData?.quiz_id || quizData?.id || canonicalQuizId || "";
+        const resolvedQuizId =
+          quizData?.quiz_id || quizData?.id || canonicalQuizId || "";
 
         setQuizTitle(
           quizData?.title ||
@@ -151,7 +159,9 @@ const QuizDisplayPage: React.FC = () => {
           const parsedGeneratedQuiz = JSON.parse(keyedGeneratedQuiz);
           applyQuizData(
             {
-              title: parsedGeneratedQuiz?.title || `${profession || "Document"} Quiz`,
+              title:
+                parsedGeneratedQuiz?.title ||
+                `${profession || "Document"} Quiz`,
               description:
                 parsedGeneratedQuiz?.description ||
                 customInstruction ||
@@ -189,7 +199,10 @@ const QuizDisplayPage: React.FC = () => {
                 );
               }
             } catch (historyError) {
-              console.error("Error saving document quiz history:", historyError);
+              console.error(
+                "Error saving document quiz history:",
+                historyError,
+              );
             }
           }
 
@@ -268,12 +281,29 @@ const QuizDisplayPage: React.FC = () => {
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
+    if (isQuizChecked) {
+      return;
+    }
+
     const updated = [...userAnswers];
     updated[index] = answer;
     setUserAnswers(updated);
   };
 
   const checkAnswers = async () => {
+    const unansweredQuestions = quizQuestions
+      .map((_, index) => index)
+      .filter((index) => !isAnswerProvided(userAnswers[index]));
+
+    if (unansweredQuestions.length > 0) {
+      const message =
+        unansweredQuestions.length === quizQuestions.length
+          ? "Answer the quiz before submitting it for grading."
+          : `Answer all questions before submitting. ${unansweredQuestions.length} unanswered question${unansweredQuestions.length === 1 ? "" : "s"} left.`;
+      toast.error(message);
+      return;
+    }
+
     try {
       const payload = quizQuestions.map((q, i) => {
         const correct = q.answer ?? q.correct_answer;
@@ -318,8 +348,6 @@ const QuizDisplayPage: React.FC = () => {
 
       setQuizReport(transformed);
       setIsQuizChecked(true);
-
-      // History is saved on generation to avoid duplicate entries.
     } catch (err) {
       console.error("Error checking answers:", err);
       toast.error("Failed to grade your quiz. Please try again.");
@@ -411,13 +439,14 @@ const QuizDisplayPage: React.FC = () => {
                     onAnswerChange={handleAnswerChange}
                     options={q.options || []}
                     value={userAnswers[i]}
+                    disabled={isQuizChecked}
                   />
                 </div>
               ))}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-              <CheckButton onClick={checkAnswers} />
+              {!isQuizChecked && <CheckButton onClick={checkAnswers} />}
               <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
@@ -430,6 +459,11 @@ const QuizDisplayPage: React.FC = () => {
               <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}
             </div>
+            {isQuizChecked && (
+              <p className="mt-4 text-sm font-medium text-slate-600">
+                Answers are locked after submission and grading.
+              </p>
+            )}
           </section>
 
           {liveAccessCode && (
