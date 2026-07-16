@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
+from server.app.core.config import settings
 from server.app.quiz.utils.grading import grade_answers
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
@@ -52,7 +53,6 @@ class LiveQuizSessionService:
         send_email_invitations: bool = False,
         invitation_repository=None,
         email_service=None,
-        frontend_origin: Optional[str] = None,
     ) -> Dict[str, Any]:
         quiz = await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
@@ -84,6 +84,7 @@ class LiveQuizSessionService:
                 "invited_emails": invited,
                 "invitations_created": len(invited),
                 "invitations_delivered": 0,
+                "invitations_queued": 0,
             }
 
         if _as_utc(access_code_expires_at) <= _utc_now():
@@ -116,9 +117,10 @@ class LiveQuizSessionService:
 
         invitations_created = 0
         invitations_delivered = 0
+        invitations_queued = 0
         if invitation_repository and normalized_invited_emails:
             title = updated_quiz.get("title", "Live Quiz")
-            join_link = self._join_link(code, frontend_origin)
+            join_link = self._join_link(code)
             for email in normalized_invited_emails:
                 invitation_id = await invitation_repository.upsert_invitation(
                     {
@@ -136,7 +138,7 @@ class LiveQuizSessionService:
                 invitations_created += 1
                 if send_email_invitations and email_service:
                     try:
-                        await email_service.send_email(
+                        send_result = await email_service.send_email(
                             to=email,
                             template_id="custom",
                             template_vars={
@@ -153,13 +155,18 @@ class LiveQuizSessionService:
                             purpose="live_quiz_invitation",
                             priority="default",
                         )
+                        is_queued = send_result.adapter in {"background", "celery"}
+                        delivery_status = "queued" if is_queued else "delivered"
                         await invitation_repository.update_email_delivery(
                             invitation_id,
-                            email_sent=True,
-                            invitation_sent_status="delivered",
-                            status="delivered",
+                            email_sent=not is_queued,
+                            invitation_sent_status=delivery_status,
+                            status=delivery_status,
                         )
-                        invitations_delivered += 1
+                        if is_queued:
+                            invitations_queued += 1
+                        else:
+                            invitations_delivered += 1
                     except Exception as e:
                         logger.warning(f"Could not send live quiz invitation to {email}: {e}")
                         await invitation_repository.update_email_delivery(
@@ -167,6 +174,16 @@ class LiveQuizSessionService:
                             email_sent=False,
                             invitation_sent_status="failed",
                         )
+            logger.info(
+                "Created %s live quiz invitation(s) for quiz %s",
+                invitations_created,
+                updated_quiz["_id"],
+            )
+            logger.info(
+                "Queued %s live quiz invitation email(s) for quiz %s",
+                invitations_queued,
+                updated_quiz["_id"],
+            )
 
         return {
             "quiz_id": str(updated_quiz["_id"]),
@@ -178,6 +195,7 @@ class LiveQuizSessionService:
             "invited_emails": normalized_invited_emails,
             "invitations_created": invitations_created,
             "invitations_delivered": invitations_delivered,
+            "invitations_queued": invitations_queued,
         }
 
     async def validate_access_code(self, code: str) -> Dict[str, Any]:
@@ -773,11 +791,8 @@ class LiveQuizSessionService:
             )
         return normalized
 
-    def _join_link(self, access_code: str, frontend_origin: Optional[str]) -> str:
-        origin = (frontend_origin or "").rstrip("/")
-        if not origin:
-            return f"/quiz-access/{access_code}"
-        return f"{origin}/quiz-access/{access_code}"
+    def _join_link(self, access_code: str) -> str:
+        return f"{settings.FRONTEND_BASE_URL}/quiz-access/{access_code}"
 
     def _invitation_email_body(
         self,

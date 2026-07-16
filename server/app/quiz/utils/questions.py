@@ -7,10 +7,14 @@ from server.app.quiz.utils.huggingface_utils import generate_quiz_with_huggingfa
 from server.app.quiz.utils.mock_quiz_generator import get_mock_questions_by_type
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
 from server.app.db.core.connection import (
+    get_live_quiz_invitations_collection,
     get_live_quiz_sessions_collection,
     get_quizzes_v2_collection,
 )
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
+from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
+    LiveQuizInvitationRepository,
+)
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 
 
@@ -19,7 +23,6 @@ async def get_questions(
     user_id: str | None = None,
     invitation_repository=None,
     email_service=None,
-    frontend_origin: str | None = None,
 ) -> Dict:
 
     ai_down = False
@@ -42,6 +45,7 @@ async def get_questions(
     live_invited_emails = []
     live_invitations_created = 0
     live_invitations_delivered = 0
+    live_invitations_queued = 0
 
     base_quiz_payload = {
         "profession": request.profession,
@@ -170,6 +174,10 @@ async def get_questions(
                 get_live_quiz_sessions_collection(),
             )
         )
+        if invitation_repository is None:
+            invitation_repository = LiveQuizInvitationRepository(
+                get_live_quiz_invitations_collection()
+            )
         live_config = await live_service.generate_access_code(
             quiz_id=quiz_id,
             access_code_expires_at=request.access_code_expires_at,
@@ -180,7 +188,6 @@ async def get_questions(
             send_email_invitations=request.send_email_invitations,
             invitation_repository=invitation_repository,
             email_service=email_service,
-            frontend_origin=frontend_origin,
         )
         live_access_code = live_config["access_code"]
         live_access_code_expires_at = live_config["access_code_expires_at"]
@@ -189,6 +196,14 @@ async def get_questions(
         live_invited_emails = live_config["invited_emails"]
         live_invitations_created = live_config["invitations_created"]
         live_invitations_delivered = live_config["invitations_delivered"]
+        live_invitations_queued = live_config["invitations_queued"]
+        logging.info(
+            "Live quiz invitation workflow completed for quiz %s: created=%s queued=%s delivered=%s",
+            quiz_id,
+            live_invitations_created,
+            live_invitations_queued,
+            live_invitations_delivered,
+        )
 
     result = {
         "source": source,
@@ -205,6 +220,7 @@ async def get_questions(
         "invited_emails": live_invited_emails,
         "invitations_created": live_invitations_created,
         "invitations_delivered": live_invitations_delivered,
+        "invitations_queued": live_invitations_queued,
     }
 
     logging.warning(f"Final API Response: {result}")

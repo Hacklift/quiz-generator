@@ -55,9 +55,13 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
         send_email_invitations: sendEmailInvitations,
       });
       setAccessCode(response.access_code);
+      const sentCount =
+        response.invitations_queued || response.invitations_delivered;
       toast.success(
         response.invitations_created
-          ? `Live quiz ready. ${response.invitations_delivered} invitation email(s) delivered.`
+          ? `Live quiz ready. ${sentCount} invitation email(s) ${
+              response.invitations_queued ? "queued" : "delivered"
+            }.`
           : "Live quiz access code generated.",
       );
     } catch (error: any) {

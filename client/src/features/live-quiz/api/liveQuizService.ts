@@ -97,6 +97,7 @@ export interface AccessCodeResponse {
   invited_emails: string[];
   invitations_created: number;
   invitations_delivered: number;
+  invitations_queued: number;
 }
 
 export interface LiveQuizSummary {
@@ -265,8 +266,12 @@ export const liveQuizService = {
     const socket = new WebSocket(
       `${wsBaseUrl}/api/v1/quizzes/${encodeURIComponent(
         quizId,
-      )}/live-sessions/ws?token=${encodeURIComponent(token)}`,
+      )}/live-sessions/ws`,
     );
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "authenticate", token }));
+    });
 
     socket.onmessage = (message) => {
       try {

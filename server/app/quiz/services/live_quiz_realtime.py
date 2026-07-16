@@ -9,8 +9,15 @@ class LiveQuizRealtimeBroadcaster:
     def __init__(self):
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
 
-    async def connect(self, quiz_id: str, websocket: WebSocket) -> None:
-        await websocket.accept()
+    async def connect(
+        self,
+        quiz_id: str,
+        websocket: WebSocket,
+        *,
+        accepted: bool = False,
+    ) -> None:
+        if not accepted:
+            await websocket.accept()
         self._connections[quiz_id].add(websocket)
 
     def disconnect(self, quiz_id: str, websocket: WebSocket) -> None:

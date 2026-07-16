@@ -1,8 +1,9 @@
+import asyncio
 from typing import List, Optional
 
 import jwt
 from bson import ObjectId
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
@@ -47,6 +48,7 @@ from server.app.quiz.services.live_quiz_realtime import live_quiz_realtime_broad
 
 
 router = APIRouter()
+WEBSOCKET_AUTH_TIMEOUT_SECONDS = 10
 
 
 def get_live_quiz_service(
@@ -88,7 +90,6 @@ def get_participant_token(
 async def generate_quiz_access_code(
     quiz_id: str,
     payload: AccessCodeCreateRequest,
-    request: Request,
     current_user: UserOut = Depends(get_verified_user),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
     invitation_repository: LiveQuizInvitationRepository = Depends(
@@ -106,7 +107,6 @@ async def generate_quiz_access_code(
         send_email_invitations=payload.send_email_invitations,
         invitation_repository=invitation_repository,
         email_service=email_service,
-        frontend_origin=request.headers.get("origin"),
     )
 
 
@@ -289,15 +289,41 @@ async def _get_verified_user_from_websocket_token(
     return UserOut(**user_payload)
 
 
+async def _receive_websocket_auth_token(websocket: WebSocket) -> str | None:
+    try:
+        message = await asyncio.wait_for(
+            websocket.receive_json(),
+            timeout=WEBSOCKET_AUTH_TIMEOUT_SECONDS,
+        )
+    except (asyncio.TimeoutError, WebSocketDisconnect, ValueError):
+        return None
+
+    if not isinstance(message, dict) or message.get("type") != "authenticate":
+        return None
+
+    token = message.get("token")
+    if not isinstance(token, str):
+        return None
+
+    token = token.strip()
+    return token or None
+
+
 @router.websocket("/quizzes/{quiz_id}/live-sessions/ws")
 async def live_quiz_participants_ws(
     websocket: WebSocket,
     quiz_id: str,
-    token: str = Query(default=""),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
     sessions_collection: AsyncIOMotorCollection = Depends(get_user_sessions_collection),
 ):
+    await websocket.accept()
+
+    token = await _receive_websocket_auth_token(websocket)
+    if not token:
+        await websocket.close(code=1008)
+        return
+
     try:
         current_user = await _get_verified_user_from_websocket_token(
             token,
@@ -309,7 +335,7 @@ async def live_quiz_participants_ws(
         await websocket.close(code=1008)
         return
 
-    await live_quiz_realtime_broadcaster.connect(quiz_id, websocket)
+    await live_quiz_realtime_broadcaster.connect(quiz_id, websocket, accepted=True)
     try:
         await websocket.send_json(
             jsonable_encoder({

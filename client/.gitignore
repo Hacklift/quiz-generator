@@ -11,6 +11,8 @@
 
 # next.js
 /.next/
+/.next-stale-owned-by-docker/
+/.next-stale-build-blocked-*/
 /out/
 
 # production
