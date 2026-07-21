@@ -2,41 +2,57 @@
 # Deploy / update Quiz Generator. Run as root on the server from anywhere:
 #   bash /opt/quiz-generator/deploy/deploy.sh
 #
-# The server has no GitHub access, so this script deploys whatever code is
-# already in /opt/quiz-generator. Ship fresh code from your dev machine with:
-#   bash deploy/push-to-server.sh   (runs this script for you afterwards)
+# Pulls the latest master via the read-only deploy key, then rebuilds and
+# restarts the stack. Secrets stay in /opt/quiz-generator/.env (gitignored).
 set -euo pipefail
 
-APP_DIR=/opt/quiz-generator
-COMPOSE="docker compose -f docker-compose.prod.yml"
+main() {
+    APP_DIR=/opt/quiz-generator
+    REPO=git@github.com:Hacklift/quiz-generator.git
+    DEPLOY_KEY=/root/.ssh/quiz_generator_deploy
+    COMPOSE="docker compose -f docker-compose.prod.yml"
 
-cd $APP_DIR
+    cd $APP_DIR
 
-echo "==> Building images..."
-$COMPOSE build
+    echo "==> Pulling latest code from master..."
+    if [ ! -d .git ]; then
+        git init -b master
+        git remote add origin $REPO
+        git config core.sshCommand "ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
+    fi
+    git fetch origin master
+    git reset --hard origin/master
+    # Drop untracked leftovers; ignored files (.env) are untouched.
+    git clean -fd
 
-echo "==> Starting / updating containers..."
-$COMPOSE up -d --remove-orphans
+    echo "==> Building images..."
+    $COMPOSE build
 
-echo "==> Syncing category seed data (idempotent)..."
-$COMPOSE run --rm seed-categories
+    echo "==> Starting / updating containers..."
+    $COMPOSE up -d --remove-orphans
 
-echo "==> Refreshing nginx config..."
-if ! cmp -s deploy/nginx-quiz-campilot.conf /etc/nginx/sites-available/quiz-campilot; then
-    cp deploy/nginx-quiz-campilot.conf /etc/nginx/sites-available/quiz-campilot
-    ln -sf /etc/nginx/sites-available/quiz-campilot /etc/nginx/sites-enabled/quiz-campilot
-    nginx -t
-    systemctl reload nginx
-    echo "    nginx config updated and reloaded."
-else
-    echo "    nginx config unchanged."
-fi
+    echo "==> Syncing category seed data (idempotent)..."
+    $COMPOSE run --rm seed-categories
 
-echo "==> Health checks..."
-sleep 5
-curl -sf -o /dev/null http://127.0.0.1:8020/api && echo "    API      OK (127.0.0.1:8020)"
-curl -sf -o /dev/null http://127.0.0.1:3020/    && echo "    Frontend OK (127.0.0.1:3020)"
+    echo "==> Refreshing nginx config..."
+    if ! cmp -s deploy/nginx-quiz-campilot.conf /etc/nginx/sites-available/quiz-campilot; then
+        cp deploy/nginx-quiz-campilot.conf /etc/nginx/sites-available/quiz-campilot
+        ln -sf /etc/nginx/sites-available/quiz-campilot /etc/nginx/sites-enabled/quiz-campilot
+        nginx -t
+        systemctl reload nginx
+        echo "    nginx config updated and reloaded."
+    else
+        echo "    nginx config unchanged."
+    fi
 
-echo ""
-echo "=== Deploy complete ==="
-$COMPOSE ps --format 'table {{.Name}}\t{{.Status}}'
+    echo "==> Health checks..."
+    sleep 5
+    curl -sf -o /dev/null http://127.0.0.1:8020/api && echo "    API      OK (127.0.0.1:8020)"
+    curl -sf -o /dev/null http://127.0.0.1:3020/    && echo "    Frontend OK (127.0.0.1:3020)"
+
+    echo ""
+    echo "=== Deploy complete ==="
+    $COMPOSE ps --format 'table {{.Name}}\t{{.Status}}'
+}
+
+main "$@"
