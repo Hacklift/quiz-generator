@@ -29,6 +29,31 @@
     COPY server/Pipfile server/Pipfile.lock ./
     
     RUN pipenv install --system --skip-lock
-    
+
     COPY server/ .
-    
+
+# ---------- FRONTEND PRODUCTION ----------
+FROM node:18 AS frontend-prod
+
+RUN corepack enable
+
+WORKDIR /client
+
+COPY client/package.json client/pnpm-lock.yaml ./
+
+RUN pnpm install --frozen-lockfile
+
+COPY client/ .
+
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_SSR_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_SSR_API_BASE_URL=$NEXT_PUBLIC_SSR_API_BASE_URL \
+    NODE_OPTIONS=--max-old-space-size=1536
+
+RUN pnpm run build
+
+ENV NODE_ENV=production
+
+CMD ["pnpm", "run", "start"]
+

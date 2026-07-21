@@ -1,0 +1,103 @@
+services:
+  client:
+    build:
+      context: .
+      target: frontend-prod
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://quiz-api.campilot.org}
+        NEXT_PUBLIC_SSR_API_BASE_URL: http://server:8000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3020}:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SSR_API_BASE_URL=http://server:8000
+      - SHARE_URL=${SHARE_URL}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      - server
+
+  server:
+    build:
+      context: .
+      target: backend-service
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8020}:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery:
+    build:
+      context: .
+      target: backend-service
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["celery", "-A", "server.celery_config.celery_app", "worker",
+              "-Q", "email,celery",
+              "--loglevel=info", "--pool=solo", "--concurrency=1"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      server:
+        condition: service_started
+
+  mongodb:
+    image: mongo:7
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Seeds the category taxonomy only (no demo users/quizzes).
+  # Run manually: docker compose -f docker-compose.prod.yml run --rm seed-categories
+  seed-categories:
+    profiles: ["seed"]
+    build:
+      context: .
+      target: backend-service
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["python", "-m", "server.app.quiz.seed_data.seed_all_categories"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
+  redis_data:
