@@ -17,9 +17,10 @@ main() {
     echo "==> Pulling latest code from master..."
     if [ ! -d .git ]; then
         git init -b master
-        git remote add origin $REPO
-        git config core.sshCommand "ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
     fi
+    git remote get-url origin >/dev/null 2>&1 || git remote add origin $REPO
+    git remote set-url origin $REPO
+    git config core.sshCommand "ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
     git fetch origin master
     git reset --hard origin/master
     # Drop untracked leftovers; ignored files (.env) are untouched.
