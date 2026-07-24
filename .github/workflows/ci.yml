@@ -38,7 +38,8 @@ jobs:
       - name: Install dependencies
         working-directory: server
         run: |
-          pip install pipenv
+          # Same pipenv as the Dockerfile: its --deploy hash check must match.
+          pip install pipenv==2023.12.1
           pipenv install --system --dev --deploy
       - name: Run pytest
         run: python -m pytest server/tests -q
@@ -58,7 +59,7 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
       - name: Run jest
-        run: pnpm test -- --ci
+        run: pnpm test --ci
       - name: Build
         env:
           NEXT_PUBLIC_API_BASE_URL: https://quiz-api.campilot.org
