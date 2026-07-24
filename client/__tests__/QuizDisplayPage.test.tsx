@@ -72,6 +72,7 @@ const mockToastError = toast.error as jest.Mock;
 const mockToastSuccess = toast.success as jest.Mock;
 
 const storedQuiz = {
+  quiz_id: "quiz-123",
   title: "Capitals Quiz",
   question_type: "multichoice",
   questions: [

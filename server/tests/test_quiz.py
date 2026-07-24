@@ -164,10 +164,6 @@ def test_grade_against_stored_questions_rejects_unknown_question():
     with pytest.raises(SubmissionMismatchError):
         grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
 
-    assert "accuracy_percentage" in data[0]
-    assert "result" in data[0]
-    assert data[0]["is_correct"] in [True, False]
-
 
 @pytest.mark.asyncio
 async def test_generate_quiz():
