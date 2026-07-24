@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+LAST_SEEN_UPDATE_INTERVAL = timedelta(minutes=5)
 
 from bson import ObjectId
 from fastapi import HTTPException, status
@@ -10,6 +12,15 @@ from server.app.db.core.connection import get_user_sessions_collection, get_user
 from server.app.users.identity import ACTIVE_USER_STATUSES, coerce_user_status, now_utc
 from server.app.users.models import UserOut
 from server.app.users.repository import build_user_out_payload, get_active_session
+
+
+def _last_seen_is_stale(last_seen) -> bool:
+    """Debounce last_seen_at writes: only touch Mongo if the stamp is old."""
+    if not isinstance(last_seen, datetime):
+        return True
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return now_utc() - last_seen > LAST_SEEN_UPDATE_INTERVAL
 
 
 async def resolve_user_from_access_token(
@@ -66,7 +77,7 @@ async def resolve_user_from_access_token(
     if session is None:
         raise HTTPException(status_code=401, detail="Session has been revoked")
 
-    if update_last_seen:
+    if update_last_seen and _last_seen_is_stale(user.get("last_seen_at")):
         await users_collection.update_one(
             {"_id": user["_id"]},
             {"$set": {"last_seen_at": now_utc()}},

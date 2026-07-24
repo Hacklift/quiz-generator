@@ -1,5 +1,5 @@
 # ---------- FRONTEND SERVICE ----------
-    FROM node:18 AS frontend-service
+    FROM node:22 AS frontend-service
 
     RUN corepack enable
     
@@ -28,12 +28,12 @@
     
     COPY server/Pipfile server/Pipfile.lock ./
     
-    RUN pipenv install --system --skip-lock
+    RUN pipenv install --system --deploy
 
     COPY server/ .
 
 # ---------- FRONTEND PRODUCTION ----------
-FROM node:18 AS frontend-prod
+FROM node:22 AS frontend-prod
 
 RUN corepack enable
 

@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 import logging
 import os
-import random
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+from server.app.core.dependencies import get_current_user
+from server.app.core.rate_limiter import limiter
 from server.app.db.core.connection import get_quizzes_v2_collection
 from server.app.quiz.schemas.quiz_schemas import QuizSchema
 from server.app.share.services import SharedQuizReadService
@@ -38,10 +39,15 @@ async def get_random_quiz_id(
     quizzes_v2_collection: AsyncIOMotorCollection = Depends(get_quizzes_v2_collection),
 ):
     try:
-        quiz_list = await quizzes_v2_collection.find({"status": {"$ne": "deleted"}}).to_list(length=50)
+        # Only curated seed quizzes are eligible: user-generated quizzes must
+        # never be handed out to anonymous callers.
+        quiz_list = await quizzes_v2_collection.aggregate([
+            {"$match": {"status": {"$ne": "deleted"}, "source": "seed"}},
+            {"$sample": {"size": 1}},
+        ]).to_list(length=1)
         if not quiz_list:
             raise HTTPException(detail="Unable to fetch from database!", status_code=404)
-        selected_quiz = random.choice(quiz_list)
+        selected_quiz = quiz_list[0]
         return QuizSchema(
             id=str(selected_quiz["_id"]),
             title=selected_quiz["title"],
@@ -89,9 +95,13 @@ async def get_shared_quiz_data(quiz_id: str):
 
 
 @router.post("/share-email", response_model=ShareEmailResponse)
+@limiter.limit("5/hour")
 async def share_quiz_via_email(
+    request: Request,
+    response: Response,
     query: ShareEmailRequest,
     email_svc: EmailService = Depends(get_email_service),
+    current_user=Depends(get_current_user),
 ):
     try:
         shared_quiz = await shared_quiz_read_service.resolve_shared_quiz(query.quiz_id)
@@ -104,7 +114,8 @@ async def share_quiz_via_email(
             template_vars={
                 "title": shared_quiz["title"],
                 "description": shared_quiz["description"],
-                "link": query.shareableLink,
+                # Always build the link server-side; never trust a client URL.
+                "link": f"{share_url}/share/{query.quiz_id}",
             },
             purpose="quiz_link",
             priority="default",

@@ -1,14 +1,12 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
-import publicApi from "@shared/api/publicHttp";
+import api from "@shared/api/http";
 
 const ShareEmailModal = ({
-  shareableLink,
   quizId,
   isOpen,
   onClose,
 }: {
-  shareableLink: string;
   quizId: string;
   isOpen: boolean;
   onClose: () => void;
@@ -25,10 +23,9 @@ const ShareEmailModal = ({
     setStatus(null);
 
     try {
-      const response = await publicApi.post("/share/share-email", {
+      const response = await api.post("/share/share-email", {
         quiz_id: quizId,
         recipient_email: recipientEmail,
-        shareableLink,
       });
       setStatus({ message: response.data.message, success: true });
       toast.success(response.data.message || "Email sent successfully.");

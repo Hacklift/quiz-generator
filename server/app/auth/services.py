@@ -125,12 +125,13 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
 
 async def resend_verification_email_service(email: str, email_svc: EmailService) -> MessageResponse:
     normalized_email = normalize_email(email)
+    neutral_message = MessageResponse(
+        message="If an account exists for this email, a verification email has been sent."
+    )
     user_data = await users_collection.find_one({"email_normalized": normalized_email})
-    if not user_data:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user_data.get("is_verified", False):
-        raise HTTPException(status_code=400, detail="Email already verified")
+    # Neutral responses: don't reveal whether the account exists or its state.
+    if not user_data or user_data.get("is_verified", False):
+        return neutral_message
 
     redis_client = await get_redis_client()
 
@@ -149,7 +150,7 @@ async def resend_verification_email_service(email: str, email_svc: EmailService)
         priority="default",
     )
 
-    return MessageResponse(message="Verification email resent successfully")
+    return neutral_message
 
 async def verify_otp_service(email: str,
     otp: str,
@@ -166,7 +167,7 @@ async def verify_otp_service(email: str,
     if stored_otp is None:
         raise HTTPException(status_code=400, detail="OTP expired or not requested.")
 
-    if otp != stored_otp:
+    if not hmac.compare_digest(otp, stored_otp):
         attempts_key = f"attempts:{normalized_email}"
         await redis_client.incr(attempts_key)
         otp_ttl = await redis_client.ttl(f"otp:{normalized_email}")
@@ -457,16 +458,25 @@ async def reset_password_service(request: PasswordResetRequest):
     redis_client = await get_redis_client()
     normalized_email = normalize_email(request.email)
     user = await users_collection.find_one({"email_normalized": normalized_email})
-    
+
+    # Neutral response: don't reveal whether the account exists.
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=400, detail="Invalid or expired reset credentials")
 
     if request.reset_method == "otp":
+        attempts_key = f"password_reset_attempts:{normalized_email}"
+        attempts = int(await redis_client.get(attempts_key) or 0)
+        if attempts >= 4:
+            raise HTTPException(status_code=403, detail="Too many attempts. Request a new reset code.")
+
         stored_otp = await redis_client.get(f"password_reset_otp:{normalized_email}")
         if stored_otp is None:
-            raise HTTPException(status_code=400, detail="OTP expired or not found")
-        if request.otp != stored_otp:  
-            raise HTTPException(status_code=401, detail="Invalid OTP")
+            raise HTTPException(status_code=400, detail="Invalid or expired reset credentials")
+        if not request.otp or not hmac.compare_digest(request.otp, stored_otp):
+            await redis_client.incr(attempts_key)
+            otp_ttl = await redis_client.ttl(f"password_reset_otp:{normalized_email}")
+            await redis_client.expire(attempts_key, otp_ttl if otp_ttl and otp_ttl > 0 else 600)
+            raise HTTPException(status_code=401, detail="Invalid or expired reset credentials")
 
     elif request.reset_method == "token":
         if not request.token:
@@ -507,6 +517,7 @@ async def reset_password_service(request: PasswordResetRequest):
    
     await redis_client.delete(f"password_reset_otp:{normalized_email}")
     await redis_client.delete(f"password_reset_token:{normalized_email}")
+    await redis_client.delete(f"password_reset_attempts:{normalized_email}")
 
     return PasswordResetResponse(message="Password reset successful", success=True)
 
@@ -516,6 +527,8 @@ async def logout_service(
 ):
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=400, detail="Invalid token type")
         user_id = payload.get("sub")
         session_id = payload.get("sid")
 

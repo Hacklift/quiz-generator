@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 
@@ -24,7 +24,8 @@ class ShareEmailRequest(BaseModel):
 
     recipient_email: EmailStr
 
-    shareableLink: str
+    # Deprecated: ignored server-side; the link is built from SHARE_URL.
+    shareableLink: Optional[str] = None
 
 
 

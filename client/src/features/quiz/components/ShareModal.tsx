@@ -93,7 +93,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
         </button>
       </div>
       <ShareEmailModal
-        shareableLink={shareableLink}
         quizId={quizId}
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}

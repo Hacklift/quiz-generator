@@ -1,4 +1,4 @@
-import random
+import secrets
 
 import jwt
 
@@ -28,7 +28,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def generate_otp():
 
-    return str(random.randint(100000, 999999))
+    return str(secrets.randbelow(900000) + 100000)
 
 
 def generate_verification_token(email: str, *, purpose: str = "email_verification") -> str:
@@ -175,12 +175,3 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def decode_token(token: str):
-
-    try:
-
-        return jwt.decode(token, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-
-    except jwt.PyJWTError:
-
-        return None

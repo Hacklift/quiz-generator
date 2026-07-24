@@ -46,10 +46,18 @@ main() {
         echo "    nginx config unchanged."
     fi
 
+    echo "==> Installing backup cron..."
+    if ! cmp -s deploy/backup-mongo.sh /usr/local/bin/quiz-generator-backup; then
+        install -m 755 deploy/backup-mongo.sh /usr/local/bin/quiz-generator-backup
+    fi
+    echo '15 3 * * * root /usr/local/bin/quiz-generator-backup >> /var/log/quiz-generator-backup.log 2>&1' \
+        > /etc/cron.d/quiz-generator-backup
+
     echo "==> Health checks..."
     sleep 5
-    curl -sf -o /dev/null http://127.0.0.1:8020/api && echo "    API      OK (127.0.0.1:8020)"
-    curl -sf -o /dev/null http://127.0.0.1:3020/    && echo "    Frontend OK (127.0.0.1:3020)"
+    # /api/readyz verifies Mongo and Redis connectivity, not just the process.
+    curl -sf -o /dev/null http://127.0.0.1:8020/api/readyz && echo "    API      OK (readyz: mongo+redis reachable)"
+    curl -sf -o /dev/null http://127.0.0.1:3020/           && echo "    Frontend OK (127.0.0.1:3020)"
 
     echo ""
     echo "=== Deploy complete ==="

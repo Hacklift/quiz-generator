@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 
 from server.app.core.config import settings
 from server.app.core.dependencies import get_current_user_optional
+from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.models.document_quiz_models import DocumentQuizResponse
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
@@ -23,6 +25,7 @@ from server.app.quiz.utils.extract_text import (
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _to_iso_datetime(value: datetime | str | None) -> str | None:
@@ -38,7 +41,10 @@ def _format_max_size_message(max_bytes: int) -> str:
 
 
 @router.post("/document-quizzes/generate", response_model=DocumentQuizResponse)
+@limiter.limit(RateLimits.QUIZ_GENERATE)
 async def generate_document_quiz(
+    request: Request,
+    response: Response,
     question_type: str = Form(...),
     num_questions: int = Form(...),
     difficulty_level: str = Form(...),
@@ -80,19 +86,25 @@ async def generate_document_quiz(
 
     try:
         if document_file is not None:
-            file_bytes = await document_file.read()
+            # Read incrementally so an oversized upload is rejected without
+            # ever buffering more than the configured cap in memory.
+            max_bytes = settings.DOCUMENT_UPLOAD_MAX_BYTES
+            buffer = bytearray()
+            while chunk := await document_file.read(1024 * 1024):
+                buffer.extend(chunk)
+                if len(buffer) > max_bytes:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            "The uploaded document is too large. "
+                            f"Maximum supported size is {_format_max_size_message(max_bytes)}."
+                        ),
+                    )
+            file_bytes = bytes(buffer)
             if len(file_bytes) == 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="The uploaded document is empty.",
-                )
-            if len(file_bytes) > settings.DOCUMENT_UPLOAD_MAX_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=(
-                        "The uploaded document is too large. "
-                        f"Maximum supported size is {_format_max_size_message(settings.DOCUMENT_UPLOAD_MAX_BYTES)}."
-                    ),
                 )
             document = extract_text_from_bytes(
                 file_bytes=file_bytes,
@@ -183,6 +195,10 @@ async def generate_document_quiz(
                 "classification": save_result.get("classification"),
             }
     except Exception:
+        logger.exception(
+            "Failed to persist generated document quiz for user %s; returning unsaved quiz",
+            user_id,
+        )
         quiz_id = None
 
     if live_quiz_enabled:

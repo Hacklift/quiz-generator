@@ -1,6 +1,3 @@
-import os
-
-import redis
 from fastapi import APIRouter, Request, Response
 
 from server.app.api.health import router as health_router
@@ -31,13 +28,6 @@ router = APIRouter()
 @limiter.limit("100/minute")
 async def read_root(request: Request, response: Response):
     return {"message": "Welcome to the Quiz App API!"}
-
-
-@router.get("/ping-redis")
-@limiter.limit("10/minute")
-async def ping_redis(request: Request, response: Response):
-    redis_client = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    return {"pong": redis_client.ping()}
 
 
 router.include_router(health_router, prefix="/api", tags=["healthcheck"])

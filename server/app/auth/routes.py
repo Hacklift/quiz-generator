@@ -22,10 +22,12 @@ from server.app.users.schemas import (
     ResendVerificationRequest,
 )
 from server.app.auth.models import (
-    LoginRequestModel, 
+    LoginRequestModel,
     LoginResponse,
     RefreshTokenResponse,
-    RefreshTokenRequest
+    RefreshTokenRequest,
+    VerifyLinkRequest,
+    VerifyOtpRequest,
 )
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
@@ -53,18 +55,18 @@ async def register_user(
     return await register_user_service(user, email_svc=email_svc)
 
 @router.post("/verify-otp/")
-@limiter.limit(RateLimits.AUTH_VERIFY)  
-async def verify_otp(request: Request, response: Response, email: str, otp: str):
+@limiter.limit(RateLimits.AUTH_VERIFY)
+async def verify_otp(request: Request, response: Response, payload: VerifyOtpRequest):
     users_collection = request.app.state.users_collection
     redis_client = request.app.state.redis
-    return await verify_otp_service(email, otp, users_collection, redis_client)
+    return await verify_otp_service(payload.email, payload.otp, users_collection, redis_client)
 
 @router.post("/verify-link/")
 @limiter.limit(RateLimits.AUTH_VERIFY)
-async def verify_link(request: Request, response: Response, token: str):
+async def verify_link(request: Request, response: Response, payload: VerifyLinkRequest):
     users_collection = request.app.state.users_collection
     redis_client = request.app.state.redis
-    return await verify_link_service(token, users_collection, redis_client)
+    return await verify_link_service(payload.token, users_collection, redis_client)
 
 @router.post("/resend-verification", response_model=MessageResponse)
 @limiter.limit("5/hour")  

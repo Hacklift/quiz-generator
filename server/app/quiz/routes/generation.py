@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.models.quiz_models import QuizRequest, QuizResponse
 from server.app.quiz.services.generation_policy import validate_generation_question_count
 from server.app.quiz.utils.questions import get_questions
@@ -17,10 +18,12 @@ router = APIRouter()
 
 
 @router.post("/get-questions", response_model=QuizResponse)
-
+@limiter.limit(RateLimits.QUIZ_GENERATE)
 async def get_quiz(
 
-    request: QuizRequest,
+    request: Request,
+    response: Response,
+    payload: QuizRequest,
 
     current_user=Depends(get_current_user_optional),
     email_service: EmailService = Depends(get_email_service),
@@ -32,7 +35,7 @@ async def get_quiz(
             detail="Please log in to generate quizzes.",
         )
 
-    request.num_questions = validate_generation_question_count(request.num_questions)
+    payload.num_questions = validate_generation_question_count(payload.num_questions)
 
     user_id = str(current_user.id) if current_user else None
     invitation_repository = LiveQuizInvitationRepository(
@@ -40,7 +43,7 @@ async def get_quiz(
     )
 
     return await get_questions(
-        request,
+        payload,
         user_id=user_id,
         invitation_repository=invitation_repository,
         email_service=email_service,

@@ -1,6 +1,7 @@
 """
 Enhanced Rate Limiter Configuration for FastAPI
 """
+import hashlib
 import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -21,8 +22,8 @@ def get_rate_limit_key(request: Request) -> str:
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
-        
-        return f"token:{hash(token)}"
+        # Stable across processes/restarts, unlike builtin hash().
+        return f"token:{hashlib.sha256(token.encode()).hexdigest()}"
     
     return f"ip:{get_remote_address(request)}"
 

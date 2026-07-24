@@ -41,3 +41,15 @@ class RefreshTokenResponse(BaseModel):
     token_type: str
 
     refresh_token: Optional[str] = None
+
+
+class VerifyOtpRequest(BaseModel):
+
+    email: str
+
+    otp: str
+
+
+class VerifyLinkRequest(BaseModel):
+
+    token: str

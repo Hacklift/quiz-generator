@@ -31,10 +31,10 @@ export const registerUser = async (data: {
 };
 
 export const verifyOtp = async (email: string, otp: string) =>
-  api.post("/auth/verify-otp/", null, { params: { email, otp } });
+  api.post("/auth/verify-otp/", { email, otp });
 
 export const verifyLink = async (token: string) =>
-  api.post("/auth/verify-link/", null, { params: { token } });
+  api.post("/auth/verify-link/", { token });
 
 export const resendVerification = async (email: string) =>
   api.post("/auth/resend-verification", { email });

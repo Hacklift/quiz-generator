@@ -1,4 +1,4 @@
-const CACHE_NAME = "my-site-cache-v3";
+const CACHE_NAME = "my-site-cache-v4";
 const PRECACHE_URLS = ["/", "/offline.html"];
 
 self.addEventListener("install", (e) => {
@@ -21,21 +21,35 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// Only cache same-origin static assets and navigations. API responses
+// (cross-origin) and any request carrying credentials must never be
+// written to Cache Storage: they contain private user data that would
+// otherwise persist on disk after logout.
+function isCacheable(req) {
+  if (req.method !== "GET") return false;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return false;
+  if (req.headers.has("Authorization")) return false;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
+    return false;
+  }
+  return true;
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (
-    req.method !== "GET" ||
-    !(req.url.startsWith("http://") || req.url.startsWith("https://"))
-  ) {
+  if (!isCacheable(req)) {
     return;
   }
   event.respondWith(
     fetch(req)
       .then((res) => {
-        const resClone = res.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(req, resClone);
-        });
+        if (res.ok && res.type === "basic") {
+          const resClone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(req, resClone);
+          });
+        }
         return res;
       })
       .catch(() => {
