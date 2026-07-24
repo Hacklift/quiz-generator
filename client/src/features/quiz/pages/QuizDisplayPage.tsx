@@ -304,49 +304,29 @@ const QuizDisplayPage: React.FC = () => {
       return;
     }
 
+    if (!quizId) {
+      toast.error(
+        "This quiz can no longer be graded. Generate or reload it and try again.",
+      );
+      return;
+    }
+
     try {
-      const payload = quizQuestions.map((q, i) => {
-        const correct = q.answer ?? q.correct_answer;
-        if (correct === undefined)
-          throw new Error(`No answer for ${q.question}`);
-
-        let userAnswer = userAnswers[i];
-        let correctAnswer = correct;
-
-        if (q.question_type === "true-false") {
-          if (typeof userAnswer === "string") {
-            userAnswer = userAnswer.toLowerCase() === "true" ? 1 : 0;
-          }
-          if (typeof correctAnswer === "string") {
-            correctAnswer = correctAnswer.toLowerCase() === "true" ? 1 : 0;
-          }
-        }
-
-        return {
+      // Grading is authoritative on the server: only the user's answers are
+      // sent, and correct answers come back in the grading response.
+      const payload = {
+        answers: quizQuestions.map((q, i) => ({
           question: q.question,
-          user_answer: userAnswer,
-          correct_answer: correctAnswer,
-          question_type: q.question_type || activeQuestionType,
-          source: q.source || "unknown",
-        };
-      });
+          user_answer: userAnswers[i],
+        })),
+      };
 
       const { data: report } = await publicApi.post(
-        "/api/grade-answers",
+        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
         payload,
       );
 
-      const transformed = report.map((r: any) =>
-        r.question_type === "true-false"
-          ? {
-              ...r,
-              user_answer: r.user_answer == 1 ? "true" : "false",
-              correct_answer: r.correct_answer == 1 ? "true" : "false",
-            }
-          : r,
-      );
-
-      setQuizReport(transformed);
+      setQuizReport(report);
       setIsQuizChecked(true);
     } catch (err) {
       console.error("Error checking answers:", err);

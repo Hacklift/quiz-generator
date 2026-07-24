@@ -3,11 +3,13 @@ from unittest.mock import MagicMock
 
 from fastapi import HTTPException, Response
 
-from server.app.quiz.models.grading_models import UserAnswer
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.core.rate_limiter import limiter
 from server.app.quiz.routes.generation import get_quiz
-from server.app.quiz.routes.grading import grade_user_answers
+from server.app.quiz.services.quiz_grading_service import (
+    SubmissionMismatchError,
+    grade_against_stored_questions,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -95,25 +97,17 @@ async def test_get_questions_exceeding_available():
     assert "limited to" in exc.value.detail
 
 
-@pytest.mark.asyncio
-async def test_grade_answers_multichoice():
-    data = await grade_user_answers(
-        [
-            UserAnswer(
-                question="What is the capital of France?",
-                user_answer="Paris",
-                correct_answer="Paris",
-                question_type="multichoice",
-            ),
-            UserAnswer(
-                question="Which planet is known as the Red Planet?",
-                user_answer="Jupiter",
-                correct_answer="Mars",
-                question_type="multichoice",
-            ),
-        ],
-        source="mock",
-    )
+def test_grade_against_stored_questions_multichoice():
+    stored = [
+        {"question": "What is the capital of France?", "correct_answer": "Paris"},
+        {"question": "Which planet is known as the Red Planet?", "correct_answer": "Mars"},
+    ]
+    submitted = [
+        {"question": "What is the capital of France?", "user_answer": "Paris"},
+        {"question": "Which planet is known as the Red Planet?", "user_answer": "Jupiter"},
+    ]
+
+    data = grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
 
     assert len(data) == 2
     assert data[0]["is_correct"] is True
@@ -122,46 +116,53 @@ async def test_grade_answers_multichoice():
     assert data[1]["result"] == "Incorrect"
 
 
-@pytest.mark.asyncio
-async def test_grade_answers_true_false():
-    data = await grade_user_answers(
-        [
-            UserAnswer(
-                question="The Earth is flat.",
-                user_answer="false",
-                correct_answer="false",
-                question_type="true-false",
-            ),
-            UserAnswer(
-                question="Water boils at 100 C.",
-                user_answer="true",
-                correct_answer="true",
-                question_type="true-false",
-            ),
-        ],
-        source="mock",
-    )
+def test_grade_against_stored_questions_true_false_normalizes_formats():
+    stored = [
+        {"question": "The Earth is flat.", "correct_answer": "False"},
+        {"question": "Water boils at 100 C.", "correct_answer": "1"},
+    ]
+    submitted = [
+        {"question": "The Earth is flat.", "user_answer": "false"},
+        {"question": "Water boils at 100 C.", "user_answer": "true"},
+    ]
+
+    data = grade_against_stored_questions(stored, submitted, quiz_type="true-false")
 
     assert len(data) == 2
     assert all(item["is_correct"] is True for item in data)
+    assert data[0]["correct_answer"] == "false"
 
 
-@pytest.mark.asyncio
-async def test_grade_answers_open_ended():
-    data = await grade_user_answers(
-        [
-            UserAnswer(
-                question="Explain the process of photosynthesis.",
-                user_answer="Photosynthesis uses sunlight to make food from carbon dioxide and water.",
-                correct_answer=(
-                    "Photosynthesis is the process by which green plants and some organisms use "
-                    "sunlight to synthesize foods with the help of chlorophyll."
-                ),
-                question_type="open-ended",
-            )
-        ],
-        source="mock",
-    )
+def test_grade_against_stored_questions_open_ended():
+    stored = [
+        {
+            "question": "Explain the process of photosynthesis.",
+            "correct_answer": (
+                "Photosynthesis is the process by which green plants and some organisms use "
+                "sunlight to synthesize foods with the help of chlorophyll."
+            ),
+        }
+    ]
+    submitted = [
+        {
+            "question": "Explain the process of photosynthesis.",
+            "user_answer": "Photosynthesis uses sunlight to make food from carbon dioxide and water.",
+        }
+    ]
+
+    data = grade_against_stored_questions(stored, submitted, quiz_type="open-ended")
+
+    assert "accuracy_percentage" in data[0]
+    assert "result" in data[0]
+    assert data[0]["is_correct"] in [True, False]
+
+
+def test_grade_against_stored_questions_rejects_unknown_question():
+    stored = [{"question": "Real question?", "correct_answer": "Yes"}]
+    submitted = [{"question": "Injected question?", "user_answer": "Yes"}]
+
+    with pytest.raises(SubmissionMismatchError):
+        grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
 
     assert "accuracy_percentage" in data[0]
     assert "result" in data[0]
