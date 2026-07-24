@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-dev",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "run", "dev"],
+      "cwd": "client",
+      "port": 3000
+    },
+    {
+      "name": "client-prod",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "run", "start"],
+      "cwd": "client",
+      "port": 3000
+    }
+  ]
+}
