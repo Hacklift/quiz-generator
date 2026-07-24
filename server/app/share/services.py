@@ -60,11 +60,13 @@ class SharedQuizReadService:
             "title": quiz_doc.title,
             "description": quiz_doc.description or build_default_description(topic),
             "quiz_type": quiz_doc.quiz_type.value,
+            # correct_answer is deliberately omitted: shared quizzes are served
+            # to anonymous callers, and answers in the payload are readable in
+            # the browser's network inspector.
             "questions": [
                 {
                     "question": question.question,
                     "options": question.options,
-                    "correct_answer": question.correct_answer,
                 }
                 for question in quiz_doc.questions
             ],

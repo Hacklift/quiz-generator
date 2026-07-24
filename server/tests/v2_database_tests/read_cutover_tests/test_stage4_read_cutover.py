@@ -318,4 +318,4 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
     assert payload is not None
     assert payload["id"] == str(quiz_id)
     assert payload["title"] == "Shared Quiz"
-    assert payload["questions"][0]["correct_answer"] == "B"
+    assert "correct_answer" not in payload["questions"][0]
