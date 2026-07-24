@@ -91,8 +91,8 @@ async def test_get_questions_exceeding_available():
     with pytest.raises(HTTPException) as exc:
         await get_quiz(MagicMock(), Response(), build_request("multichoice", 20), current_user=None)
 
-    assert exc.value.status_code == 400
-    assert "Requested" in exc.value.detail
+    assert exc.value.status_code == 422
+    assert "limited to" in exc.value.detail
 
 
 @pytest.mark.asyncio
