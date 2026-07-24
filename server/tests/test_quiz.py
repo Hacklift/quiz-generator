@@ -1,10 +1,23 @@
 import pytest
-from fastapi import HTTPException
+from unittest.mock import MagicMock
+
+from fastapi import HTTPException, Response
 
 from server.app.quiz.models.grading_models import UserAnswer
 from server.app.quiz.models.quiz_models import QuizRequest
+from server.app.core.rate_limiter import limiter
 from server.app.quiz.routes.generation import get_quiz
 from server.app.quiz.routes.grading import grade_user_answers
+
+
+@pytest.fixture(autouse=True)
+def disable_rate_limiter():
+    original_enabled = limiter.enabled
+    limiter.enabled = False
+    try:
+        yield
+    finally:
+        limiter.enabled = original_enabled
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +44,7 @@ def build_request(question_type: str, num_questions: int) -> QuizRequest:
 
 @pytest.mark.asyncio
 async def test_get_questions_multichoice_success():
-    data = await get_quiz(build_request("multichoice", 3), current_user=None)
+    data = await get_quiz(MagicMock(), Response(), build_request("multichoice", 3), current_user=None)
 
     assert isinstance(data["questions"], list)
     assert len(data["questions"]) == 3
@@ -44,7 +57,7 @@ async def test_get_questions_multichoice_success():
 
 @pytest.mark.asyncio
 async def test_get_questions_true_false_success():
-    data = await get_quiz(build_request("true-false", 5), current_user=None)
+    data = await get_quiz(MagicMock(), Response(), build_request("true-false", 5), current_user=None)
 
     assert len(data["questions"]) == 5
     for question in data["questions"]:
@@ -55,7 +68,7 @@ async def test_get_questions_true_false_success():
 
 @pytest.mark.asyncio
 async def test_get_questions_open_ended_success():
-    data = await get_quiz(build_request("open-ended", 3), current_user=None)
+    data = await get_quiz(MagicMock(), Response(), build_request("open-ended", 3), current_user=None)
 
     assert len(data["questions"]) == 3
     for question in data["questions"]:
@@ -67,7 +80,7 @@ async def test_get_questions_open_ended_success():
 @pytest.mark.asyncio
 async def test_get_questions_invalid_type():
     with pytest.raises(HTTPException) as exc:
-        await get_quiz(build_request("invalid-type", 2), current_user=None)
+        await get_quiz(MagicMock(), Response(), build_request("invalid-type", 2), current_user=None)
 
     assert exc.value.status_code == 400
     assert "No mock data for question type" in exc.value.detail
@@ -76,7 +89,7 @@ async def test_get_questions_invalid_type():
 @pytest.mark.asyncio
 async def test_get_questions_exceeding_available():
     with pytest.raises(HTTPException) as exc:
-        await get_quiz(build_request("multichoice", 20), current_user=None)
+        await get_quiz(MagicMock(), Response(), build_request("multichoice", 20), current_user=None)
 
     assert exc.value.status_code == 400
     assert "Requested" in exc.value.detail
@@ -157,7 +170,7 @@ async def test_grade_answers_open_ended():
 
 @pytest.mark.asyncio
 async def test_generate_quiz():
-    data = await get_quiz(build_request("multichoice", 3), current_user=None)
+    data = await get_quiz(MagicMock(), Response(), build_request("multichoice", 3), current_user=None)
 
     assert data["source"] == "mock"
     assert isinstance(data["questions"], list)

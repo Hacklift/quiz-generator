@@ -1,5 +1,5 @@
 import inspect
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from bson import ObjectId
@@ -99,10 +99,17 @@ async def test_unverified_user_can_generate_quiz():
         "server.app.quiz.routes.generation.get_questions",
         new=AsyncMock(return_value={"source": "mock", "questions": []}),
     ) as get_questions_mock:
-        result = await get_quiz(request, current_user=current_user)
+        result = await get_quiz(
+            MagicMock(), Response(), request, current_user=current_user
+        )
 
     assert result == {"source": "mock", "questions": []}
-    get_questions_mock.assert_awaited_once_with(request, user_id=current_user.id)
+    get_questions_mock.assert_awaited_once_with(
+        request,
+        user_id=current_user.id,
+        invitation_repository=ANY,
+        email_service=ANY,
+    )
 
 
 @pytest.mark.asyncio
