@@ -6,7 +6,13 @@ from datetime import datetime, timezone
 from .core.security import hash_password
 from .quiz.schemas.quiz_schemas import NewQuizSchema as SeedQuiz
 from .quiz.seed_data.seed_all_categories import seed_all
-from .users.identity import build_profile, default_user_status, normalize_email, normalize_username
+from .users.identity import (
+    USER_SCHEMA_VERSION,
+    build_profile,
+    default_user_status,
+    normalize_email,
+    normalize_username,
+)
 from .users.models import SeedUser
 from typing import List
 
@@ -43,7 +49,7 @@ async def seed_users_collection(collection: AsyncIOMotorCollection, seed_data: L
                 user_data["email_normalized"] = normalize_email(user_data["email"])
                 user_data["username_normalized"] = normalize_username(user_data["username"])
                 user_data["profile"] = build_profile(full_name=user_data.pop("full_name", None))
-                user_data["schema_version"] = 1
+                user_data["schema_version"] = USER_SCHEMA_VERSION
                 user_data["created_at"] = datetime.now(timezone.utc)
                 user_data["updated_at"] = datetime.now(timezone.utc)
                 user = SeedUser(**user_data)
@@ -80,7 +86,7 @@ async def restoreSeed_users_collection(collection: AsyncIOMotorCollection, seed_
             user_data["email_normalized"] = normalize_email(user_data["email"])
             user_data["username_normalized"] = normalize_username(user_data["username"])
             user_data["profile"] = build_profile(full_name=user_data.pop("full_name", None))
-            user_data["schema_version"] = 1
+            user_data["schema_version"] = USER_SCHEMA_VERSION
             user_data["created_at"] = datetime.now(timezone.utc)
             user_data["updated_at"] = datetime.now(timezone.utc)
             user = SeedUser(**user_data)

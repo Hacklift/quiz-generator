@@ -1,9 +1,34 @@
-from pydantic import BaseModel, Field, EmailStr, field_validator
-from typing import Any, List, Optional
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
+from typing import Any, List, Literal, Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 from .validators import PyObjectId
 from server.app.users.identity import DEFAULT_AVATAR_COLOR
+from server.app.users.persona import persona_pair_is_valid
+
+
+# Literal members are pinned against persona.PERSONA_USER_TYPES_BY_CATEGORY by
+# tests/test_persona_taxonomy.py — Literal cannot be built from a runtime tuple.
+PersonaCategoryField = Literal["school", "corporate"]
+PersonaUserTypeField = Literal[
+    "teacher", "lecturer", "student", "parent", "business", "employee", "hr"
+]
+
+
+class UserPersona(BaseModel):
+    category: Optional[PersonaCategoryField] = None
+    user_type: Optional[PersonaUserTypeField] = None
+    set_at: Optional[datetime] = None
+    source: Optional[str] = "unset"
+
+    @model_validator(mode="after")
+    def validate_pair(self):
+        if not persona_pair_is_valid(self.category, self.user_type):
+            raise ValueError(
+                "persona user_type must belong to persona category, "
+                "and both must be set together"
+            )
+        return self
 
 
 class UserProfile(BaseModel):
@@ -12,6 +37,7 @@ class UserProfile(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     avatar_color: Optional[str] = DEFAULT_AVATAR_COLOR
+    persona: Optional[UserPersona] = None
 
     @field_validator("bio")
     @classmethod
@@ -76,6 +102,10 @@ class UserDB(BaseModel):
     def avatar_color(self) -> Optional[str]:
         return self.profile.avatar_color
 
+    @property
+    def persona(self) -> Optional[UserPersona]:
+        return self.profile.persona
+
     class Config:
         populate_by_name = True
         from_attributes = True
@@ -126,6 +156,9 @@ class UserOut(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     avatar_color: Optional[str] = "#143E6F"
+    persona_category: Optional[str] = None
+    persona_user_type: Optional[str] = None
+    persona_set_at: Optional[str] = None
     role: Optional[str] = "user"
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
@@ -148,6 +181,19 @@ class UpdateProfileRequest(BaseModel):
     location: Optional[str] = None
     website: Optional[str] = None
     avatar_color: Optional[str] = None
+    persona_category: Optional[str] = None
+    persona_user_type: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_persona(self):
+        if self.persona_category is None and self.persona_user_type is None:
+            return self
+        if not persona_pair_is_valid(self.persona_category, self.persona_user_type):
+            raise ValueError(
+                "persona_user_type must belong to persona_category, "
+                "and both must be provided together"
+            )
+        return self
 
     @field_validator('bio')
     @classmethod

@@ -6,7 +6,7 @@ from typing import Any
 
 ACTIVE_USER_STATUSES = {"pending_verification", "active"}
 BLOCKED_USER_STATUSES = {"suspended", "deleted"}
-USER_SCHEMA_VERSION = 1
+USER_SCHEMA_VERSION = 2
 DEFAULT_AVATAR_COLOR = "#143E6F"
 
 
@@ -36,13 +36,18 @@ def build_profile(
     location: str | None = None,
     website: str | None = None,
     avatar_color: str | None = None,
+    persona: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    # Imported lazily: persona.py imports now_utc from this module.
+    from server.app.users.persona import build_persona
+
     return {
         "full_name": full_name,
         "bio": bio,
         "location": location,
         "website": website,
         "avatar_color": avatar_color or DEFAULT_AVATAR_COLOR,
+        "persona": persona if persona is not None else build_persona(),
     }
 
 
