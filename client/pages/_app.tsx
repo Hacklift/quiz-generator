@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { Toaster } from "react-hot-toast";
 import SplashScreen from "@app/components/SplashScreen";
 import { AuthProvider } from "@features/auth/context/authContext";
+import { PersonaProvider } from "@features/persona/context/personaContext";
 import SignInModal from "@features/auth/components/SignInModal";
 import AssistantLauncher from "@features/assistant/components/AssistantLauncher";
 import { ROUTES } from "@shared/config/patterns/routes";
@@ -30,23 +31,25 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <AuthProvider>
-      <SplashScreen />
-      <EmailVerificationBanner />
+      <PersonaProvider>
+        <SplashScreen />
+        <EmailVerificationBanner />
 
-      <Component {...pageProps} openLoginModal={openSignInModal} />
-      <AssistantLauncher />
+        <Component {...pageProps} openLoginModal={openSignInModal} />
+        <AssistantLauncher />
 
-      <SignInModal
-        isOpen={showSignInModal}
-        onClose={closeSignInModal}
-        redirectTo={ROUTES.HOME}
-        switchToSignUp={() => {
-          closeSignInModal();
-          router.push(ROUTES.REGISTER);
-        }}
-      />
+        <SignInModal
+          isOpen={showSignInModal}
+          onClose={closeSignInModal}
+          redirectTo={ROUTES.HOME}
+          switchToSignUp={() => {
+            closeSignInModal();
+            router.push(ROUTES.REGISTER);
+          }}
+        />
 
-      <Toaster position="top-right" />
+        <Toaster position="top-right" />
+      </PersonaProvider>
     </AuthProvider>
   );
 }

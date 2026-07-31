@@ -14,6 +14,8 @@ import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
+import PersonaBadge from "@features/persona/components/PersonaBadge";
+import { parsePersona } from "@shared/config/persona";
 
 type ApiErrorLike = {
   response?: {
@@ -120,10 +122,14 @@ export default function QuizForm() {
     );
   };
 
-  // Persona entry points on the home page land here with ?persona=&topic=
-  // (design_handoff_home_page §4): prefill the topic and show a tag.
+  // Persona entry points land here as ?persona=&category=&topic=.
+  // parsePersona also accepts the pre-slug labels that shipped in earlier
+  // links (e.g. ?persona=HR%20personnel), so old bookmarks keep working.
   const searchParams = useSearchParams();
-  const personaLabel = searchParams?.get("persona") || "";
+  const persona = parsePersona(
+    searchParams?.get("category"),
+    searchParams?.get("persona"),
+  );
 
   useEffect(() => {
     const personaTopic = searchParams?.get("topic");
@@ -454,11 +460,8 @@ export default function QuizForm() {
 
   return (
     <div className="max-w-3xl mx-auto bg-[#f7f8fa] rounded-xl p-10 shadow-lg">
-      {personaLabel ? (
-        <p className="mb-6 inline-flex items-center gap-2 bg-[#e7ecf3] px-3 py-1.5 text-sm font-semibold text-[#062042]">
-          <span className="h-2 w-2 bg-[#0a3264]" aria-hidden="true" />
-          Set up for: {personaLabel}
-        </p>
+      {persona ? (
+        <PersonaBadge userType={persona.userType} className="mb-6" />
       ) : null}
       <form onSubmit={(e) => e.preventDefault()}>
         <QuizGenerationSection
