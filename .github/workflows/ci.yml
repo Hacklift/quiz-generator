@@ -29,10 +29,6 @@ jobs:
       EMAIL_PASSWORD: ci-password
       EMAIL_HOST: smtp.example.com
       EMAIL_PORT: "587"
-      # email_platform/platform_email_utils.py requires these at import time,
-      # so any test importing users.services needs them present.
-      SENDER_EMAIL: ci@example.com
-      SENDER_PASSWORD: ci-password
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
