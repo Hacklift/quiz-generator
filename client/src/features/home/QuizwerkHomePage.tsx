@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import Image from "next/image";
-import { Archivo } from "next/font/google";
 import SignInModal from "@features/auth/components/SignInModal";
 import { useAuth } from "@features/auth/context/authContext";
 import {
@@ -12,40 +11,24 @@ import {
   getBillingErrorMessage,
 } from "@features/profile/api/billingApi";
 import { BillingPlanAction } from "@shared/config/billingPlans";
+import {
+  PERSONA_TAXONOMY,
+  PersonaCategory,
+  PersonaUserType,
+  personaGenerateHref,
+} from "@shared/config/persona";
+import {
+  archivo,
+  BTN_GHOST,
+  BTN_INVERSE,
+  BTN_PRIMARY,
+  CONTAINER,
+  FeatureRow,
+  Kicker,
+  Microlabel,
+  ResultBar,
+} from "@shared/ui/quizwerk";
 import HeroMockup from "./HeroMockup";
-
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
-
-/* ── shared bits ─────────────────────────────────────────────────────── */
-
-const CONTAINER = "mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)]";
-
-function Kicker({
-  children,
-  onPaper = false,
-}: {
-  children: React.ReactNode;
-  onPaper?: boolean;
-}) {
-  return (
-    <p
-      className={`mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] ${
-        onPaper ? "text-brand-200" : "text-brand-700"
-      }`}
-    >
-      {children}
-    </p>
-  );
-}
-
-const BTN_BASE =
-  "inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
-const BTN_PRIMARY = `${BTN_BASE} bg-brand text-paper transition hover:bg-brand-600`;
-const BTN_GHOST = `${BTN_BASE} border-2 border-ink bg-transparent text-ink transition hover:bg-ink/[0.07]`;
 
 /* ── data ────────────────────────────────────────────────────────────── */
 
@@ -55,28 +38,6 @@ const STATS = [
   { value: "50", label: "Questions per quiz, max" },
   { value: "0", label: "Hours spent formatting" },
 ];
-
-const PERSONAS = {
-  school: {
-    title: "School",
-    sub: "Teachers, lecturers, students and parents.",
-    rows: [
-      { label: "Teacher", desc: "Class quizzes, homework checks, exam revision", topic: "Photosynthesis — Grade 8 biology" },
-      { label: "Lecturer", desc: "Lecture recaps and seminar prep for large cohorts", topic: "Introduction to microeconomics" },
-      { label: "Student", desc: "Self-testing before the exam", topic: "World War II — key dates and causes" },
-      { label: "Parent", desc: "Practice at home, marked automatically", topic: "Multiplication tables — ages 7 to 9" },
-    ],
-  },
-  corporate: {
-    title: "Corporate",
-    sub: "Businesses, employees and HR personnel.",
-    rows: [
-      { label: "Business", desc: "Onboarding and product knowledge at scale", topic: "Company onboarding essentials" },
-      { label: "Employee", desc: "Upskill and certify at your own pace", topic: "Data protection basics" },
-      { label: "HR personnel", desc: "Compliance training with an audit trail", topic: "Workplace policy — harassment prevention" },
-    ],
-  },
-};
 
 const HOW_IT_WORKS = [
   { n: "01", title: "Enter your topic", copy: "Anything you would train on. One line is enough." },
@@ -137,64 +98,6 @@ const TESTIMONIALS = [
   },
 ];
 
-/* ── sections ────────────────────────────────────────────────────────── */
-
-function FeatureRow({
-  n,
-  title,
-  copy,
-  vignette,
-}: {
-  n: string;
-  title: string;
-  copy: string;
-  vignette: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-start gap-x-[48px] gap-y-[28px] border-t-2 border-divider py-[42px]">
-      <span className="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]">
-        {n}
-      </span>
-      <div className="min-w-[260px] flex-1">
-        <h3 className="mb-[10px] text-[24px] font-extrabold leading-[1.12] tracking-[-0.015em]">
-          {title}
-        </h3>
-        <p className="max-w-[52ch] text-[15.5px] leading-[28px] text-ink/[0.78]">
-          {copy}
-        </p>
-      </div>
-      <div className="w-full max-w-[420px] border-2 border-divider p-[20px]">
-        {vignette}
-      </div>
-    </div>
-  );
-}
-
-function Microlabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-[10px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
-      {children}
-    </p>
-  );
-}
-
-function ResultBar({ q, pct, tone }: { q: string; pct: number; tone: "brand" | "brand-300" }) {
-  return (
-    <div className="mb-[10px] flex items-center gap-[10px]">
-      <span className="w-[26px] text-[12px] font-extrabold">{q}</span>
-      <div className="h-[10px] flex-1 bg-[#e4e3e2]">
-        <div
-          className={tone === "brand" ? "h-full bg-brand" : "h-full bg-brand-300"}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="w-[40px] text-right text-[12px] [font-variant-numeric:tabular-nums] text-ink/70">
-        {pct}%
-      </span>
-    </div>
-  );
-}
-
 /* ── page ────────────────────────────────────────────────────────────── */
 
 export default function QuizwerkHomePage() {
@@ -207,10 +110,8 @@ export default function QuizwerkHomePage() {
   const goGenerate = () => router.push("/generate");
   const goJoin = () => router.push("/quiz-access");
 
-  const pickPersona = (category: "school" | "corporate", label: string, topic: string) => {
-    router.push(
-      `/generate?persona=${encodeURIComponent(label)}&category=${category}&topic=${encodeURIComponent(topic)}`,
-    );
+  const pickPersona = (userType: PersonaUserType) => {
+    router.push(personaGenerateHref(userType));
   };
 
   const handlePlanSelection = async (action: BillingPlanAction) => {
@@ -315,32 +216,32 @@ export default function QuizwerkHomePage() {
               a quiz that fits it — change anything before you run it.
             </p>
             <div className="mt-[48px] grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-[64px] gap-y-[40px]">
-              {(Object.entries(PERSONAS) as [
-                "school" | "corporate",
-                (typeof PERSONAS)["school"],
-              ][]).map(([key, group]) => (
-                <div key={key}>
-                  <h3 className="text-[22px] font-extrabold tracking-[-0.015em]">{group.title}</h3>
-                  <p className="mb-[20px] mt-[4px] text-[13.5px] text-paper/70">{group.sub}</p>
-                  {group.rows.map((row) => (
-                    <button
-                      key={row.label}
-                      type="button"
-                      onClick={() => pickPersona(key, row.label, row.topic)}
-                      className="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
-                    >
-                      <span className="flex items-center gap-[14px]">
-                        <span className="h-[8px] w-[8px] flex-none bg-paper" />
-                        <span className="flex-1">
-                          <span className="block text-[17px] font-extrabold leading-[1.2]">{row.label}</span>
-                          <span className="mt-[3px] block text-[13.5px] text-paper/[0.72]">{row.desc}</span>
+              {(Object.keys(PERSONA_TAXONOMY) as PersonaCategory[]).map((key) => {
+                const group = PERSONA_TAXONOMY[key];
+                return (
+                  <div key={key}>
+                    <h3 className="text-[22px] font-extrabold tracking-[-0.015em]">{group.label}</h3>
+                    <p className="mb-[20px] mt-[4px] text-[13.5px] text-paper/70">{group.description}</p>
+                    {group.userTypes.map((row) => (
+                      <button
+                        key={row.slug}
+                        type="button"
+                        onClick={() => pickPersona(row.slug)}
+                        className="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                      >
+                        <span className="flex items-center gap-[14px]">
+                          <span className="h-[8px] w-[8px] flex-none bg-paper" />
+                          <span className="flex-1">
+                            <span className="block text-[17px] font-extrabold leading-[1.2]">{row.label}</span>
+                            <span className="mt-[3px] block text-[13.5px] text-paper/[0.72]">{row.description}</span>
+                          </span>
+                          <span aria-hidden="true" className="text-[18px]">→</span>
                         </span>
-                        <span aria-hidden="true" className="text-[18px]">→</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ))}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -528,7 +429,7 @@ export default function QuizwerkHomePage() {
             <button
               type="button"
               onClick={goGenerate}
-              className={`${BTN_BASE} mt-[32px] border-2 border-paper text-paper transition hover:bg-paper/[0.12] focus-visible:outline-paper`}
+              className={`${BTN_INVERSE} mt-[32px]`}
             >
               Generate your first quiz — free
             </button>

@@ -1257,7 +1257,7 @@ exports[`QuizwerkHomePage renders the full page markup 1`] = `
             The next quiz writes itself.
           </h3>
           <button
-            class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand mt-[32px] border-2 border-paper text-paper transition hover:bg-paper/[0.12] focus-visible:outline-paper"
+            class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border-2 border-paper text-paper transition hover:bg-paper/[0.12] focus-visible:outline-paper mt-[32px]"
             type="button"
           >
             Generate your first quiz — free
