@@ -9,11 +9,13 @@ import {
   generateDocumentQuiz,
 } from "@features/quiz/api/documentQuizApi";
 import { useAuth } from "@features/auth/context/authContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TokenService } from "@shared/auth/tokenService";
 import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
+import PersonaBadge from "@features/persona/components/PersonaBadge";
+import { parsePersona } from "@shared/config/persona";
 
 type ApiErrorLike = {
   response?: {
@@ -119,6 +121,23 @@ export default function QuizForm() {
       `${file.name} uploaded successfully. Ready for quiz generation.`,
     );
   };
+
+  // Persona entry points land here as ?persona=&category=&topic=.
+  // parsePersona also accepts the pre-slug labels that shipped in earlier
+  // links (e.g. ?persona=HR%20personnel), so old bookmarks keep working.
+  const searchParams = useSearchParams();
+  const persona = parsePersona(
+    searchParams?.get("category"),
+    searchParams?.get("persona"),
+  );
+
+  useEffect(() => {
+    const personaTopic = searchParams?.get("topic");
+    if (personaTopic) {
+      setGenerationMode("topic");
+      setProfession((current) => current || personaTopic);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (user === undefined) return;
@@ -441,6 +460,9 @@ export default function QuizForm() {
 
   return (
     <div className="max-w-3xl mx-auto bg-[#f7f8fa] rounded-xl p-10 shadow-lg">
+      {persona ? (
+        <PersonaBadge userType={persona.userType} className="mb-6" />
+      ) : null}
       <form onSubmit={(e) => e.preventDefault()}>
         <QuizGenerationSection
           generationMode={generationMode}

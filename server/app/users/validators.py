@@ -3,7 +3,11 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import model_validator
 from pymongo.errors import OperationFailure
 
-from server.app.users.repository import backfill_user_identity_fields
+from server.app.users.persona import PERSONA_CATEGORIES, PERSONA_USER_TYPES
+from server.app.users.repository import (
+    backfill_user_identity_fields,
+    backfill_user_persona_fields,
+)
 
 
 class PyObjectId(ObjectId):
@@ -32,6 +36,7 @@ async def ensure_user_collections(
 ):
     """Prepare user-domain collections during application startup."""
     await backfill_user_identity_fields(users_collection, limit=backfill_limit)
+    await backfill_user_persona_fields(users_collection, limit=backfill_limit)
     await ensure_users_validator(database)
     await ensure_user_session_validator(database)
     await ensure_auth_event_validator(database)
@@ -57,6 +62,9 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
     await users_collection.create_index("is_active")
     await users_collection.create_index("stripe_customer_id", sparse=True)
     await users_collection.create_index("stripe_subscription_id", sparse=True)
+    # Persona adoption reporting (#137) aggregates on these.
+    await users_collection.create_index("profile.persona.category", sparse=True)
+    await users_collection.create_index("profile.persona.user_type", sparse=True)
 
 
 async def ensure_users_validator(database):
@@ -100,6 +108,23 @@ async def ensure_users_validator(database):
                         "location": {"bsonType": ["string", "null"]},
                         "website": {"bsonType": ["string", "null"]},
                         "avatar_color": {"bsonType": ["string", "null"]},
+                        "persona": {
+                            "bsonType": ["object", "null"],
+                            "properties": {
+                                # None stays in the enums: an unset persona is
+                                # the normal state for every pre-#119 user.
+                                "category": {
+                                    "bsonType": ["string", "null"],
+                                    "enum": [*PERSONA_CATEGORIES, None],
+                                },
+                                "user_type": {
+                                    "bsonType": ["string", "null"],
+                                    "enum": [*PERSONA_USER_TYPES, None],
+                                },
+                                "set_at": {"bsonType": ["date", "null"]},
+                                "source": {"bsonType": ["string", "null"]},
+                            },
+                        },
                     },
                 },
                 "password_changed_at": {"bsonType": ["date", "null"]},

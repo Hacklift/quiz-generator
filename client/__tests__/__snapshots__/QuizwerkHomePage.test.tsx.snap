@@ -1,0 +1,1310 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`QuizwerkHomePage renders the full page markup 1`] = `
+<div>
+  <div
+    class="className bg-paper text-ink antialiased"
+  >
+    <header
+      class="border-b-2 border-divider"
+    >
+      <nav
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] flex flex-wrap items-center gap-x-[24px] gap-y-[10px] py-[14px]"
+      >
+        <a
+          class="mr-auto text-[18px] font-extrabold tracking-[-0.015em]"
+          href="/"
+        >
+          Quizwerk
+        </a>
+        <a
+          class="min-h-[44px] content-center text-[15px] hover:text-brand"
+          href="#product"
+        >
+          Product
+        </a>
+        <a
+          class="min-h-[44px] content-center text-[15px] hover:text-brand"
+          href="#categories"
+        >
+          Categories
+        </a>
+        <a
+          class="min-h-[44px] content-center text-[15px] hover:text-brand"
+          href="#pricing"
+        >
+          Pricing
+        </a>
+        <button
+          class="min-h-[44px] cursor-pointer text-[15px] hover:text-brand"
+          type="button"
+        >
+          Join a quiz
+        </button>
+        <button
+          class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand bg-brand text-paper transition hover:bg-brand-600"
+          type="button"
+        >
+          Generate a quiz
+        </button>
+      </nav>
+    </header>
+    <main>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] py-[clamp(48px,7vw,84px)]"
+      >
+        <div
+          class="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-center gap-[clamp(32px,5vw,88px)]"
+        >
+          <div>
+            <h1
+              class="ml-[-0.058em] text-[clamp(42px,5.4vw,76px)] font-extrabold leading-[1.06] tracking-[-0.02em]"
+            >
+              Type a topic.
+              <br />
+              Run the quiz.
+            </h1>
+            <p
+              class="mt-[24px] max-w-[52ch] text-[17px] leading-[28px]"
+            >
+              Quizwerk turns any topic into a ready-to-run quiz — question types you choose, answer keys included, delivered live or exported to PDF. For the classroom and the training room alike.
+            </p>
+            <div
+              class="mt-[32px] flex flex-wrap gap-[14px]"
+            >
+              <button
+                class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand bg-brand text-paper transition hover:bg-brand-600"
+                type="button"
+              >
+                Generate a quiz
+              </button>
+              <button
+                class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border-2 border-ink bg-transparent text-ink transition hover:bg-ink/[0.07]"
+                type="button"
+              >
+                Join a live quiz
+              </button>
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            class="relative mr-[96px] pb-[28px] max-[560px]:mr-0"
+          >
+            <div>
+              <div
+                class="rounded-t-[16px] bg-[#101012] p-[10px] pb-0"
+              >
+                <div
+                  class="mx-auto mb-[6px] h-[6px] w-[6px] rounded-full bg-[#2a2a2e]"
+                />
+                <div
+                  class="bg-paper p-[18px] pr-[80px] text-ink"
+                >
+                  <div
+                    class="flex items-center justify-between pb-[8px]"
+                  >
+                    <span
+                      class="flex items-center gap-[7px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700"
+                    >
+                      <span
+                        class="h-[7px] w-[7px] animate-live-pulse bg-brand"
+                      />
+                      LIVE · 4F7KQ2
+                    </span>
+                    <span
+                      class="text-[11px] [font-variant-numeric:tabular-nums] text-ink/70"
+                    >
+                      3 / 5
+                    </span>
+                  </div>
+                  <div
+                    class="mb-[12px] h-[2px] bg-divider"
+                  />
+                  <p
+                    class="mb-[12px] font-extrabold leading-[1.25] tracking-[-0.015em] text-[16px]"
+                  >
+                    Which of these is the correct first step in a fire evacuation?
+                  </p>
+                  <div
+                    class="mb-[10px]"
+                  >
+                    <div
+                      class="flex items-baseline justify-between text-[12px] leading-[1.3]"
+                    >
+                      <span>
+                        <span
+                          class="font-extrabold"
+                        >
+                          A
+                        </span>
+                         
+                        Raise the alarm
+                      </span>
+                      <span
+                        class="[font-variant-numeric:tabular-nums] text-ink/70"
+                      >
+                        62
+                        %
+                      </span>
+                    </div>
+                    <div
+                      class="mt-[4px] h-[8px] w-full bg-[#e4e3e2]"
+                    >
+                      <div
+                        class="h-full bg-brand"
+                        style="width: 62%;"
+                      />
+                    </div>
+                  </div>
+                  <div
+                    class="mb-[10px]"
+                  >
+                    <div
+                      class="flex items-baseline justify-between text-[12px] leading-[1.3]"
+                    >
+                      <span>
+                        <span
+                          class="font-extrabold"
+                        >
+                          B
+                        </span>
+                         
+                        Collect belongings
+                      </span>
+                      <span
+                        class="[font-variant-numeric:tabular-nums] text-ink/70"
+                      >
+                        21
+                        %
+                      </span>
+                    </div>
+                    <div
+                      class="mt-[4px] h-[8px] w-full bg-[#e4e3e2]"
+                    >
+                      <div
+                        class="h-full bg-brand-300"
+                        style="width: 21%;"
+                      />
+                    </div>
+                  </div>
+                  <div
+                    class="mb-[10px]"
+                  >
+                    <div
+                      class="flex items-baseline justify-between text-[12px] leading-[1.3]"
+                    >
+                      <span>
+                        <span
+                          class="font-extrabold"
+                        >
+                          C
+                        </span>
+                         
+                        Call your manager
+                      </span>
+                      <span
+                        class="[font-variant-numeric:tabular-nums] text-ink/70"
+                      >
+                        17
+                        %
+                      </span>
+                    </div>
+                    <div
+                      class="mt-[4px] h-[8px] w-full bg-[#e4e3e2]"
+                    >
+                      <div
+                        class="h-full bg-brand-300"
+                        style="width: 17%;"
+                      />
+                    </div>
+                  </div>
+                  <p
+                    class="mt-[12px] text-[11px] uppercase tracking-[0.08em] text-ink/50"
+                  >
+                    24 of 26 answered
+                  </p>
+                </div>
+              </div>
+              <div
+                class="relative h-[14px] rounded-b-[12px] bg-gradient-to-b from-[#e4e4e8] to-[#b6b6bd]"
+              >
+                <div
+                  class="absolute left-1/2 top-0 h-[5px] w-[86px] -translate-x-1/2 rounded-b-[6px] bg-[#a9a9b1]"
+                />
+              </div>
+            </div>
+            <div
+              class="absolute bottom-0 right-0 w-[164px] rounded-[28px] bg-[#101012] p-[7px] max-[560px]:relative max-[560px]:mx-auto max-[560px]:mt-[16px]"
+            >
+              <div
+                class="rounded-[21px] bg-paper px-[12px] pb-[10px] pt-[8px] text-ink"
+              >
+                <div
+                  class="mx-auto mb-[8px] h-[16px] w-[54px] rounded-full bg-[#101012]"
+                />
+                <p
+                  class="mb-[6px] flex items-center gap-[5px] text-[9px] font-extrabold uppercase tracking-[0.1em] text-brand-700"
+                >
+                  <span
+                    class="h-[5px] w-[5px] animate-live-pulse bg-brand"
+                  />
+                  LIVE
+                </p>
+                <p
+                  class="mb-[8px] text-[11px] font-extrabold leading-[1.3] tracking-[-0.015em]"
+                >
+                  Which of these is the correct first step in a fire evacuation?
+                </p>
+                <div
+                  class="mb-[6px] border-[1.5px] border-brand bg-brand-100 px-[8px] py-[6px] text-[10px]"
+                >
+                  <span
+                    class="font-extrabold"
+                  >
+                    A
+                  </span>
+                   Raise the alarm
+                </div>
+                <div
+                  class="mb-[6px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]"
+                >
+                  <span
+                    class="font-extrabold"
+                  >
+                    B
+                  </span>
+                   Collect belongings
+                </div>
+                <div
+                  class="mb-[8px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]"
+                >
+                  <span
+                    class="font-extrabold"
+                  >
+                    C
+                  </span>
+                   Call your manager
+                </div>
+                <div
+                  class="bg-brand px-[8px] py-[7px] text-center text-[11px] font-extrabold text-paper"
+                >
+                  Submit
+                </div>
+                <div
+                  class="mx-auto mt-[8px] h-[3px] w-[48px] rounded-full bg-[#101012]/30"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section
+        class="border-y-2 border-divider"
+      >
+        <div
+          class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-[28px] py-[42px]"
+        >
+          <div>
+            <p
+              class="text-[clamp(34px,3.4vw,48px)] font-extrabold leading-none tracking-[-0.015em] text-brand [font-variant-numeric:tabular-nums]"
+            >
+              12s
+            </p>
+            <p
+              class="mt-[10px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              Topic to finished draft
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[clamp(34px,3.4vw,48px)] font-extrabold leading-none tracking-[-0.015em] text-brand [font-variant-numeric:tabular-nums]"
+            >
+              3
+            </p>
+            <p
+              class="mt-[10px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              Question formats
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[clamp(34px,3.4vw,48px)] font-extrabold leading-none tracking-[-0.015em] text-brand [font-variant-numeric:tabular-nums]"
+            >
+              50
+            </p>
+            <p
+              class="mt-[10px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              Questions per quiz, max
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[clamp(34px,3.4vw,48px)] font-extrabold leading-none tracking-[-0.015em] text-brand [font-variant-numeric:tabular-nums]"
+            >
+              0
+            </p>
+            <p
+              class="mt-[10px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              Hours spent formatting
+            </p>
+          </div>
+        </div>
+      </section>
+      <section
+        class="bg-brand text-paper"
+        id="categories"
+      >
+        <div
+          class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] py-[84px]"
+        >
+          <p
+            class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-200"
+          >
+            Who it's for
+          </p>
+          <h2
+            class="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]"
+          >
+            Pick the seat you're sitting in
+          </h2>
+          <p
+            class="mt-[12px] max-w-[52ch] text-[15.5px] leading-[28px] text-paper/80"
+          >
+            Two worlds, one generator. Choose a persona and we start you with a quiz that fits it — change anything before you run it.
+          </p>
+          <div
+            class="mt-[48px] grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-[64px] gap-y-[40px]"
+          >
+            <div>
+              <h3
+                class="text-[22px] font-extrabold tracking-[-0.015em]"
+              >
+                School
+              </h3>
+              <p
+                class="mb-[20px] mt-[4px] text-[13.5px] text-paper/70"
+              >
+                Teachers, lecturers, students and parents.
+              </p>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Teacher
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Class quizzes, homework checks, exam revision
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Lecturer
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Lecture recaps and seminar prep for large cohorts
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Student
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Self-testing before the exam
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Parent
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Practice at home, marked automatically
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+            </div>
+            <div>
+              <h3
+                class="text-[22px] font-extrabold tracking-[-0.015em]"
+              >
+                Corporate
+              </h3>
+              <p
+                class="mb-[20px] mt-[4px] text-[13.5px] text-paper/70"
+              >
+                Businesses, employees and HR personnel.
+              </p>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Business
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Onboarding and product knowledge at scale
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      Employee
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Upskill and certify at your own pace
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+              <button
+                class="block w-full cursor-pointer border-t-2 border-paper/30 px-[6px] py-[16px] text-left transition hover:bg-paper/[0.12] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"
+                type="button"
+              >
+                <span
+                  class="flex items-center gap-[14px]"
+                >
+                  <span
+                    class="h-[8px] w-[8px] flex-none bg-paper"
+                  />
+                  <span
+                    class="flex-1"
+                  >
+                    <span
+                      class="block text-[17px] font-extrabold leading-[1.2]"
+                    >
+                      HR personnel
+                    </span>
+                    <span
+                      class="mt-[3px] block text-[13.5px] text-paper/[0.72]"
+                    >
+                      Compliance training with an audit trail
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    class="text-[18px]"
+                  >
+                    →
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] pb-[28px] pt-[70px]"
+        id="product"
+      >
+        <p
+          class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-700"
+        >
+          What Quizwerk does
+        </p>
+        <div
+          class="flex flex-wrap items-start gap-x-[48px] gap-y-[28px] border-t-2 border-divider py-[42px]"
+        >
+          <span
+            class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+          >
+            01
+          </span>
+          <div
+            class="min-w-[260px] flex-1"
+          >
+            <h3
+              class="mb-[10px] text-[24px] font-extrabold leading-[1.12] tracking-[-0.015em]"
+            >
+              Generate from a topic
+            </h3>
+            <p
+              class="max-w-[52ch] text-[15.5px] leading-[28px] text-ink/[0.78]"
+            >
+              Type the subject — photosynthesis, GDPR, the new expense policy — pick a format and a length, and get a clean draft with the answer key in seconds.
+            </p>
+          </div>
+          <div
+            class="w-full max-w-[420px] border-2 border-divider p-[20px]"
+          >
+            <div>
+              <p
+                class="mb-[10px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60"
+              >
+                Topic
+              </p>
+              <div
+                class="border-2 border-ink px-[12px] py-[10px] text-[14px]"
+              >
+                Fire safety in the workplace
+              </div>
+              <div
+                class="mt-[12px] flex flex-wrap gap-[8px]"
+              >
+                <span
+                  class="bg-brand-100 px-[10px] py-[3px] text-[11px] tracking-[0.02em] text-brand-800"
+                >
+                  Multiple choice
+                </span>
+                <span
+                  class="border border-brand px-[10px] py-[3px] text-[11px] tracking-[0.02em] text-brand-700"
+                >
+                  5 questions
+                </span>
+              </div>
+              <div
+                class="mt-[14px]"
+              >
+                <span
+                  class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand bg-brand text-paper transition hover:bg-brand-600"
+                >
+                  Generate quiz
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex flex-wrap items-start gap-x-[48px] gap-y-[28px] border-t-2 border-divider py-[42px]"
+        >
+          <span
+            class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+          >
+            02
+          </span>
+          <div
+            class="min-w-[260px] flex-1"
+          >
+            <h3
+              class="mb-[10px] text-[24px] font-extrabold leading-[1.12] tracking-[-0.015em]"
+            >
+              Run it live
+            </h3>
+            <p
+              class="max-w-[52ch] text-[15.5px] leading-[28px] text-ink/[0.78]"
+            >
+              Put a join code on the projector. Participants answer on their own phones, scores tally in real time, and nobody installs anything.
+            </p>
+          </div>
+          <div
+            class="w-full max-w-[420px] border-2 border-divider p-[20px]"
+          >
+            <div>
+              <p
+                class="mb-[10px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60"
+              >
+                Session code
+              </p>
+              <p
+                class="text-[52px] font-extrabold leading-none tracking-[0.08em]"
+              >
+                4F7–KQ2
+              </p>
+              <p
+                class="mt-[14px] flex items-center gap-[8px] text-[13px] text-ink/[0.78]"
+              >
+                <span
+                  class="h-[8px] w-[8px] animate-live-pulse bg-brand"
+                />
+                24 participants joined
+              </p>
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex flex-wrap items-start gap-x-[48px] gap-y-[28px] border-t-2 border-divider py-[42px]"
+        >
+          <span
+            class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+          >
+            03
+          </span>
+          <div
+            class="min-w-[260px] flex-1"
+          >
+            <h3
+              class="mb-[10px] text-[24px] font-extrabold leading-[1.12] tracking-[-0.015em]"
+            >
+              Results, kept
+            </h3>
+            <p
+              class="max-w-[52ch] text-[15.5px] leading-[28px] text-ink/[0.78]"
+            >
+              Every session lands in your workspace: per-question scores, common misses, and one-click export to PDF or text — for the grade book or the compliance file.
+            </p>
+          </div>
+          <div
+            class="w-full max-w-[420px] border-2 border-divider p-[20px]"
+          >
+            <div>
+              <p
+                class="mb-[10px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60"
+              >
+                Correct answers by question
+              </p>
+              <div
+                class="mb-[10px] flex items-center gap-[10px]"
+              >
+                <span
+                  class="w-[26px] text-[12px] font-extrabold"
+                >
+                  Q1
+                </span>
+                <div
+                  class="h-[10px] flex-1 bg-[#e4e3e2]"
+                >
+                  <div
+                    class="h-full bg-brand"
+                    style="width: 92%;"
+                  />
+                </div>
+                <span
+                  class="w-[40px] text-right text-[12px] [font-variant-numeric:tabular-nums] text-ink/70"
+                >
+                  92
+                  %
+                </span>
+              </div>
+              <div
+                class="mb-[10px] flex items-center gap-[10px]"
+              >
+                <span
+                  class="w-[26px] text-[12px] font-extrabold"
+                >
+                  Q2
+                </span>
+                <div
+                  class="h-[10px] flex-1 bg-[#e4e3e2]"
+                >
+                  <div
+                    class="h-full bg-brand"
+                    style="width: 71%;"
+                  />
+                </div>
+                <span
+                  class="w-[40px] text-right text-[12px] [font-variant-numeric:tabular-nums] text-ink/70"
+                >
+                  71
+                  %
+                </span>
+              </div>
+              <div
+                class="mb-[10px] flex items-center gap-[10px]"
+              >
+                <span
+                  class="w-[26px] text-[12px] font-extrabold"
+                >
+                  Q3
+                </span>
+                <div
+                  class="h-[10px] flex-1 bg-[#e4e3e2]"
+                >
+                  <div
+                    class="h-full bg-brand-300"
+                    style="width: 38%;"
+                  />
+                </div>
+                <span
+                  class="w-[40px] text-right text-[12px] [font-variant-numeric:tabular-nums] text-ink/70"
+                >
+                  38
+                  %
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] border-t-2 border-divider py-[70px]"
+      >
+        <p
+          class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-700"
+        >
+          How it works
+        </p>
+        <div
+          class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-[28px]"
+        >
+          <div>
+            <p
+              class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+            >
+              01
+            </p>
+            <h3
+              class="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]"
+            >
+              Enter your topic
+            </h3>
+            <p
+              class="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]"
+            >
+              Anything you would train on. One line is enough.
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+            >
+              02
+            </p>
+            <h3
+              class="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]"
+            >
+              Pick the format
+            </h3>
+            <p
+              class="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]"
+            >
+              Multiple choice, true–false or short answer. 5 to 50 questions.
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+            >
+              03
+            </p>
+            <h3
+              class="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]"
+            >
+              Review the draft
+            </h3>
+            <p
+              class="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]"
+            >
+              Answer keys included. Edit, reorder, regenerate.
+            </p>
+          </div>
+          <div>
+            <p
+              class="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]"
+            >
+              04
+            </p>
+            <h3
+              class="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]"
+            >
+              Run it or ship it
+            </h3>
+            <p
+              class="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]"
+            >
+              Live with a join code, or exported to PDF and text.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] border-t-2 border-divider py-[70px]"
+      >
+        <div
+          class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-center gap-[clamp(32px,5vw,64px)]"
+        >
+          <div>
+            <p
+              class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-700"
+            >
+              In the room
+            </p>
+            <h2
+              class="text-[32px] font-extrabold leading-[1.12] tracking-[-0.015em]"
+            >
+              Built for the room, not the browser tab
+            </h2>
+            <p
+              class="mt-[16px] max-w-[52ch] text-[15.5px] leading-[28px] text-ink/[0.78]"
+            >
+              Join codes big enough for the back row, questions that read on a phone held at arm's length, and results on the projector before the bell — or the coffee refill.
+            </p>
+          </div>
+          <div
+            class="aspect-[951/665] w-full overflow-hidden border-2 border-divider"
+          >
+            <img
+              alt="Quizwerk running a live quiz on a projector"
+              class="h-full w-full object-cover [filter:grayscale(1)_contrast(1.08)]"
+              data-nimg="1"
+              decoding="async"
+              height="665"
+              loading="lazy"
+              src="/_next/image?url=%2Fimages%2Fhquiz1.png&w=1920&q=75"
+              srcset="/_next/image?url=%2Fimages%2Fhquiz1.png&w=1080&q=75 1x, /_next/image?url=%2Fimages%2Fhquiz1.png&w=1920&q=75 2x"
+              style="color: transparent;"
+              width="951"
+            />
+          </div>
+        </div>
+      </section>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] border-t-2 border-divider py-[70px]"
+        id="pricing"
+      >
+        <p
+          class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-700"
+        >
+          Pricing
+        </p>
+        <h2
+          class="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]"
+        >
+          Pick a plan that fits how you train
+        </h2>
+        <div
+          class="mt-[42px] grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-[36px]"
+        >
+          <div
+            class="flex flex-col border-t-2 pt-[20px] border-divider"
+          >
+            <h3
+              class="text-[20px] font-extrabold tracking-[-0.015em]"
+            >
+              Free
+            </h3>
+            <p
+              class="mt-[10px] text-[44px] font-extrabold leading-none tracking-[-0.015em] [font-variant-numeric:tabular-nums]"
+            >
+              $0
+            </p>
+            <ul
+              class="mb-[28px] mt-[22px] flex-1 space-y-[12px]"
+            >
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                5 quizzes a month
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Basic question types
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Save and share quizzes
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Community templates
+              </li>
+            </ul>
+            <div>
+              <button
+                class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border-2 border-ink bg-transparent text-ink transition hover:bg-ink/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                Start free
+              </button>
+            </div>
+          </div>
+          <div
+            class="flex flex-col border-t-2 pt-[20px] border-brand"
+          >
+            <p
+              class="mb-[6px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700"
+            >
+              Most teams
+            </p>
+            <h3
+              class="text-[20px] font-extrabold tracking-[-0.015em]"
+            >
+              Pro
+            </h3>
+            <p
+              class="mt-[10px] text-[44px] font-extrabold leading-none tracking-[-0.015em] [font-variant-numeric:tabular-nums]"
+            >
+              $20
+              <span
+                class="ml-[6px] text-[15px] font-normal tracking-normal text-ink/70"
+              >
+                / month
+              </span>
+            </p>
+            <ul
+              class="mb-[28px] mt-[22px] flex-1 space-y-[12px]"
+            >
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Unlimited quiz generation
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Advanced question types
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Edit and customise questions
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Export to PDF and text
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Priority support
+              </li>
+            </ul>
+            <div>
+              <button
+                class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand bg-brand text-paper transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                Get Pro
+              </button>
+            </div>
+          </div>
+          <div
+            class="flex flex-col border-t-2 pt-[20px] border-divider"
+          >
+            <h3
+              class="text-[20px] font-extrabold tracking-[-0.015em]"
+            >
+              Premium
+            </h3>
+            <p
+              class="mt-[10px] text-[44px] font-extrabold leading-none tracking-[-0.015em] [font-variant-numeric:tabular-nums]"
+            >
+              $100
+              <span
+                class="ml-[6px] text-[15px] font-normal tracking-normal text-ink/70"
+              >
+                / year
+              </span>
+            </p>
+            <ul
+              class="mb-[28px] mt-[22px] flex-1 space-y-[12px]"
+            >
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Everything in Pro
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Early access to new features
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Personalised templates
+              </li>
+              <li
+                class="flex items-center gap-[12px] text-[15px]"
+              >
+                <span
+                  class="h-[8px] w-[8px] flex-none bg-brand"
+                />
+                Premium support
+              </li>
+            </ul>
+            <div>
+              <button
+                class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border-2 border-ink bg-transparent text-ink transition hover:bg-ink/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+              >
+                Go Premium
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section
+        class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] border-t-2 border-divider py-[70px]"
+      >
+        <p
+          class="mb-[16px] text-[13px] font-extrabold uppercase tracking-[0.08em] text-brand-700"
+        >
+          From classrooms and boardrooms
+        </p>
+        <div
+          class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[36px]"
+        >
+          <figure
+            class="border-t-2 border-divider pt-[20px]"
+          >
+            <blockquote
+              class="text-[19px] font-extrabold leading-[27px] tracking-[-0.015em]"
+            >
+              “We ran a 40-person compliance refresher off a join code on the projector. Scoring that used to take an evening happened before the room emptied.”
+            </blockquote>
+            <figcaption
+              class="mt-[14px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              Dana M. — Compliance trainer, logistics
+            </figcaption>
+          </figure>
+          <figure
+            class="border-t-2 border-divider pt-[20px]"
+          >
+            <blockquote
+              class="text-[19px] font-extrabold leading-[27px] tracking-[-0.015em]"
+            >
+              “Topic to printed handout inside the coffee break. My slide decks stopped being the bottleneck.”
+            </blockquote>
+            <figcaption
+              class="mt-[14px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              R. Okafor — L&D lead, fintech
+            </figcaption>
+          </figure>
+          <figure
+            class="border-t-2 border-divider pt-[20px]"
+          >
+            <blockquote
+              class="text-[19px] font-extrabold leading-[27px] tracking-[-0.015em]"
+            >
+              “My Friday revision quiz takes five minutes to set, and the class marks itself before the bell.”
+            </blockquote>
+            <figcaption
+              class="mt-[14px] text-[13px] uppercase tracking-[0.08em] text-ink/70"
+            >
+              T. Adeyemi — Secondary school teacher
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <section
+        class="bg-brand text-paper"
+      >
+        <div
+          class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] py-[84px]"
+        >
+          <h3
+            class="max-w-[18ch] text-[clamp(34px,4.2vw,56px)] font-extrabold leading-[1.06] tracking-[-0.02em]"
+          >
+            The next quiz writes itself.
+          </h3>
+          <button
+            class="inline-flex min-h-[44px] cursor-pointer items-center justify-center whitespace-nowrap px-[16px] py-[10px] text-[14px] font-extrabold leading-[1.2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border-2 border-paper text-paper transition hover:bg-paper/[0.12] focus-visible:outline-paper mt-[32px]"
+            type="button"
+          >
+            Generate your first quiz — free
+          </button>
+        </div>
+      </section>
+    </main>
+    <footer
+      class="mx-auto w-full max-w-[1200px] px-[clamp(20px,5vw,72px)] flex flex-wrap items-center justify-between gap-x-[28px] gap-y-[12px] py-[28px] text-[13px] text-ink/70"
+    >
+      <span
+        class="text-[15px] font-extrabold tracking-[-0.015em] text-ink"
+      >
+        Quizwerk
+      </span>
+      <span
+        class="flex flex-wrap gap-x-[24px] gap-y-[8px]"
+      >
+        <a
+          class="min-h-[44px] content-center hover:text-brand"
+          href="#product"
+        >
+          Product
+        </a>
+        <a
+          class="min-h-[44px] content-center hover:text-brand"
+          href="#categories"
+        >
+          Categories
+        </a>
+        <a
+          class="min-h-[44px] content-center hover:text-brand"
+          href="#pricing"
+        >
+          Pricing
+        </a>
+        <button
+          class="min-h-[44px] cursor-pointer hover:text-brand"
+          type="button"
+        >
+          Join a live quiz
+        </button>
+      </span>
+      <span>
+        © 2026 Quizwerk. All rights reserved.
+      </span>
+    </footer>
+  </div>
+</div>
+`;

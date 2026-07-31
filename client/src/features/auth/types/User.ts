@@ -1,3 +1,5 @@
+import type { PersonaCategory, PersonaUserType } from "@shared/config/persona";
+
 export interface User {
   id: string;
   username: string;
@@ -9,6 +11,9 @@ export interface User {
   location?: string;
   website?: string;
   avatar_color?: string;
+  persona_category?: PersonaCategory | null;
+  persona_user_type?: PersonaUserType | null;
+  persona_set_at?: string | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   subscription_plan?: string;
@@ -27,6 +32,8 @@ export interface UpdateProfilePayload {
   location?: string;
   website?: string;
   avatar_color?: string;
+  persona_category?: PersonaCategory;
+  persona_user_type?: PersonaUserType;
 }
 
 export interface UpdateProfileResponse {

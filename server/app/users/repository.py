@@ -16,6 +16,7 @@ from server.app.users.identity import (
     normalize_username,
     now_utc,
 )
+from server.app.users.persona import build_persona, get_persona
 from server.app.users.schemas import (
     CreateUserRequest,
     DeleteUserResponse,
@@ -46,6 +47,11 @@ def serialize_user_document(user: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
+    persona = get_persona(user)
+    persona_set_at = persona.get("set_at")
+    if isinstance(persona_set_at, datetime):
+        persona_set_at = persona_set_at.isoformat()
+
     return {
         "id": str(user["_id"]),
         "username": user["username"],
@@ -55,6 +61,9 @@ def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
         "location": get_profile_value(user, "location"),
         "website": get_profile_value(user, "website"),
         "avatar_color": get_profile_value(user, "avatar_color", "#143E6F"),
+        "persona_category": persona.get("category"),
+        "persona_user_type": persona.get("user_type"),
+        "persona_set_at": persona_set_at,
         "role": user.get("role", "user"),
         "status": coerce_user_status(user),
         "is_active": user.get("is_active", True),
@@ -325,6 +334,32 @@ async def backfill_user_identity_fields(users_collection: AsyncIOMotorCollection
         if legacy_auth_fields:
             update_doc["$unset"] = legacy_auth_fields
         await users_collection.update_one({"_id": user["_id"]}, update_doc)
+        updated_count += 1
+        if updated_count >= limit:
+            break
+    return updated_count
+
+
+async def backfill_user_persona_fields(
+    users_collection: AsyncIOMotorCollection, *, limit: int = 1000
+) -> int:
+    """Give pre-persona users an empty persona sub-document (see #119).
+
+    Kept separate from backfill_user_identity_fields so this pass can run on
+    its own without re-touching every identity field.
+    """
+    updated_count = 0
+    cursor = users_collection.find({"profile.persona": {"$exists": False}})
+    async for user in cursor:
+        await users_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "profile.persona": build_persona(),
+                    "schema_version": USER_SCHEMA_VERSION,
+                }
+            },
+        )
         updated_count += 1
         if updated_count >= limit:
             break

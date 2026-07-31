@@ -11,6 +11,7 @@ from server.app.db.core.redis import get_redis_client
 from server.app.email_platform.service import EmailService
 from server.app.users.identity import normalize_email, now_utc
 from server.app.users.models import UpdateProfileRequest, UpdateProfileResponse, UserOut
+from server.app.users.persona import persona_update_fields
 from server.app.users.repository import (
     build_user_out_payload,
     delete_user,
@@ -30,6 +31,9 @@ def get_user_profile_service(current_user: UserOut) -> dict:
         "location": current_user.location,
         "website": current_user.website,
         "avatar_color": current_user.avatar_color,
+        "persona_category": current_user.persona_category,
+        "persona_user_type": current_user.persona_user_type,
+        "persona_set_at": current_user.persona_set_at,
         "role": current_user.role,
         "status": current_user.status,
         "is_active": current_user.is_active,
@@ -60,6 +64,12 @@ async def update_user_profile_service(
         }.items()
         if value is not None
     }
+    update_data.update(
+        persona_update_fields(
+            profile_data.persona_category,
+            profile_data.persona_user_type,
+        )
+    )
     update_data["updated_at"] = now_utc()
 
     try:

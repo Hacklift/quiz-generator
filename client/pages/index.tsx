@@ -1,1 +1,1 @@
-export { default } from "@features/quiz/pages/HomePage";
+export { default } from "@features/home/QuizwerkHomePage";
