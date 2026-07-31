@@ -14,7 +14,7 @@ interface SidebarProps {
 
 export default function Sidebar({ onBrowseClick }: SidebarProps) {
   return (
-    <div className="flex flex-col justify-between h-full p-4 bg-[#f2f2f2]">
+    <div className="flex h-full flex-col justify-between bg-paper p-4">
       <div className="flex flex-col gap-3">
         <ProfileButton />
         <GenerateQuizButton />

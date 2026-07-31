@@ -12,7 +12,36 @@ import NavGenerateQuizButton from "./NavGenerateQuizButton";
 import Sidebar from "./Sidebar";
 import BrowseModal from "./modals/BrowseModal";
 import { useAuth } from "@features/auth/context/authContext";
+import { usePersona } from "@features/persona/context/personaContext";
 import NotificationBell from "@features/notifications/components/NotificationBell";
+import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
+
+/**
+ * Primary navigation, in the Quizwerk design language.
+ *
+ * The desktop and mobile menus render from this one list — they used to be
+ * two hand-maintained copies that drifted.
+ */
+type NavItem =
+  | { kind: "link"; label: string; href: string; authOnly?: boolean }
+  | { kind: "action"; label: string; action: "browse" };
+
+const NAV_ITEMS: NavItem[] = [
+  { kind: "link", label: "Home", href: "/" },
+  { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
+  { kind: "link", label: "Generate Quiz", href: "/generate" },
+  { kind: "action", label: "Categories", action: "browse" },
+  { kind: "link", label: "Pricing", href: "/#pricing" },
+];
+
+/** Signed-in shortcuts, shown only in the mobile drawer. */
+const MOBILE_WORKSPACE_LINKS = [
+  { label: "My Profile", href: "/profile" },
+  { label: "Saved Quizzes", href: "/saved_quiz" },
+  { label: "Popular Quizzes", href: "/popular" },
+  { label: "Folders", href: "/folders" },
+  { label: "Quiz History", href: "/quiz_history" },
+];
 
 const NavBar: React.FC = () => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
@@ -21,6 +50,7 @@ const NavBar: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { user, isAuthenticated, logout, isLoading } = useAuth();
+  const { definition: personaDefinition } = usePersona();
 
   const router = useRouter();
 
@@ -34,23 +64,36 @@ const NavBar: React.FC = () => {
     setIsSignUpOpen(true);
   };
 
+  const isActive = (href: string) => {
+    if (href === "/") {
+      return router.pathname === "/" && !router.asPath.includes("#");
+    }
+    if (href.startsWith("/#")) {
+      return router.asPath.endsWith(href.slice(1));
+    }
+    return router.pathname === href;
+  };
+
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !("authOnly" in item && item.authOnly) || isAuthenticated,
+  );
+
   return (
-    <>
+    <div className={archivo.className}>
       {!isLoading && isAuthenticated && (
         <>
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="hidden md:flex fixed top-4 left-4 z-[100] text-[#0F2654] text-2xl focus:outline-none bg-[#E0E2E5] p-2 rounded-full shadow-md"
+            aria-label="Toggle workspace sidebar"
+            className="fixed left-4 top-4 z-[100] hidden bg-brand p-2 text-paper transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:flex"
           >
             {isSidebarOpen ? <X /> : <Menu />}
           </button>
 
           <div
-            className={`
-              fixed top-0 left-0 h-full bg-[#F5F5F5] shadow-md z-50
-              transition-all duration-300
-              ${isSidebarOpen ? "w-64" : "w-0 overflow-hidden"}
-            `}
+            className={`fixed left-0 top-0 z-50 h-full border-r-2 border-divider bg-paper transition-all duration-300 ${
+              isSidebarOpen ? "w-64" : "w-0 overflow-hidden"
+            }`}
             style={{ paddingTop: "64px" }}
           >
             <Sidebar onBrowseClick={() => setIsBrowseModalOpen(true)} />
@@ -58,63 +101,61 @@ const NavBar: React.FC = () => {
         </>
       )}
 
-      <nav className="bg-[#E0E2E5] shadow-md fixed top-0 left-0 right-0 z-40 h-16 flex items-center">
-        <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 md:px-8 flex items-center justify-between">
+      <nav className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center border-b-2 border-divider bg-paper">
+        <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-[clamp(20px,5vw,72px)]">
           <Link
             href="/"
-            className="text-2xl sm:text-3xl font-bold text-[#0F2654]"
+            className="text-[18px] font-extrabold tracking-[-0.015em] text-ink"
           >
-            HQuiz
+            Quizwerk
           </Link>
 
-          <div className="hidden md:flex items-center space-x-8">
-            <Link
-              href="/"
-              className={`text-sm font-medium transition-all ${router.pathname === "/" && !router.asPath.includes("#") ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
-                }`}
-            >
-              Home
-            </Link>
-
-            <Link
-              href="/generate"
-              className={`text-sm font-medium transition-all ${router.pathname === "/generate" ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
-                }`}
-            >
-              Generate Quiz
-            </Link>
-
-            <button
-              onClick={() => setIsBrowseModalOpen(true)}
-              className={`text-sm font-medium transition-all ${isBrowseModalOpen ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
-                }`}
-            >
-              Categories
-            </button>
-
-            <Link
-              href="/#pricing"
-              className={`text-sm font-medium transition-all ${router.asPath.endsWith("#pricing") ? "text-[#0F2654] font-semibold" : "text-gray-500 hover:text-[#0F2654]"
-                }`}
-            >
-              Pricing
-            </Link>
+          <div className="hidden items-center gap-[28px] md:flex">
+            {visibleItems.map((item) =>
+              item.kind === "link" ? (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`text-[15px] transition ${
+                    isActive(item.href)
+                      ? "font-extrabold text-brand"
+                      : "text-ink hover:text-brand"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <button
+                  key={item.label}
+                  onClick={() => setIsBrowseModalOpen(true)}
+                  className={`text-[15px] transition ${
+                    isBrowseModalOpen
+                      ? "font-extrabold text-brand"
+                      : "text-ink hover:text-brand"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
           </div>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden items-center gap-[16px] md:flex">
             <NavGenerateQuizButton />
             {!isLoading && (
               <>
                 {isAuthenticated ? (
                   <>
                     <NotificationBell />
-                    <span className="text-[#0F2654] font-medium">
+                    <span className="text-[15px] text-ink">
                       Hi, {user?.username || "User"}
+                      {personaDefinition ? (
+                        <span className="ml-[6px] text-[13px] text-ink/60">
+                          · {personaDefinition.label}
+                        </span>
+                      ) : null}
                     </span>
-                    <button
-                      onClick={logout}
-                      className="bg-[#0F2654] text-white px-4 py-2 rounded-lg hover:bg-[#173773] transition-all"
-                    >
+                    <button onClick={logout} className={BTN_PRIMARY}>
                       Logout
                     </button>
                   </>
@@ -130,7 +171,7 @@ const NavBar: React.FC = () => {
 
           <button
             onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-            className="md:hidden text-[#0F2654] text-2xl focus:outline-none p-2 rounded-full"
+            className="p-2 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
             aria-label="Toggle mobile top-nav"
           >
             {isMobileNavOpen ? <X /> : <Menu />}
@@ -141,137 +182,94 @@ const NavBar: React.FC = () => {
       <div className="h-16" />
 
       <div
-        className={`
-          fixed top-16 left-0 w-full bg-white shadow-md z-30
-          md:hidden transition-transform duration-200 overflow-y-auto max-h-[calc(100vh-64px)]
-          ${isMobileNavOpen ? "translate-y-0" : "-translate-y-full"}
-        `}
+        className={`fixed left-0 top-16 z-30 max-h-[calc(100vh-64px)] w-full overflow-y-auto border-b-2 border-divider bg-paper transition-transform duration-200 md:hidden ${
+          isMobileNavOpen ? "translate-y-0" : "-translate-y-full"
+        }`}
       >
-        <div className="flex flex-col px-4 py-4 space-y-4">
-          <Link
-            href="/"
-            onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.pathname === "/" && !router.asPath.includes("#") ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
-              }`}
-          >
-            Home
-          </Link>
-
-          <Link
-            href="/generate"
-            onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.pathname === "/generate" ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
-              }`}
-          >
-            Generate Quiz
-          </Link>
-
-          <button
-            onClick={() => {
-              setIsMobileNavOpen(false);
-              setIsBrowseModalOpen(true);
-            }}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all text-left ${isBrowseModalOpen ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
-              }`}
-          >
-            Categories
-          </button>
-
-          <Link
-            href="/#pricing"
-            onClick={() => setIsMobileNavOpen(false)}
-            className={`text-base font-medium px-3 py-2 rounded-md transition-all ${router.asPath.endsWith("#pricing") ? "bg-[#0F2654] text-white font-semibold shadow-sm" : "text-gray-600 hover:bg-gray-100"
-              }`}
-          >
-            Pricing
-          </Link>
+        <div className="flex flex-col px-4 py-4">
+          {visibleItems.map((item) =>
+            item.kind === "link" ? (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setIsMobileNavOpen(false)}
+                className={`min-h-[44px] content-center border-t-2 border-divider px-3 py-2 text-[16px] transition ${
+                  isActive(item.href)
+                    ? "font-extrabold text-brand"
+                    : "text-ink hover:bg-ink/[0.05]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <button
+                key={item.label}
+                onClick={() => {
+                  setIsMobileNavOpen(false);
+                  setIsBrowseModalOpen(true);
+                }}
+                className="min-h-[44px] border-t-2 border-divider px-3 py-2 text-left text-[16px] text-ink transition hover:bg-ink/[0.05]"
+              >
+                {item.label}
+              </button>
+            ),
+          )}
 
           {!isLoading && isAuthenticated && (
             <>
-              <div className="border-t border-gray-200 my-2 pt-2">
-                <p className="px-3 text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
-                  Dashboard Menu
-                </p>
-              </div>
-
-              <Link
-                href="/profile"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="text-base font-medium px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 transition-all flex items-center gap-2"
-              >
-                👤 My Profile
-              </Link>
-
-              <Link
-                href="/saved_quiz"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="text-base font-medium px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 transition-all flex items-center gap-2"
-              >
-                💾 Saved Quizzes
-              </Link>
-
-              <Link
-                href="/popular"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="text-base font-medium px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 transition-all flex items-center gap-2"
-              >
-                🌟 Popular Quizzes
-              </Link>
-
-              <Link
-                href="/folders"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="text-base font-medium px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 transition-all flex items-center gap-2"
-              >
-                📁 Folders
-              </Link>
-
-              <Link
-                href="/quiz_history"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="text-base font-medium px-3 py-2 rounded-md text-gray-600 hover:bg-gray-100 transition-all flex items-center gap-2"
-              >
-                🕘 Quiz History
-              </Link>
+              <p className="mb-1 mt-4 px-3 text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
+                Workspace
+              </p>
+              {MOBILE_WORKSPACE_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="min-h-[44px] content-center border-t-2 border-divider px-3 py-2 text-[16px] text-ink transition hover:bg-ink/[0.05]"
+                >
+                  {link.label}
+                </Link>
+              ))}
             </>
           )}
 
-          <div className="border-t border-gray-200 my-2" />
-          <NavGenerateQuizButton className="w-full text-center" />
-          {!isLoading && (
-            <>
-              {isAuthenticated ? (
-                <>
-                  <span className="text-[#0F2654] text-center">
-                    Hi, {user?.username || "User"}
-                  </span>
-                  <div className="flex justify-center">
-                    <NotificationBell />
-                  </div>
-                  <button
-                    onClick={() => {
-                      logout();
-                      setIsMobileNavOpen(false);
-                    }}
-                    className="bg-[#0F2654] text-white px-4 py-2 rounded-lg hover:bg-[#173773] transition-all w-full"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <>
-                  <SignInButton
-                    onOpen={() => setIsLoginOpen(true)}
-                    className="w-full text-center"
-                  />
-                  <SignUpButton
-                    onOpen={() => setIsSignUpOpen(true)}
-                    className="w-full text-center"
-                  />
-                </>
-              )}
-            </>
-          )}
+          <div className="mt-4 flex flex-col gap-3 border-t-2 border-divider pt-4">
+            <NavGenerateQuizButton className="w-full text-center" />
+            {!isLoading && (
+              <>
+                {isAuthenticated ? (
+                  <>
+                    <span className="text-center text-[15px] text-ink">
+                      Hi, {user?.username || "User"}
+                    </span>
+                    <div className="flex justify-center">
+                      <NotificationBell />
+                    </div>
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsMobileNavOpen(false);
+                      }}
+                      className={`${BTN_PRIMARY} w-full`}
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <SignInButton
+                      onOpen={() => setIsLoginOpen(true)}
+                      className="w-full text-center"
+                    />
+                    <SignUpButton
+                      onOpen={() => setIsSignUpOpen(true)}
+                      className="w-full text-center"
+                    />
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -289,7 +287,7 @@ const NavBar: React.FC = () => {
         isOpen={isBrowseModalOpen}
         onClose={() => setIsBrowseModalOpen(false)}
       />
-    </>
+    </div>
   );
 };
 
