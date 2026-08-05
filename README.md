@@ -25,3 +25,5 @@ Client on http://localhost:3000, API on http://localhost:8000.
   — how to fill in a persona dashboard view.
 - [ENGINEERING_REVIEW.md](ENGINEERING_REVIEW.md) — 2026-07 review and what was
   actioned.
+- [CLAUDE_PR_REVIEW.md](CLAUDE_PR_REVIEW.md) — how automated Claude PR reviews
+  run, how to trigger them, and the required repository secret.
