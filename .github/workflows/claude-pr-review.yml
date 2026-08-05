@@ -1,0 +1,175 @@
+name: Claude PR Review
+
+# Provides:
+# 1. An automatic first-pass review when a PR is opened or updated.
+# 2. An on-demand review when a team member comments "@claude ..." on a PR.
+#
+# Claude's feedback is advisory only. Human reviewers still approve or request
+# changes through GitHub.
+#
+# Required repository configuration:
+# - Install the official Claude GitHub App for this repository.
+# - Add CLAUDE_CODE_OAUTH_TOKEN under:
+#   Settings -> Secrets and variables -> Actions.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+      - reopened
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  actions: read
+  id-token: write
+
+jobs:
+  auto-review:
+    name: Automatic review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Skip drafts, Dependabot updates and PRs originating from forks.
+    # Fork PRs do not receive repository secrets under the pull_request event.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    # When new commits are pushed, cancel the outdated review and review the
+    # latest state of the PR instead.
+    concurrency:
+      group: claude-auto-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude PR review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          use_sticky_comment: true
+          additional_permissions: |
+            actions: read
+
+          prompt: |
+            REPOSITORY: ${{ github.repository }}
+            PULL REQUEST: ${{ github.event.pull_request.number }}
+
+            Review this pull request as an automated first-pass reviewer.
+
+            Prioritise:
+            - Correctness bugs and faulty business logic.
+            - Security, authentication and authorization problems.
+            - Runtime errors and unhandled failure cases.
+            - Breaking API or database changes.
+            - Data validation and error-handling gaps.
+            - Missing or inadequate tests.
+            - Performance or concurrency problems where materially relevant.
+
+            Quiz Generator project context:
+            - The backend uses Python and FastAPI.
+            - The frontend uses Next.js, React and TypeScript.
+            - MongoDB is used for persistent application data.
+            - The application includes authentication, quiz creation and
+              delivery, persona-based experiences, exports and email flows.
+            - Preserve API compatibility unless a breaking change is deliberate
+              and clearly documented.
+            - Pay close attention to MongoDB ObjectId handling, missing or null
+              values, session and authorization boundaries, and backend/frontend
+              contract consistency.
+            - Do not suggest disabling established linting or type-checking
+              rules merely to make a warning disappear.
+
+            For every material finding:
+            - Identify the relevant file and line.
+            - Explain the concrete failure case or risk.
+            - Recommend a specific correction.
+            - Distinguish confirmed problems from uncertain concerns.
+
+            Skip formatting nitpicks already handled by formatters or linters.
+            Do not merely restate the diff. If the change appears sound, say so
+            briefly rather than inventing findings.
+
+            Post the final review feedback directly on the pull request.
+
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(git:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(find:*),Bash(wc:*),Bash(sed:*),mcp__github_inline_comment__create_inline_comment"
+
+  on-demand:
+    name: On-demand review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Runs only when a trusted human writes "@claude ..." on a pull request.
+    # Plain issues, bot comments and external public comments cannot retrigger
+    # the workflow.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      contains(github.event.comment.body, '@claude')
+
+    concurrency:
+      group: claude-on-demand-${{ github.event.comment.id }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Resolve pull-request metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json headRefName,isCrossRepository)"
+          is_cross_repository="$(printf '%s' "$pr_json" | jq -r '.isCrossRepository')"
+          head_ref="$(printf '%s' "$pr_json" | jq -r '.headRefName')"
+          echo "is_cross_repository=$is_cross_repository" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Stop for fork pull requests
+        if: steps.pr.outputs.is_cross_repository == 'true'
+        run: |
+          echo "Skipping Claude on-demand review for fork pull request without repository secrets."
+
+      - name: Check out pull-request branch
+        if: steps.pr.outputs.is_cross_repository == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_ref }}
+          fetch-depth: 0
+
+      - name: Run on-demand Claude review
+        if: steps.pr.outputs.is_cross_repository == 'false'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          use_sticky_comment: true
+          additional_permissions: |
+            actions: read
+
+          # No fixed prompt is required here. The "@claude ..." PR comment is
+          # used as the instruction.
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(git:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(find:*),Bash(wc:*),Bash(sed:*),mcp__github_inline_comment__create_inline_comment"
