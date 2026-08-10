@@ -1,13 +1,14 @@
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 const apiWsUrl = apiBaseUrl.replace(/^http/i, "ws");
+const isDevelopment = process.env.NODE_ENV !== "production";
 
 // Next.js injects inline bootstrap scripts (__NEXT_DATA__), so script-src
 // needs 'unsafe-inline' until a nonce-based CSP is introduced. This still
 // blocks externally injected scripts, framing, and form exfiltration.
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
