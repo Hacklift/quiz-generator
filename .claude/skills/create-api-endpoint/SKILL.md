@@ -1,69 +1,70 @@
 ---
 name: create-api-endpoint
-description: Workflow for adding a new FastAPI endpoint, Pydantic schema, CRUD/repository handler, service function, and router registration in server/.
+description: Complete workflow for creating or modifying FastAPI endpoints, Pydantic v2 schemas, service functions, CRUD/repository handlers, rate limiting, and pytest cases in server/.
 ---
 
 # Create API Endpoint Skill
 
-Follow this workflow when adding or extending an API endpoint in the FastAPI backend (`server/`).
+Follow this workflow when building or updating endpoints in the FastAPI backend (`server/`).
 
 ## Step 1: Define Pydantic Request & Response Schemas
-Create or update models in `server/app/db/models/` or `server/app/schemas/`:
-- Use Pydantic v2 syntax.
-- Ensure all MongoDB `ObjectId` fields are serialized to string `id: str` in responses.
-- Define explicit field types, defaults, and field validations.
+Define Pydantic v2 models in `server/app/db/models/` or domain schema files:
+- Never leak raw MongoDB `ObjectId` instances in response models. Convert `_id` to `id: str`.
+- Specify field descriptions, constraints (`min_length`, `ge`), and defaults.
 
 ```python
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
-class ItemCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
+class QuizFilterRequest(BaseModel):
+    category: Optional[str] = None
+    limit: int = Field(default=20, ge=1, le=100)
 
-class ItemResponse(BaseModel):
+class QuizSummaryResponse(BaseModel):
     id: str
     title: str
-    description: Optional[str] = None
-    user_id: str
+    category: str
+    question_count: int
 ```
 
 ## Step 2: Implement CRUD / Repository Function
-Add raw database operations in `server/app/db/crud/` or `server/app/quiz/repositories/v2/`:
-- Keep CRUD operations isolated from HTTP requests.
-- Filter operations by `user_id` when handling user-owned data to enforce tenancy.
-- Handle database exceptions cleanly.
+Add database operations in `server/app/db/crud/` or `server/app/quiz/repositories/v2/`:
+- Ensure queries filter by `user_id` when handling private data to enforce tenancy.
+- Handle database execution safely.
 
 ## Step 3: Implement Service Layer Logic
-Add business logic and authorization in `server/app/db/services/` or `server/app/services/`:
-- Enforce business validation rules (e.g. check resource existence, admin roles).
-- Raise `HTTPException` with appropriate status codes (`400`, `401`, `403`, `404`).
+Add business validation and authorization in `server/app/<domain>/services/`:
+- Verify caller permissions (e.g. check admin role or resource ownership).
+- Raise explicit `HTTPException(status_code=..., detail=...)`.
 
 ## Step 4: Add FastAPI Route Handler
-Create or update routes in `server/app/db/routes/` or appropriate domain route file under `server/app/`:
-- Protect authenticated endpoints with `Depends(get_current_user)`.
-- Decorate with `@limiter.limit(...)` if the endpoint is public or resource-intensive.
+Create or update route functions in `server/app/<domain>/routes/` or `server/app/db/routes/`:
+- Protect private endpoints using `current_user: dict = Depends(get_current_user)`.
+- Decorate with `@limiter.limit(...)` if the endpoint is public or CPU-intensive.
 - Use explicit `response_model=...` parameters.
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException, status
 from server.app.dependancies import get_current_user
+from server.app.core.rate_limiter import limiter
 
 router = APIRouter()
 
-@router.post("/", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)
-async def create_item(
-    payload: ItemCreate,
+@router.post("/search", response_model=List[QuizSummaryResponse])
+@limiter.limit("30/minute")
+async def search_quizzes(
+    request: Request,
+    payload: QuizFilterRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    return await item_service.create_item_for_user(current_user["id"], payload)
+    return await quiz_service.search_user_quizzes(current_user["id"], payload)
 ```
 
-## Step 5: Register Route in Main API Router
-Mount the router inside `server/app/api/router.py`:
+## Step 5: Mount Router in Main API Router
+Ensure the router is registered inside `server/app/api/router.py`:
 ```python
-router.include_router(new_feature_router, prefix="/api/new-feature", tags=["NewFeature"])
+router.include_router(feature_router, prefix="/api/feature", tags=["Feature"])
 ```
 
-## Step 6: Add Unit Test
-Add a corresponding test file under `server/tests/` using `pytest` and `httpx.AsyncClient` to verify success and authorization failure cases.
+## Step 6: Write Pytest Test Case
+Create a test in `server/tests/` to verify success, validation errors (400), unauthenticated access (401), and unauthorized access (403).

@@ -1,66 +1,57 @@
 ---
 name: create-frontend-feature
-description: Workflow for creating feature components, API helpers, pages, and route constants in client/ using feature-first architecture.
+description: Complete workflow for creating or extending Next.js feature modules, API helpers, UI components, pages router integration, and Jest tests in client/.
 ---
 
 # Create Frontend Feature Skill
 
-Follow this workflow when building or expanding a frontend feature in `client/`.
+Follow this workflow when building or expanding frontend features in `client/`.
 
-## Step 1: Create Feature Directory Structure
-Locate or create your feature folder inside `client/src/features/<feature_name>/`:
+## Step 1: Feature Directory Organization
+Locate or create your feature directory under `client/src/features/<feature_name>/`:
 ```text
 client/src/features/<feature_name>/
 ├── api/          # Typed API helper functions
-├── components/   # Feature-specific UI components
-├── pages/        # Main page components (if applicable)
-├── types/        # Feature TypeScript interfaces
-└── context/      # React contexts (if state is shared)
+├── components/   # React UI components
+├── pages/        # Feature view pages
+├── types/        # TypeScript interfaces & models
+└── context/      # React contexts (if shared state is needed)
 ```
 
-## Step 2: Define TypeScript Models & Interfaces
-Define clear request/response models in `types/` or `client/interfaces/`:
+## Step 2: Define TypeScript Interfaces
+Define strict types for API payloads and component props in `types/` or `client/interfaces/`:
 ```typescript
-export interface FeatureItem {
+export interface QuizItem {
   id: string;
   title: string;
-  createdAt: string;
-}
-
-export interface CreateFeaturePayload {
-  title: string;
+  category: string;
+  questionCount: number;
 }
 ```
 
 ## Step 3: Implement Typed API Helpers
-Create API functions using the shared Axios client in `api/<feature>Api.ts` or `client/lib/functions/`:
-- Use relative backend paths (`/api/...` or `/auth/...`).
-- Let the central Axios interceptor manage JWT Bearer headers and token auto-refresh.
+Create API functions in `api/<feature>Api.ts` using the central Axios client (`@shared/api/http`):
+- Do not manually attach `Authorization` headers; the Axios interceptor handles JWT token injection and auto-refresh on 401.
 
 ```typescript
 import { http } from "@shared/api/http";
-import { FeatureItem, CreateFeaturePayload } from "../types";
+import { QuizItem } from "../types";
 
-export const fetchFeatureItems = async (): Promise<FeatureItem[]> => {
-  const response = await http.get("/api/feature-items");
-  return response.data;
-};
-
-export const createFeatureItem = async (payload: CreateFeaturePayload): Promise<FeatureItem> => {
-  const response = await http.post("/api/feature-items", payload);
+export const getFeatureQuizzes = async (): Promise<QuizItem[]> => {
+  const response = await http.get("/api/feature-quizzes");
   return response.data;
 };
 ```
 
-## Step 4: Add UI Components
-Build modular, typed React components using Tailwind CSS and design tokens from `client/src/shared/ui/quizwerk.ts`:
+## Step 4: Build Accessible React Components
+Construct components using Tailwind CSS and tokens from `client/src/shared/ui/quizwerk.ts`:
 - Ensure proper accessibility attributes (`aria-*`, `role`).
-- Handle loading, empty, and error states gracefully.
+- Handle loading, error, and empty states.
 
-## Step 5: Register Route in Pages Router
-For user-accessible pages, create a page under `client/pages/`:
-1. Add route path constant in `client/constants/patterns/routes.ts` or `@shared/config/patterns/routes`.
-2. Export the page from `client/pages/<route_name>.tsx`:
+## Step 5: Mount Route in Pages Router
+For new pages:
+1. Define route path constant in `client/constants/patterns/routes.ts` or `@shared/config/patterns/routes`.
+2. Create page entry in `client/pages/<route_name>.tsx`:
 
 ```tsx
 export { default } from "@features/<feature_name>/pages/<FeaturePage>";
@@ -68,5 +59,9 @@ export { default } from "@features/<feature_name>/pages/<FeaturePage>";
 
 3. Wrap with `RequireAuth` if the page requires authentication.
 
-## Step 6: Verify Build & Types
-Run `pnpm exec tsc --noEmit` and `pnpm lint` in `client/` to verify zero type regressions.
+## Step 6: Verify Type Safety & Linting
+Execute type check and linting from `client/`:
+```bash
+pnpm exec tsc --noEmit
+pnpm lint
+```
