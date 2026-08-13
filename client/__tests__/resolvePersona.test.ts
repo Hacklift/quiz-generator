@@ -88,6 +88,31 @@ describe("persona storage", () => {
       readStoredPersonaTopic({ category: "corporate", userType: "hr" }),
     ).toBeNull();
   });
+
+  test("preserves topic when rewriting the same stored persona without topic", () => {
+    const persona = { category: "school" as const, userType: "teacher" as const };
+
+    writeStoredPersona(persona, { topic: "Photosynthesis" });
+    writeStoredPersona(persona);
+
+    expect(readStoredPersonaTopic(persona)).toBe("Photosynthesis");
+  });
+
+  test("clears old topic when storing a different persona without topic", () => {
+    writeStoredPersona(
+      { category: "school", userType: "teacher" },
+      { topic: "Photosynthesis" },
+    );
+
+    const nextPersona = {
+      category: "corporate" as const,
+      userType: "hr" as const,
+    };
+    writeStoredPersona(nextPersona);
+
+    expect(readStoredPersona()).toEqual(nextPersona);
+    expect(readStoredPersonaTopic(nextPersona)).toBeNull();
+  });
 });
 
 describe("resolvePersona precedence", () => {

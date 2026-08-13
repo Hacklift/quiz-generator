@@ -224,6 +224,10 @@ class TestUpdateProfileService:
         assert update_doc["profile.persona.category"] == "corporate"
         assert update_doc["profile.persona.user_type"] == "hr"
         assert "updated_at" in update_doc
+        assert collection.find_one.await_args.args[0] == {
+            "_id": user_id,
+            "status": {"$ne": "deleted"},
+        }
 
     @pytest.mark.asyncio
     async def test_leaves_persona_untouched_when_not_supplied(self):
@@ -284,3 +288,29 @@ class TestUpdatePersonaService:
         assert update_doc["profile.persona.user_type"] == "employee"
         assert update_doc["profile.persona.source"] == "inferred"
         assert isinstance(update_doc["profile.persona.set_at"], datetime)
+        assert collection.find_one.await_args.args[0] == {
+            "_id": user_id,
+            "status": {"$ne": "deleted"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_treats_deleted_user_between_update_and_fetch_as_not_found(self):
+        user_id = ObjectId()
+        collection = AsyncMock()
+        collection.update_one.return_value = AsyncMock(modified_count=1)
+        collection.find_one.return_value = None
+
+        current_user = type("CurrentUser", (), {"id": str(user_id)})()
+
+        with pytest.raises(Exception) as exc:
+            await update_user_persona_service(
+                UpdatePersonaRequest(
+                    persona_category="school",
+                    persona_user_type="teacher",
+                ),
+                current_user,
+                collection,
+            )
+
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "User not found after update"

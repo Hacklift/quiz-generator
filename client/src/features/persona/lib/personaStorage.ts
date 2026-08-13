@@ -75,10 +75,15 @@ export function writeStoredPersona(
   if (typeof window === "undefined") return;
 
   try {
+    const existingPersona = readStoredPersona();
+    const existingTopic = readStoredPersonaTopic(persona);
     const topic =
       typeof context.topic === "string"
         ? context.topic.trim().slice(0, MAX_STORED_TOPIC_LENGTH)
-        : "";
+        : existingPersona?.category === persona.category &&
+            existingPersona?.userType === persona.userType
+          ? existingTopic || ""
+          : "";
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({

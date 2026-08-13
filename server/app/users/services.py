@@ -94,7 +94,9 @@ async def update_user_profile_service(
         if not user_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    updated_user = await users_collection.find_one({"_id": user_object_id})
+    updated_user = await users_collection.find_one(
+        {"_id": user_object_id, "status": {"$ne": "deleted"}}
+    )
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -152,7 +154,9 @@ async def update_user_persona_service(
         if not user_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    updated_user = await users_collection.find_one({"_id": user_object_id})
+    updated_user = await users_collection.find_one(
+        {"_id": user_object_id, "status": {"$ne": "deleted"}}
+    )
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
