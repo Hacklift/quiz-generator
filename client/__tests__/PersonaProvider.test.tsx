@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   PersonaProvider,
   usePersona,
@@ -7,7 +7,11 @@ import {
 
 const mockRefreshUser = jest.fn();
 
-let mockRouter = {
+let mockRouter: {
+  asPath: string;
+  pathname: string;
+  query: Record<string, string>;
+} = {
   asPath:
     "/generate?persona=lecturer&category=school&topic=Introduction+to+microeconomics",
   pathname: "/generate",
@@ -32,11 +36,16 @@ jest.mock("@features/auth/context/authContext", () => ({
 }));
 
 function PersonaProbe() {
-  const { persona, source } = usePersona();
+  const { persona, source, clearPersona } = usePersona();
   return (
-    <p data-testid="persona-state">
-      {persona ? `${persona.category}:${persona.userType}:${source}` : "none"}
-    </p>
+    <>
+      <p data-testid="persona-state">
+        {persona ? `${persona.category}:${persona.userType}:${source}` : "none"}
+      </p>
+      <button type="button" onClick={clearPersona}>
+        Clear persona
+      </button>
+    </>
   );
 }
 
@@ -73,6 +82,90 @@ describe("PersonaProvider", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(setItemSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem("quizwerk.persona") || "{}")).toEqual(
+      {
+        category: "school",
+        userType: "lecturer",
+        topic: "Introduction to microeconomics",
+        v: 1,
+      },
+    );
+
+    setItemSpy.mockRestore();
+  });
+
+  test("clearPersona clears local storage and cached stored persona state", async () => {
+    localStorage.setItem(
+      "quizwerk.persona",
+      JSON.stringify({
+        category: "corporate",
+        userType: "hr",
+        topic: "Onboarding checklist",
+        v: 1,
+      }),
+    );
+    mockRouter = {
+      asPath: "/generate",
+      pathname: "/generate",
+      query: {},
+    };
+
+    render(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("persona-state")).toHaveTextContent(
+        "corporate:hr:storage",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear persona" }));
+
+    expect(localStorage.getItem("quizwerk.persona")).toBeNull();
+    expect(screen.getByTestId("persona-state")).toHaveTextContent("none");
+  });
+
+  test("does not rewrite matching stored persona when query has no topic", async () => {
+    localStorage.setItem(
+      "quizwerk.persona",
+      JSON.stringify({
+        category: "school",
+        userType: "lecturer",
+        topic: "Introduction to microeconomics",
+        v: 1,
+      }),
+    );
+    mockRouter = {
+      asPath: "/generate?persona=lecturer&category=school",
+      pathname: "/generate",
+      query: {
+        persona: "lecturer",
+        category: "school",
+      },
+    };
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+
+    render(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "school:lecturer:query",
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("persona-state")).toHaveTextContent(
+        "school:lecturer:query",
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(setItemSpy).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem("quizwerk.persona") || "{}")).toEqual(
       {
         category: "school",

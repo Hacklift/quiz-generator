@@ -35,7 +35,7 @@ export function readStoredPersona(): Persona | null {
 }
 
 export function readStoredPersonaTopic(persona?: Persona | null): string | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !persona) return null;
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -53,10 +53,9 @@ export function readStoredPersonaTopic(persona?: Persona | null): string | null 
 
     const storedPersona = parsePersona(parsed.category, parsed.userType);
     if (
-      persona &&
-      (!storedPersona ||
-        storedPersona.category !== persona.category ||
-        storedPersona.userType !== persona.userType)
+      !storedPersona ||
+      storedPersona.category !== persona.category ||
+      storedPersona.userType !== persona.userType
     ) {
       return null;
     }

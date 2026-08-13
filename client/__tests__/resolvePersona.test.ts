@@ -89,6 +89,16 @@ describe("persona storage", () => {
     ).toBeNull();
   });
 
+  test("does not return a stored topic without a matching persona", () => {
+    writeStoredPersona(
+      { category: "corporate", userType: "hr" },
+      { topic: "Onboarding checklist" },
+    );
+
+    expect(readStoredPersonaTopic(null)).toBeNull();
+    expect(readStoredPersonaTopic()).toBeNull();
+  });
+
   test("preserves topic when rewriting the same stored persona without topic", () => {
     const persona = { category: "school" as const, userType: "teacher" as const };
 
