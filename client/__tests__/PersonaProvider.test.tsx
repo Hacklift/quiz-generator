@@ -6,6 +6,22 @@ import {
 } from "@features/persona/context/personaContext";
 
 const mockRefreshUser = jest.fn();
+const guestAuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  refreshUser: mockRefreshUser,
+};
+
+let mockAuthState: {
+  user: {
+    persona_category?: string | null;
+    persona_user_type?: string | null;
+  } | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  refreshUser: typeof mockRefreshUser;
+} = guestAuthState;
 
 let mockRouter: {
   asPath: string;
@@ -27,12 +43,7 @@ jest.mock("next/router", () => ({
 }));
 
 jest.mock("@features/auth/context/authContext", () => ({
-  useAuth: () => ({
-    user: null,
-    isAuthenticated: false,
-    isLoading: false,
-    refreshUser: mockRefreshUser,
-  }),
+  useAuth: () => mockAuthState,
 }));
 
 function PersonaProbe() {
@@ -53,6 +64,7 @@ describe("PersonaProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     mockRefreshUser.mockReset();
+    mockAuthState = guestAuthState;
     mockRouter = {
       asPath:
         "/generate?persona=lecturer&category=school&topic=Introduction+to+microeconomics",
@@ -92,6 +104,44 @@ describe("PersonaProvider", () => {
     );
 
     setItemSpy.mockRestore();
+  });
+
+  test("does not leak authenticated profile persona after logout", async () => {
+    mockRouter = {
+      asPath: "/generate",
+      pathname: "/generate",
+      query: {},
+    };
+    mockAuthState = {
+      ...guestAuthState,
+      user: {
+        persona_category: "school",
+        persona_user_type: "teacher",
+      },
+      isAuthenticated: true,
+    };
+
+    const { rerender } = render(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "school:teacher:profile",
+    );
+
+    mockAuthState = guestAuthState;
+    rerender(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("persona-state")).toHaveTextContent("none"),
+    );
+    expect(localStorage.getItem("quizwerk.persona")).toBeNull();
   });
 
   test("clearPersona clears local storage and cached stored persona state", async () => {

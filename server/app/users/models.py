@@ -217,6 +217,10 @@ class UpdatePersonaRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_persona(self):
+        if not self.persona_category.strip() or not self.persona_user_type.strip():
+            raise ValueError(
+                "persona_category and persona_user_type must be non-empty strings"
+            )
         if not persona_pair_is_valid(self.persona_category, self.persona_user_type):
             raise ValueError(
                 "persona_user_type must belong to persona_category, "

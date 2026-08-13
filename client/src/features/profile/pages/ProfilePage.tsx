@@ -331,7 +331,7 @@ export default function ProfilePage() {
       ? "bg-green-100 text-green-800"
       : billingStatus === "past_due"
         ? "bg-amber-100 text-amber-800"
-      : "bg-gray-100 text-gray-700";
+        : "bg-gray-100 text-gray-700";
   const personaLabel =
     categoryDefinition && definition
       ? `${categoryDefinition.label} · ${definition.label}`

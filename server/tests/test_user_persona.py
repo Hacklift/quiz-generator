@@ -168,6 +168,20 @@ class TestUpdatePersonaRequest:
                 persona_user_type="teacher",
             )
 
+    def test_rejects_empty_strings(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="",
+                persona_user_type="",
+            )
+
+    def test_rejects_blank_strings(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="   ",
+                persona_user_type="teacher",
+            )
+
     def test_rejects_unknown_source(self):
         with pytest.raises(ValidationError):
             UpdatePersonaRequest(
