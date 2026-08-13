@@ -19,6 +19,7 @@ import { updatePersona } from "@features/persona/api/personaApi";
 import {
   clearStoredPersona,
   readStoredPersona,
+  readStoredPersonaTopic,
   writeStoredPersona,
 } from "@features/persona/lib/personaStorage";
 import { resolvePersona } from "@features/persona/lib/resolvePersona";
@@ -40,6 +41,9 @@ const EMPTY_STATE: PersonaState = {
 };
 
 const PersonaContext = createContext<PersonaState>(EMPTY_STATE);
+
+const samePersona = (first: Persona | null, second: Persona | null) =>
+  first?.category === second?.category && first?.userType === second?.userType;
 
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
@@ -80,14 +84,31 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   }, [override, storedPersona, user, router.query]);
 
   useEffect(() => {
-    if (resolved.source === "query" && resolved.persona) {
-      const topic = Array.isArray(router.query?.topic)
-        ? router.query.topic[0]
-        : router.query?.topic;
+    if (resolved.source !== "query" || !resolved.persona) {
+      return;
+    }
+
+    const topic = Array.isArray(router.query?.topic)
+      ? router.query.topic[0]
+      : router.query?.topic;
+
+    const normalizedTopic =
+      typeof topic === "string" ? topic.trim().slice(0, 300) : "";
+    const storedTopic = readStoredPersonaTopic(resolved.persona) || "";
+    const isStoredPersonaCurrent = samePersona(storedPersona, resolved.persona);
+
+    if (!isStoredPersonaCurrent || storedTopic !== normalizedTopic) {
       writeStoredPersona(resolved.persona, { topic });
+    }
+    if (!isStoredPersonaCurrent) {
       setStoredPersona(resolved.persona);
     }
-  }, [resolved.persona, resolved.source, router.query]);
+  }, [
+    resolved.persona,
+    resolved.source,
+    router.query?.topic,
+    storedPersona,
+  ]);
 
   const setPersona = useCallback(
     async (
