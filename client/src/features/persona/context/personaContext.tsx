@@ -4,6 +4,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -21,7 +22,10 @@ import {
   writeStoredPersona,
 } from "@features/persona/lib/personaStorage";
 import { resolvePersona } from "@features/persona/lib/resolvePersona";
-import type { PersonaState } from "@features/persona/types/persona";
+import type {
+  PersonaState,
+  PersonaWriteSource,
+} from "@features/persona/types/persona";
 
 const EMPTY_STATE: PersonaState = {
   persona: null,
@@ -44,6 +48,17 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   // Local override so a fresh pick renders immediately, before the profile
   // round-trip completes.
   const [override, setOverride] = useState<Persona | null>(null);
+  const [storedPersona, setStoredPersona] = useState<Persona | null>(null);
+
+  useEffect(() => {
+    setStoredPersona(readStoredPersona());
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated && override && !storedPersona) {
+      setOverride(null);
+    }
+  }, [isAuthenticated, override, storedPersona]);
 
   const resolved = useMemo(() => {
     if (override) {
@@ -60,19 +75,44 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         persona: (router.query?.persona as string) ?? null,
         category: (router.query?.category as string) ?? null,
       },
-      stored: readStoredPersona(),
+      stored: storedPersona,
     });
-  }, [override, user, router.query]);
+  }, [override, storedPersona, user, router.query]);
+
+  useEffect(() => {
+    if (resolved.source === "query" && resolved.persona) {
+      const topic = Array.isArray(router.query?.topic)
+        ? router.query.topic[0]
+        : router.query?.topic;
+      writeStoredPersona(resolved.persona, { topic });
+      setStoredPersona(resolved.persona);
+    }
+  }, [resolved.persona, resolved.source, router.query]);
 
   const setPersona = useCallback(
-    async (persona: Persona) => {
-      setOverride(persona);
-      writeStoredPersona(persona);
-
+    async (
+      persona: Persona,
+      options: { source?: PersonaWriteSource } = {},
+    ) => {
       if (isAuthenticated) {
-        await updatePersona(persona);
-        await refreshUser();
+        setOverride(persona);
+        try {
+          await updatePersona(persona, options.source ?? "profile");
+          await refreshUser();
+          if ((options.source ?? "profile") !== "inferred") {
+            clearStoredPersona();
+            setStoredPersona(null);
+          }
+        } catch (error) {
+          setOverride(null);
+          throw error;
+        }
+        return;
       }
+
+      writeStoredPersona(persona);
+      setStoredPersona(persona);
+      setOverride(persona);
     },
     [isAuthenticated, refreshUser],
   );

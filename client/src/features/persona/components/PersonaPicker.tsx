@@ -9,6 +9,7 @@ import {
 } from "@shared/config/persona";
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import { usePersona } from "@features/persona/context/personaContext";
+import type { PersonaWriteSource } from "@features/persona/types/persona";
 
 /**
  * Two-step category -> user-type picker, styled to the Quizwerk system.
@@ -19,18 +20,24 @@ import { usePersona } from "@features/persona/context/personaContext";
 export default function PersonaPicker({
   onPicked,
   heading = "Who are you setting up for?",
+  initialCategory = null,
+  source = "profile",
 }: {
   onPicked?: (persona: Persona) => void;
   heading?: string;
+  initialCategory?: PersonaCategory | null;
+  source?: PersonaWriteSource;
 }) {
   const { setPersona } = usePersona();
-  const [category, setCategory] = useState<PersonaCategory | null>(null);
+  const [category, setCategory] = useState<PersonaCategory | null>(
+    initialCategory,
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const choose = async (persona: Persona) => {
     setIsSaving(true);
     try {
-      await setPersona(persona);
+      await setPersona(persona, { source });
       onPicked?.(persona);
     } catch {
       toast.error("Could not save your choice. Please try again.");

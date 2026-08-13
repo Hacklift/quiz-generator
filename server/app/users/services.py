@@ -10,7 +10,12 @@ from server.app.db.core.connection import get_auth_events_collection, get_user_s
 from server.app.db.core.redis import get_redis_client
 from server.app.email_platform.service import EmailService
 from server.app.users.identity import normalize_email, now_utc
-from server.app.users.models import UpdateProfileRequest, UpdateProfileResponse, UserOut
+from server.app.users.models import (
+    UpdatePersonaRequest,
+    UpdateProfileRequest,
+    UpdateProfileResponse,
+    UserOut,
+)
 from server.app.users.persona import persona_update_fields
 from server.app.users.repository import (
     build_user_out_payload,
@@ -106,6 +111,64 @@ async def update_user_profile_service(
 
     return UpdateProfileResponse(
         message="Profile updated successfully",
+        user=UserOut(
+            **{
+                **build_user_out_payload(updated_user),
+                "created_at": created_at,
+                "updated_at": updated_at_value,
+            }
+        ),
+    )
+
+
+async def update_user_persona_service(
+    persona_data: UpdatePersonaRequest,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+) -> UpdateProfileResponse:
+    update_data = persona_update_fields(
+        persona_data.persona_category,
+        persona_data.persona_user_type,
+        source=persona_data.source,
+    )
+    update_data["updated_at"] = now_utc()
+
+    try:
+        user_object_id = ObjectId(current_user.id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid user ID format: {str(exc)}",
+        ) from exc
+
+    result = await users_collection.update_one(
+        {"_id": user_object_id, "status": {"$ne": "deleted"}},
+        {"$set": update_data},
+    )
+    if result.modified_count == 0:
+        user_exists = await users_collection.find_one(
+            {"_id": user_object_id, "status": {"$ne": "deleted"}}
+        )
+        if not user_exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    updated_user = await users_collection.find_one({"_id": user_object_id})
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after update",
+        )
+
+    created_at = updated_user.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+
+    updated_at_value = updated_user.get("updated_at")
+    if isinstance(updated_at_value, datetime):
+        updated_at_value = updated_at_value.isoformat()
+
+    return UpdateProfileResponse(
+        message="Persona updated successfully",
         user=UserOut(
             **{
                 **build_user_out_payload(updated_user),

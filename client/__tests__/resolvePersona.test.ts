@@ -1,5 +1,10 @@
 import { resolvePersona } from "@features/persona/lib/resolvePersona";
 import {
+  readStoredPersona,
+  readStoredPersonaTopic,
+  writeStoredPersona,
+} from "@features/persona/lib/personaStorage";
+import {
   categoryForUserType,
   parsePersona,
   personaGenerateHref,
@@ -7,6 +12,10 @@ import {
 } from "@shared/config/persona";
 
 const EMPTY_QUERY = { persona: null, category: null };
+
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 describe("parsePersona", () => {
   test("accepts slugs", () => {
@@ -52,6 +61,32 @@ describe("parsePersona", () => {
       });
       expect(params.get("topic")).toBeTruthy();
     }
+  });
+});
+
+describe("persona storage", () => {
+  test("persists persona and its carried topic", () => {
+    const persona = { category: "school" as const, userType: "teacher" as const };
+
+    writeStoredPersona(persona, {
+      topic: "Photosynthesis — Grade 8 biology",
+    });
+
+    expect(readStoredPersona()).toEqual(persona);
+    expect(readStoredPersonaTopic(persona)).toBe(
+      "Photosynthesis — Grade 8 biology",
+    );
+  });
+
+  test("does not apply a stored topic to a different persona", () => {
+    writeStoredPersona(
+      { category: "school", userType: "teacher" },
+      { topic: "Photosynthesis" },
+    );
+
+    expect(
+      readStoredPersonaTopic({ category: "corporate", userType: "hr" }),
+    ).toBeNull();
   });
 });
 

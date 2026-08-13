@@ -5,6 +5,7 @@ import { Toaster } from "react-hot-toast";
 import SplashScreen from "@app/components/SplashScreen";
 import { AuthProvider } from "@features/auth/context/authContext";
 import { PersonaProvider } from "@features/persona/context/personaContext";
+import PersonaOnboardingGate from "@features/persona/components/PersonaOnboardingGate";
 import SignInModal from "@features/auth/components/SignInModal";
 import AssistantLauncher from "@features/assistant/components/AssistantLauncher";
 import { ROUTES } from "@shared/config/patterns/routes";
@@ -53,6 +54,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
       <PersonaProvider>
         <SplashScreen />
         <EmailVerificationBanner />
+        <PersonaOnboardingGate />
 
         <Component {...pageProps} openLoginModal={openSignInModal} />
         <AssistantLauncher />

@@ -210,6 +210,21 @@ class UpdateProfileRequest(BaseModel):
         return v
 
 
+class UpdatePersonaRequest(BaseModel):
+    persona_category: str
+    persona_user_type: str
+    source: Literal["onboarding", "profile", "inferred"] = "profile"
+
+    @model_validator(mode="after")
+    def validate_persona(self):
+        if not persona_pair_is_valid(self.persona_category, self.persona_user_type):
+            raise ValueError(
+                "persona_user_type must belong to persona_category, "
+                "and both must be provided together"
+            )
+        return self
+
+
 class UpdateProfileResponse(BaseModel):
     message: str
     user: UserOut

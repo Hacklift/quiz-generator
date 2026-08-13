@@ -5,7 +5,7 @@ import pytest
 from bson import ObjectId
 from pydantic import ValidationError
 
-from server.app.users.models import UpdateProfileRequest, UserPersona
+from server.app.users.models import UpdatePersonaRequest, UpdateProfileRequest, UserPersona
 from server.app.users.persona import (
     PERSONA_CATEGORIES,
     PERSONA_USER_TYPES,
@@ -18,7 +18,10 @@ from server.app.users.persona import (
     persona_update_fields,
 )
 from server.app.users.repository import build_user_out_payload
-from server.app.users.services import update_user_profile_service
+from server.app.users.services import (
+    update_user_persona_service,
+    update_user_profile_service,
+)
 
 
 def _user_doc(**overrides):
@@ -146,6 +149,34 @@ class TestUpdateProfileRequest:
             UpdateProfileRequest(persona_user_type="teacher")
 
 
+class TestUpdatePersonaRequest:
+    def test_accepts_valid_pair_and_source(self):
+        request = UpdatePersonaRequest(
+            persona_category="school",
+            persona_user_type="teacher",
+            source="onboarding",
+        )
+
+        assert request.persona_category == "school"
+        assert request.persona_user_type == "teacher"
+        assert request.source == "onboarding"
+
+    def test_rejects_mismatched_pair(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="corporate",
+                persona_user_type="teacher",
+            )
+
+    def test_rejects_unknown_source(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="school",
+                persona_user_type="teacher",
+                source="signup",
+            )
+
+
 class TestUserPersonaModel:
     def test_rejects_user_type_outside_category(self):
         with pytest.raises(ValidationError):
@@ -210,3 +241,46 @@ class TestUpdateProfileService:
         update_doc = collection.update_one.await_args.args[1]["$set"]
         assert not any(key.startswith("profile.persona") for key in update_doc)
         assert update_doc["profile.full_name"] == "Ada"
+
+
+class TestUpdatePersonaService:
+    @pytest.mark.asyncio
+    async def test_persists_only_persona_fields_for_authenticated_user(self):
+        user_id = ObjectId()
+        stored = _user_doc(
+            _id=user_id,
+            profile={
+                "persona": {
+                    "category": "corporate",
+                    "user_type": "employee",
+                }
+            },
+        )
+        collection = AsyncMock()
+        collection.update_one.return_value = AsyncMock(modified_count=1)
+        collection.find_one.return_value = stored
+
+        current_user = type("CurrentUser", (), {"id": str(user_id)})()
+
+        await update_user_persona_service(
+            UpdatePersonaRequest(
+                persona_category="corporate",
+                persona_user_type="employee",
+                source="inferred",
+            ),
+            current_user,
+            collection,
+        )
+
+        update_doc = collection.update_one.await_args.args[1]["$set"]
+        assert set(update_doc) == {
+            "profile.persona.category",
+            "profile.persona.user_type",
+            "profile.persona.source",
+            "profile.persona.set_at",
+            "updated_at",
+        }
+        assert update_doc["profile.persona.category"] == "corporate"
+        assert update_doc["profile.persona.user_type"] == "employee"
+        assert update_doc["profile.persona.source"] == "inferred"
+        assert isinstance(update_doc["profile.persona.set_at"], datetime)
