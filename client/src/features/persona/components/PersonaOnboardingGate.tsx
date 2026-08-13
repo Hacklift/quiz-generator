@@ -57,7 +57,7 @@ export default function PersonaOnboardingGate() {
       !user ||
       profilePersona ||
       !persona ||
-      (source !== "query" && source !== "storage") ||
+      source !== "query" ||
       !autoSaveKey ||
       pendingAutoSaveKey.current === autoSaveKey ||
       failedAutoSaveKeys.current.has(autoSaveKey)

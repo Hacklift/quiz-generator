@@ -63,6 +63,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (wasAuthenticatedRef.current && !isAuthenticated) {
       setOverride(null);
+      setStoredPersona(null);
+      clearStoredPersona();
+    } else if (!wasAuthenticatedRef.current && isAuthenticated) {
+      setOverride(null);
     }
     wasAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
@@ -128,10 +132,8 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         try {
           await updatePersona(persona, options.source ?? "profile");
           await refreshUser();
-          if ((options.source ?? "profile") !== "inferred") {
-            clearStoredPersona();
-            setStoredPersona(null);
-          }
+          clearStoredPersona();
+          setStoredPersona(null);
         } catch (error) {
           setOverride(null);
           throw error;
@@ -141,7 +143,6 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
 
       writeStoredPersona(persona);
       setStoredPersona(persona);
-      setOverride(persona);
     },
     [isAuthenticated, refreshUser],
   );

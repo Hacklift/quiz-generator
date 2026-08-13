@@ -72,6 +72,14 @@ function PersonaProbe() {
       >
         Infer persona
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          void setPersona({ category: "corporate", userType: "hr" })
+        }
+      >
+        Set guest persona
+      </button>
       <button type="button" onClick={clearPersona}>
         Clear persona
       </button>
@@ -164,7 +172,45 @@ describe("PersonaProvider", () => {
     expect(localStorage.getItem("quizwerk.persona")).toBeNull();
   });
 
-  test("clears inferred authenticated override on logout before another user logs in", async () => {
+  test("does not let guest persona override a logged-in user's profile persona", async () => {
+    mockRouter = {
+      asPath: "/generate",
+      pathname: "/generate",
+      query: {},
+    };
+
+    const { rerender } = render(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Set guest persona" }));
+
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "corporate:hr:storage",
+    );
+
+    mockAuthState = {
+      ...guestAuthState,
+      user: {
+        persona_category: "school",
+        persona_user_type: "teacher",
+      },
+      isAuthenticated: true,
+    };
+    rerender(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "school:teacher:profile",
+    );
+  });
+
+  test("clears inferred persona storage on logout before another user logs in", async () => {
     localStorage.setItem(
       "quizwerk.persona",
       JSON.stringify({
@@ -206,7 +252,7 @@ describe("PersonaProvider", () => {
     expect(screen.getByTestId("persona-state")).toHaveTextContent(
       "school:lecturer:profile",
     );
-    expect(localStorage.getItem("quizwerk.persona")).not.toBeNull();
+    expect(localStorage.getItem("quizwerk.persona")).toBeNull();
 
     mockAuthState = guestAuthState;
     rerender(
@@ -216,16 +262,14 @@ describe("PersonaProvider", () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByTestId("persona-state")).toHaveTextContent(
-        "school:lecturer:storage",
-      ),
+      expect(screen.getByTestId("persona-state")).toHaveTextContent("none"),
     );
 
     mockAuthState = {
       ...guestAuthState,
       user: {
-        persona_category: "corporate",
-        persona_user_type: "hr",
+        persona_category: null,
+        persona_user_type: null,
       },
       isAuthenticated: true,
     };
@@ -235,9 +279,7 @@ describe("PersonaProvider", () => {
       </PersonaProvider>,
     );
 
-    expect(screen.getByTestId("persona-state")).toHaveTextContent(
-      "corporate:hr:profile",
-    );
+    expect(screen.getByTestId("persona-state")).toHaveTextContent("none");
   });
 
   test("clearPersona clears local storage and cached stored persona state", async () => {

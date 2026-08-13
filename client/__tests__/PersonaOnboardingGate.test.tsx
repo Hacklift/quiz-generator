@@ -57,11 +57,11 @@ describe("PersonaOnboardingGate", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  test("silently persists a carried persona as inferred", async () => {
+  test("silently persists a query carried persona as inferred", async () => {
     mockSetPersona.mockResolvedValue(undefined);
     mockPersonaState = {
       persona: { category: "school", userType: "teacher" },
-      source: "storage",
+      source: "query",
       setPersona: mockSetPersona,
     };
 
@@ -73,6 +73,20 @@ describe("PersonaOnboardingGate", () => {
         { source: "inferred" },
       );
     });
+  });
+
+  test("does not silently persist a storage carried persona", () => {
+    mockPersonaState = {
+      persona: { category: "school", userType: "teacher" },
+      source: "storage",
+      setPersona: mockSetPersona,
+    };
+
+    render(<PersonaOnboardingGate />);
+
+    expect(mockSetPersona).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Which describes you best?")).toBeInTheDocument();
   });
 
   test("does not show when the profile already has persona", () => {
