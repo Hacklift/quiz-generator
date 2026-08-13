@@ -6,6 +6,9 @@ import {
 } from "@features/persona/context/personaContext";
 
 const mockRefreshUser = jest.fn();
+const mockUpdatePersona = jest.fn(
+  async (_persona: unknown, _source?: unknown) => ({}),
+);
 const guestAuthState = {
   user: null,
   isAuthenticated: false,
@@ -46,13 +49,29 @@ jest.mock("@features/auth/context/authContext", () => ({
   useAuth: () => mockAuthState,
 }));
 
+jest.mock("@features/persona/api/personaApi", () => ({
+  updatePersona: (persona: unknown, source: unknown) =>
+    mockUpdatePersona(persona, source),
+}));
+
 function PersonaProbe() {
-  const { persona, source, clearPersona } = usePersona();
+  const { persona, source, setPersona, clearPersona } = usePersona();
   return (
     <>
       <p data-testid="persona-state">
         {persona ? `${persona.category}:${persona.userType}:${source}` : "none"}
       </p>
+      <button
+        type="button"
+        onClick={() =>
+          void setPersona(
+            { category: "school", userType: "lecturer" },
+            { source: "inferred" },
+          )
+        }
+      >
+        Infer persona
+      </button>
       <button type="button" onClick={clearPersona}>
         Clear persona
       </button>
@@ -64,6 +83,7 @@ describe("PersonaProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     mockRefreshUser.mockReset();
+    mockUpdatePersona.mockClear();
     mockAuthState = guestAuthState;
     mockRouter = {
       asPath:
@@ -142,6 +162,82 @@ describe("PersonaProvider", () => {
       expect(screen.getByTestId("persona-state")).toHaveTextContent("none"),
     );
     expect(localStorage.getItem("quizwerk.persona")).toBeNull();
+  });
+
+  test("clears inferred authenticated override on logout before another user logs in", async () => {
+    localStorage.setItem(
+      "quizwerk.persona",
+      JSON.stringify({
+        category: "school",
+        userType: "lecturer",
+        topic: "Introduction to microeconomics",
+        v: 1,
+      }),
+    );
+    mockRouter = {
+      asPath: "/generate",
+      pathname: "/generate",
+      query: {},
+    };
+    mockAuthState = {
+      ...guestAuthState,
+      user: {
+        persona_category: null,
+        persona_user_type: null,
+      },
+      isAuthenticated: true,
+    };
+
+    const { rerender } = render(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("persona-state")).toHaveTextContent(
+        "school:lecturer:storage",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Infer persona" }));
+
+    await waitFor(() => expect(mockUpdatePersona).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "school:lecturer:profile",
+    );
+    expect(localStorage.getItem("quizwerk.persona")).not.toBeNull();
+
+    mockAuthState = guestAuthState;
+    rerender(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("persona-state")).toHaveTextContent(
+        "school:lecturer:storage",
+      ),
+    );
+
+    mockAuthState = {
+      ...guestAuthState,
+      user: {
+        persona_category: "corporate",
+        persona_user_type: "hr",
+      },
+      isAuthenticated: true,
+    };
+    rerender(
+      <PersonaProvider>
+        <PersonaProbe />
+      </PersonaProvider>,
+    );
+
+    expect(screen.getByTestId("persona-state")).toHaveTextContent(
+      "corporate:hr:profile",
+    );
   });
 
   test("clearPersona clears local storage and cached stored persona state", async () => {

@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/router";
@@ -53,16 +54,18 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   // round-trip completes.
   const [override, setOverride] = useState<Persona | null>(null);
   const [storedPersona, setStoredPersona] = useState<Persona | null>(null);
+  const wasAuthenticatedRef = useRef(isAuthenticated);
 
   useEffect(() => {
     setStoredPersona(readStoredPersona());
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated && override && !storedPersona) {
+    if (wasAuthenticatedRef.current && !isAuthenticated) {
       setOverride(null);
     }
-  }, [isAuthenticated, override, storedPersona]);
+    wasAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
 
   const resolved = useMemo(() => {
     if (override) {
