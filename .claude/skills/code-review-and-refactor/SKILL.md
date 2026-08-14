@@ -15,8 +15,8 @@ Review code changes against criteria from [`ENGINEERING_REVIEW.md`](../../../ENG
 - [ ] Are protected routes secured with `Depends(get_current_user)`?
 - [ ] Are sensitive token endpoints (`/auth/verify-otp`, `/auth/verify-link`) taking parameters in POST JSON bodies rather than query params?
 - [ ] Are OTP verification checks using cryptographic functions (`secrets.randbelow`, `hmac.compare_digest`)?
-- [ ] Does every endpoint verify resource tenancy (`user_id == current_user["id"]`) before returning or mutating data?
-- [ ] Are `/share` endpoints checking an explicit `is_shared` or `share_token` flag before revealing quiz contents?
+- [ ] Does every private-data endpoint scope queries or ownership checks to `current_user.id`? (`get_current_user` returns a `UserOut` model, not a dictionary.)
+- [ ] Do anonymous `/share` responses omit `correct_answer` and other answer data, as enforced by `server/app/share/services.py` and the share response schemas?
 
 ### ⚡ Performance & Efficiency
 - [ ] Are unauthenticated or heavy AI endpoints guarded with per-IP rate limits (`@limiter.limit(...)`)?

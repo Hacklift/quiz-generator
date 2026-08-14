@@ -12,8 +12,9 @@ These directories handle auth, sharing, billing, or public-facing quiz data.
 Apply these rules on every change here, not just during formal review.
 
 ## Tenancy & access control
-- Every endpoint returning or mutating user data must verify `user_id == current_user["id"]` before proceeding.
-- `/share` and any public-read endpoint must gate on an explicit `is_shared` / `share_token` flag before returning quiz content — including `correct_answer`.
+- `get_current_user` returns `server.app.users.models.UserOut`; access it with attributes such as `current_user.id`, never dictionary subscripting.
+- Every endpoint returning or mutating private user data must scope its query or ownership check to `current_user.id` before proceeding.
+- Preserve the current public-sharing boundary: anonymous shared-quiz responses must omit `correct_answer` and other answer data. Do not assume an `is_shared` or `share_token` field exists; inspect `server/app/share/routes.py`, `server/app/share/services.py`, and the response schemas before changing sharing behavior.
 - Never build outbound links or emails from client-supplied URLs; construct them server-side from validated IDs.
 
 ## Secrets & comparisons

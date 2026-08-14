@@ -4,6 +4,18 @@ This guide equips Claude (CLI and AI agents) to navigate, understand, build, tes
 
 ---
 
+## 0. Inspect Before Acting
+
+Repository code is the source of truth. Before proposing or making a change:
+
+1. Inspect the relevant directory and neighboring implementation; do not infer a path, module, symbol, schema, command, or API contract from this guide alone.
+2. Trace registrations and consumers before editing: start backend routes at `server/app/api/router.py`, frontend routes at `client/pages/`, database access at `server/app/db/core/connection.py`, and feature API calls under `client/src/features/`.
+3. Search for the current convention and copy a working nearby pattern. Domain layouts vary between singular files (`routes.py`, `services.py`, `repository.py`) and packages (`routes/`, `services/`, `repositories/`).
+4. Read the relevant tests and configuration before changing behavior. Preserve public API and stored-data contracts unless the task explicitly requires a coordinated change.
+5. Verify every referenced path and imported/exported symbol exists, then run the narrowest relevant checks. If documentation and implementation disagree, follow the implementation and update the documentation when it is in scope.
+
+---
+
 ## 1. Repository Architecture & Domain Map
 
 `quiz-generator` is a full-stack, AI-powered quiz platform. It provides automated quiz generation (via LLMs & RAG), live quiz sessions with real-time scoring, folder/category organization, user notifications, and role-based access control.
@@ -16,7 +28,7 @@ quiz-generator/
 │   └── app/
 │       ├── api/                    # Central APIRouter & route mounting (router.py)
 │       ├── auth/                   # JWT Auth, OTP, verification, services & routes
-│       ├── db/                     # Mongo connection, models, CRUD, services, notifications
+│       ├── db/core/                # MongoDB/Redis connections and collection getters
 │       ├── quiz/                   # Quiz generation, document RAG, live sessions, repositories (v2)
 │       ├── mcp/                    # Internal FastMCP server & auth middleware
 │       ├── email_platform/         # Email sending policy engine & Celery tasks
@@ -29,7 +41,7 @@ quiz-generator/
 │   ├── public/                     # Static assets (images, PWA manifest, service worker)
 │   └── src/
 │       ├── features/               # Feature-first modules (auth, quiz, live-quiz, notifications, etc.)
-│       └── shared/                 # Axios client (http.ts), UI design tokens (quizwerk.ts), config
+│       └── shared/                 # Axios client, shared config, and quizwerk UI system
 ├── deploy/                         # Nginx configs & production deployment scripts
 └── .github/workflows/               # CI pipelines & automated Claude PR review workflows
 ```
@@ -53,11 +65,11 @@ docker compose restart server celery client
 
 ### Local Execution (Without Docker)
 ```bash
-# 1. Backend Server (run from /server)
-cd server && uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
+# 1. Backend Server (run from /server; uses the Pipfile environment)
+cd server && pipenv run fastapi dev main.py
 
-# 2. Celery Async Worker (run from /server)
-cd server && celery -A server.celery_config.celery_app worker -Q email,celery --loglevel=info --pool=solo --concurrency=1
+# 2. Celery Async Worker (run from the repository root)
+celery -A server.celery_config.celery_app worker -Q email,celery --loglevel=info --pool=solo --concurrency=1
 
 # 3. Next.js Frontend (run from /client)
 cd client && pnpm dev
@@ -89,11 +101,11 @@ When implementing or modifying a feature across the stack, follow this data flow
        ↓ (Axios HTTP request with Bearer token & auto-refresh)
 [client/src/shared/api/http.ts] 
        ↓ (HTTP REST / JSON)
-[server/app/api/router.py] ➔ [FastAPI Route Handler in server/app/<domain>/routes/]
+[server/app/api/router.py] ➔ [FastAPI Route Handler in server/app/<domain>/routes.py or routes/]
        ↓ (validates request via Pydantic model & Depends(get_current_user))
-[Service Layer in server/app/<domain>/services/]
+[Service Layer in server/app/<domain>/services.py or services/]
        ↓ (executes business logic & authorization checks)
-[CRUD / Repository in server/app/<domain>/crud/ or repositories/v2/]
+[Domain Repository in server/app/<domain>/repository.py or repositories/]
        ↓ (PyMongo / Motor queries)
 [MongoDB Database (quizApp_db)]
 ```
@@ -112,8 +124,8 @@ When implementing or modifying a feature across the stack, follow this data flow
 ### Frontend (`client/`)
 1. **Feature-First Organization**: Place code under `client/src/features/<feature>/` (`components/`, `api/`, `types/`, `pages/`).
 2. **Pages Router Integration**: Top-level routes in `client/pages/` must re-export page components from `client/src/features/`.
-3. **Design System & Styling**: Use Vanilla CSS / Tailwind CSS with design tokens defined in `client/src/shared/ui/quizwerk.ts`.
-4. **Route Constants**: Reference route paths via `ROUTES` in `client/constants/patterns/routes.ts` or `@shared/config/patterns/routes`.
+3. **Design System & Styling**: Use Tailwind CSS and the shared Quizwerk exports under `client/src/shared/ui/quizwerk/`.
+4. **Route Constants**: Reuse existing route paths from `ROUTES` in `client/src/shared/config/patterns/routes.ts` (`@shared/config/patterns/routes`) and add a constant there when a reusable route is introduced.
 
 ---
 

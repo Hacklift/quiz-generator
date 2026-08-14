@@ -19,7 +19,7 @@ client/src/features/<feature_name>/
 ```
 
 ## Step 2: Define TypeScript Interfaces
-Define strict types for API payloads and component props in `types/` or `client/interfaces/`:
+Define strict types for API payloads and component props in the feature's `types/` directory or an existing feature-local type file:
 ```typescript
 export interface QuizItem {
   id: string;
@@ -30,27 +30,27 @@ export interface QuizItem {
 ```
 
 ## Step 3: Implement Typed API Helpers
-Create API functions in `api/<feature>Api.ts` using the central Axios client (`@shared/api/http`):
+Create API functions in `api/<feature>Api.ts` using the `api` export from the central Axios client (`@shared/api/http`):
 - Do not manually attach `Authorization` headers; the Axios interceptor handles JWT token injection and auto-refresh on 401.
 
 ```typescript
-import { http } from "@shared/api/http";
+import { api } from "@shared/api/http";
 import { QuizItem } from "../types";
 
 export const getFeatureQuizzes = async (): Promise<QuizItem[]> => {
-  const response = await http.get("/api/feature-quizzes");
+  const response = await api.get("/api/feature-quizzes");
   return response.data;
 };
 ```
 
 ## Step 4: Build Accessible React Components
-Construct components using Tailwind CSS and tokens from `client/src/shared/ui/quizwerk.ts`:
+Construct components using Tailwind CSS and reusable exports from `client/src/shared/ui/quizwerk/`:
 - Ensure proper accessibility attributes (`aria-*`, `role`).
 - Handle loading, error, and empty states.
 
 ## Step 5: Mount Route in Pages Router
 For new pages:
-1. Define route path constant in `client/constants/patterns/routes.ts` or `@shared/config/patterns/routes`.
+1. Reuse or add the route path constant in `client/src/shared/config/patterns/routes.ts` (`@shared/config/patterns/routes`).
 2. Create page entry in `client/pages/<route_name>.tsx`:
 
 ```tsx
