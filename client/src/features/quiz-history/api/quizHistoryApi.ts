@@ -6,7 +6,7 @@ export const getUserQuizHistory = async (): Promise<any[] | undefined> => {
     const token = TokenService.getAccessToken();
     if (!token) throw new Error("No access token found");
 
-    const response = await api.get("/api/quiz-history");
+    const response = await api.get("/api/quiz-attempts");
 
     return response.data;
   } catch (error) {
@@ -19,7 +19,7 @@ export const getQuizHistoryItem = async (historyId: string) => {
   const token = TokenService.getAccessToken();
   if (!token) throw new Error("No access token found");
 
-  const response = await api.get(`/api/quiz-history/${historyId}`);
+  const response = await api.get(`/api/quiz-attempts/${historyId}`);
   return response.data;
 };
 
@@ -27,6 +27,6 @@ export const deleteQuizHistoryItem = async (historyId: string) => {
   const token = TokenService.getAccessToken();
   if (!token) throw new Error("No access token found");
 
-  const response = await api.delete(`/api/quiz-history/${historyId}`);
+  const response = await api.delete(`/api/quiz-attempts/${historyId}`);
   return response.data;
 };

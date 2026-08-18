@@ -1,6 +1,7 @@
 from .constants import (
     FOLDER_ITEMS_V2_COLLECTION,
     FOLDERS_V2_COLLECTION,
+    QUIZ_ATTEMPTS_V2_COLLECTION,
     QUIZ_HISTORY_V2_COLLECTION,
     QUIZZES_V2_COLLECTION,
     SAVED_QUIZZES_V2_COLLECTION,
@@ -133,6 +134,43 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "legacy_history_id": {"bsonType": ["string", "null"]},
                     "created_at": {"bsonType": "date"},
                     "deleted_at": {"bsonType": ["date", "null"]},
+                },
+            }
+        },
+        QUIZ_ATTEMPTS_V2_COLLECTION: {
+            "$jsonSchema": {
+                "bsonType": "object",
+                "required": ["user_id", "quiz_id", "question_results", "score", "percentage", "submitted_at"],
+                "properties": {
+                    "user_id": {"bsonType": "string", "minLength": 1},
+                    "quiz_id": {"bsonType": "string", "minLength": 1},
+                    "score": {"bsonType": ["int", "long"]},
+                    "percentage": {"bsonType": ["double", "int", "long", "decimal"]},
+                    "submitted_at": {"bsonType": "date"},
+                    "deleted_at": {"bsonType": ["date", "null"]},
+                    "question_results": {
+                        "bsonType": "array",
+                        "items": {
+                            "bsonType": "object",
+                            "required": [
+                                "question",
+                                "question_type",
+                                "is_correct",
+                                "result",
+                            ],
+                            "properties": {
+                                "question": {"bsonType": "string", "minLength": 1},
+                                "user_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "correct_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "question_type": {"bsonType": "string", "minLength": 1},
+                                "accuracy_percentage": {
+                                    "bsonType": ["double", "int", "long", "decimal", "null"]
+                                },
+                                "is_correct": {"bsonType": "bool"},
+                                "result": {"bsonType": "string", "minLength": 1},
+                            },
+                        },
+                    },
                 },
             }
         },

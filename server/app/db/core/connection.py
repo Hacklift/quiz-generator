@@ -43,6 +43,7 @@ folders_v2_collection = database["folders_v2"]
 folder_items_v2_collection = database["folder_items_v2"]
 saved_quizzes_v2_collection = database["saved_quizzes_v2"]
 quiz_history_v2_collection = database["quiz_history_v2"]
+quiz_attempts_v2_collection = database["quiz_attempts_v2"]
 document_rag_cache_collection = database["document_rag_cache"]
 
 
@@ -150,6 +151,7 @@ async def startUp():
         folder_items_v2_collection,
         saved_quizzes_v2_collection,
         quiz_history_v2_collection,
+        quiz_attempts_v2_collection,
     )
     from server.app.quiz.services.quiz_user_library_service import QuizUserLibraryService
 
@@ -248,6 +250,12 @@ def get_quiz_history_v2_collection() -> AsyncIOMotorCollection:
     if quiz_history_v2_collection is None:
         raise RuntimeError("[DB Error] quiz_history_v2_collection has not been initialized properly.")
     return quiz_history_v2_collection
+
+
+def get_quiz_attempts_v2_collection() -> AsyncIOMotorCollection:
+    if quiz_attempts_v2_collection is None:
+        raise RuntimeError("[DB Error] quiz_attempts_v2_collection has not been initialized properly.")
+    return quiz_attempts_v2_collection
 
 
 def get_document_rag_cache_collection() -> AsyncIOMotorCollection:

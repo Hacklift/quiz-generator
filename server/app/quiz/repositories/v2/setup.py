@@ -4,6 +4,7 @@ from pymongo.errors import OperationFailure
 from .constants import (
     FOLDER_ITEMS_V2_COLLECTION,
     FOLDERS_V2_COLLECTION,
+    QUIZ_ATTEMPTS_V2_COLLECTION,
     QUIZ_HISTORY_V2_COLLECTION,
     QUIZZES_V2_COLLECTION,
     SAVED_QUIZZES_V2_COLLECTION,
@@ -11,6 +12,7 @@ from .constants import (
 from .indexes import (
     ensure_folder_items_v2_indexes,
     ensure_folders_v2_indexes,
+    ensure_quiz_attempts_v2_indexes,
     ensure_quiz_history_v2_indexes,
     ensure_quizzes_v2_indexes,
     ensure_saved_quizzes_v2_indexes,
@@ -24,6 +26,7 @@ V2_COLLECTION_INDEXERS = {
     FOLDER_ITEMS_V2_COLLECTION: ensure_folder_items_v2_indexes,
     SAVED_QUIZZES_V2_COLLECTION: ensure_saved_quizzes_v2_indexes,
     QUIZ_HISTORY_V2_COLLECTION: ensure_quiz_history_v2_indexes,
+    QUIZ_ATTEMPTS_V2_COLLECTION: ensure_quiz_attempts_v2_indexes,
 }
 
 
@@ -64,9 +67,11 @@ async def ensure_v2_indexes(
     folder_items_collection: AsyncIOMotorCollection,
     saved_quizzes_collection: AsyncIOMotorCollection,
     quiz_history_collection: AsyncIOMotorCollection,
+    quiz_attempts_collection: AsyncIOMotorCollection,
 ):
     await ensure_quizzes_v2_indexes(quizzes_collection)
     await ensure_folders_v2_indexes(folders_collection)
     await ensure_folder_items_v2_indexes(folder_items_collection)
     await ensure_saved_quizzes_v2_indexes(saved_quizzes_collection)
     await ensure_quiz_history_v2_indexes(quiz_history_collection)
+    await ensure_quiz_attempts_v2_indexes(quiz_attempts_collection)
