@@ -19,7 +19,8 @@ export interface PersonaState {
   categoryDefinition: PersonaCategoryDefinition | null;
   source: PersonaSource;
   isLoading: boolean;
-  /** Persists to the profile when signed in, otherwise to local storage. */
+  /** Persists to the profile when signed in, otherwise to guest local storage. */
   setPersona: (persona: Persona) => Promise<void>;
+  /** Clears guest fallback only. Profile persona is changed through setPersona. */
   clearPersona: () => void;
 }

@@ -1,9 +1,9 @@
 import { api } from "@shared/api/http";
 import type { Persona } from "@shared/config/persona";
 
-/** Persists persona onto the user profile (rides PUT /auth/profile). */
+/** Persists only persona fields; this is available to authenticated users. */
 export async function updatePersona(persona: Persona) {
-  const response = await api.put("/auth/profile", {
+  const response = await api.put("/auth/profile/persona", {
     persona_category: persona.category,
     persona_user_type: persona.userType,
   });

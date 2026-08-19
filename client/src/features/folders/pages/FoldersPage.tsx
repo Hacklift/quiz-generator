@@ -12,6 +12,7 @@ import OrganizeModal from "@features/folders/components/OrganizeModal";
 import ConfirmDeleteModal from "@features/folders/components/ConfirmDeleteModal";
 import { useAuth } from "@features/auth/context/authContext";
 import RequireAuth from "@features/auth/components/RequireAuth";
+import { useTerms } from "@features/persona/hooks/useTerms";
 import {
   getUserFolders,
   deleteFolder,
@@ -31,6 +32,7 @@ const getFolderId = (folder: Partial<Folder>) => folder.id || "";
 const FoldersPage = () => {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const t = useTerms();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showOrganizeModal, setShowOrganizeModal] = useState(false);
@@ -102,7 +104,7 @@ const FoldersPage = () => {
             <div className="text-center text-gray-500 mt-20">
               <p>No folders yet.</p>
               <p className="text-sm">
-                Create a folder to organize your saved quizzes.
+                Create a folder to organize your saved {t("quiz", "plural")}.
               </p>
             </div>
           ) : (

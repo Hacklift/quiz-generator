@@ -13,6 +13,11 @@ import Sidebar from "./Sidebar";
 import BrowseModal from "./modals/BrowseModal";
 import { useAuth } from "@features/auth/context/authContext";
 import { usePersona } from "@features/persona/context/personaContext";
+import { useTerms } from "@features/persona/hooks/useTerms";
+import {
+  titleCaseTerm,
+  type TerminologyResolver,
+} from "@shared/config/terminology";
 import NotificationBell from "@features/notifications/components/NotificationBell";
 import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
 
@@ -26,22 +31,25 @@ type NavItem =
   | { kind: "link"; label: string; href: string; authOnly?: boolean }
   | { kind: "action"; label: string; action: "browse" };
 
-const NAV_ITEMS: NavItem[] = [
-  { kind: "link", label: "Home", href: "/" },
-  { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-  { kind: "link", label: "Generate Quiz", href: "/generate" },
-  { kind: "action", label: "Categories", action: "browse" },
-  { kind: "link", label: "Pricing", href: "/#pricing" },
-];
+function navigationItems(t: TerminologyResolver): NavItem[] {
+  return [
+    { kind: "link", label: "Home", href: "/" },
+    { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
+    { kind: "link", label: `Create ${t("quiz")}`, href: "/generate" },
+    { kind: "action", label: "Categories", action: "browse" },
+    { kind: "link", label: "Pricing", href: "/#pricing" },
+  ];
+}
 
-/** Signed-in shortcuts, shown only in the mobile drawer. */
-const MOBILE_WORKSPACE_LINKS = [
-  { label: "My Profile", href: "/profile" },
-  { label: "Saved Quizzes", href: "/saved_quiz" },
-  { label: "Popular Quizzes", href: "/popular" },
-  { label: "Folders", href: "/folders" },
-  { label: "Quiz History", href: "/quiz_history" },
-];
+function mobileWorkspaceLinks(t: TerminologyResolver) {
+  return [
+    { label: "My Profile", href: "/profile" },
+    { label: `Saved ${t("quiz", "plural")}`, href: "/saved_quiz" },
+    { label: `Popular ${t("quiz", "plural")}`, href: "/popular" },
+    { label: "Folders", href: "/folders" },
+    { label: `${titleCaseTerm(t("quiz"))} history`, href: "/quiz_history" },
+  ];
+}
 
 const NavBar: React.FC = () => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
@@ -51,6 +59,7 @@ const NavBar: React.FC = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { user, isAuthenticated, logout, isLoading } = useAuth();
   const { definition: personaDefinition } = usePersona();
+  const t = useTerms();
 
   const router = useRouter();
 
@@ -74,9 +83,10 @@ const NavBar: React.FC = () => {
     return router.pathname === href;
   };
 
-  const visibleItems = NAV_ITEMS.filter(
+  const visibleItems = navigationItems(t).filter(
     (item) => !("authOnly" in item && item.authOnly) || isAuthenticated,
   );
+  const workspaceLinks = mobileWorkspaceLinks(t);
 
   return (
     <div className={archivo.className}>
@@ -220,7 +230,7 @@ const NavBar: React.FC = () => {
               <p className="mb-1 mt-4 px-3 text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
                 Workspace
               </p>
-              {MOBILE_WORKSPACE_LINKS.map((link) => (
+              {workspaceLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}

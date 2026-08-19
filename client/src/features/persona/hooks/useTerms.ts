@@ -2,7 +2,11 @@
 
 import { useCallback } from "react";
 import { usePersona } from "@features/persona/context/personaContext";
-import { resolveTerm, type TermKey } from "@shared/config/terminology";
+import {
+  resolveTerm,
+  type TermForm,
+  type TermKey,
+} from "@shared/config/terminology";
 
 /**
  * Persona-bound terminology.
@@ -16,7 +20,7 @@ export function useTerms() {
   const { persona } = usePersona();
 
   return useCallback(
-    (key: TermKey, form: "singular" | "plural" = "singular") =>
+    (key: TermKey, form: TermForm = "singular") =>
       resolveTerm(key, persona, form),
     [persona],
   );

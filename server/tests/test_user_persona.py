@@ -3,9 +3,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from bson import ObjectId
+from fastapi import HTTPException
 from pydantic import ValidationError
 
-from server.app.users.models import UpdateProfileRequest, UserPersona
+from server.app.users.models import (
+    UpdatePersonaRequest,
+    UpdateProfileRequest,
+    UserPersona,
+)
 from server.app.users.persona import (
     PERSONA_CATEGORIES,
     PERSONA_USER_TYPES,
@@ -18,7 +23,10 @@ from server.app.users.persona import (
     persona_update_fields,
 )
 from server.app.users.repository import build_user_out_payload
-from server.app.users.services import update_user_profile_service
+from server.app.users.services import (
+    update_user_persona_service,
+    update_user_profile_service,
+)
 
 
 def _user_doc(**overrides):
@@ -146,6 +154,25 @@ class TestUpdateProfileRequest:
             UpdateProfileRequest(persona_user_type="teacher")
 
 
+class TestUpdatePersonaRequest:
+    def test_accepts_matching_required_pair(self):
+        request = UpdatePersonaRequest(
+            persona_category="school", persona_user_type="teacher"
+        )
+        assert request.persona_category == "school"
+
+    @pytest.mark.parametrize(
+        "category,user_type",
+        [("", ""), ("school", ""), ("corporate", "teacher")],
+    )
+    def test_rejects_empty_or_invalid_pairs(self, category, user_type):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category=category,
+                persona_user_type=user_type,
+            )
+
+
 class TestUserPersonaModel:
     def test_rejects_user_type_outside_category(self):
         with pytest.raises(ValidationError):
@@ -210,3 +237,67 @@ class TestUpdateProfileService:
         update_doc = collection.update_one.await_args.args[1]["$set"]
         assert not any(key.startswith("profile.persona") for key in update_doc)
         assert update_doc["profile.full_name"] == "Ada"
+
+
+class TestUpdatePersonaService:
+    @pytest.mark.asyncio
+    async def test_updates_only_persona_fields(self):
+        user_id = ObjectId()
+        collection = AsyncMock()
+        collection.update_one.return_value = AsyncMock(modified_count=1)
+        collection.find_one.return_value = _user_doc(_id=user_id)
+        current_user = type("CurrentUser", (), {"id": str(user_id)})()
+
+        await update_user_persona_service(
+            UpdatePersonaRequest(
+                persona_category="corporate", persona_user_type="employee"
+            ),
+            current_user,
+            collection,
+        )
+
+        update_doc = collection.update_one.await_args.args[1]["$set"]
+        assert set(update_doc) == {
+            "profile.persona.category",
+            "profile.persona.user_type",
+            "profile.persona.set_at",
+            "profile.persona.source",
+            "updated_at",
+        }
+        assert update_doc["profile.persona.source"] == "profile"
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_missing_or_deleted_user(self):
+        user_id = ObjectId()
+        collection = AsyncMock()
+        collection.update_one.return_value = AsyncMock(modified_count=0)
+        collection.find_one.return_value = None
+        current_user = type("CurrentUser", (), {"id": str(user_id)})()
+
+        with pytest.raises(HTTPException) as exc:
+            await update_user_persona_service(
+                UpdatePersonaRequest(
+                    persona_category="school", persona_user_type="teacher"
+                ),
+                current_user,
+                collection,
+            )
+
+        assert exc.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_current_user_id(self):
+        collection = AsyncMock()
+        current_user = type("CurrentUser", (), {"id": "not-an-object-id"})()
+
+        with pytest.raises(HTTPException) as exc:
+            await update_user_persona_service(
+                UpdatePersonaRequest(
+                    persona_category="school", persona_user_type="teacher"
+                ),
+                current_user,
+                collection,
+            )
+
+        assert exc.value.status_code == 400
+        collection.update_one.assert_not_awaited()

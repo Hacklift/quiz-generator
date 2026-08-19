@@ -210,6 +210,21 @@ class UpdateProfileRequest(BaseModel):
         return v
 
 
+class UpdatePersonaRequest(BaseModel):
+    """The only profile fields an authenticated user may change pre-verification."""
+
+    persona_category: PersonaCategoryField
+    persona_user_type: PersonaUserTypeField
+
+    @model_validator(mode="after")
+    def validate_persona(self):
+        if not persona_pair_is_valid(
+            self.persona_category, self.persona_user_type
+        ):
+            raise ValueError("persona_user_type must belong to persona_category")
+        return self
+
+
 class UpdateProfileResponse(BaseModel):
     message: str
     user: UserOut

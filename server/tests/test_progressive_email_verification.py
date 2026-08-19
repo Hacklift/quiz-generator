@@ -9,8 +9,8 @@ from fastapi.params import Depends
 from server.app.auth import routes as auth_routes
 from server.app.auth.services import login_service
 from server.app.users import routes as user_routes
-from server.app.users.models import UserOut
-from server.app.core.dependencies import get_verified_user
+from server.app.users.models import UpdatePersonaRequest, UserOut
+from server.app.core.dependencies import get_current_user, get_verified_user
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.routes.generation import get_quiz
 from server.app.quiz.routes.downloads import download_quiz_handler, limiter
@@ -132,6 +132,44 @@ def test_sensitive_auth_routes_require_verified_user():
     _assert_uses_verified_dependency(user_routes.update_profile)
     _assert_uses_verified_dependency(user_routes.request_email_change)
     _assert_uses_verified_dependency(user_routes.verify_email_change)
+
+
+def test_persona_route_requires_authentication_but_not_verification():
+    dependency = inspect.signature(user_routes.update_persona).parameters[
+        "current_user"
+    ].default
+    assert isinstance(dependency, Depends)
+    assert dependency.dependency is get_current_user
+
+
+@pytest.mark.asyncio
+async def test_unverified_user_can_update_persona_through_persona_route():
+    current_user = _user(is_verified=False)
+    collection = AsyncMock()
+    collection.update_one.return_value = AsyncMock(modified_count=1)
+    collection.find_one.return_value = {
+        "_id": ObjectId(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "is_verified": False,
+        "is_active": True,
+        "status": "pending_verification",
+    }
+    request = MagicMock()
+    request.app.state.users_collection = collection
+
+    response = await user_routes.update_persona(
+        request=request,
+        response=Response(),
+        persona_data=UpdatePersonaRequest(
+            persona_category="school", persona_user_type="teacher"
+        ),
+        current_user=current_user,
+    )
+
+    assert response.message == "Persona updated successfully"
+    update_doc = collection.update_one.await_args.args[1]["$set"]
+    assert update_doc["profile.persona.user_type"] == "teacher"
 
 
 def test_login_password_reset_and_verification_routes_do_not_require_verified_user():

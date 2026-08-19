@@ -4,6 +4,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -41,14 +42,36 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const router = useRouter();
 
-  // Local override so a fresh pick renders immediately, before the profile
-  // round-trip completes.
-  const [override, setOverride] = useState<Persona | null>(null);
+  // Storage is hydrated only after the initial client render. Reading it in
+  // render would make SSR see no persona while the browser sees one, causing
+  // a hydration mismatch in persona-aware shell copy.
+  const [storedPersona, setStoredPersona] = useState<Persona | null>(null);
+  const [storageHydrated, setStorageHydrated] = useState(false);
+  const [hasAuthenticatedSession, setHasAuthenticatedSession] = useState(false);
+
+  useEffect(() => {
+    setStoredPersona(readStoredPersona());
+    setStorageHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      setHasAuthenticatedSession(true);
+      return;
+    }
+
+    // A browser can be shared. Never allow a guest preference that survived
+    // an authenticated session to become a later account's fallback persona.
+    if (hasAuthenticatedSession) {
+      clearStoredPersona();
+      setStoredPersona(null);
+      setHasAuthenticatedSession(false);
+    }
+  }, [hasAuthenticatedSession, isAuthenticated, isLoading]);
 
   const resolved = useMemo(() => {
-    if (override) {
-      return { persona: override, source: "profile" as const };
-    }
     return resolvePersona({
       profile: user
         ? {
@@ -60,26 +83,33 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         persona: (router.query?.persona as string) ?? null,
         category: (router.query?.category as string) ?? null,
       },
-      stored: readStoredPersona(),
+      // Profile and explicit links remain available to signed-in users. Guest
+      // storage is intentionally never an authenticated fallback.
+      stored: isAuthenticated || hasAuthenticatedSession ? null : storedPersona,
     });
-  }, [override, user, router.query]);
+  }, [hasAuthenticatedSession, isAuthenticated, router.query, storedPersona, user]);
 
   const setPersona = useCallback(
     async (persona: Persona) => {
-      setOverride(persona);
-      writeStoredPersona(persona);
-
       if (isAuthenticated) {
         await updatePersona(persona);
         await refreshUser();
+        // A profile save is authoritative. Remove the guest copy so it
+        // cannot surface for another account on a shared browser.
+        clearStoredPersona();
+        setStoredPersona(null);
+        return;
       }
+
+      writeStoredPersona(persona);
+      setStoredPersona(persona);
     },
     [isAuthenticated, refreshUser],
   );
 
   const clearPersona = useCallback(() => {
-    setOverride(null);
     clearStoredPersona();
+    setStoredPersona(null);
   }, []);
 
   const value = useMemo<PersonaState>(() => {
@@ -93,11 +123,11 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         ? getCategoryDefinition(persona.category)
         : null,
       source: resolved.source,
-      isLoading,
+      isLoading: isLoading || !storageHydrated,
       setPersona,
       clearPersona,
     };
-  }, [resolved, isLoading, setPersona, clearPersona]);
+  }, [resolved, isLoading, storageHydrated, setPersona, clearPersona]);
 
   return (
     <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>

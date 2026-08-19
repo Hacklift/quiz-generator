@@ -5,7 +5,12 @@ from server.app.core.dependencies import get_current_user, get_verified_user
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
-from server.app.users.models import UpdateProfileRequest, UpdateProfileResponse, UserOut
+from server.app.users.models import (
+    UpdatePersonaRequest,
+    UpdateProfileRequest,
+    UpdateProfileResponse,
+    UserOut,
+)
 from server.app.users.schemas import (
     EmailChangeRequest,
     EmailChangeVerifyRequest,
@@ -15,6 +20,7 @@ from server.app.users.services import (
     delete_account_service,
     get_user_profile_service,
     request_email_change_service,
+    update_user_persona_service,
     update_user_profile_service,
     verify_email_change_service,
 )
@@ -62,6 +68,21 @@ async def update_profile(
 ):
     return await update_user_profile_service(
         profile_data,
+        current_user,
+        request.app.state.users_collection,
+    )
+
+
+@router.put("/auth/profile/persona", response_model=UpdateProfileResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def update_persona(
+    request: Request,
+    response: Response,
+    persona_data: UpdatePersonaRequest,
+    current_user: UserOut = Depends(get_current_user),
+):
+    return await update_user_persona_service(
+        persona_data,
         current_user,
         request.app.state.users_collection,
     )
