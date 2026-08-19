@@ -15,7 +15,8 @@ import { api } from "@shared/api/http";
 import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 import PersonaBadge from "@features/persona/components/PersonaBadge";
-import { parsePersona } from "@shared/config/persona";
+import { usePersona } from "@features/persona/context/personaContext";
+import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 
 type ApiErrorLike = {
   response?: {
@@ -122,22 +123,19 @@ export default function QuizForm() {
     );
   };
 
-  // Persona entry points land here as ?persona=&category=&topic=.
-  // parsePersona also accepts the pre-slug labels that shipped in earlier
-  // links (e.g. ?persona=HR%20personnel), so old bookmarks keep working.
+  // PersonaProvider resolves profile > URL query > localStorage, so persona
+  // entry points and post-auth carry-through use the same app-wide rule.
   const searchParams = useSearchParams();
-  const persona = parsePersona(
-    searchParams?.get("category"),
-    searchParams?.get("persona"),
-  );
+  const { persona } = usePersona();
 
   useEffect(() => {
-    const personaTopic = searchParams?.get("topic");
+    const personaTopic =
+      searchParams?.get("topic") || readStoredPersonaTopic(persona);
     if (personaTopic) {
       setGenerationMode("topic");
       setProfession((current) => current || personaTopic);
     }
-  }, [searchParams]);
+  }, [persona, searchParams]);
 
   useEffect(() => {
     if (user === undefined) return;

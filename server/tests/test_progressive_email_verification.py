@@ -44,6 +44,20 @@ def _assert_uses_verified_dependency(endpoint, parameter_name: str = "current_us
     assert dependency.dependency is get_verified_user
 
 
+def _request_with_users_collection(users_collection):
+    return type(
+        "Request",
+        (),
+        {
+            "app": type(
+                "App",
+                (),
+                {"state": type("State", (), {"users_collection": users_collection})()},
+            )()
+        },
+    )()
+
+
 @pytest.mark.asyncio
 async def test_unverified_user_can_login():
     user_id = ObjectId()
@@ -134,7 +148,7 @@ def test_sensitive_auth_routes_require_verified_user():
     _assert_uses_verified_dependency(user_routes.verify_email_change)
 
 
-def test_persona_route_requires_authentication_but_not_verification():
+def test_persona_update_requires_authentication_but_not_verification():
     dependency = inspect.signature(user_routes.update_persona).parameters[
         "current_user"
     ].default
@@ -143,33 +157,95 @@ def test_persona_route_requires_authentication_but_not_verification():
 
 
 @pytest.mark.asyncio
-async def test_unverified_user_can_update_persona_through_persona_route():
-    current_user = _user(is_verified=False)
-    collection = AsyncMock()
-    collection.update_one.return_value = AsyncMock(modified_count=1)
-    collection.find_one.return_value = {
-        "_id": ObjectId(current_user.id),
-        "username": current_user.username,
-        "email": current_user.email,
+async def test_persona_update_route_allows_unverified_authenticated_user():
+    user_id = ObjectId()
+    users_collection = AsyncMock()
+    users_collection.update_one.return_value = AsyncMock(modified_count=1)
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "unverified",
+        "email": "unverified@example.com",
         "is_verified": False,
         "is_active": True,
         "status": "pending_verification",
+        "profile": {
+            "persona": {
+                "category": "school",
+                "user_type": "teacher",
+                "source": "onboarding",
+            }
+        },
     }
-    request = MagicMock()
-    request.app.state.users_collection = collection
 
-    response = await user_routes.update_persona(
-        request=request,
-        response=Response(),
-        persona_data=UpdatePersonaRequest(
-            persona_category="school", persona_user_type="teacher"
+    result = await user_routes.update_persona(
+        _request_with_users_collection(users_collection),
+        Response(),
+        UpdatePersonaRequest(
+            persona_category="school",
+            persona_user_type="teacher",
+            source="onboarding",
         ),
-        current_user=current_user,
+        current_user=UserOut(
+            id=str(user_id),
+            username="unverified",
+            email="unverified@example.com",
+            is_verified=False,
+            is_active=True,
+            status="pending_verification",
+        ),
     )
 
-    assert response.message == "Persona updated successfully"
-    update_doc = collection.update_one.await_args.args[1]["$set"]
-    assert update_doc["profile.persona.user_type"] == "teacher"
+    assert result.message == "Persona updated successfully"
+    assert result.user.persona_category == "school"
+    assert result.user.persona_user_type == "teacher"
+    users_collection.update_one.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_persona_update_route_returns_400_for_invalid_current_user_id():
+    users_collection = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await user_routes.update_persona(
+            _request_with_users_collection(users_collection),
+            Response(),
+            UpdatePersonaRequest(
+                persona_category="school",
+                persona_user_type="teacher",
+            ),
+            current_user=UserOut(
+                id="not-an-object-id",
+                username="user",
+                email="user@example.com",
+            ),
+        )
+
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_persona_update_route_returns_404_for_deleted_or_missing_user():
+    user_id = ObjectId()
+    users_collection = AsyncMock()
+    users_collection.update_one.return_value = AsyncMock(modified_count=0)
+    users_collection.find_one.return_value = None
+
+    with pytest.raises(HTTPException) as exc:
+        await user_routes.update_persona(
+            _request_with_users_collection(users_collection),
+            Response(),
+            UpdatePersonaRequest(
+                persona_category="school",
+                persona_user_type="teacher",
+            ),
+            current_user=UserOut(
+                id=str(user_id),
+                username="user",
+                email="user@example.com",
+            ),
+        )
+
+    assert exc.value.status_code == 404
 
 
 def test_login_password_reset_and_verification_routes_do_not_require_verified_user():

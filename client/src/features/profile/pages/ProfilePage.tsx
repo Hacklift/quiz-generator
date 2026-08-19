@@ -18,9 +18,12 @@ import {
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
+import PersonaPicker from "@features/persona/components/PersonaPicker";
+import { usePersona } from "@features/persona/context/personaContext";
 
 export default function ProfilePage() {
   const { user, isLoading, logout, refreshUser } = useAuth();
+  const { persona, definition, categoryDefinition } = usePersona();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -35,7 +38,7 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [activeSettingSection, setActiveSettingSection] = useState<
-    "account" | "billing" | "profile" | null
+    "account" | "billing" | "profile" | "persona" | null
   >(null);
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "cancelled" | "success";
@@ -329,6 +332,10 @@ export default function ProfilePage() {
       : billingStatus === "past_due"
         ? "bg-amber-100 text-amber-800"
         : "bg-gray-100 text-gray-700";
+  const personaLabel =
+    categoryDefinition && definition
+      ? `${categoryDefinition.label} · ${definition.label}`
+      : "Not set";
 
   if (isLoading) {
     return (
@@ -615,6 +622,12 @@ export default function ProfilePage() {
                     {user?.email || "N/A"}
                   </span>
                 </div>
+                <div className="flex justify-between items-center gap-4 py-3 border-t">
+                  <span className="text-gray-600">Persona</span>
+                  <span className="text-right font-medium text-gray-900">
+                    {personaLabel}
+                  </span>
+                </div>
                 <div className="flex justify-between items-center py-3 border-t">
                   <span className="text-gray-600">Account Status</span>
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
@@ -798,6 +811,42 @@ export default function ProfilePage() {
                           </p>
                         </button>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border border-[#143E6F]/20 rounded-xl">
+                  <button
+                    onClick={() =>
+                      setActiveSettingSection((prev) =>
+                        prev === "persona" ? null : "persona",
+                      )
+                    }
+                    className="w-full px-5 py-4 flex items-center justify-between text-left"
+                  >
+                    <div>
+                      <h4 className="text-lg font-semibold text-[#143E6F]">
+                        Persona
+                      </h4>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Current selection: {personaLabel}
+                      </p>
+                    </div>
+                    <span className="text-[#143E6F]">
+                      {activeSettingSection === "persona" ? "-" : "+"}
+                    </span>
+                  </button>
+                  {activeSettingSection === "persona" && (
+                    <div className="border-t border-[#143E6F]/10 p-5">
+                      <PersonaPicker
+                        heading="Change your Quizwerk persona"
+                        initialCategory={persona?.category ?? null}
+                        source="profile"
+                        onPicked={() => {
+                          toast.success("Persona updated successfully.");
+                          setActiveSettingSection(null);
+                        }}
+                      />
                     </div>
                   )}
                 </div>

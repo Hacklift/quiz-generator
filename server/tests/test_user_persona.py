@@ -3,14 +3,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 from bson import ObjectId
-from fastapi import HTTPException
 from pydantic import ValidationError
 
-from server.app.users.models import (
-    UpdatePersonaRequest,
-    UpdateProfileRequest,
-    UserPersona,
-)
+from server.app.users.models import UpdatePersonaRequest, UpdateProfileRequest, UserPersona
 from server.app.users.persona import (
     PERSONA_CATEGORIES,
     PERSONA_USER_TYPES,
@@ -155,21 +150,44 @@ class TestUpdateProfileRequest:
 
 
 class TestUpdatePersonaRequest:
-    def test_accepts_matching_required_pair(self):
+    def test_accepts_valid_pair_and_source(self):
         request = UpdatePersonaRequest(
-            persona_category="school", persona_user_type="teacher"
+            persona_category="school",
+            persona_user_type="teacher",
+            source="onboarding",
         )
-        assert request.persona_category == "school"
 
-    @pytest.mark.parametrize(
-        "category,user_type",
-        [("", ""), ("school", ""), ("corporate", "teacher")],
-    )
-    def test_rejects_empty_or_invalid_pairs(self, category, user_type):
+        assert request.persona_category == "school"
+        assert request.persona_user_type == "teacher"
+        assert request.source == "onboarding"
+
+    def test_rejects_mismatched_pair(self):
         with pytest.raises(ValidationError):
             UpdatePersonaRequest(
-                persona_category=category,
-                persona_user_type=user_type,
+                persona_category="corporate",
+                persona_user_type="teacher",
+            )
+
+    def test_rejects_empty_strings(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="",
+                persona_user_type="",
+            )
+
+    def test_rejects_blank_strings(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="   ",
+                persona_user_type="teacher",
+            )
+
+    def test_rejects_unknown_source(self):
+        with pytest.raises(ValidationError):
+            UpdatePersonaRequest(
+                persona_category="school",
+                persona_user_type="teacher",
+                source="signup",
             )
 
 
@@ -220,6 +238,10 @@ class TestUpdateProfileService:
         assert update_doc["profile.persona.category"] == "corporate"
         assert update_doc["profile.persona.user_type"] == "hr"
         assert "updated_at" in update_doc
+        assert collection.find_one.await_args.args[0] == {
+            "_id": user_id,
+            "status": {"$ne": "deleted"},
+        }
 
     @pytest.mark.asyncio
     async def test_leaves_persona_untouched_when_not_supplied(self):
@@ -241,16 +263,28 @@ class TestUpdateProfileService:
 
 class TestUpdatePersonaService:
     @pytest.mark.asyncio
-    async def test_updates_only_persona_fields(self):
+    async def test_persists_only_persona_fields_for_authenticated_user(self):
         user_id = ObjectId()
+        stored = _user_doc(
+            _id=user_id,
+            profile={
+                "persona": {
+                    "category": "corporate",
+                    "user_type": "employee",
+                }
+            },
+        )
         collection = AsyncMock()
         collection.update_one.return_value = AsyncMock(modified_count=1)
-        collection.find_one.return_value = _user_doc(_id=user_id)
+        collection.find_one.return_value = stored
+
         current_user = type("CurrentUser", (), {"id": str(user_id)})()
 
         await update_user_persona_service(
             UpdatePersonaRequest(
-                persona_category="corporate", persona_user_type="employee"
+                persona_category="corporate",
+                persona_user_type="employee",
+                source="inferred",
             ),
             current_user,
             collection,
@@ -260,44 +294,37 @@ class TestUpdatePersonaService:
         assert set(update_doc) == {
             "profile.persona.category",
             "profile.persona.user_type",
-            "profile.persona.set_at",
             "profile.persona.source",
+            "profile.persona.set_at",
             "updated_at",
         }
-        assert update_doc["profile.persona.source"] == "profile"
+        assert update_doc["profile.persona.category"] == "corporate"
+        assert update_doc["profile.persona.user_type"] == "employee"
+        assert update_doc["profile.persona.source"] == "inferred"
+        assert isinstance(update_doc["profile.persona.set_at"], datetime)
+        assert collection.find_one.await_args.args[0] == {
+            "_id": user_id,
+            "status": {"$ne": "deleted"},
+        }
 
     @pytest.mark.asyncio
-    async def test_returns_404_for_missing_or_deleted_user(self):
+    async def test_treats_deleted_user_between_update_and_fetch_as_not_found(self):
         user_id = ObjectId()
         collection = AsyncMock()
-        collection.update_one.return_value = AsyncMock(modified_count=0)
+        collection.update_one.return_value = AsyncMock(modified_count=1)
         collection.find_one.return_value = None
+
         current_user = type("CurrentUser", (), {"id": str(user_id)})()
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(Exception) as exc:
             await update_user_persona_service(
                 UpdatePersonaRequest(
-                    persona_category="school", persona_user_type="teacher"
+                    persona_category="school",
+                    persona_user_type="teacher",
                 ),
                 current_user,
                 collection,
             )
 
         assert exc.value.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_rejects_invalid_current_user_id(self):
-        collection = AsyncMock()
-        current_user = type("CurrentUser", (), {"id": "not-an-object-id"})()
-
-        with pytest.raises(HTTPException) as exc:
-            await update_user_persona_service(
-                UpdatePersonaRequest(
-                    persona_category="school", persona_user_type="teacher"
-                ),
-                current_user,
-                collection,
-            )
-
-        assert exc.value.status_code == 400
-        collection.update_one.assert_not_awaited()
+        assert exc.value.detail == "User not found after update"

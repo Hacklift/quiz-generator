@@ -128,12 +128,13 @@ async def update_user_persona_service(
     current_user: UserOut,
     users_collection: AsyncIOMotorCollection,
 ) -> UpdateProfileResponse:
-    """Persist only persona fields for an authenticated user.
+    update_data = persona_update_fields(
+        persona_data.persona_category,
+        persona_data.persona_user_type,
+        source=persona_data.source,
+    )
+    update_data["updated_at"] = now_utc()
 
-    Full profile updates remain verification-gated. This separate operation
-    lets unverified users complete basic workspace setup without widening
-    their ability to edit unrelated account data.
-    """
     try:
         user_object_id = ObjectId(current_user.id)
     except Exception as exc:
@@ -141,13 +142,6 @@ async def update_user_persona_service(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid user ID format: {str(exc)}",
         ) from exc
-
-    update_data = persona_update_fields(
-        persona_data.persona_category,
-        persona_data.persona_user_type,
-        source="profile",
-    )
-    update_data["updated_at"] = now_utc()
 
     result = await users_collection.update_one(
         {"_id": user_object_id, "status": {"$ne": "deleted"}},

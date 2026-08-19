@@ -19,6 +19,7 @@ from server.app.users.schemas import (
 from server.app.users.services import (
     delete_account_service,
     get_user_profile_service,
+    update_user_persona_service,
     request_email_change_service,
     update_user_persona_service,
     update_user_profile_service,

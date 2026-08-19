@@ -10,6 +10,7 @@ export type { Persona, PersonaCategory, PersonaUserType };
 
 /** Where the active persona came from, most trusted first. */
 export type PersonaSource = "profile" | "query" | "storage" | "none";
+export type PersonaWriteSource = "onboarding" | "profile" | "inferred";
 
 export interface PersonaState {
   persona: Persona | null;
@@ -20,7 +21,10 @@ export interface PersonaState {
   source: PersonaSource;
   isLoading: boolean;
   /** Persists to the profile when signed in, otherwise to guest local storage. */
-  setPersona: (persona: Persona) => Promise<void>;
-  /** Clears guest fallback only. Profile persona is changed through setPersona. */
+  setPersona: (
+    persona: Persona,
+    options?: { source?: PersonaWriteSource },
+  ) => Promise<void>;
+  /** Clears the guest fallback; persisted persona is changed with setPersona. */
   clearPersona: () => void;
 }
