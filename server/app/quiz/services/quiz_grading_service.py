@@ -4,6 +4,8 @@ Answers are graded against the stored quiz document, never against
 correct answers supplied by the client. Correct answers are revealed
 only in the grading response, after submission.
 """
+import logging
+from collections import Counter
 from typing import Any, Optional
 
 from server.app.db.core.connection import (
@@ -23,6 +25,9 @@ from server.app.quiz.repositories.v2.repositories.attempt_repository import Quiz
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 from server.app.quiz.utils.grading import grade_answers
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubmissionMismatchError(ValueError):
@@ -50,6 +55,17 @@ def grade_against_stored_questions(
     Raises SubmissionMismatchError when a submitted question is not part of
     the stored quiz.
     """
+    stored_question_counts = Counter(
+        question["question"] for question in stored_questions
+    )
+    submitted_question_counts = Counter(
+        submitted.get("question") for submitted in submitted_answers
+    )
+    if submitted_question_counts != stored_question_counts:
+        raise SubmissionMismatchError(
+            "Submitted answers do not match this quiz's questions."
+        )
+
     questions_by_text = {q["question"]: q for q in stored_questions}
 
     grading_payload = []
@@ -170,9 +186,16 @@ class QuizGradingService:
             source=source,
         )
         if user_id is not None:
-            await self._store_attempt(
-                user_id=user_id,
-                quiz_id=str(quiz_doc.id),
-                graded_results=graded_results,
-            )
+            try:
+                await self._store_attempt(
+                    user_id=user_id,
+                    quiz_id=str(quiz_doc.id),
+                    graded_results=graded_results,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to persist quiz attempt for user_id=%s quiz_id=%s",
+                    user_id,
+                    str(quiz_doc.id),
+                )
         return graded_results

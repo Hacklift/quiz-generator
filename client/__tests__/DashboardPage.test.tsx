@@ -44,8 +44,9 @@ jest.mock("@features/quiz/components/Footer", () => ({
   default: () => <footer>Footer</footer>,
 }));
 
-jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({
-  getUserQuizHistory: jest.fn().mockResolvedValue([]),
+jest.mock("@features/dashboard/components/RecentQuizzes", () => ({
+  __esModule: true,
+  default: ({ heading }: { heading: string }) => <section>{heading}</section>,
 }));
 
 jest.mock("@features/persona/components/PersonaPicker", () => ({

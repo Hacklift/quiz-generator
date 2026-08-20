@@ -57,6 +57,11 @@ class FakeAttemptRepository:
         return 0
 
 
+class FailingAttemptRepository(FakeAttemptRepository):
+    async def insert_attempt(self, attempt: QuizAttemptDocumentV2):
+        raise RuntimeError("database unavailable")
+
+
 def build_quiz_document() -> QuizDocumentV2:
     quiz_id = ObjectId()
     return QuizDocumentV2(
@@ -122,12 +127,39 @@ async def test_grade_submission_does_not_persist_attempt_for_anonymous_user():
 
     await service.grade_submission(
         str(quiz.id),
-        [{"question": "What protocol serves web pages?", "user_answer": "HTTP"}],
+        [
+            {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
+            {"question": "Which port is commonly used for HTTPS?", "user_answer": "443"},
+        ],
         source="mock",
         user_id=None,
     )
 
     assert attempt_repository.attempts == []
+
+
+@pytest.mark.asyncio
+async def test_grade_submission_returns_results_when_attempt_persistence_fails():
+    quiz = build_quiz_document()
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=FailingAttemptRepository(),
+    )
+
+    results = await service.grade_submission(
+        str(quiz.id),
+        [
+            {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
+            {"question": "Which port is commonly used for HTTPS?", "user_answer": "80"},
+        ],
+        source="mock",
+        user_id="user-1",
+    )
+
+    assert len(results) == 2
+    assert results[0]["is_correct"] is True
+    assert results[1]["is_correct"] is False
 
 
 @pytest.mark.asyncio

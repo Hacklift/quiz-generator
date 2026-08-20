@@ -30,10 +30,36 @@ interface QuizAttemptItem {
   question_results: QuizAttemptQuestion[];
 }
 
+interface GeneratedQuizQuestion {
+  question: string;
+  options?: string[];
+  answer: string;
+}
+
+interface GeneratedQuizHistoryItem {
+  id?: string;
+  _id?: string;
+  quiz_id?: string;
+  created_at?: string;
+  quiz_name?: string;
+  question_type: string;
+  difficulty_level?: string;
+  profession?: string;
+  audience_type?: string;
+  custom_instruction?: string;
+  questions: GeneratedQuizQuestion[];
+}
+
+type QuizHistoryDetailItem = QuizAttemptItem | GeneratedQuizHistoryItem;
+
+const isQuizAttemptItem = (
+  item: QuizHistoryDetailItem,
+): item is QuizAttemptItem => "question_results" in item;
+
 export default function QuizHistoryDetailsPage() {
   const router = useRouter();
   const { historyId } = router.query;
-  const [item, setItem] = useState<QuizAttemptItem | null>(null);
+  const [item, setItem] = useState<QuizHistoryDetailItem | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,8 +70,8 @@ export default function QuizHistoryDetailsPage() {
         const response = await getQuizHistoryItem(historyId);
         setItem(response);
       } catch (error) {
-        console.error("Failed to fetch quiz attempt:", error);
-        toast.error("Failed to load quiz attempt details.");
+        console.error("Failed to fetch quiz history item:", error);
+        toast.error("Failed to load quiz history details.");
       } finally {
         setLoading(false);
       }
@@ -57,7 +83,7 @@ export default function QuizHistoryDetailsPage() {
   return (
     <RequireAuth
       title="Quiz History Details"
-      description="Sign in to view quiz attempt details."
+      description="Sign in to view quiz history details."
     >
       <div className="flex flex-col min-h-screen bg-gray-100">
         <NavBar />
@@ -76,9 +102,9 @@ export default function QuizHistoryDetailsPage() {
               </div>
             ) : !item ? (
               <div className="bg-white p-8 rounded-xl shadow-md border border-gray-200 text-center text-gray-600">
-                Quiz attempt not found.
+                Quiz history item not found.
               </div>
-            ) : (
+            ) : isQuizAttemptItem(item) ? (
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
                 <h1 className="text-3xl font-bold text-[#0F2654] mb-2">
                   {item.quiz_title || "Quiz Attempt"}
@@ -146,6 +172,54 @@ export default function QuizHistoryDetailsPage() {
                           {question.accuracy_percentage.toFixed(0)}%
                         </p>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                <h1 className="text-3xl font-bold text-[#0F2654] mb-2">
+                  {item.profession || item.quiz_name || "Quiz History Item"}
+                </h1>
+                <p className="text-sm text-gray-500 mb-1">
+                  Generated on:{" "}
+                  {item.created_at
+                    ? new Date(item.created_at).toLocaleString()
+                    : "Unknown date"}
+                </p>
+                <p className="text-sm text-gray-600 mb-1">
+                  Question type: {item.question_type}
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Difficulty: {item.difficulty_level || "N/A"} · Audience:{" "}
+                  {item.audience_type || "N/A"}
+                </p>
+                {item.custom_instruction && (
+                  <p className="text-sm text-gray-700 mb-6">
+                    <strong>Custom instruction:</strong>{" "}
+                    {item.custom_instruction}
+                  </p>
+                )}
+
+                <div className="space-y-5">
+                  {item.questions.map((question, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                    >
+                      <h2 className="font-semibold text-gray-800 mb-2">
+                        {index + 1}. {question.question}
+                      </h2>
+                      {question.options && question.options.length > 0 && (
+                        <ul className="list-disc list-inside text-sm text-gray-700 mb-2">
+                          {question.options.map((option, optionIndex) => (
+                            <li key={optionIndex}>{option}</li>
+                          ))}
+                        </ul>
+                      )}
+                      <p className="text-sm text-[#0F2654]">
+                        <strong>Answer:</strong> {question.answer}
+                      </p>
                     </div>
                   ))}
                 </div>

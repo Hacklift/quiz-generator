@@ -2,21 +2,19 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { getUserQuizHistory } from "@features/quiz-history/api/quizHistoryApi";
+import { getUserGeneratedQuizHistory } from "@features/quiz-history/api/quizHistoryApi";
 
 interface HistoryRow {
   _id?: string;
   id?: string;
-  quiz_title?: string | null;
-  score?: number;
-  total_questions?: number;
-  percentage?: number;
-  submitted_at?: string;
+  quiz_name?: string;
+  question_type?: string;
+  questions?: Array<{ question: string }>;
+  created_at?: string;
 }
 
 /**
- * [SCAFFOLD-OWNED] Recent activity list, read from graded attempts so the
- * dashboard reflects scored practice history.
+ * [SCAFFOLD-OWNED] Recent activity list for recently generated quizzes.
  */
 export default function RecentQuizzes({
   heading,
@@ -32,7 +30,7 @@ export default function RecentQuizzes({
 
   useEffect(() => {
     let active = true;
-    getUserQuizHistory().then((history) => {
+    getUserGeneratedQuizHistory().then((history) => {
       if (active)
         setRows(Array.isArray(history) ? history.slice(0, limit) : []);
     });
@@ -65,15 +63,12 @@ export default function RecentQuizzes({
                   className="flex w-full flex-wrap items-baseline justify-between gap-[12px] border-t-2 border-divider px-[6px] py-[14px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
                   <span className="text-[15px] font-extrabold">
-                    {row.quiz_title || "Untitled quiz"}
+                    {row.quiz_name || "Untitled quiz"}
                   </span>
                   <span className="text-[13px] text-ink/60">
-                    {typeof row.score === "number" &&
-                    typeof row.total_questions === "number"
-                      ? `Score ${row.score}/${row.total_questions}`
-                      : "Attempt"}
-                    {typeof row.percentage === "number"
-                      ? ` · ${row.percentage.toFixed(0)}%`
+                    {row.question_type || "Quiz"}
+                    {Array.isArray(row.questions)
+                      ? ` · ${row.questions.length} questions`
                       : ""}
                   </span>
                 </button>
