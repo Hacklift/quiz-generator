@@ -4,7 +4,9 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/router";
@@ -18,10 +20,14 @@ import { updatePersona } from "@features/persona/api/personaApi";
 import {
   clearStoredPersona,
   readStoredPersona,
+  readStoredPersonaTopic,
   writeStoredPersona,
 } from "@features/persona/lib/personaStorage";
 import { resolvePersona } from "@features/persona/lib/resolvePersona";
-import type { PersonaState } from "@features/persona/types/persona";
+import type {
+  PersonaState,
+  PersonaWriteSource,
+} from "@features/persona/types/persona";
 
 const EMPTY_STATE: PersonaState = {
   persona: null,
@@ -37,6 +43,9 @@ const EMPTY_STATE: PersonaState = {
 
 const PersonaContext = createContext<PersonaState>(EMPTY_STATE);
 
+const samePersona = (first: Persona | null, second: Persona | null) =>
+  first?.category === second?.category && first?.userType === second?.userType;
+
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const router = useRouter();
@@ -44,6 +53,23 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   // Local override so a fresh pick renders immediately, before the profile
   // round-trip completes.
   const [override, setOverride] = useState<Persona | null>(null);
+  const [storedPersona, setStoredPersona] = useState<Persona | null>(null);
+  const wasAuthenticatedRef = useRef(isAuthenticated);
+
+  useEffect(() => {
+    setStoredPersona(readStoredPersona());
+  }, []);
+
+  useEffect(() => {
+    if (wasAuthenticatedRef.current && !isAuthenticated) {
+      setOverride(null);
+      setStoredPersona(null);
+      clearStoredPersona();
+    } else if (!wasAuthenticatedRef.current && isAuthenticated) {
+      setOverride(null);
+    }
+    wasAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
 
   const resolved = useMemo(() => {
     if (override) {
@@ -60,25 +86,70 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         persona: (router.query?.persona as string) ?? null,
         category: (router.query?.category as string) ?? null,
       },
-      stored: readStoredPersona(),
+      stored: storedPersona,
     });
-  }, [override, user, router.query]);
+  }, [override, storedPersona, user, router.query]);
+
+  useEffect(() => {
+    if (resolved.source !== "query" || !resolved.persona) {
+      return;
+    }
+
+    const topic = Array.isArray(router.query?.topic)
+      ? router.query.topic[0]
+      : router.query?.topic;
+
+    const hasTopicParam = typeof topic === "string";
+    const normalizedTopic = hasTopicParam ? topic.trim().slice(0, 300) : "";
+    const storedTopic = readStoredPersonaTopic(resolved.persona) || "";
+    const storagePersona = storedPersona ?? readStoredPersona();
+    const isStoredPersonaCurrent = samePersona(storagePersona, resolved.persona);
+    const targetTopic = hasTopicParam ? normalizedTopic : storedTopic;
+
+    if (!isStoredPersonaCurrent || storedTopic !== targetTopic) {
+      writeStoredPersona(
+        resolved.persona,
+        hasTopicParam ? { topic } : undefined,
+      );
+    }
+    if (!samePersona(storedPersona, resolved.persona)) {
+      setStoredPersona(resolved.persona);
+    }
+  }, [
+    resolved.persona,
+    resolved.source,
+    router.query?.topic,
+    storedPersona,
+  ]);
 
   const setPersona = useCallback(
-    async (persona: Persona) => {
-      setOverride(persona);
-      writeStoredPersona(persona);
-
+    async (
+      persona: Persona,
+      options: { source?: PersonaWriteSource } = {},
+    ) => {
       if (isAuthenticated) {
-        await updatePersona(persona);
-        await refreshUser();
+        setOverride(persona);
+        try {
+          await updatePersona(persona, options.source ?? "profile");
+          await refreshUser();
+          clearStoredPersona();
+          setStoredPersona(null);
+        } catch (error) {
+          setOverride(null);
+          throw error;
+        }
+        return;
       }
+
+      writeStoredPersona(persona);
+      setStoredPersona(persona);
     },
     [isAuthenticated, refreshUser],
   );
 
   const clearPersona = useCallback(() => {
     setOverride(null);
+    setStoredPersona(null);
     clearStoredPersona();
   }, []);
 
