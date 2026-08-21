@@ -1,9 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Request, Response
 
 from server.app.api.health import router as health_router
-from server.app.assistant.routes import router as assistant_router
 from server.app.auth.routes import router as auth_router
-from server.app.billing.routes import router as billing_router
 from server.app.core.rate_limiter import limiter
 from server.app.notifications.routes import router as notifications_router
 from server.app.quiz.routes.attempts import router as attempts_router
@@ -22,6 +22,25 @@ from server.app.share.routes import router as share_router
 from server.app.users.routes import router as users_router
 
 
+logger = logging.getLogger(__name__)
+
+try:
+    from server.app.billing.routes import router as billing_router
+except ModuleNotFoundError as exc:
+    if exc.name != "stripe":
+        raise
+    billing_router = None
+    logger.warning("Billing routes disabled because optional dependency 'stripe' is not installed.")
+
+try:
+    from server.app.assistant.routes import router as assistant_router
+except ModuleNotFoundError as exc:
+    if exc.name != "mcp":
+        raise
+    assistant_router = None
+    logger.warning("Assistant routes disabled because optional dependency 'mcp' is not installed.")
+
+
 router = APIRouter()
 
 
@@ -32,9 +51,11 @@ async def read_root(request: Request, response: Response):
 
 
 router.include_router(health_router, prefix="/api", tags=["healthcheck"])
-router.include_router(assistant_router, prefix="/api", tags=["assistant"])
+if assistant_router is not None:
+    router.include_router(assistant_router, prefix="/api", tags=["assistant"])
 router.include_router(auth_router, prefix="/auth", tags=["authentication"])
-router.include_router(billing_router)
+if billing_router is not None:
+    router.include_router(billing_router)
 router.include_router(users_router)
 router.include_router(quiz_generation_router, prefix="/api", tags=["quiz"])
 router.include_router(canonical_quizzes_router, prefix="/api", tags=["quiz"])

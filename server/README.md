@@ -53,11 +53,15 @@ Payment-specific variables:
 
 ```plaintext
 FRONTEND_BASE_URL=http://localhost:3000
+ASSISTANT_INTERNAL_MCP_SECRET=replace-with-a-long-random-shared-secret
 STRIPE_SECRET_KEY=sk_test_replace_me
 STRIPE_WEBHOOK_SECRET=whsec_replace_me
 STRIPE_PRICE_ID_MONTHLY=price_replace_monthly
 STRIPE_PRICE_ID_YEARLY=price_replace_yearly
 ```
+
+If you are not using the assistant/MCP flow in a non-Docker environment, set
+`ASSISTANT_ENABLED=false` instead of leaving the secret unset.
 
 For document-based quiz generation with RAG, configure:
 
