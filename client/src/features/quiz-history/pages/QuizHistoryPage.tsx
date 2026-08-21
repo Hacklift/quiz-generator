@@ -12,50 +12,36 @@ import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
 
-interface QuizHistoryQuestion {
+interface QuizAttemptQuestion {
   question: string;
-  options?: string[];
-  answer: string;
+  user_answer?: string | number | null;
+  correct_answer?: string | number | null;
+  is_correct: boolean;
+  result: string;
+  accuracy_percentage?: number | null;
+  question_type: string;
 }
 
-interface LiveQuizStats {
-  invited_participants: number;
-  joined_participants: number;
-  completed_participants: number;
-  average_score?: number | null;
-  best_score?: number | null;
-  quiz_status: string;
-}
-
-interface QuizHistoryItem {
+interface QuizAttemptItem {
   id?: string;
   _id?: string;
-  quiz_id?: string;
-  created_at?: string;
-  quiz_name?: string;
-  question_type: string;
-  difficulty_level?: string;
-  profession?: string;
-  audience_type?: string;
-  live_quiz_enabled?: boolean;
-  live_quiz_stats?: LiveQuizStats | null;
-  invited_participants?: number;
-  joined_participants?: number;
-  completed_participants?: number;
-  average_score?: number | null;
-  best_score?: number | null;
-  quiz_status?: string;
-  questions: QuizHistoryQuestion[];
+  quiz_id: string;
+  quiz_title?: string | null;
+  score: number;
+  percentage: number;
+  total_questions: number;
+  submitted_at?: string;
+  question_results: QuizAttemptQuestion[];
 }
 
-const getQuizHistoryId = (quizItem: Partial<QuizHistoryItem>) =>
+const getQuizHistoryId = (quizItem: Partial<QuizAttemptItem>) =>
   quizItem._id || quizItem.id || "";
 
 const DisplayQuizHistoryPage = ({
   quizHistory,
   onDelete,
 }: {
-  quizHistory: QuizHistoryItem[];
+  quizHistory: QuizAttemptItem[];
   onDelete: (historyId: string) => Promise<void>;
 }) => {
   const router = useRouter();
@@ -86,7 +72,7 @@ const DisplayQuizHistoryPage = ({
 
           {quizHistory.length === 0 ? (
             <p className="text-center text-gray-600">
-              No quiz history available.
+              No graded quiz attempts available yet.
             </p>
           ) : (
             quizHistory.map((quizItem, idx) => (
@@ -98,33 +84,21 @@ const DisplayQuizHistoryPage = ({
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-500 mb-2">
-                      Generated on:{" "}
-                      {quizItem.created_at
-                        ? new Date(quizItem.created_at).toLocaleString()
+                      Submitted on:{" "}
+                      {quizItem.submitted_at
+                        ? new Date(quizItem.submitted_at).toLocaleString()
                         : "Unknown date"}
                     </p>
                     <h2 className="text-lg font-semibold text-[#0F2654]">
-                      {quizItem.profession ||
-                        quizItem.quiz_name ||
-                        "Quiz History Item"}
+                      {quizItem.quiz_title || "Quiz Attempt"}
                     </h2>
                     <p className="text-sm text-gray-600">
-                      {quizItem.question_type} ·{" "}
-                      {quizItem.difficulty_level || "N/A"}
+                      Score: {quizItem.score}/{quizItem.total_questions} ·{" "}
+                      {quizItem.percentage.toFixed(0)}%
                     </p>
                   </div>
 
                   <div className="flex gap-2">
-                    {quizItem.live_quiz_enabled && quizItem.quiz_id && (
-                      <button
-                        onClick={() =>
-                          router.push(`/my-live-quizzes/${quizItem.quiz_id}`)
-                        }
-                        className="px-3 py-1 rounded-lg border border-[#0a3264] text-[#0a3264] text-sm hover:bg-blue-50"
-                      >
-                        Live Dashboard
-                      </button>
-                    )}
                     <button
                       onClick={() =>
                         router.push(
@@ -149,79 +123,57 @@ const DisplayQuizHistoryPage = ({
                   </div>
                 </div>
 
-                {quizItem.live_quiz_enabled && (
-                  <div className="mb-4 grid gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 sm:grid-cols-3">
-                    <span>
-                      Invited:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.invited_participants ??
-                          quizItem.invited_participants ??
-                          0}
-                      </strong>
-                    </span>
-                    <span>
-                      Joined:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.joined_participants ??
-                          quizItem.joined_participants ??
-                          0}
-                      </strong>
-                    </span>
-                    <span>
-                      Completed:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.completed_participants ??
-                          quizItem.completed_participants ??
-                          0}
-                      </strong>
-                    </span>
-                    <span>
-                      Average:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.average_score ??
-                          quizItem.average_score ??
-                          "-"}
-                      </strong>
-                    </span>
-                    <span>
-                      Best:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.best_score ??
-                          quizItem.best_score ??
-                          "-"}
-                      </strong>
-                    </span>
-                    <span>
-                      Status:{" "}
-                      <strong>
-                        {quizItem.live_quiz_stats?.quiz_status ??
-                          quizItem.quiz_status ??
-                          "not_live"}
-                      </strong>
-                    </span>
-                  </div>
-                )}
+                <div className="mb-4 grid gap-3 rounded-md border border-[#0F2654]/10 bg-[#f8fbff] p-3 text-sm text-slate-700 sm:grid-cols-3">
+                  <span>
+                    Correct: <strong>{quizItem.score}</strong>
+                  </span>
+                  <span>
+                    Incorrect:{" "}
+                    <strong>{quizItem.total_questions - quizItem.score}</strong>
+                  </span>
+                  <span>
+                    Suggested retry set:{" "}
+                    <strong>
+                      {
+                        quizItem.question_results.filter(
+                          (item) => !item.is_correct,
+                        ).length
+                      }
+                    </strong>
+                  </span>
+                </div>
 
                 <div className="space-y-4">
-                  {quizItem.questions.map((quizQuestion, qIndex) => (
-                    <div key={qIndex} className="mb-4">
+                  {quizItem.question_results.map((quizQuestion, qIndex) => (
+                    <div
+                      key={qIndex}
+                      className={`mb-4 rounded-lg border p-4 ${
+                        quizQuestion.is_correct
+                          ? "border-emerald-200 bg-emerald-50/60"
+                          : "border-amber-200 bg-amber-50/60"
+                      }`}
+                    >
                       <h3 className="font-semibold text-gray-800 text-base sm:text-lg mb-1">
                         {qIndex + 1}. {quizQuestion.question}
                       </h3>
-
-                      {quizQuestion.options && (
-                        <ul className="ml-4 list-disc list-inside text-sm text-gray-700">
-                          {quizQuestion.options.map((option, optIdx) => (
-                            <li key={optIdx} className="py-0.5">
-                              {option}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-
-                      <p className="mt-1 text-sm text-[#0F2654]">
-                        <strong>Answer:</strong> {quizQuestion.answer}
+                      <p className="text-sm text-gray-600">
+                        {quizQuestion.question_type} · {quizQuestion.result}
                       </p>
+                      <p className="mt-2 text-sm text-slate-700">
+                        <strong>Your answer:</strong>{" "}
+                        {quizQuestion.user_answer?.toString() || "No answer"}
+                      </p>
+                      <p className="mt-1 text-sm text-[#0F2654]">
+                        <strong>Correct answer:</strong>{" "}
+                        {quizQuestion.correct_answer?.toString() ||
+                          "Unavailable"}
+                      </p>
+                      {typeof quizQuestion.accuracy_percentage === "number" && (
+                        <p className="mt-1 text-sm text-slate-700">
+                          <strong>Accuracy:</strong>{" "}
+                          {quizQuestion.accuracy_percentage.toFixed(0)}%
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -238,8 +190,8 @@ const DisplayQuizHistoryPage = ({
               Confirm Delete
             </h2>
             <p className="text-sm text-gray-600 mb-6">
-              Are you sure you want to delete this quiz history item? This
-              action cannot be undone.
+              Are you sure you want to delete this quiz attempt? This action
+              cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
               <button
@@ -272,7 +224,7 @@ export default function DisplayQuizHistory({
   openLoginModal: () => void;
 }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const [quizHistory, setQuizHistory] = useState<QuizHistoryItem[]>([]);
+  const [quizHistory, setQuizHistory] = useState<QuizAttemptItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -285,7 +237,7 @@ export default function DisplayQuizHistory({
 
     const fetchQuizHistory = async () => {
       try {
-        const rawHistory: QuizHistoryItem[] =
+        const rawHistory: QuizAttemptItem[] =
           (await getUserQuizHistory()) ?? [];
         setQuizHistory(rawHistory);
       } catch (error) {
@@ -325,10 +277,10 @@ export default function DisplayQuizHistory({
               setQuizHistory((prev) =>
                 prev.filter((item) => getQuizHistoryId(item) !== historyId),
               );
-              toast.success("Quiz history item deleted.");
+              toast.success("Quiz attempt deleted.");
             } catch (error) {
-              console.error("Failed to delete quiz history item:", error);
-              toast.error("Failed to delete quiz history item.");
+              console.error("Failed to delete quiz attempt:", error);
+              toast.error("Failed to delete quiz attempt.");
             }
           }}
         />

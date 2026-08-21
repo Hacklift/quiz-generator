@@ -10,6 +10,33 @@ import { API_BASE_URL, api } from "@shared/api/http";
 
 export { api };
 
+const getAuthErrorMessage = (error: any, fallback: string): string => {
+  const detail = error?.response?.data?.detail;
+  const message = error?.response?.data?.message;
+
+  if (Array.isArray(detail)) {
+    return detail[0]?.msg || message || fallback;
+  }
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
+
+  if (axios.isAxiosError(error) && !error.response) {
+    return "Could not reach the server. Check your connection and try again.";
+  }
+
+  if (typeof error?.message === "string" && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallback;
+};
+
 export const registerUser = async (data: {
   username: string;
   email: string;
@@ -20,13 +47,7 @@ export const registerUser = async (data: {
     const response = await api.post("/auth/register/", data);
     return response.data;
   } catch (error: any) {
-    const detail = error.response?.data?.detail;
-    const message = Array.isArray(detail)
-      ? detail[0]?.msg || "Invalid input."
-      : typeof detail === "string"
-        ? detail
-        : error.message || "Registration failed.";
-    throw new Error(message);
+    throw new Error(getAuthErrorMessage(error, "Registration failed."));
   }
 };
 
@@ -44,7 +65,7 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
     const response = await api.post("/auth/login", payload);
     return response.data as LoginResponse;
   } catch (error: any) {
-    throw new Error(error.response?.data?.detail || "Login failed");
+    throw new Error(getAuthErrorMessage(error, "Login failed."));
   }
 };
 
@@ -62,7 +83,7 @@ export const refreshAccessToken = async (): Promise<RefreshTokenResponse> => {
     );
     return response.data;
   } catch (error: any) {
-    throw new Error(error.response?.data?.detail || "Token refresh failed");
+    throw new Error(getAuthErrorMessage(error, "Token refresh failed."));
   }
 };
 
@@ -95,7 +116,7 @@ export const updateProfile = async (
     const response = await api.put("/auth/profile", data);
     return response.data as UpdateProfileResponse;
   } catch (error: any) {
-    throw new Error(error.response?.data?.detail || "Failed to update profile");
+    throw new Error(getAuthErrorMessage(error, "Failed to update profile."));
   }
 };
 

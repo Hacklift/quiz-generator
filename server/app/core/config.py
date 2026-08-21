@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from importlib.util import find_spec
 from typing import Literal, Optional
 from urllib.parse import urlparse, urlunparse
 
@@ -7,7 +8,9 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    JWT_SECRET: str
+    JWT_SECRET: str = Field(
+        validation_alias=AliasChoices("JWT_SECRET", "JWT_SECRET_KEY"),
+    )
     JWT_ALGORITHM: str = "HS256"
     VERIFICATION_TOKEN_EXPIRE_HOURS: int = 2
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -15,8 +18,12 @@ class Settings(BaseSettings):
     ENABLE_TEST_USER_ROUTES: bool = False
     ENABLE_PUBLIC_USER_LIST: bool = False
 
-    email_sender: str
-    email_password: str
+    email_sender: str = Field(
+        validation_alias=AliasChoices("EMAIL_SENDER", "SENDER_EMAIL", "email_sender"),
+    )
+    email_password: str = Field(
+        validation_alias=AliasChoices("EMAIL_PASSWORD", "SENDER_PASSWORD", "email_password"),
+    )
     email_host: str
     email_port: int
     share_url: str
@@ -50,7 +57,7 @@ class Settings(BaseSettings):
     V2_BACKFILL_LOCK_LEASE_SECONDS: int = 600
     ASSISTANT_ENABLED: bool = True
     ASSISTANT_INTERNAL_MCP_URL: Optional[str] = None
-    ASSISTANT_INTERNAL_MCP_SECRET: str
+    ASSISTANT_INTERNAL_MCP_SECRET: Optional[str] = None
     ASSISTANT_PLANNER_PROVIDER: str = "gemini"
     ASSISTANT_PLANNER_MODEL: str = "gemini-2.5-flash"
     ASSISTANT_PLANNER_FALLBACK_MODEL: str = "gemini-2.5-flash-lite"
@@ -67,14 +74,18 @@ class Settings(BaseSettings):
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:
+        if not self.ASSISTANT_INTERNAL_MCP_SECRET or not self.ASSISTANT_INTERNAL_MCP_SECRET.strip():
+            raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
         return self.ASSISTANT_INTERNAL_MCP_SECRET
 
     @model_validator(mode="after")
     def resolve_internal_mcp_url(self):
-        if not self.ASSISTANT_INTERNAL_MCP_SECRET.strip():
-            raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
         if self.QUIZ_GENERATION_MAX_QUESTIONS < 1:
             raise ValueError("QUIZ_GENERATION_MAX_QUESTIONS must be at least 1")
+        if not self.ASSISTANT_ENABLED or find_spec("mcp") is None:
+            return self
+        if not self.ASSISTANT_INTERNAL_MCP_SECRET or not self.ASSISTANT_INTERNAL_MCP_SECRET.strip():
+            raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
         if not self.ASSISTANT_INTERNAL_MCP_URL:
             port = os.getenv("PORT", "8000")
             self.ASSISTANT_INTERNAL_MCP_URL = f"http://127.0.0.1:{port}/internal/mcp"

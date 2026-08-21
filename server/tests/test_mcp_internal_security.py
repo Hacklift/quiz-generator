@@ -23,6 +23,22 @@ def test_internal_mcp_url_defaults_to_port_env(monkeypatch):
     assert config.ASSISTANT_INTERNAL_MCP_URL == "http://127.0.0.1:10000/internal/mcp"
 
 
+def test_settings_accept_legacy_env_aliases(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.delenv("EMAIL_SENDER", raising=False)
+    monkeypatch.delenv("EMAIL_PASSWORD", raising=False)
+    monkeypatch.setenv("JWT_SECRET_KEY", "legacy-secret")
+    monkeypatch.setenv("SENDER_EMAIL", "legacy@example.com")
+    monkeypatch.setenv("SENDER_PASSWORD", "legacy-password")
+    monkeypatch.setenv("ASSISTANT_ENABLED", "false")
+
+    config = Settings()
+
+    assert config.JWT_SECRET == "legacy-secret"
+    assert config.email_sender == "legacy@example.com"
+    assert config.email_password == "legacy-password"
+
+
 def test_assistant_mcp_client_sends_internal_secret(monkeypatch):
     monkeypatch.setattr(settings, "ASSISTANT_INTERNAL_MCP_SECRET", "internal-test-secret")
     client = AssistantMcpClient(mcp_url="http://127.0.0.1:8000/internal/mcp")

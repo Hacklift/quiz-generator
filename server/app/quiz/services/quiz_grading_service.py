@@ -4,19 +4,30 @@ Answers are graded against the stored quiz document, never against
 correct answers supplied by the client. Correct answers are revealed
 only in the grading response, after submission.
 """
+import logging
+from collections import Counter
 from typing import Any, Optional
 
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
     get_folders_v2_collection,
+    get_quiz_attempts_v2_collection,
     get_quiz_history_v2_collection,
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
 )
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
+from server.app.quiz.repositories.v2.models.reference_models import (
+    QuizAttemptDocumentV2,
+    QuizAttemptQuestionResultV2,
+)
+from server.app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 from server.app.quiz.utils.grading import grade_answers
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubmissionMismatchError(ValueError):
@@ -44,6 +55,17 @@ def grade_against_stored_questions(
     Raises SubmissionMismatchError when a submitted question is not part of
     the stored quiz.
     """
+    stored_question_counts = Counter(
+        question["question"] for question in stored_questions
+    )
+    submitted_question_counts = Counter(
+        submitted.get("question") for submitted in submitted_answers
+    )
+    if submitted_question_counts != stored_question_counts:
+        raise SubmissionMismatchError(
+            "Submitted answers do not match this quiz's questions."
+        )
+
     questions_by_text = {q["question"]: q for q in stored_questions}
 
     grading_payload = []
@@ -78,6 +100,7 @@ class QuizGradingService:
         *,
         quiz_repository: Optional[QuizV2Repository] = None,
         reference_repository: Optional[ReferenceV2Repository] = None,
+        attempt_repository: Optional[QuizAttemptV2Repository] = None,
     ):
         self.quiz_repository = (
             quiz_repository
@@ -92,6 +115,39 @@ class QuizGradingService:
                 get_folder_items_v2_collection(),
                 get_saved_quizzes_v2_collection(),
                 get_quiz_history_v2_collection(),
+            )
+        )
+        self.attempt_repository = (
+            attempt_repository
+            if attempt_repository is not None
+            else QuizAttemptV2Repository(get_quiz_attempts_v2_collection())
+        )
+
+    @staticmethod
+    def _build_attempt_summary(graded_results: list[dict[str, Any]]) -> tuple[int, float]:
+        total_questions = len(graded_results)
+        score = sum(1 for result in graded_results if result.get("is_correct"))
+        percentage = round((score / total_questions) * 100, 2) if total_questions else 0.0
+        return score, percentage
+
+    async def _store_attempt(
+        self,
+        *,
+        user_id: str,
+        quiz_id: str,
+        graded_results: list[dict[str, Any]],
+    ) -> None:
+        score, percentage = self._build_attempt_summary(graded_results)
+        await self.attempt_repository.insert_attempt(
+            QuizAttemptDocumentV2(
+                user_id=user_id,
+                quiz_id=quiz_id,
+                question_results=[
+                    QuizAttemptQuestionResultV2(**graded_result)
+                    for graded_result in graded_results
+                ],
+                score=score,
+                percentage=percentage,
             )
         )
 
@@ -109,6 +165,7 @@ class QuizGradingService:
         submitted_answers: list[dict[str, Any]],
         *,
         source: str = "mock",
+        user_id: str | None = None,
     ) -> Optional[list[dict[str, Any]]]:
         """Returns graded results, or None when the quiz does not exist."""
         quiz_doc = await self._resolve_quiz(quiz_id)
@@ -122,9 +179,23 @@ class QuizGradingService:
             }
             for question in quiz_doc.questions
         ]
-        return grade_against_stored_questions(
+        graded_results = grade_against_stored_questions(
             stored_questions,
             submitted_answers,
             quiz_type=quiz_doc.quiz_type.value,
             source=source,
         )
+        if user_id is not None:
+            try:
+                await self._store_attempt(
+                    user_id=user_id,
+                    quiz_id=str(quiz_doc.id),
+                    graded_results=graded_results,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to persist quiz attempt for user_id=%s quiz_id=%s",
+                    user_id,
+                    str(quiz_doc.id),
+                )
+        return graded_results

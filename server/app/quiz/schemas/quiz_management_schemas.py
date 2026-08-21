@@ -55,5 +55,28 @@ class QuizHistoryDetailResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class QuizAttemptQuestionResultResponse(BaseModel):
+    question: str
+    user_answer: str | int | None = None
+    correct_answer: str | int | None = None
+    question_type: str
+    accuracy_percentage: float | None = None
+    is_correct: bool
+    result: str
+
+
+class QuizAttemptResponse(BaseModel):
+    id: str = Field(alias="_id")
+    quiz_id: str
+    quiz_title: Optional[str] = None
+    score: int
+    percentage: float
+    total_questions: int
+    submitted_at: datetime
+    question_results: list[QuizAttemptQuestionResultResponse]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class DeleteResourceResponse(BaseModel):
     message: str
