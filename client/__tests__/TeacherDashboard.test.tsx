@@ -47,6 +47,7 @@ describe("TeacherDashboard", () => {
     expect(
       screen.getByText("Classroom assessment presets"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Class quiz")).toBeInTheDocument();
     expect(screen.getByText("Homework check")).toBeInTheDocument();
     expect(screen.getByText("Exam revision")).toBeInTheDocument();
   });
@@ -54,6 +55,14 @@ describe("TeacherDashboard", () => {
   test("navigates to the persona-aware generate page with teacher presets", () => {
     render(
       <TeacherDashboard persona={mockTeacherPersona} user={mockUser} />,
+    );
+
+    const classQuizBtn = screen.getByRole("button", {
+      name: /Create Class quiz/i,
+    });
+    fireEvent.click(classQuizBtn);
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("preset=class-quiz"),
     );
 
     const homeworkBtn = screen.getByRole("button", {

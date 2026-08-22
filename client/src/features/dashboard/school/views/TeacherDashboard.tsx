@@ -30,7 +30,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
   const presets: TeacherPreset[] = [
     {
       id: "class-quiz",
-      title: `Class ${t("assignment")}`,
+      title: "Class quiz",
       badge: "In-class / Auto-marked",
       description: `Run a live, interactive check during your ${t(
         "session",
