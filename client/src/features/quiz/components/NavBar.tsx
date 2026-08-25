@@ -18,6 +18,7 @@ import {
   titleCaseTerm,
   type TerminologyResolver,
 } from "@shared/config/terminology";
+import { ROUTES } from "@shared/config/patterns/routes";
 import NotificationBell from "@features/notifications/components/NotificationBell";
 import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
 
@@ -31,11 +32,10 @@ type NavItem =
   | { kind: "link"; label: string; href: string; authOnly?: boolean }
   | { kind: "action"; label: string; action: "browse" };
 
-function navigationItems(t: TerminologyResolver): NavItem[] {
+export function navigationItems(): NavItem[] {
   return [
     { kind: "link", label: "Home", href: "/" },
     { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "link", label: `Create ${t("quiz")}`, href: "/generate" },
     { kind: "action", label: "Categories", action: "browse" },
     { kind: "link", label: "Pricing", href: "/#pricing" },
   ];
@@ -83,7 +83,7 @@ const NavBar: React.FC = () => {
     return router.pathname === href;
   };
 
-  const visibleItems = navigationItems(t).filter(
+  const visibleItems = navigationItems().filter(
     (item) => !("authOnly" in item && item.authOnly) || isAuthenticated,
   );
   const workspaceLinks = mobileWorkspaceLinks(t);
@@ -291,6 +291,7 @@ const NavBar: React.FC = () => {
       <SignInModal
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
+        redirectTo={ROUTES.DASHBOARD}
         switchToSignUp={switchToSignUp}
       />
       <BrowseModal

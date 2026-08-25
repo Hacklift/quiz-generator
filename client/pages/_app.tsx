@@ -62,7 +62,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         <SignInModal
           isOpen={showSignInModal}
           onClose={closeSignInModal}
-          redirectTo={ROUTES.HOME}
+          redirectTo={ROUTES.DASHBOARD}
           switchToSignUp={() => {
             closeSignInModal();
             router.push(ROUTES.REGISTER);

@@ -12,7 +12,7 @@ import {
  * Persona-bound terminology.
  *
  *   const t = useTerms();
- *   t("learner", "plural")   // "students" for a teacher, "employees" for HR
+ *   t("learner", "plural")   // "students" for a teacher, "team members" for HR
  *
  * Persona views must use this instead of hardcoding learner/class/team nouns.
  */

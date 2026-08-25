@@ -16,6 +16,7 @@ import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
+import { useTerms } from "@features/persona/hooks/useTerms";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 
 type ApiErrorLike = {
@@ -127,6 +128,7 @@ export default function QuizForm() {
   // entry points and post-auth carry-through use the same app-wide rule.
   const searchParams = useSearchParams();
   const { persona } = usePersona();
+  const t = useTerms();
 
   useEffect(() => {
     const personaTopic =
@@ -175,6 +177,8 @@ export default function QuizForm() {
   }, [user, isAuthenticated]);
 
   const handleGenerateQuiz = async () => {
+    const resolvedAudienceType = audienceType || t("learner", "plural");
+
     if (generationMode === "topic" && !profession) {
       setErrorMessage("Please enter a profession or topic for your quiz.");
       return;
@@ -280,7 +284,7 @@ export default function QuizForm() {
         payload.append("question_type", questionType);
         payload.append("num_questions", numQuestions.toString());
         payload.append("difficulty_level", difficultyLevel);
-        payload.append("audience_type", audienceType || "students");
+        payload.append("audience_type", resolvedAudienceType);
         payload.append("custom_instruction", customInstruction);
         payload.append("token", token);
         payload.append("document_title", documentTitle);
@@ -321,7 +325,7 @@ export default function QuizForm() {
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
               profession: response.title,
-              audience_type: audienceType || "students",
+              audience_type: resolvedAudienceType,
               custom_instruction:
                 customInstruction ||
                 `Generated from ${response.source_document_type.toUpperCase()} material.`,
@@ -338,7 +342,7 @@ export default function QuizForm() {
           customInstruction:
             customInstruction ||
             `Generated from ${response.source_document_type.toUpperCase()} material.`,
-          audienceType: audienceType || "students",
+          audienceType: resolvedAudienceType,
           difficultyLevel,
         }).toString();
 
@@ -358,7 +362,7 @@ export default function QuizForm() {
         num_questions: numQuestions,
         profession,
         custom_instruction: customInstruction,
-        audience_type: audienceType,
+        audience_type: resolvedAudienceType,
         difficulty_level: difficultyLevel,
         token,
         live_quiz_enabled: enableLiveQuiz,
@@ -390,7 +394,7 @@ export default function QuizForm() {
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
               profession,
-              audience_type: audienceType,
+              audience_type: resolvedAudienceType,
               custom_instruction: customInstruction,
             },
             questions,
@@ -407,7 +411,7 @@ export default function QuizForm() {
         title: profession || `${questionType} Quiz`,
         description:
           customInstruction ||
-          `A ${difficultyLevel} ${questionType} quiz for ${audienceType || "students"}.`,
+          `A ${difficultyLevel} ${questionType} quiz for ${resolvedAudienceType}.`,
         question_type: questionType,
         questions,
         live_quiz_enabled: data?.live_quiz_enabled,
@@ -425,7 +429,7 @@ export default function QuizForm() {
         numQuestions: numQuestions.toString(),
         profession,
         customInstruction,
-        audienceType,
+        audienceType: resolvedAudienceType,
         difficultyLevel,
         token,
         liveQuiz: enableLiveQuiz ? "true" : "false",

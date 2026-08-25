@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import Image from "next/image";
 import SignInModal from "@features/auth/components/SignInModal";
+import { ROUTES } from "@shared/config/patterns/routes";
 import { useAuth } from "@features/auth/context/authContext";
 import {
   createCheckoutSession,
@@ -454,6 +455,7 @@ export default function QuizwerkHomePage() {
       <SignInModal
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
+        redirectTo={ROUTES.DASHBOARD}
         switchToSignUp={() => {}}
       />
     </div>

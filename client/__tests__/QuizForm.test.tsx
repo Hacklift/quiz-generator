@@ -93,5 +93,10 @@ describe("QuizForm", () => {
         expect.stringContaining("/quiz_display?"),
       );
     });
+
+    expect(publicApi.post).toHaveBeenCalledWith(
+      "/api/get-questions",
+      expect.objectContaining({ audience_type: "learners" }),
+    );
   });
 });
