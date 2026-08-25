@@ -4,7 +4,6 @@ import React from "react";
 import { useRouter } from "next/router";
 import { useTerms } from "@features/persona/hooks/useTerms";
 import { personaGenerateHref } from "@shared/config/persona";
-import { titleCaseTerm } from "@shared/config/terminology";
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
 
