@@ -86,7 +86,7 @@ describe("LecturerDashboard", () => {
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes");
 
     const liveResultsBtn = screen.getByRole("button", {
-      name: /View live session results/i,
+      name: /View live lecture results/i,
     });
     fireEvent.click(liveResultsBtn);
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes");

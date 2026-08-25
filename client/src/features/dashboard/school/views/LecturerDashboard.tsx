@@ -153,7 +153,7 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
               id="lecturer-results-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              {titleCaseTerm(t("group"))} session results
+              {titleCaseTerm(t("group"))} {t("session")} results
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
               Inspect participation and scores from your live{" "}
@@ -166,7 +166,7 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
               type="button"
               onClick={() => router.push("/my-live-quizzes")}
               className={BTN_PRIMARY}
-              aria-label="View live session results"
+              aria-label={`View live ${t("session")} results`}
             >
               View live {t("session")} results
             </button>
