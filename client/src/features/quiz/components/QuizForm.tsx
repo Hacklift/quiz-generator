@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
@@ -30,6 +30,41 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
+const TEACHER_GENERATION_PRESETS: Record<
+  string,
+  {
+    audienceType: string;
+    customInstruction: string;
+    difficultyLevel: string;
+    numQuestions: number;
+    questionType: string;
+  }
+> = {
+  "class-quiz": {
+    audienceType: "students",
+    customInstruction:
+      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+    difficultyLevel: "easy",
+    numQuestions: 10,
+    questionType: "multichoice",
+  },
+  "homework-check": {
+    audienceType: "students",
+    customInstruction:
+      "Create a homework check with concise questions and answer explanations for rapid marking.",
+    difficultyLevel: "medium",
+    numQuestions: 10,
+    questionType: "short-answer",
+  },
+  "exam-revision": {
+    audienceType: "students",
+    customInstruction:
+      "Create an exam revision quiz that mixes recall and application across the topic.",
+    difficultyLevel: "hard",
+    numQuestions: 10,
+    questionType: "multichoice",
+  },
+};
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
@@ -83,6 +118,7 @@ export default function QuizForm() {
 
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const appliedPresetRef = useRef<string | null>(null);
 
   const handleDocumentFileChange = (file: File | null) => {
     if (!file) {
@@ -136,6 +172,26 @@ export default function QuizForm() {
       setProfession((current) => current || personaTopic);
     }
   }, [persona, searchParams]);
+
+  useEffect(() => {
+    const presetKey = searchParams?.get("preset") || "";
+    const preset = TEACHER_GENERATION_PRESETS[presetKey];
+
+    if (!preset || persona?.userType !== "teacher") {
+      return;
+    }
+    if (appliedPresetRef.current === presetKey) {
+      return;
+    }
+
+    appliedPresetRef.current = presetKey;
+    setGenerationMode("topic");
+    setAudienceType(preset.audienceType);
+    setCustomInstruction((current) => current || preset.customInstruction);
+    setDifficultyLevel(preset.difficultyLevel);
+    setNumQuestions(preset.numQuestions);
+    setQuestionType(preset.questionType);
+  }, [persona?.userType, searchParams]);
 
   useEffect(() => {
     if (user === undefined) return;
