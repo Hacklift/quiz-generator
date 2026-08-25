@@ -21,7 +21,6 @@ from server.app.users.services import (
     get_user_profile_service,
     update_user_persona_service,
     request_email_change_service,
-    update_user_persona_service,
     update_user_profile_service,
     verify_email_change_service,
 )
