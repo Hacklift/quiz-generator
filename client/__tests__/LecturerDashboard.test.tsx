@@ -80,7 +80,7 @@ describe("LecturerDashboard", () => {
     );
 
     const startBtn = screen.getByRole("button", {
-      name: /Start a live lecture/i,
+      name: /Start live lecture/i,
     });
     fireEvent.click(startBtn);
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes");
@@ -92,7 +92,7 @@ describe("LecturerDashboard", () => {
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes");
 
     const historyBtn = screen.getByRole("button", {
-      name: /View homework history/i,
+      name: /All homework history/i,
     });
     fireEvent.click(historyBtn);
     expect(mockPush).toHaveBeenCalledWith("/quiz_history");

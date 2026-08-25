@@ -78,7 +78,7 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push("/my-live-quizzes")}
             className={`${BTN_PRIMARY} px-[28px] py-[14px] text-[16px]`}
-            aria-label={`Start a live ${t("session")}`}
+            aria-label={`Start live ${t("session")}`}
           >
             Start live {t("session")}
           </button>
@@ -174,7 +174,7 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
               type="button"
               onClick={() => router.push("/quiz_history")}
               className={BTN_GHOST}
-              aria-label={`View ${t("assignment")} history`}
+              aria-label={`All ${t("assignment", "plural")} history`}
             >
               All {t("assignment", "plural")}
             </button>
