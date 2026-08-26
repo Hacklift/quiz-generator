@@ -82,6 +82,12 @@ class CanonicalQuizWriteService:
             questions=normalized_questions,
         )
         fingerprint_payload = {
+            # User-owned quizzes must only deduplicate within the same owner.
+            # Without this field, identical generated content can resolve to a
+            # different user's canonical quiz and inherit that user's access
+            # controls. Ownerless seed/legacy content still deduplicates as it
+            # did before because the value remains None.
+            "owner_user_id": quiz_create.owner_user_id,
             "title": quiz_create.title,
             "description": quiz_create.description,
             "quiz_type": quiz_create.quiz_type,
