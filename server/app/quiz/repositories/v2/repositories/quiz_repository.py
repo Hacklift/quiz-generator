@@ -9,6 +9,8 @@ from pymongo.errors import DuplicateKeyError
 
 from ..models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2, QuizQuestionsUpdateV2
 
+_OWNER_SCOPE_UNSET = object()
+
 
 class QuizV2Repository:
     def __init__(self, collection: AsyncIOMotorCollection):
@@ -33,8 +35,17 @@ class QuizV2Repository:
         )
         return QuizDocumentV2(**document) if document else None
 
-    async def find_by_content_fingerprint(self, content_fingerprint: str) -> Optional[QuizDocumentV2]:
-        document = await self.collection.find_one({"content_fingerprint": content_fingerprint})
+    async def find_by_content_fingerprint(
+        self,
+        content_fingerprint: str,
+        owner_user_id: Optional[str] | object = _OWNER_SCOPE_UNSET,
+    ) -> Optional[QuizDocumentV2]:
+        query = {"content_fingerprint": content_fingerprint}
+        if owner_user_id is not _OWNER_SCOPE_UNSET:
+            # MongoDB matches both an explicit null and a missing field here,
+            # preserving ownerless legacy/seed deduplication.
+            query["owner_user_id"] = owner_user_id
+        document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
     async def find_by_structure_fingerprint(self, structure_fingerprint: str) -> Optional[QuizDocumentV2]:
@@ -191,13 +202,19 @@ class QuizV2Repository:
         return QuizDocumentV2(**stored), "updated" if existing else "created"
 
     async def find_or_create_by_fingerprint(self, quiz: QuizDocumentV2) -> QuizDocumentV2:
-        existing = await self.find_by_content_fingerprint(quiz.content_fingerprint)
+        existing = await self.find_by_content_fingerprint(
+            quiz.content_fingerprint,
+            quiz.owner_user_id,
+        )
         if existing:
             return existing
         try:
             return await self.insert_quiz(quiz)
         except DuplicateKeyError:
-            existing = await self.find_by_content_fingerprint(quiz.content_fingerprint)
+            existing = await self.find_by_content_fingerprint(
+                quiz.content_fingerprint,
+                quiz.owner_user_id,
+            )
             if existing:
                 return existing
             raise
