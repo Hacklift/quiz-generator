@@ -20,6 +20,8 @@ import { archivo, BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/q
 const MAX_QUESTIONS = Number(
   process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
 );
+const DURATION_OPTIONS = [5, 10, 15, 20, 30, 45, 60] as const;
+type DurationOption = `${(typeof DURATION_OPTIONS)[number]}` | "custom";
 
 export default function CreateParentPracticePage() {
   const router = useRouter();
@@ -29,6 +31,10 @@ export default function CreateParentPracticePage() {
     "multiplication-tables",
   );
   const [numQuestions, setNumQuestions] = useState(10);
+  const [durationOption, setDurationOption] =
+    useState<DurationOption>("20");
+  const [customDuration, setCustomDuration] = useState("25");
+  const [durationError, setDurationError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [ready, setReady] = useState<ParentPracticeReady | null>(null);
   const presets = useMemo(() => getPresetsForLevel(level), [level]);
@@ -43,10 +49,26 @@ export default function CreateParentPracticePage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const durationMinutes =
+      durationOption === "custom"
+        ? Number(customDuration)
+        : Number(durationOption);
+    if (
+      !Number.isInteger(durationMinutes) ||
+      durationMinutes < 1 ||
+      durationMinutes > 180
+    ) {
+      setDurationError(
+        "Enter a whole number between 1 and 180 minutes.",
+      );
+      return;
+    }
+
+    setDurationError("");
     try {
       setIsCreating(true);
       const params = resolveParentPracticePreset(level, presetId, numQuestions);
-      setReady(await createParentPractice(params));
+      setReady(await createParentPractice(params, durationMinutes));
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not create practice.",
@@ -85,7 +107,7 @@ export default function CreateParentPracticePage() {
               <Kicker>Practice ready</Kicker>
               <h1 className="text-[clamp(28px,4vw,40px)] font-extrabold">{ready.title}</h1>
               <p className="mt-[12px] text-[16px] text-ink/70">
-                {ready.questionCount} questions · Access code {ready.accessCode}
+                {ready.questionCount} questions · {ready.durationMinutes} minutes · Access code {ready.accessCode}
               </p>
               <div className="mt-[28px] flex flex-wrap gap-[12px]">
                 <button className={BTN_PRIMARY} onClick={() => router.push(joinPath)}>
@@ -103,7 +125,7 @@ export default function CreateParentPracticePage() {
               <p className="mt-[12px] max-w-[52ch] leading-[27px] text-ink/70">
                 Choose a level and focused practice set. Marking is automatic.
               </p>
-              <form onSubmit={submit} className="mt-[32px] space-y-[24px] border-t-2 border-divider pt-[28px]">
+              <form noValidate onSubmit={submit} className="mt-[32px] space-y-[24px] border-t-2 border-divider pt-[28px]">
                 <label className="block text-[14px] font-extrabold">
                   Child age/level
                   <select aria-label="Child age/level" value={level} onChange={(event) => selectLevel(event.target.value as ParentPracticeLevel)} className="mt-[8px] block w-full border-2 border-divider bg-paper px-[12px] py-[11px] font-normal">
@@ -120,6 +142,55 @@ export default function CreateParentPracticePage() {
                   Number of questions
                   <input aria-label="Number of questions" type="number" min={1} max={MAX_QUESTIONS} value={numQuestions} onChange={(event) => setNumQuestions(Math.min(MAX_QUESTIONS, Math.max(1, Number(event.target.value))))} className="mt-[8px] block w-full border-2 border-divider bg-paper px-[12px] py-[11px] font-normal" />
                 </label>
+                <div>
+                  <label className="block text-[14px] font-extrabold">
+                    Duration
+                    <select
+                      aria-label="Duration"
+                      value={durationOption}
+                      onChange={(event) => {
+                        setDurationOption(event.target.value as DurationOption);
+                        setDurationError("");
+                      }}
+                      className="mt-[8px] block w-full border-2 border-divider bg-paper px-[12px] py-[11px] font-normal"
+                    >
+                      {DURATION_OPTIONS.map((minutes) => (
+                        <option key={minutes} value={minutes}>
+                          {minutes} minutes
+                        </option>
+                      ))}
+                      <option value="custom">Custom</option>
+                    </select>
+                  </label>
+                  {durationOption === "custom" ? (
+                    <label className="mt-[16px] block text-[14px] font-extrabold">
+                      Custom duration
+                      <span className="mt-[8px] flex items-center gap-[10px] font-normal">
+                        <input
+                          aria-label="Custom duration"
+                          type="number"
+                          min={1}
+                          max={180}
+                          step={1}
+                          value={customDuration}
+                          onChange={(event) => {
+                            setCustomDuration(event.target.value);
+                            setDurationError("");
+                          }}
+                          aria-invalid={Boolean(durationError)}
+                          aria-describedby="duration-error"
+                          className="w-[140px] border-2 border-divider bg-paper px-[12px] py-[11px]"
+                        />
+                        minutes
+                      </span>
+                    </label>
+                  ) : null}
+                  {durationError ? (
+                    <p id="duration-error" role="alert" className="mt-[8px] text-[13px] font-normal text-red-700">
+                      {durationError}
+                    </p>
+                  ) : null}
+                </div>
                 <button type="submit" disabled={isCreating} className={`${BTN_PRIMARY} disabled:cursor-not-allowed disabled:opacity-60`}>
                   {isCreating ? "Creating…" : "Create Practice"}
                 </button>

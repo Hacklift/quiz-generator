@@ -6,18 +6,27 @@ export interface ParentPracticeReady {
   title: string;
   questionCount: number;
   accessCode: string;
+  durationMinutes: number;
 }
 
 export async function createParentPractice(
   params: ParentPracticeGenerationParams,
+  durationMinutes = 20,
 ): Promise<ParentPracticeReady> {
+  if (
+    !Number.isInteger(durationMinutes) ||
+    durationMinutes < 1 ||
+    durationMinutes > 180
+  ) {
+    throw new Error("Duration must be a whole number between 1 and 180 minutes.");
+  }
   const allowFallback =
     process.env.NEXT_PUBLIC_PARENT_PRACTICE_ALLOW_FALLBACK === "true";
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const { data } = await api.post("/api/get-questions", {
     ...params,
     live_quiz_enabled: true,
-    time_limit_minutes: 20,
+    time_limit_minutes: durationMinutes,
     access_code_expires_at: expiresAt.toISOString(),
     participant_access_mode: "public",
     invited_emails: [],
@@ -41,5 +50,6 @@ export async function createParentPractice(
     title: params.profession,
     questionCount: data.questions.length,
     accessCode: data.access_code,
+    durationMinutes,
   };
 }

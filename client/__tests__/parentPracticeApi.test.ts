@@ -33,7 +33,7 @@ describe("parentPracticeApi", () => {
       },
     });
 
-    await createParentPractice(params);
+    await createParentPractice(params, 27);
 
     expect(post).toHaveBeenCalledWith(
       "/api/get-questions",
@@ -44,9 +44,20 @@ describe("parentPracticeApi", () => {
         invited_emails: [],
         send_email_invitations: false,
         allow_fallback: true,
+        time_limit_minutes: 27,
       }),
     );
   });
+
+  test.each([0, -1, 181, 2.5, Number.NaN])(
+    "rejects invalid duration %s before making a request",
+    async (duration) => {
+      await expect(createParentPractice(params, duration)).rejects.toThrow(
+        /between 1 and 180 minutes/i,
+      );
+      expect(post).not.toHaveBeenCalled();
+    },
+  );
 
   test("rejects unrelated generic fallback content", async () => {
     post.mockResolvedValue({
