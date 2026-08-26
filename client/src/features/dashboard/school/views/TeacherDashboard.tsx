@@ -133,7 +133,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
               type="button"
               onClick={() => router.push("/my-live-quizzes")}
               className={BTN_PRIMARY}
-              aria-label="View live session results"
+              aria-label={`View live ${t("session")} results`}
             >
               View live {t("session")} results
             </button>

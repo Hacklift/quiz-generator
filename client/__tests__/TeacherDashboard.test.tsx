@@ -93,7 +93,7 @@ describe("TeacherDashboard", () => {
     );
 
     const liveResultsBtn = screen.getByRole("button", {
-      name: /View live session results/i,
+      name: /View live lesson results/i,
     });
     expect(liveResultsBtn).toBeInTheDocument();
     fireEvent.click(liveResultsBtn);
