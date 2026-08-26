@@ -136,4 +136,76 @@ describe("QuizForm", () => {
       "Create a marking-ready in-class quiz with clear answer options and an answer key.",
     );
   });
+
+  test("applies persona generation defaults for parent role (easy, children, 10 questions)", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "parent",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
+    });
+    expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+  });
+
+  test("applies persona generation defaults for lecturer role (medium, undergraduates, 10 questions)", async () => {
+    mockPersona = { category: "school", userType: "lecturer" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "lecturer",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+        "undergraduates",
+      );
+    });
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+  });
+
+  test("applies persona generation defaults for business corporate role (employees)", async () => {
+    mockPersona = { category: "corporate", userType: "business" };
+    mockSearchParams = new URLSearchParams({
+      category: "corporate",
+      persona: "business",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("employees");
+    });
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+  });
+
+  test("allows query params to override persona defaults", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "parent",
+      difficultyLevel: "hard",
+      numQuestions: "5",
+      audienceType: "toddlers",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("toddlers");
+    });
+    expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("5")).toBeInTheDocument();
+  });
 });
+

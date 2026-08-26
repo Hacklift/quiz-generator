@@ -57,9 +57,7 @@ export interface PersonaCategoryDefinition {
   userTypes: PersonaUserTypeDefinition[];
 }
 
-// TODO(#133): generationDefaults values are engineering placeholders —
-// confirm audience/difficulty/length/format with product before shipping the
-// persona-tuned generation story.
+/** Persona-aware generation defaults mapping for #133. */
 export const PERSONA_TAXONOMY: Record<
   PersonaCategory,
   PersonaCategoryDefinition
@@ -213,6 +211,12 @@ export function getUserTypeDefinition(
   userType: PersonaUserType,
 ): PersonaUserTypeDefinition {
   return USER_TYPE_INDEX[userType];
+}
+
+export function getPersonaGenerationDefaults(
+  userType: PersonaUserType,
+): PersonaGenerationDefaults {
+  return USER_TYPE_INDEX[userType].generationDefaults;
 }
 
 export function getCategoryDefinition(

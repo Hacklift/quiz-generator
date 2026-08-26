@@ -17,6 +17,7 @@ import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryA
 import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
+import { getPersonaGenerationDefaults } from "@shared/config/persona";
 
 type ApiErrorLike = {
   response?: {
@@ -119,6 +120,7 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const appliedPresetRef = useRef<string | null>(null);
+  const appliedPersonaRef = useRef<string | null>(null);
 
   const handleDocumentFileChange = (file: File | null) => {
     if (!file) {
@@ -171,6 +173,31 @@ export default function QuizForm() {
       setGenerationMode("topic");
       setProfession((current) => current || personaTopic);
     }
+  }, [persona, searchParams]);
+
+  // #133: Apply persona-aware generation defaults on form load.
+  useEffect(() => {
+    if (!persona) return;
+    if (appliedPersonaRef.current === persona.userType) return;
+
+    appliedPersonaRef.current = persona.userType;
+    const defaults = getPersonaGenerationDefaults(persona.userType);
+    if (!defaults) return;
+
+    const queryAudience = searchParams?.get("audienceType");
+    const queryDifficulty = searchParams?.get("difficultyLevel");
+    const queryNumQuestions = searchParams?.get("numQuestions");
+    const queryQuestionType = searchParams?.get("questionType");
+
+    setAudienceType(queryAudience || defaults.audienceType);
+    setDifficultyLevel(
+      (queryDifficulty as "easy" | "medium" | "hard") ||
+        defaults.difficultyLevel,
+    );
+    setNumQuestions(
+      queryNumQuestions ? Number(queryNumQuestions) : defaults.numQuestions,
+    );
+    setQuestionType(queryQuestionType || defaults.questionType);
   }, [persona, searchParams]);
 
   useEffect(() => {
