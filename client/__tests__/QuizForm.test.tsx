@@ -1,14 +1,17 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import QuizForm from "@features/quiz/components/QuizForm";
+import type { Persona } from "@shared/config/persona";
 
 const mockPush = jest.fn();
+let mockSearchParams = new URLSearchParams();
+let mockPersona: Persona | null = null;
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
   }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
 }));
 
 jest.mock("@features/auth/context/authContext", () => ({
@@ -32,9 +35,23 @@ jest.mock("@shared/api/publicHttp", () => ({
   },
 }));
 
+jest.mock("@features/persona/context/personaContext", () => ({
+  usePersona: () => ({
+    persona: mockPersona,
+    isLoading: false,
+  }),
+}));
+
+jest.mock("@features/persona/components/PersonaBadge", () => ({
+  __esModule: true,
+  default: () => <div>Persona badge</div>,
+}));
+
 describe("QuizForm", () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockSearchParams = new URLSearchParams();
+    mockPersona = null;
     const publicApi = require("@shared/api/publicHttp").default;
     publicApi.post.mockReset();
   });
@@ -93,5 +110,30 @@ describe("QuizForm", () => {
         expect.stringContaining("/quiz_display?"),
       );
     });
+  });
+
+  test("applies teacher class quiz preset from persona dashboard query params", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      preset: "class-quiz",
+      topic: "Photosynthesis",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("Enter the concept/context here"),
+      ).toHaveValue("Photosynthesis");
+    });
+    expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+    );
   });
 });
