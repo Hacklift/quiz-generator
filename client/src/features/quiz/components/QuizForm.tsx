@@ -34,7 +34,6 @@ const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
 const TEACHER_GENERATION_PRESETS: Record<
   string,
   {
-    audienceType: string;
     customInstruction: string;
     difficultyLevel: string;
     numQuestions: number;
@@ -42,7 +41,6 @@ const TEACHER_GENERATION_PRESETS: Record<
   }
 > = {
   "class-quiz": {
-    audienceType: "students",
     customInstruction:
       "Create a marking-ready in-class quiz with clear answer options and an answer key.",
     difficultyLevel: "easy",
@@ -50,7 +48,6 @@ const TEACHER_GENERATION_PRESETS: Record<
     questionType: "multichoice",
   },
   "homework-check": {
-    audienceType: "students",
     customInstruction:
       "Create a homework check with concise questions and answer explanations for rapid marking.",
     difficultyLevel: "medium",
@@ -58,7 +55,6 @@ const TEACHER_GENERATION_PRESETS: Record<
     questionType: "short-answer",
   },
   "exam-revision": {
-    audienceType: "students",
     customInstruction:
       "Create an exam revision quiz that mixes recall and application across the topic.",
     difficultyLevel: "hard",
@@ -188,12 +184,12 @@ export default function QuizForm() {
 
     appliedPresetRef.current = presetKey;
     setGenerationMode("topic");
-    setAudienceType(preset.audienceType);
+    setAudienceType(t("learner", "plural"));
     setCustomInstruction((current) => current || preset.customInstruction);
     setDifficultyLevel(preset.difficultyLevel);
     setNumQuestions(preset.numQuestions);
     setQuestionType(preset.questionType);
-  }, [persona?.userType, searchParams]);
+  }, [persona?.userType, searchParams, t]);
 
   useEffect(() => {
     if (user === undefined) return;
