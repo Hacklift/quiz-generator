@@ -18,6 +18,10 @@ import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
 import { useTerms } from "@features/persona/hooks/useTerms";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
+import {
+  getUserTypeDefinition,
+  type PersonaUserType,
+} from "@shared/config/persona";
 
 type ApiErrorLike = {
   response?: {
@@ -31,35 +35,54 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
-const TEACHER_GENERATION_PRESETS: Record<
-  string,
-  {
-    customInstruction: string;
-    difficultyLevel: string;
-    numQuestions: number;
-    questionType: string;
-  }
+interface GenerationPreset {
+  customInstruction: string;
+  difficultyLevel: string;
+  numQuestions: number;
+  questionType: string;
+}
+
+const PERSONA_GENERATION_PRESETS: Partial<
+  Record<PersonaUserType, Record<string, GenerationPreset>>
 > = {
-  "class-quiz": {
-    customInstruction:
-      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
-    difficultyLevel: "easy",
-    numQuestions: 10,
-    questionType: "multichoice",
+  teacher: {
+    "class-quiz": {
+      customInstruction:
+        "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+      difficultyLevel: "easy",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
+    "homework-check": {
+      customInstruction:
+        "Create a homework check with concise questions and answer explanations for rapid marking.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "short-answer",
+    },
+    "exam-revision": {
+      customInstruction:
+        "Create an exam revision quiz that mixes recall and application across the topic.",
+      difficultyLevel: "hard",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
   },
-  "homework-check": {
-    customInstruction:
-      "Create a homework check with concise questions and answer explanations for rapid marking.",
-    difficultyLevel: "medium",
-    numQuestions: 10,
-    questionType: "short-answer",
-  },
-  "exam-revision": {
-    customInstruction:
-      "Create an exam revision quiz that mixes recall and application across the topic.",
-    difficultyLevel: "hard",
-    numQuestions: 10,
-    questionType: "multichoice",
+  lecturer: {
+    "lecture-recap": {
+      customInstruction:
+        "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
+    "seminar-prep": {
+      customInstruction:
+        "Create a low-stakes seminar preparation quiz that checks understanding of the assigned reading.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
   },
 };
 
@@ -173,23 +196,29 @@ export default function QuizForm() {
 
   useEffect(() => {
     const presetKey = searchParams?.get("preset") || "";
-    const preset = TEACHER_GENERATION_PRESETS[presetKey];
+    const userType = persona?.userType;
+    const preset = userType
+      ? PERSONA_GENERATION_PRESETS[userType]?.[presetKey]
+      : undefined;
 
-    if (!preset || persona?.userType !== "teacher") {
+    if (!preset || !userType) {
       return;
     }
-    if (appliedPresetRef.current === presetKey) {
+    const presetIdentity = `${userType}:${presetKey}`;
+    if (appliedPresetRef.current === presetIdentity) {
       return;
     }
 
-    appliedPresetRef.current = presetKey;
+    appliedPresetRef.current = presetIdentity;
     setGenerationMode("topic");
-    setAudienceType(t("learner", "plural"));
+    setAudienceType(
+      getUserTypeDefinition(userType).generationDefaults.audienceType,
+    );
     setCustomInstruction((current) => current || preset.customInstruction);
     setDifficultyLevel(preset.difficultyLevel);
     setNumQuestions(preset.numQuestions);
     setQuestionType(preset.questionType);
-  }, [persona?.userType, searchParams, t]);
+  }, [persona?.userType, searchParams]);
 
   useEffect(() => {
     if (user === undefined) return;

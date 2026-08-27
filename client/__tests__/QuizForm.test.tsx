@@ -141,4 +141,31 @@ describe("QuizForm", () => {
       "Create a marking-ready in-class quiz with clear answer options and an answer key.",
     );
   });
+
+  test("applies lecturer lecture recap preset from persona dashboard query params", async () => {
+    mockPersona = { category: "school", userType: "lecturer" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "lecturer",
+      preset: "lecture-recap",
+      topic: "Introduction to microeconomics",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("Enter the concept/context here"),
+      ).toHaveValue("Introduction to microeconomics");
+    });
+    expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+      "undergraduates",
+    );
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
+    );
+  });
 });
