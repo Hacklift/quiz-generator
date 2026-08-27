@@ -67,12 +67,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setError("Invalid response from server");
       }
     } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.detail ||
-        error?.message ||
-        "Invalid credentials. Please try again.";
-      setError(errorMessage);
+      setError(error?.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

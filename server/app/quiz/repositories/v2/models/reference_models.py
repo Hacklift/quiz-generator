@@ -108,3 +108,33 @@ class QuizHistoryDocumentV2(BaseModel):
         json_encoders={ObjectId: str},
         extra="forbid",
     )
+
+
+class QuizAttemptQuestionResultV2(BaseModel):
+    question: str
+    user_answer: str | int | None = None
+    correct_answer: str | int | None = None
+    question_type: str
+    accuracy_percentage: float | None = None
+    is_correct: bool
+    result: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuizAttemptDocumentV2(BaseModel):
+    id: ObjectId = Field(default_factory=ObjectId, alias="_id")
+    user_id: str
+    quiz_id: str
+    question_results: list[QuizAttemptQuestionResultV2]
+    score: int = Field(ge=0)
+    percentage: float = Field(ge=0, le=100)
+    submitted_at: datetime = Field(default_factory=datetime.utcnow)
+    deleted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+        extra="forbid",
+    )

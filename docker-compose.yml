@@ -33,6 +33,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
+      - ASSISTANT_INTERNAL_MCP_SECRET=${ASSISTANT_INTERNAL_MCP_SECRET:-local-dev-internal-mcp-secret}
       - PYTHONPATH=/
     command: ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}", "--reload"]
     depends_on:
@@ -56,6 +57,7 @@ services:
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
       - MONGO_URI=mongodb://mongodb:27017/quizApp_db
       - REDIS_URL=redis://redis:6379/0
+      - ASSISTANT_INTERNAL_MCP_SECRET=${ASSISTANT_INTERNAL_MCP_SECRET:-local-dev-internal-mcp-secret}
       - PYTHONPATH=/
     command: ["celery", "-A", "server.celery_config.celery_app", "worker",
               "-Q", "email,celery",

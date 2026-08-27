@@ -8,22 +8,35 @@ import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import { getQuizHistoryItem } from "@features/quiz-history/api/quizHistoryApi";
 
-interface QuizHistoryQuestion {
+interface QuizAttemptQuestion {
+  question: string;
+  user_answer?: string | number | null;
+  correct_answer?: string | number | null;
+  question_type: string;
+  accuracy_percentage?: number | null;
+  is_correct: boolean;
+  result: string;
+}
+
+interface QuizAttemptItem {
+  id?: string;
+  _id?: string;
+  quiz_id: string;
+  quiz_title?: string | null;
+  score: number;
+  percentage: number;
+  total_questions: number;
+  submitted_at?: string;
+  question_results: QuizAttemptQuestion[];
+}
+
+interface GeneratedQuizQuestion {
   question: string;
   options?: string[];
   answer: string;
 }
 
-interface LiveQuizStats {
-  invited_participants: number;
-  joined_participants: number;
-  completed_participants: number;
-  average_score?: number | null;
-  best_score?: number | null;
-  quiz_status: string;
-}
-
-interface QuizHistoryItem {
+interface GeneratedQuizHistoryItem {
   id?: string;
   _id?: string;
   quiz_id?: string;
@@ -34,15 +47,19 @@ interface QuizHistoryItem {
   profession?: string;
   audience_type?: string;
   custom_instruction?: string;
-  live_quiz_enabled?: boolean;
-  live_quiz_stats?: LiveQuizStats | null;
-  questions: QuizHistoryQuestion[];
+  questions: GeneratedQuizQuestion[];
 }
+
+type QuizHistoryDetailItem = QuizAttemptItem | GeneratedQuizHistoryItem;
+
+const isQuizAttemptItem = (
+  item: QuizHistoryDetailItem,
+): item is QuizAttemptItem => "question_results" in item;
 
 export default function QuizHistoryDetailsPage() {
   const router = useRouter();
   const { historyId } = router.query;
-  const [item, setItem] = useState<QuizHistoryItem | null>(null);
+  const [item, setItem] = useState<QuizHistoryDetailItem | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,6 +104,78 @@ export default function QuizHistoryDetailsPage() {
               <div className="bg-white p-8 rounded-xl shadow-md border border-gray-200 text-center text-gray-600">
                 Quiz history item not found.
               </div>
+            ) : isQuizAttemptItem(item) ? (
+              <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                <h1 className="text-3xl font-bold text-[#0F2654] mb-2">
+                  {item.quiz_title || "Quiz Attempt"}
+                </h1>
+                <p className="text-sm text-gray-500 mb-1">
+                  Submitted on:{" "}
+                  {item.submitted_at
+                    ? new Date(item.submitted_at).toLocaleString()
+                    : "Unknown date"}
+                </p>
+                <p className="text-sm text-gray-600 mb-1">
+                  Score: {item.score}/{item.total_questions}
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Percentage: {item.percentage.toFixed(0)}%
+                </p>
+
+                <div className="mb-6 grid gap-3 rounded-md border border-[#0F2654]/10 bg-[#f8fbff] p-3 text-sm text-slate-700 sm:grid-cols-3">
+                  <span>
+                    Correct: <strong>{item.score}</strong>
+                  </span>
+                  <span>
+                    Incorrect:{" "}
+                    <strong>{item.total_questions - item.score}</strong>
+                  </span>
+                  <span>
+                    Retry set:{" "}
+                    <strong>
+                      {
+                        item.question_results.filter(
+                          (question) => !question.is_correct,
+                        ).length
+                      }
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="space-y-5">
+                  {item.question_results.map((question, index) => (
+                    <div
+                      key={index}
+                      className={`rounded-lg border p-4 ${
+                        question.is_correct
+                          ? "border-emerald-200 bg-emerald-50/60"
+                          : "border-amber-200 bg-amber-50/60"
+                      }`}
+                    >
+                      <h2 className="font-semibold text-gray-800 mb-2">
+                        {index + 1}. {question.question}
+                      </h2>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {question.question_type} · {question.result}
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        <strong>Your answer:</strong>{" "}
+                        {question.user_answer?.toString() || "No answer"}
+                      </p>
+                      <p className="text-sm text-[#0F2654]">
+                        <strong>Correct answer:</strong>{" "}
+                        {question.correct_answer?.toString() || "Unavailable"}
+                      </p>
+                      {typeof question.accuracy_percentage === "number" && (
+                        <p className="text-sm text-slate-700 mt-1">
+                          <strong>Accuracy:</strong>{" "}
+                          {question.accuracy_percentage.toFixed(0)}%
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
                 <h1 className="text-3xl font-bold text-[#0F2654] mb-2">
@@ -101,62 +190,10 @@ export default function QuizHistoryDetailsPage() {
                 <p className="text-sm text-gray-600 mb-1">
                   Question type: {item.question_type}
                 </p>
-                <p className="text-sm text-gray-600 mb-1">
-                  Difficulty: {item.difficulty_level || "N/A"}
-                </p>
                 <p className="text-sm text-gray-600 mb-4">
-                  Audience: {item.audience_type || "N/A"}
+                  Difficulty: {item.difficulty_level || "N/A"} · Audience:{" "}
+                  {item.audience_type || "N/A"}
                 </p>
-                {item.live_quiz_enabled && item.quiz_id && (
-                  <div className="mb-6">
-                    {item.live_quiz_stats && (
-                      <div className="mb-4 grid gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-slate-700 sm:grid-cols-3">
-                        <span>
-                          Invited:{" "}
-                          <strong>
-                            {item.live_quiz_stats.invited_participants}
-                          </strong>
-                        </span>
-                        <span>
-                          Joined:{" "}
-                          <strong>
-                            {item.live_quiz_stats.joined_participants}
-                          </strong>
-                        </span>
-                        <span>
-                          Completed:{" "}
-                          <strong>
-                            {item.live_quiz_stats.completed_participants}
-                          </strong>
-                        </span>
-                        <span>
-                          Average:{" "}
-                          <strong>
-                            {item.live_quiz_stats.average_score ?? "-"}
-                          </strong>
-                        </span>
-                        <span>
-                          Best:{" "}
-                          <strong>
-                            {item.live_quiz_stats.best_score ?? "-"}
-                          </strong>
-                        </span>
-                        <span>
-                          Status:{" "}
-                          <strong>{item.live_quiz_stats.quiz_status}</strong>
-                        </span>
-                      </div>
-                    )}
-                    <button
-                      onClick={() =>
-                        router.push(`/my-live-quizzes/${item.quiz_id}`)
-                      }
-                      className="rounded-lg border border-[#0a3264] px-4 py-2 text-sm font-medium text-[#0a3264] hover:bg-blue-50"
-                    >
-                      Open Live Dashboard
-                    </button>
-                  </div>
-                )}
                 {item.custom_instruction && (
                   <p className="text-sm text-gray-700 mb-6">
                     <strong>Custom instruction:</strong>{" "}
