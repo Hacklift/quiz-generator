@@ -75,6 +75,11 @@ export default function PersonaBadge({
             </strong>
             <span className="text-slate-400">questions</span>
           </span>
+
+          <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium text-slate-700 shadow-xs border border-slate-200">
+            <span className="text-slate-400">Guidance:</span>
+            <strong className="text-slate-800 font-semibold">Applied</strong>
+          </span>
         </div>
       ) : null}
     </div>

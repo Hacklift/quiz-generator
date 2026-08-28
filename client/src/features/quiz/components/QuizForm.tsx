@@ -17,7 +17,10 @@ import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryA
 import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
-import { getPersonaGenerationDefaults } from "@shared/config/persona";
+import {
+  getPersonaGenerationDefaults,
+  type PersonaGenerationDefaults,
+} from "@shared/config/persona";
 
 type ApiErrorLike = {
   response?: {
@@ -31,14 +34,17 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
+const DIFFICULTY_LEVELS = new Set(["easy", "medium", "hard"]);
+const QUESTION_TYPES = new Set([
+  "multichoice",
+  "true-false",
+  "short-answer",
+  "open-ended",
+]);
 const TEACHER_GENERATION_PRESETS: Record<
   string,
-  {
-    audienceType: string;
+  PersonaGenerationDefaults & {
     customInstruction: string;
-    difficultyLevel: string;
-    numQuestions: number;
-    questionType: string;
   }
 > = {
   "class-quiz": {
@@ -66,6 +72,28 @@ const TEACHER_GENERATION_PRESETS: Record<
     questionType: "multichoice",
   },
 };
+
+function queryDifficultyOrDefault(
+  value: string | null | undefined,
+  fallback: PersonaGenerationDefaults["difficultyLevel"],
+) {
+  return value && DIFFICULTY_LEVELS.has(value) ? value : fallback;
+}
+
+function queryQuestionTypeOrDefault(
+  value: string | null | undefined,
+  fallback: PersonaGenerationDefaults["questionType"],
+) {
+  return value && QUESTION_TYPES.has(value) ? value : fallback;
+}
+
+function queryQuestionCountOrDefault(
+  value: string | null | undefined,
+  fallback: number,
+) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
@@ -185,19 +213,27 @@ export default function QuizForm() {
     if (!defaults) return;
 
     const queryAudience = searchParams?.get("audienceType");
+    const queryCustomInstruction = searchParams?.get("customInstruction");
     const queryDifficulty = searchParams?.get("difficultyLevel");
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
+    const presetKey = searchParams?.get("preset") || "";
 
     setAudienceType(queryAudience || defaults.audienceType);
+    if (!presetKey) {
+      setCustomInstruction(
+        (current) => current || queryCustomInstruction || defaults.customInstruction,
+      );
+    }
     setDifficultyLevel(
-      (queryDifficulty as "easy" | "medium" | "hard") ||
-        defaults.difficultyLevel,
+      queryDifficultyOrDefault(queryDifficulty, defaults.difficultyLevel),
     );
     setNumQuestions(
-      queryNumQuestions ? Number(queryNumQuestions) : defaults.numQuestions,
+      queryQuestionCountOrDefault(queryNumQuestions, defaults.numQuestions),
     );
-    setQuestionType(queryQuestionType || defaults.questionType);
+    setQuestionType(
+      queryQuestionTypeOrDefault(queryQuestionType, defaults.questionType),
+    );
   }, [persona, searchParams]);
 
   useEffect(() => {

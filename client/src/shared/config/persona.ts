@@ -36,6 +36,7 @@ export interface Persona {
 /** Seam for #133 (persona-aware generation defaults). */
 export interface PersonaGenerationDefaults {
   audienceType: string;
+  customInstruction: string;
   difficultyLevel: "easy" | "medium" | "hard";
   numQuestions: number;
   questionType: "multichoice" | "true-false" | "open-ended" | "short-answer";
@@ -75,6 +76,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Photosynthesis — Grade 8 biology",
         generationDefaults: {
           audienceType: "students",
+          customInstruction:
+            "Use clear classroom language, include marking-friendly questions, and keep the answer key suitable for teacher review.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",
@@ -88,6 +91,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Introduction to microeconomics",
         generationDefaults: {
           audienceType: "undergraduates",
+          customInstruction:
+            "Frame questions for lecture recap and seminar preparation, with concepts suitable for large cohorts.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",
@@ -101,6 +106,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "World War II — key dates and causes",
         generationDefaults: {
           audienceType: "students",
+          customInstruction:
+            "Create self-practice questions with immediate learning value and wording suited to exam revision.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",
@@ -114,6 +121,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Multiplication tables — ages 7 to 9",
         generationDefaults: {
           audienceType: "children",
+          customInstruction:
+            "Use child-friendly wording, simple examples, and auto-marked questions a parent can review quickly.",
           difficultyLevel: "easy",
           numQuestions: 10,
           questionType: "multichoice",
@@ -134,6 +143,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Company onboarding essentials",
         generationDefaults: {
           audienceType: "employees",
+          customInstruction:
+            "Focus on onboarding and product-knowledge checks with practical workplace wording.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",
@@ -147,6 +158,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Data protection basics",
         generationDefaults: {
           audienceType: "employees",
+          customInstruction:
+            "Create self-paced upskilling questions with clear explanations and workplace examples.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",
@@ -160,6 +173,8 @@ export const PERSONA_TAXONOMY: Record<
         defaultTopic: "Workplace policy — harassment prevention",
         generationDefaults: {
           audienceType: "employees",
+          customInstruction:
+            "Use compliance-training wording, scenario-based checks, and clear pass/fail review language.",
           difficultyLevel: "medium",
           numQuestions: 10,
           questionType: "multichoice",

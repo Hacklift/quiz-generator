@@ -12,6 +12,8 @@ describe("PersonaBadge", () => {
     expect(screen.getByText("Medium")).toBeInTheDocument();
     expect(screen.getByText("Multiple Choice")).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("Guidance:")).toBeInTheDocument();
+    expect(screen.getByText("Applied")).toBeInTheDocument();
   });
 
   test("renders role label and default chips for Parent (Easy, Children)", () => {
