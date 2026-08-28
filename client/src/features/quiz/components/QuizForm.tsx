@@ -148,7 +148,7 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const appliedPresetRef = useRef<string | null>(null);
-  const appliedPersonaRef = useRef<string | null>(null);
+  const appliedPersonaDefaultsRef = useRef(false);
 
   const handleDocumentFileChange = (file: File | null) => {
     if (!file) {
@@ -206,9 +206,9 @@ export default function QuizForm() {
   // #133: Apply persona-aware generation defaults on form load.
   useEffect(() => {
     if (!persona) return;
-    if (appliedPersonaRef.current === persona.userType) return;
+    if (appliedPersonaDefaultsRef.current) return;
 
-    appliedPersonaRef.current = persona.userType;
+    appliedPersonaDefaultsRef.current = true;
     const defaults = getPersonaGenerationDefaults(persona.userType);
     if (!defaults) return;
 
@@ -247,13 +247,27 @@ export default function QuizForm() {
       return;
     }
 
+    const queryAudience = searchParams?.get("audienceType");
+    const queryCustomInstruction = searchParams?.get("customInstruction");
+    const queryDifficulty = searchParams?.get("difficultyLevel");
+    const queryNumQuestions = searchParams?.get("numQuestions");
+    const queryQuestionType = searchParams?.get("questionType");
+
     appliedPresetRef.current = presetKey;
     setGenerationMode("topic");
-    setAudienceType(preset.audienceType);
-    setCustomInstruction((current) => current || preset.customInstruction);
-    setDifficultyLevel(preset.difficultyLevel);
-    setNumQuestions(preset.numQuestions);
-    setQuestionType(preset.questionType);
+    setAudienceType(queryAudience || preset.audienceType);
+    setCustomInstruction(
+      (current) => current || queryCustomInstruction || preset.customInstruction,
+    );
+    setDifficultyLevel(
+      queryDifficultyOrDefault(queryDifficulty, preset.difficultyLevel),
+    );
+    setNumQuestions(
+      queryQuestionCountOrDefault(queryNumQuestions, preset.numQuestions),
+    );
+    setQuestionType(
+      queryQuestionTypeOrDefault(queryQuestionType, preset.questionType),
+    );
   }, [persona?.userType, searchParams]);
 
   useEffect(() => {

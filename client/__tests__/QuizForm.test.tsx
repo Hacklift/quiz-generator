@@ -137,6 +137,34 @@ describe("QuizForm", () => {
     );
   });
 
+  test("allows query params to override teacher preset defaults", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      preset: "class-quiz",
+      difficultyLevel: "hard",
+      numQuestions: "6",
+      audienceType: "exam candidates",
+      questionType: "short-answer",
+      customInstruction: "Prioritize applied reasoning questions.",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+        "exam candidates",
+      );
+    });
+    expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("6")).toBeInTheDocument();
+    expect(screen.getByLabelText("Short Answer")).toBeChecked();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Prioritize applied reasoning questions.",
+    );
+  });
+
   const PERSONA_DEFAULT_CASES: Array<{
     userType: PersonaUserType;
     category: Persona["category"];
@@ -249,6 +277,30 @@ describe("QuizForm", () => {
     });
     expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue("5")).toBeInTheDocument();
+  });
+
+  test("does not clobber manual form edits if persona changes after defaults apply", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Audience"), {
+      target: { value: "my custom audience" },
+    });
+    fireEvent.change(screen.getByDisplayValue("10"), {
+      target: { value: "4" },
+    });
+
+    mockPersona = { category: "school", userType: "parent" };
+    rerender(<QuizForm />);
+
+    expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+      "my custom audience",
+    );
+    expect(screen.getByDisplayValue("4")).toBeInTheDocument();
   });
 
   test("ignores invalid query param overrides and falls back to persona defaults", async () => {
