@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import toast from "react-hot-toast";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
@@ -93,9 +99,10 @@ function queryQuestionCountOrDefault(
   value: string | null | undefined,
   fallback: number,
 ) {
+  const safeFallback = Math.min(QUIZ_GENERATION_MAX_QUESTIONS, fallback);
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    return fallback;
+    return safeFallback;
   }
 
   return Math.min(QUIZ_GENERATION_MAX_QUESTIONS, parsed);
@@ -250,14 +257,20 @@ export default function QuizForm() {
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
     const presetKey = searchParams?.get("preset") || "";
+    const hasApplicablePreset =
+      persona.userType === "teacher" &&
+      Boolean(TEACHER_GENERATION_PRESETS[presetKey]);
     const touched = touchedGenerationFieldsRef.current;
 
     if (!touched.audienceType) {
-      setAudienceType(queryAudienceOrDefault(queryAudience, defaults.audienceType));
+      setAudienceType(
+        queryAudienceOrDefault(queryAudience, defaults.audienceType),
+      );
     }
-    if (!presetKey && !touched.customInstruction) {
+    if (!hasApplicablePreset && !touched.customInstruction) {
       setCustomInstruction(
-        (current) => current || queryCustomInstruction || defaults.customInstruction,
+        (current) =>
+          current || queryCustomInstruction || defaults.customInstruction,
       );
     }
     if (!touched.difficultyLevel) {
@@ -298,11 +311,14 @@ export default function QuizForm() {
     appliedPresetRef.current = presetKey;
     setGenerationMode("topic");
     if (!touched.audienceType) {
-      setAudienceType(queryAudienceOrDefault(queryAudience, preset.audienceType));
+      setAudienceType(
+        queryAudienceOrDefault(queryAudience, preset.audienceType),
+      );
     }
     if (!touched.customInstruction) {
       setCustomInstruction(
-        (current) => current || queryCustomInstruction || preset.customInstruction,
+        (current) =>
+          current || queryCustomInstruction || preset.customInstruction,
       );
     }
     if (!touched.difficultyLevel) {

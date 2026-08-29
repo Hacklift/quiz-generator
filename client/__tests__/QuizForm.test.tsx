@@ -355,5 +355,23 @@ describe("QuizForm", () => {
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
     expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
   });
+
+  test("applies persona custom instruction when preset query is not applicable", async () => {
+    mockPersona = { category: "school", userType: "student" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "student",
+      preset: "class-quiz",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create self-practice questions with immediate learning value and wording suited to exam revision.",
+    );
+  });
 });
 
