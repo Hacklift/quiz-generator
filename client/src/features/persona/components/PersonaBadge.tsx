@@ -15,6 +15,12 @@ export interface PersonaBadgeProps {
   userType: PersonaUserType;
   className?: string;
   showDefaults?: boolean;
+  appliedDefaults?: {
+    audienceType: string;
+    difficultyLevel: string;
+    numQuestions: number;
+    questionType: string;
+  };
 }
 
 /** Extended "Set up for: {persona}" chip showing applied generation defaults (#133). */
@@ -22,9 +28,10 @@ export default function PersonaBadge({
   userType,
   className = "",
   showDefaults = true,
+  appliedDefaults,
 }: PersonaBadgeProps) {
   const definition = getUserTypeDefinition(userType);
-  const defaults = definition.generationDefaults;
+  const defaults = appliedDefaults || definition.generationDefaults;
 
   const capitalize = (text: string) =>
     text.charAt(0).toUpperCase() + text.slice(1);

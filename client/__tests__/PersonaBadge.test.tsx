@@ -38,4 +38,23 @@ describe("PersonaBadge", () => {
     expect(screen.getByText("Set up for: Student")).toBeInTheDocument();
     expect(screen.queryByTestId("persona-badge-defaults")).not.toBeInTheDocument();
   });
+
+  test("shows live applied defaults when form values override taxonomy defaults", () => {
+    render(
+      <PersonaBadge
+        userType="teacher"
+        appliedDefaults={{
+          audienceType: "exam candidates",
+          difficultyLevel: "hard",
+          numQuestions: 6,
+          questionType: "short-answer",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Exam candidates")).toBeInTheDocument();
+    expect(screen.getByText("Hard")).toBeInTheDocument();
+    expect(screen.getByText("Short Answer")).toBeInTheDocument();
+    expect(screen.getByText("6")).toBeInTheDocument();
+  });
 });

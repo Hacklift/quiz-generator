@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import toast from "react-hot-toast";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
@@ -34,6 +34,10 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
+const QUIZ_GENERATION_MAX_QUESTIONS = Number(
+  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
+);
+const QUERY_AUDIENCE_MAX_CHARS = 80;
 const DIFFICULTY_LEVELS = new Set(["easy", "medium", "hard"]);
 const QUESTION_TYPES = new Set([
   "multichoice",
@@ -43,9 +47,7 @@ const QUESTION_TYPES = new Set([
 ]);
 const TEACHER_GENERATION_PRESETS: Record<
   string,
-  PersonaGenerationDefaults & {
-    customInstruction: string;
-  }
+  PersonaGenerationDefaults
 > = {
   "class-quiz": {
     audienceType: "students",
@@ -92,7 +94,19 @@ function queryQuestionCountOrDefault(
   fallback: number,
 ) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.min(QUIZ_GENERATION_MAX_QUESTIONS, parsed);
+}
+
+function queryAudienceOrDefault(
+  value: string | null | undefined,
+  fallback: string,
+) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, QUERY_AUDIENCE_MAX_CHARS) : fallback;
 }
 
 function formatBytes(bytes: number) {
@@ -148,7 +162,24 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const appliedPresetRef = useRef<string | null>(null);
-  const appliedPersonaDefaultsRef = useRef(false);
+  const appliedPersonaDefaultsRef = useRef<string | null>(null);
+  const touchedGenerationFieldsRef = useRef({
+    audienceType: false,
+    customInstruction: false,
+    difficultyLevel: false,
+    numQuestions: false,
+    questionType: false,
+  });
+
+  const markGenerationFieldTouched =
+    <T,>(
+      field: keyof typeof touchedGenerationFieldsRef.current,
+      setter: Dispatch<SetStateAction<T>>,
+    ) =>
+    (value: SetStateAction<T>) => {
+      touchedGenerationFieldsRef.current[field] = true;
+      setter(value);
+    };
 
   const handleDocumentFileChange = (file: File | null) => {
     if (!file) {
@@ -206,9 +237,10 @@ export default function QuizForm() {
   // #133: Apply persona-aware generation defaults on form load.
   useEffect(() => {
     if (!persona) return;
-    if (appliedPersonaDefaultsRef.current) return;
+    const personaKey = `${persona.category}:${persona.userType}`;
+    if (appliedPersonaDefaultsRef.current === personaKey) return;
 
-    appliedPersonaDefaultsRef.current = true;
+    appliedPersonaDefaultsRef.current = personaKey;
     const defaults = getPersonaGenerationDefaults(persona.userType);
     if (!defaults) return;
 
@@ -218,22 +250,31 @@ export default function QuizForm() {
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
     const presetKey = searchParams?.get("preset") || "";
+    const touched = touchedGenerationFieldsRef.current;
 
-    setAudienceType(queryAudience || defaults.audienceType);
-    if (!presetKey) {
+    if (!touched.audienceType) {
+      setAudienceType(queryAudienceOrDefault(queryAudience, defaults.audienceType));
+    }
+    if (!presetKey && !touched.customInstruction) {
       setCustomInstruction(
         (current) => current || queryCustomInstruction || defaults.customInstruction,
       );
     }
-    setDifficultyLevel(
-      queryDifficultyOrDefault(queryDifficulty, defaults.difficultyLevel),
-    );
-    setNumQuestions(
-      queryQuestionCountOrDefault(queryNumQuestions, defaults.numQuestions),
-    );
-    setQuestionType(
-      queryQuestionTypeOrDefault(queryQuestionType, defaults.questionType),
-    );
+    if (!touched.difficultyLevel) {
+      setDifficultyLevel(
+        queryDifficultyOrDefault(queryDifficulty, defaults.difficultyLevel),
+      );
+    }
+    if (!touched.numQuestions) {
+      setNumQuestions(
+        queryQuestionCountOrDefault(queryNumQuestions, defaults.numQuestions),
+      );
+    }
+    if (!touched.questionType) {
+      setQuestionType(
+        queryQuestionTypeOrDefault(queryQuestionType, defaults.questionType),
+      );
+    }
   }, [persona, searchParams]);
 
   useEffect(() => {
@@ -252,22 +293,33 @@ export default function QuizForm() {
     const queryDifficulty = searchParams?.get("difficultyLevel");
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
+    const touched = touchedGenerationFieldsRef.current;
 
     appliedPresetRef.current = presetKey;
     setGenerationMode("topic");
-    setAudienceType(queryAudience || preset.audienceType);
-    setCustomInstruction(
-      (current) => current || queryCustomInstruction || preset.customInstruction,
-    );
-    setDifficultyLevel(
-      queryDifficultyOrDefault(queryDifficulty, preset.difficultyLevel),
-    );
-    setNumQuestions(
-      queryQuestionCountOrDefault(queryNumQuestions, preset.numQuestions),
-    );
-    setQuestionType(
-      queryQuestionTypeOrDefault(queryQuestionType, preset.questionType),
-    );
+    if (!touched.audienceType) {
+      setAudienceType(queryAudienceOrDefault(queryAudience, preset.audienceType));
+    }
+    if (!touched.customInstruction) {
+      setCustomInstruction(
+        (current) => current || queryCustomInstruction || preset.customInstruction,
+      );
+    }
+    if (!touched.difficultyLevel) {
+      setDifficultyLevel(
+        queryDifficultyOrDefault(queryDifficulty, preset.difficultyLevel),
+      );
+    }
+    if (!touched.numQuestions) {
+      setNumQuestions(
+        queryQuestionCountOrDefault(queryNumQuestions, preset.numQuestions),
+      );
+    }
+    if (!touched.questionType) {
+      setQuestionType(
+        queryQuestionTypeOrDefault(queryQuestionType, preset.questionType),
+      );
+    }
   }, [persona?.userType, searchParams]);
 
   useEffect(() => {
@@ -592,7 +644,16 @@ export default function QuizForm() {
   return (
     <div className="max-w-3xl mx-auto bg-[#f7f8fa] rounded-xl p-10 shadow-lg">
       {persona ? (
-        <PersonaBadge userType={persona.userType} className="mb-6" />
+        <PersonaBadge
+          userType={persona.userType}
+          className="mb-6"
+          appliedDefaults={{
+            audienceType,
+            difficultyLevel,
+            numQuestions,
+            questionType,
+          }}
+        />
       ) : null}
       <form onSubmit={(e) => e.preventDefault()}>
         <QuizGenerationSection
@@ -612,15 +673,30 @@ export default function QuizForm() {
           documentTextLimit={DOCUMENT_TEXT_MAX_CHARS}
           onDocumentFileChange={handleDocumentFileChange}
           audienceType={audienceType}
-          setAudienceType={setAudienceType}
+          setAudienceType={markGenerationFieldTouched(
+            "audienceType",
+            setAudienceType,
+          )}
           customInstruction={customInstruction}
-          setCustomInstruction={setCustomInstruction}
+          setCustomInstruction={markGenerationFieldTouched(
+            "customInstruction",
+            setCustomInstruction,
+          )}
           numQuestions={numQuestions}
-          setNumQuestions={setNumQuestions}
+          setNumQuestions={markGenerationFieldTouched(
+            "numQuestions",
+            setNumQuestions,
+          )}
           questionType={questionType}
-          setQuestionType={setQuestionType}
+          setQuestionType={markGenerationFieldTouched(
+            "questionType",
+            setQuestionType,
+          )}
           difficultyLevel={difficultyLevel}
-          setDifficultyLevel={setDifficultyLevel}
+          setDifficultyLevel={markGenerationFieldTouched(
+            "difficultyLevel",
+            setDifficultyLevel,
+          )}
           token={token}
           setToken={setToken}
           previousToken={previousToken}

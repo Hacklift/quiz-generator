@@ -279,6 +279,24 @@ describe("QuizForm", () => {
     expect(screen.getByDisplayValue("5")).toBeInTheDocument();
   });
 
+  test("re-applies defaults when a preliminary persona resolves to the profile persona", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
+    });
+
+    mockPersona = { category: "school", userType: "teacher" };
+    rerender(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+  });
+
   test("does not clobber manual form edits if persona changes after defaults apply", async () => {
     mockPersona = { category: "school", userType: "teacher" };
     const { rerender } = render(<QuizForm />);
@@ -301,6 +319,21 @@ describe("QuizForm", () => {
       "my custom audience",
     );
     expect(screen.getByDisplayValue("4")).toBeInTheDocument();
+  });
+
+  test("clamps excessive query param question counts to the generation maximum", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      numQuestions: "100000",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    });
   });
 
   test("ignores invalid query param overrides and falls back to persona defaults", async () => {
