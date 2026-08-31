@@ -18,7 +18,9 @@ Resolution order (`lib/resolvePersona.ts`, pure and unit-tested):
 1. **profile** — the signed-in user's saved persona
 2. **query** — `?persona=&category=` on the current URL
 3. **storage** — a guest's earlier choice (`localStorage`, survives tab close;
-   unlike `TokenService`, which uses `sessionStorage` for token security)
+   unlike `TokenService`, which uses `sessionStorage` for token security).
+   It is hydrated after mount, never used as an authenticated fallback, and is
+   cleared when an authenticated session ends on a shared browser.
 4. **none**
 
 An inconsistent pair (`?category=corporate&persona=teacher`) resolves to
@@ -31,14 +33,16 @@ const { setPersona } = usePersona();
 await setPersona({ category: "school", userType: "teacher" });
 ```
 
-Writes storage immediately, then persists to the profile and refreshes the user
-when signed in.
+For guests this writes browser storage. For authenticated users it first saves
+through `PUT /auth/profile/persona`, refreshes the profile, then removes any
+guest storage copy. A failed profile save leaves both the profile and guest
+storage unchanged.
 
 ## Wording
 
 ```tsx
 const t = useTerms();
-t("learner", "plural");   // "students" (school) · "employees" (corporate)
+t("learner", "plural");   // "students" (school) · "team members" (corporate)
 t("group");               // "class" · "team" · "cohort" for a lecturer
 ```
 

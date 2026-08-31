@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SignInModal from "@features/auth/components/SignInModal";
+import { ROUTES } from "@shared/config/patterns/routes";
 
 const mockRouterPush = jest.fn();
 const mockAuthLogin = jest.fn();
@@ -119,6 +120,30 @@ describe("SignInModal", () => {
 
     await waitFor(() => {
       expect(mockOnClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test("routes to the configured post-login destination", async () => {
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        redirectTo={ROUTES.DASHBOARD}
+        switchToSignUp={mockSwitchToSignUp}
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByPlaceholderText("email@example.com or username"),
+      { target: { value: "testuser@example.com" } },
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith(ROUTES.DASHBOARD);
     });
   });
 

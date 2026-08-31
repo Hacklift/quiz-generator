@@ -20,10 +20,11 @@ export interface PersonaState {
   categoryDefinition: PersonaCategoryDefinition | null;
   source: PersonaSource;
   isLoading: boolean;
-  /** Persists to the profile when signed in, otherwise to local storage. */
+  /** Persists to the profile when signed in, otherwise to guest local storage. */
   setPersona: (
     persona: Persona,
     options?: { source?: PersonaWriteSource },
   ) => Promise<void>;
+  /** Clears the guest fallback; persisted persona is changed with setPersona. */
   clearPersona: () => void;
 }
