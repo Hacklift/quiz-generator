@@ -142,6 +142,7 @@ class CanonicalQuizWriteService:
             subcategory=quiz_data.subcategory,
             subcategory_slug=quiz_data.subcategory_slug,
             classification=quiz_data.classification,
+            persona_category=quiz_data.persona_category,
         )
         return await self.repository.insert_quiz(quiz_document)
 

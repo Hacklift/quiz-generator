@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/categories", response_model=List[str])
 
-async def get_categories(persona_category: Optional[str] = Query(None)):
+async def get_categories(persona_category: Optional[str] = Query(None, pattern="^(school|corporate)$")):
 
     return await CategoryService().list_categories(persona_category)
 
