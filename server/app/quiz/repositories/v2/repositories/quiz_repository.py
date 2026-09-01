@@ -72,7 +72,9 @@ class QuizV2Repository:
             "visibility": "public",
         }
         if persona_category:
-            query["persona_category"] = persona_category
+            # MongoDB matches both an explicit null and a missing field here,
+            # so pre-existing/untagged quizzes still surface under a persona filter.
+            query["persona_category"] = {"$in": [persona_category, None]}
         values = await self.collection.distinct("category", query)
         return sorted(value for value in values if value)
 

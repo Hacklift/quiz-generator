@@ -118,6 +118,7 @@ class TaxonomyClassification:
             "category_slug": self.category_slug,
             "subcategory": self.subcategory,
             "subcategory_slug": self.subcategory_slug,
+            "persona_category": self.persona_category,
             "tags": list(self.tags),
             "classification": {
                 "method": self.method,
