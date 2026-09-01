@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import Footer from "@features/quiz/components/Footer";
 import NavBar from "@features/quiz/components/NavBar";
+import { usePersona } from "@features/persona/context/personaContext";
 import { getCategories } from "@features/categories/api/categoriesApi";
 
 const slugify = (value: string) =>
@@ -15,13 +16,17 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 export default function CategoriesPage() {
+  const { category } = usePersona();
+  const [showAll, setShowAll] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadCategories = async () => {
+      setIsLoading(true);
       try {
-        setCategories(await getCategories());
+        const filter = showAll ? undefined : category ?? undefined;
+        setCategories(await getCategories(filter));
       } catch (error) {
         console.error(error);
         toast.error("Failed to load categories.");
@@ -30,20 +35,32 @@ export default function CategoriesPage() {
       }
     };
     loadCategories();
-  }, []);
+  }, [category, showAll]);
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#0F2654]">
       <NavBar />
       <main className="mx-auto w-full max-w-6xl flex-grow px-6 py-10">
-        <div className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            Browse quizzes
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Categories</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Explore curated quiz questions by category and subcategory.
-          </p>
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+              Browse quizzes
+            </p>
+            <h1 className="mt-2 text-3xl font-bold">Categories</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+              Explore curated quiz questions by category and subcategory.
+            </p>
+          </div>
+
+          {category && (
+            <button
+              type="button"
+              onClick={() => setShowAll((prev) => !prev)}
+              className="rounded-full border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+            >
+              {showAll ? "Show my categories" : "Show all categories"}
+            </button>
+          )}
         </div>
 
         {isLoading ? (
