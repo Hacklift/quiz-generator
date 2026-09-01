@@ -9,10 +9,13 @@ jest.mock("@features/categories/api/categoriesApi", () => ({
 
 const mockGetCategories = getCategories as jest.MockedFunction<typeof getCategories>;
 
+let mockPersonaState: { category: string | null; isLoading: boolean } = {
+  category: null,
+  isLoading: true,
+};
+
 jest.mock("@features/persona/context/personaContext", () => ({
-  usePersona: () => ({
-    category: "corporate",
-  }),
+  usePersona: () => mockPersonaState,
 }));
 
 jest.mock("@features/quiz/components/NavBar", () => () => <nav>NavBar</nav>);
@@ -21,9 +24,21 @@ jest.mock("@features/quiz/components/Footer", () => () => <footer>Footer</footer
 describe("CategoriesPage", () => {
   beforeEach(() => {
     mockGetCategories.mockReset();
+    mockPersonaState = { category: null, isLoading: true };
+  });
+
+  test("does not fetch until persona finishes loading", async () => {
+    mockPersonaState = { category: null, isLoading: true };
+    mockGetCategories.mockResolvedValue([]);
+
+    render(<CategoriesPage />);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockGetCategories).not.toHaveBeenCalled();
   });
 
   test("requests categories filtered by the user's persona category by default", async () => {
+    mockPersonaState = { category: "corporate", isLoading: false };
     mockGetCategories.mockResolvedValue(["Compliance", "Onboarding"]);
 
     render(<CategoriesPage />);
@@ -37,6 +52,7 @@ describe("CategoriesPage", () => {
   });
 
   test("shows all categories when the toggle is clicked", async () => {
+    mockPersonaState = { category: "corporate", isLoading: false };
     mockGetCategories
       .mockResolvedValueOnce(["Compliance", "Onboarding"])
       .mockResolvedValueOnce(["Compliance", "Onboarding", "Mathematics", "Science"]);
