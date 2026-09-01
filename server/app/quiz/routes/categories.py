@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from typing import List
+from typing import List, Optional
 
 from server.app.quiz.schemas.category_schemas import CategoryQuestionResponse
 from server.app.quiz.services.category_service import CategoryService
@@ -11,9 +11,9 @@ router = APIRouter()
 
 @router.get("/categories", response_model=List[str])
 
-async def get_categories():
+async def get_categories(persona_category: Optional[str] = Query(None)):
 
-    return await CategoryService().list_categories()
+    return await CategoryService().list_categories(persona_category)
 
 
 @router.get("/category/{category}/subcategories", response_model=List[str])
