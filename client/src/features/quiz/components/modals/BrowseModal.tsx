@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
 import publicApi from "@shared/api/publicHttp";
+import { useTerms } from "@features/persona/hooks/useTerms";
 
 interface Quiz {
   question: string;
@@ -19,6 +20,7 @@ interface BrowseModalProps {
 }
 
 const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
+  const t = useTerms();
   const [categories, setCategories] = useState<string[]>([]);
   const [subcategories, setSubcategories] = useState<string[]>([]);
   const [quizTypes, setQuizTypes] = useState<string[]>([]);
@@ -307,7 +309,7 @@ const BrowseModal: React.FC<BrowseModalProps> = ({ isOpen, onClose }) => {
                 </div>
               ) : (
                 <p className="text-sm text-gray-600 mt-4">
-                  No quizzes available.
+                  No {t("quiz", "plural")} available.
                 </p>
               )}
             </>

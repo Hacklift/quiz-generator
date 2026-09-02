@@ -7,7 +7,7 @@ import { useAuth } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
 import SidebarButton from "./SidebarButton";
 
-const LiveQuizzesButton: React.FC = () => {
+const LiveQuizzesButton: React.FC<{ label: string }> = ({ label }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,7 +26,7 @@ const LiveQuizzesButton: React.FC = () => {
   return (
     <>
       <SidebarButton
-        label="Live Quizzes"
+        label={label}
         icon={<Radio size={20} />}
         onClick={handleClick}
         isActive={isActive}

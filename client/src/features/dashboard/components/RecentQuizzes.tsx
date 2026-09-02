@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import { useAuth } from "@features/auth/context/authContext";
 import { getUserQuizHistory } from "@features/quiz-history/api/quizHistoryApi";
 
 interface HistoryRow {
@@ -28,9 +29,15 @@ export default function RecentQuizzes({
   limit?: number;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
 
   useEffect(() => {
+    if (!user?.is_verified) {
+      setRows([]);
+      return;
+    }
+
     let active = true;
     getUserQuizHistory().then((history) => {
       if (active) setRows(Array.isArray(history) ? history.slice(0, limit) : []);
@@ -38,7 +45,7 @@ export default function RecentQuizzes({
     return () => {
       active = false;
     };
-  }, [limit]);
+  }, [limit, user?.is_verified]);
 
   return (
     <section className="border-t-2 border-divider pt-[28px]">
@@ -48,6 +55,10 @@ export default function RecentQuizzes({
 
       {rows === null ? (
         <p className="mt-[14px] text-[14px] text-ink/60">Loading…</p>
+      ) : !user?.is_verified ? (
+        <p className="mt-[14px] max-w-[52ch] text-[15px] leading-[26px] text-ink/70">
+          Verify your email to view recent activity.
+        </p>
       ) : rows.length === 0 ? (
         <p className="mt-[14px] max-w-[52ch] text-[15px] leading-[26px] text-ink/70">
           {emptyMessage}

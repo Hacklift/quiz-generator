@@ -22,10 +22,12 @@ import publicApi from "@shared/api/publicHttp";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
+import { useTerms } from "@features/persona/hooks/useTerms";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 import {
   getPersonaGenerationDefaults,
   type PersonaGenerationDefaults,
+  type PersonaUserType,
 } from "@shared/config/persona";
 
 type ApiErrorLike = {
@@ -40,9 +42,14 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
-const QUIZ_GENERATION_MAX_QUESTIONS = Number(
-  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
+const parsedQuizGenerationMaxQuestions = Number(
+  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS,
 );
+const QUIZ_GENERATION_MAX_QUESTIONS =
+  Number.isInteger(parsedQuizGenerationMaxQuestions) &&
+  parsedQuizGenerationMaxQuestions > 0
+    ? parsedQuizGenerationMaxQuestions
+    : 10;
 const QUERY_AUDIENCE_MAX_CHARS = 80;
 const DIFFICULTY_LEVELS = new Set(["easy", "medium", "hard"]);
 const QUESTION_TYPES = new Set([
@@ -51,33 +58,52 @@ const QUESTION_TYPES = new Set([
   "short-answer",
   "open-ended",
 ]);
-const TEACHER_GENERATION_PRESETS: Record<
-  string,
-  PersonaGenerationDefaults
+const PERSONA_GENERATION_PRESETS: Partial<
+  Record<PersonaUserType, Record<string, PersonaGenerationDefaults>>
 > = {
-  "class-quiz": {
-    audienceType: "students",
-    customInstruction:
-      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
-    difficultyLevel: "easy",
-    numQuestions: 10,
-    questionType: "multichoice",
+  teacher: {
+    "class-quiz": {
+      audienceType: "students",
+      customInstruction:
+        "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+      difficultyLevel: "easy",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
+    "homework-check": {
+      audienceType: "students",
+      customInstruction:
+        "Create a homework check with concise questions and answer explanations for rapid marking.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "short-answer",
+    },
+    "exam-revision": {
+      audienceType: "students",
+      customInstruction:
+        "Create an exam revision quiz that mixes recall and application across the topic.",
+      difficultyLevel: "hard",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
   },
-  "homework-check": {
-    audienceType: "students",
-    customInstruction:
-      "Create a homework check with concise questions and answer explanations for rapid marking.",
-    difficultyLevel: "medium",
-    numQuestions: 10,
-    questionType: "short-answer",
-  },
-  "exam-revision": {
-    audienceType: "students",
-    customInstruction:
-      "Create an exam revision quiz that mixes recall and application across the topic.",
-    difficultyLevel: "hard",
-    numQuestions: 10,
-    questionType: "multichoice",
+  lecturer: {
+    "lecture-recap": {
+      audienceType: "undergraduates",
+      customInstruction:
+        "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
+    "seminar-prep": {
+      audienceType: "undergraduates",
+      customInstruction:
+        "Create a low-stakes seminar preparation quiz that checks understanding of the assigned reading.",
+      difficultyLevel: "medium",
+      numQuestions: 10,
+      questionType: "multichoice",
+    },
   },
 };
 
@@ -231,6 +257,7 @@ export default function QuizForm() {
   // entry points and post-auth carry-through use the same app-wide rule.
   const searchParams = useSearchParams();
   const { persona } = usePersona();
+  const t = useTerms();
 
   useEffect(() => {
     const personaTopic =
@@ -258,8 +285,7 @@ export default function QuizForm() {
     const queryQuestionType = searchParams?.get("questionType");
     const presetKey = searchParams?.get("preset") || "";
     const hasApplicablePreset =
-      persona.userType === "teacher" &&
-      Boolean(TEACHER_GENERATION_PRESETS[presetKey]);
+      Boolean(PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey]);
     const touched = touchedGenerationFieldsRef.current;
 
     if (!touched.audienceType) {
@@ -269,8 +295,7 @@ export default function QuizForm() {
     }
     if (!hasApplicablePreset && !touched.customInstruction) {
       setCustomInstruction(
-        (current) =>
-          current || queryCustomInstruction || defaults.customInstruction,
+        queryCustomInstruction || defaults.customInstruction,
       );
     }
     if (!touched.difficultyLevel) {
@@ -292,12 +317,16 @@ export default function QuizForm() {
 
   useEffect(() => {
     const presetKey = searchParams?.get("preset") || "";
-    const preset = TEACHER_GENERATION_PRESETS[presetKey];
+    const userType = persona?.userType;
+    const preset = userType
+      ? PERSONA_GENERATION_PRESETS[userType]?.[presetKey]
+      : undefined;
 
-    if (!preset || persona?.userType !== "teacher") {
+    if (!preset || !userType) {
       return;
     }
-    if (appliedPresetRef.current === presetKey) {
+    const presetIdentity = `${userType}:${presetKey}`;
+    if (appliedPresetRef.current === presetIdentity) {
       return;
     }
 
@@ -308,7 +337,7 @@ export default function QuizForm() {
     const queryQuestionType = searchParams?.get("questionType");
     const touched = touchedGenerationFieldsRef.current;
 
-    appliedPresetRef.current = presetKey;
+    appliedPresetRef.current = presetIdentity;
     setGenerationMode("topic");
     if (!touched.audienceType) {
       setAudienceType(
@@ -317,8 +346,7 @@ export default function QuizForm() {
     }
     if (!touched.customInstruction) {
       setCustomInstruction(
-        (current) =>
-          current || queryCustomInstruction || preset.customInstruction,
+        queryCustomInstruction || preset.customInstruction,
       );
     }
     if (!touched.difficultyLevel) {
@@ -376,6 +404,8 @@ export default function QuizForm() {
   }, [user, isAuthenticated]);
 
   const handleGenerateQuiz = async () => {
+    const resolvedAudienceType = audienceType || t("learner", "plural");
+
     if (generationMode === "topic" && !profession) {
       setErrorMessage("Please enter a profession or topic for your quiz.");
       return;
@@ -481,7 +511,7 @@ export default function QuizForm() {
         payload.append("question_type", questionType);
         payload.append("num_questions", numQuestions.toString());
         payload.append("difficulty_level", difficultyLevel);
-        payload.append("audience_type", audienceType || "students");
+        payload.append("audience_type", resolvedAudienceType);
         payload.append("custom_instruction", customInstruction);
         payload.append("token", token);
         payload.append("document_title", documentTitle);
@@ -522,7 +552,7 @@ export default function QuizForm() {
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
               profession: response.title,
-              audience_type: audienceType || "students",
+              audience_type: resolvedAudienceType,
               custom_instruction:
                 customInstruction ||
                 `Generated from ${response.source_document_type.toUpperCase()} material.`,
@@ -539,7 +569,7 @@ export default function QuizForm() {
           customInstruction:
             customInstruction ||
             `Generated from ${response.source_document_type.toUpperCase()} material.`,
-          audienceType: audienceType || "students",
+          audienceType: resolvedAudienceType,
           difficultyLevel,
         }).toString();
 
@@ -559,7 +589,7 @@ export default function QuizForm() {
         num_questions: numQuestions,
         profession,
         custom_instruction: customInstruction,
-        audience_type: audienceType,
+        audience_type: resolvedAudienceType,
         difficulty_level: difficultyLevel,
         token,
         live_quiz_enabled: enableLiveQuiz,
@@ -591,7 +621,7 @@ export default function QuizForm() {
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
               profession,
-              audience_type: audienceType,
+              audience_type: resolvedAudienceType,
               custom_instruction: customInstruction,
             },
             questions,
@@ -608,7 +638,7 @@ export default function QuizForm() {
         title: profession || `${questionType} Quiz`,
         description:
           customInstruction ||
-          `A ${difficultyLevel} ${questionType} quiz for ${audienceType || "students"}.`,
+          `A ${difficultyLevel} ${questionType} quiz for ${resolvedAudienceType}.`,
         question_type: questionType,
         questions,
         live_quiz_enabled: data?.live_quiz_enabled,
@@ -626,7 +656,7 @@ export default function QuizForm() {
         numQuestions: numQuestions.toString(),
         profession,
         customInstruction,
-        audienceType,
+        audienceType: resolvedAudienceType,
         difficultyLevel,
         token,
         liveQuiz: enableLiveQuiz ? "true" : "false",

@@ -28,6 +28,7 @@ class QuizRequest(BaseModel):
     participant_access_mode: Literal["public", "restricted", "invited_only"] = "public"
     invited_emails: List[str] = []
     send_email_invitations: bool = False
+    allow_fallback: bool = True
 
 
 

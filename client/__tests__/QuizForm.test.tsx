@@ -165,6 +165,33 @@ describe("QuizForm", () => {
     );
   });
 
+  test("applies lecturer lecture recap preset from persona dashboard query params", async () => {
+    mockPersona = { category: "school", userType: "lecturer" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "lecturer",
+      preset: "lecture-recap",
+      topic: "Introduction to microeconomics",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("Enter the concept/context here"),
+      ).toHaveValue("Introduction to microeconomics");
+    });
+    expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+      "undergraduates",
+    );
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
+    );
+  });
+
   const PERSONA_DEFAULT_CASES: Array<{
     userType: PersonaUserType;
     category: Persona["category"];
@@ -235,12 +262,16 @@ describe("QuizForm", () => {
       render(<QuizForm />);
 
       await waitFor(() => {
-      expect(screen.getByPlaceholderText("Audience")).toHaveValue(audience);
-    });
-    expect(screen.getByRole("button", { name: difficulty })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
-    expect(screen.getByLabelText(questionType)).toBeChecked();
-    expect(screen.getByPlaceholderText("Add specific instruction")).not.toHaveValue("");
+        expect(screen.getByPlaceholderText("Audience")).toHaveValue(audience);
+      });
+      expect(
+        screen.getByRole("button", { name: difficulty }),
+      ).toBeInTheDocument();
+      expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+      expect(screen.getByLabelText(questionType)).toBeChecked();
+      expect(
+        screen.getByPlaceholderText("Add specific instruction"),
+      ).not.toHaveValue("");
     },
   );
 
@@ -286,6 +317,9 @@ describe("QuizForm", () => {
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
     });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use child-friendly wording, simple examples, and auto-marked questions a parent can review quickly.",
+    );
 
     mockPersona = { category: "school", userType: "teacher" };
     rerender(<QuizForm />);
@@ -295,6 +329,9 @@ describe("QuizForm", () => {
     });
     expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use clear classroom language, include marking-friendly questions, and keep the answer key suitable for teacher review.",
+    );
   });
 
   test("does not clobber manual form edits if persona changes after defaults apply", async () => {

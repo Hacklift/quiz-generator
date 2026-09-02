@@ -2,7 +2,7 @@
  * Category-aware terminology.
  *
  * A School user should read "students" and "class" where a Corporate user
- * reads "employees" and "team". Persona views must never hardcode those
+ * reads "team members" and "team". Persona views must never hardcode those
  * nouns — call `t(...)` from `useTerms()` instead.
  *
  * Resolution order: user-type override -> category -> neutral default, so an
@@ -16,10 +16,15 @@ import type { Persona, PersonaCategory, PersonaUserType } from "./persona";
 export type TermKey =
   | "learner"
   | "group"
+  | "quiz"
+  | "live_quiz"
   | "assignment"
   | "library"
   | "report"
   | "session";
+
+export type TermForm = "singular" | "plural";
+export type TerminologyResolver = (key: TermKey, form?: TermForm) => string;
 
 export interface TermDefinition {
   singular: string;
@@ -31,6 +36,8 @@ export type TerminologyMap = Partial<Record<TermKey, TermDefinition>>;
 export const DEFAULT_TERMS: Record<TermKey, TermDefinition> = {
   learner: { singular: "learner", plural: "learners" },
   group: { singular: "group", plural: "groups" },
+  quiz: { singular: "quiz", plural: "quizzes" },
+  live_quiz: { singular: "live quiz", plural: "live quizzes" },
   assignment: { singular: "quiz", plural: "quizzes" },
   library: { singular: "library", plural: "libraries" },
   report: { singular: "report", plural: "reports" },
@@ -41,14 +48,21 @@ export const CATEGORY_TERMS: Record<PersonaCategory, TerminologyMap> = {
   school: {
     learner: { singular: "student", plural: "students" },
     group: { singular: "class", plural: "classes" },
+    quiz: { singular: "class quiz", plural: "class quizzes" },
+    live_quiz: { singular: "live class quiz", plural: "live class quizzes" },
     assignment: { singular: "homework", plural: "homework" },
     library: { singular: "resources", plural: "resources" },
     report: { singular: "gradebook", plural: "gradebooks" },
-    session: { singular: "lesson", plural: "lessons" },
+    session: { singular: "class quiz", plural: "class quizzes" },
   },
   corporate: {
-    learner: { singular: "employee", plural: "employees" },
+    learner: { singular: "team member", plural: "team members" },
     group: { singular: "team", plural: "teams" },
+    quiz: { singular: "training quiz", plural: "training quizzes" },
+    live_quiz: {
+      singular: "live training session",
+      plural: "live training sessions",
+    },
     assignment: { singular: "course", plural: "courses" },
     library: { singular: "training catalogue", plural: "training catalogues" },
     report: { singular: "compliance record", plural: "compliance records" },
@@ -79,7 +93,7 @@ export const USER_TYPE_TERMS: Partial<
 export function resolveTerm(
   key: TermKey,
   persona: Persona | null,
-  form: "singular" | "plural" = "singular",
+  form: TermForm = "singular",
 ): string {
   const fromUserType = persona
     ? USER_TYPE_TERMS[persona.userType]?.[key]

@@ -494,6 +494,49 @@ class LiveQuizSessionService:
         sessions = await self.repository.list_quiz_sessions(quiz_id)
         return [self._analytics_row(session) for session in sessions]
 
+    async def get_attempt_detail(
+        self,
+        quiz_id: str,
+        session_id: str,
+        requester_id: str,
+    ) -> Dict[str, Any]:
+        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+
+        owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
+        if not owner_id or str(owner_id) != requester_id:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        session = await self.repository.get_session_by_id_and_creator(
+            session_id,
+            requester_id,
+            quiz_id,
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Completed attempt not found")
+        if session.get("quiz_id") != quiz_id:
+            raise HTTPException(status_code=404, detail="Completed attempt not found")
+        if session.get("status") != "submitted" or not session.get("submitted_at"):
+            raise HTTPException(status_code=409, detail="Attempt is not completed")
+
+        graded_answers = session.get("graded_answers")
+        if not isinstance(graded_answers, list):
+            graded_answers = self._grade_session(session, quiz)["graded_answers"]
+
+        return {
+            "session_id": str(session["_id"]),
+            "quiz_id": quiz_id,
+            "title": quiz.get("title", "Live Quiz"),
+            "participant_name": session.get("participant_name", ""),
+            "score": session.get("score", 0),
+            "total_questions": session.get("total_questions", len(graded_answers)),
+            "percentage": session.get("percentage", 0),
+            "submitted_at": _as_utc(session["submitted_at"]),
+            "auto_submitted": session.get("auto_submitted", False),
+            "graded_answers": graded_answers,
+        }
+
     async def list_creator_live_quizzes(
         self,
         creator_user_id: str,
@@ -513,6 +556,14 @@ class LiveQuizSessionService:
                 for session in completed
                 if isinstance(session.get("score"), int)
             ]
+            completed_with_timestamp = [
+                session for session in completed if session.get("submitted_at")
+            ]
+            latest = max(
+                completed_with_timestamp,
+                key=lambda session: _as_utc(session["submitted_at"]),
+                default=None,
+            )
             rows.append(
                 {
                     "quiz_id": quiz_id,
@@ -531,6 +582,9 @@ class LiveQuizSessionService:
                     "average_score": round(sum(scores) / len(scores), 2)
                     if scores
                     else None,
+                    "latest_score": latest.get("score") if latest else None,
+                    "latest_percentage": latest.get("percentage") if latest else None,
+                    "latest_submitted_at": latest.get("submitted_at") if latest else None,
                 }
             )
         return rows
@@ -589,6 +643,7 @@ class LiveQuizSessionService:
                 "submitted_at": submitted_at,
                 "score": graded["score"],
                 "percentage": graded["percentage"],
+                "graded_answers": graded.get("graded_answers", []),
                 "duration_used_seconds": duration_used_seconds,
                 "auto_submitted": auto_submitted,
             },
@@ -623,10 +678,25 @@ class LiveQuizSessionService:
             )
 
         graded_answers = grade_answers(grading_payload, "mock")
+        indexed_answers = [
+            {
+                "question_index": index,
+                "question": answer.get("question", ""),
+                "selected_answer": str(answer.get("user_answer", "")),
+                "correct_answer": str(answer.get("correct_answer", "")),
+                "question_type": answer.get("question_type", ""),
+                "is_correct": bool(answer.get("is_correct", False)),
+            }
+            for index, answer in enumerate(graded_answers)
+        ]
         score = sum(1 for answer in graded_answers if answer.get("is_correct"))
         total = len(questions)
         percentage = round((score / total) * 100, 2) if total else 0
-        return {"score": score, "percentage": percentage}
+        return {
+            "score": score,
+            "percentage": percentage,
+            "graded_answers": indexed_answers,
+        }
 
     def _build_session_state(
         self,

@@ -11,6 +11,7 @@ import { useAuth } from "@features/auth/context/authContext";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
+import { useTerms } from "@features/persona/hooks/useTerms";
 
 interface QuizHistoryQuestion {
   question: string;
@@ -59,6 +60,7 @@ const DisplayQuizHistoryPage = ({
   onDelete: (historyId: string) => Promise<void>;
 }) => {
   const router = useRouter();
+  const t = useTerms();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -81,12 +83,12 @@ const DisplayQuizHistoryPage = ({
       <main className="flex-1 px-4 sm:px-6 md:px-8 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
-            Quiz History
+            {t("quiz").charAt(0).toUpperCase() + t("quiz").slice(1)} history
           </h1>
 
           {quizHistory.length === 0 ? (
             <p className="text-center text-gray-600">
-              No quiz history available.
+              No {t("quiz")} history available.
             </p>
           ) : (
             quizHistory.map((quizItem, idx) => (
@@ -272,6 +274,7 @@ export default function DisplayQuizHistory({
   openLoginModal: () => void;
 }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const t = useTerms();
   const [quizHistory, setQuizHistory] = useState<QuizHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -309,12 +312,12 @@ export default function DisplayQuizHistory({
 
   return (
     <RequireAuth
-      title="Quiz History"
-      description="Sign in to see your quiz history."
+      title={`${t("quiz").charAt(0).toUpperCase() + t("quiz").slice(1)} history`}
+      description={`Sign in to see your ${t("quiz")} history.`}
     >
       <Suspense
         fallback={
-          <div className="p-8 text-center">Loading quiz history...</div>
+          <div className="p-8 text-center">Loading {t("quiz")} history...</div>
         }
       >
         <DisplayQuizHistoryPage

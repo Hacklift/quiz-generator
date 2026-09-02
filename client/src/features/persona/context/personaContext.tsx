@@ -46,18 +46,26 @@ const PersonaContext = createContext<PersonaState>(EMPTY_STATE);
 const samePersona = (first: Persona | null, second: Persona | null) =>
   first?.category === second?.category && first?.userType === second?.userType;
 
+interface PersonaOverride {
+  persona: Persona;
+  userId: string | null;
+}
+
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const router = useRouter();
 
-  // Local override so a fresh pick renders immediately, before the profile
-  // round-trip completes.
-  const [override, setOverride] = useState<Persona | null>(null);
+  // A successful profile write can take one render to reach AuthProvider.
+  // Bind the optimistic value to that user so it cannot mask another
+  // account's profile during an account switch in the same browser.
+  const [override, setOverride] = useState<PersonaOverride | null>(null);
   const [storedPersona, setStoredPersona] = useState<Persona | null>(null);
+  const [storageHydrated, setStorageHydrated] = useState(false);
   const wasAuthenticatedRef = useRef(isAuthenticated);
 
   useEffect(() => {
     setStoredPersona(readStoredPersona());
+    setStorageHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -72,8 +80,8 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   const resolved = useMemo(() => {
-    if (override) {
-      return { persona: override, source: "profile" as const };
+    if (override?.userId === (user?.id ?? null)) {
+      return { persona: override.persona, source: "profile" as const };
     }
     return resolvePersona({
       profile: user
@@ -128,14 +136,17 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
       options: { source?: PersonaWriteSource } = {},
     ) => {
       if (isAuthenticated) {
-        setOverride(persona);
+        const userId = user?.id ?? null;
+        setOverride({ persona, userId });
         try {
           await updatePersona(persona, options.source ?? "profile");
           await refreshUser();
           clearStoredPersona();
           setStoredPersona(null);
         } catch (error) {
-          setOverride(null);
+          setOverride((current) =>
+            current?.userId === userId ? null : current,
+          );
           throw error;
         }
         return;
@@ -144,7 +155,7 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
       writeStoredPersona(persona);
       setStoredPersona(persona);
     },
-    [isAuthenticated, refreshUser],
+    [isAuthenticated, refreshUser, user?.id],
   );
 
   const clearPersona = useCallback(() => {
@@ -164,11 +175,11 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
         ? getCategoryDefinition(persona.category)
         : null,
       source: resolved.source,
-      isLoading,
+      isLoading: isLoading || !storageHydrated,
       setPersona,
       clearPersona,
     };
-  }, [resolved, isLoading, setPersona, clearPersona]);
+  }, [resolved, isLoading, storageHydrated, setPersona, clearPersona]);
 
   return (
     <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>

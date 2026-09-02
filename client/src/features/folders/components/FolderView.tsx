@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import MoveQuizModal from "./MoveQuizModal";
 import OrganizeModal from "./OrganizeModal";
+import { useTerms } from "@features/persona/hooks/useTerms";
 
 interface FolderViewProps {
   folder: {
@@ -24,6 +25,7 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showOrganizeModal, setShowOrganizeModal] = useState(false);
   const [quizzes, setQuizzes] = useState(folder.quizzes || []);
+  const t = useTerms();
 
   return (
     <div className="p-6 bg-white rounded-2xl shadow-sm border border-gray-100">
@@ -38,7 +40,9 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
       </div>
 
       {quizzes.length === 0 ? (
-        <p className="text-gray-500 text-sm">No quizzes in this folder yet.</p>
+        <p className="text-gray-500 text-sm">
+          No {t("quiz", "plural")} in this folder yet.
+        </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {quizzes.map((quiz) => (
