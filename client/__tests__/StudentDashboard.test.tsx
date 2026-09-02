@@ -46,21 +46,31 @@ describe("StudentDashboard", () => {
     expect(screen.getByText("Retry weak areas")).toBeInTheDocument();
     expect(screen.getByText("Quick-create presets")).toBeInTheDocument();
     expect(screen.getByText("Self-test")).toBeInTheDocument();
-    expect(screen.getByText("Joining a live lesson?")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) => element?.textContent === "Joining a live lesson?",
+      ),
+    ).toBeInTheDocument();
   });
 
   test("navigates to the persona-aware generate page when practising a topic", () => {
     render(<StudentDashboard persona={mockStudentPersona} user={mockUser} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Practise a topic/i }));
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/generate?"));
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("persona=student"));
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("/generate?"),
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("persona=student"),
+    );
   });
 
   test("navigates to quiz history from the history and retry cards", () => {
     render(<StudentDashboard persona={mockStudentPersona} user={mockUser} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /My gradebook history/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /My gradebook history/i }),
+    );
     expect(mockPush).toHaveBeenCalledWith("/quiz_history");
 
     fireEvent.click(screen.getByRole("button", { name: /Retry weak areas/i }));
