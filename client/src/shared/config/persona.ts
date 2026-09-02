@@ -280,7 +280,6 @@ export function personaGenerateHref(userType: PersonaUserType): string {
   const params = new URLSearchParams({
     persona: definition.slug,
     category: definition.category,
-    topic: definition.defaultTopic,
   });
   return `/generate?${params.toString()}`;
 }

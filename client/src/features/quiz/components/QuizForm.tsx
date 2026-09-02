@@ -26,6 +26,7 @@ import { useTerms } from "@features/persona/hooks/useTerms";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 import {
   getPersonaGenerationDefaults,
+  getUserTypeDefinition,
   type PersonaGenerationDefaults,
   type PersonaUserType,
 } from "@shared/config/persona";
@@ -258,11 +259,17 @@ export default function QuizForm() {
   const searchParams = useSearchParams();
   const { persona } = usePersona();
   const t = useTerms();
+  const personaTopicPlaceholder = persona
+    ? getUserTypeDefinition(persona.userType).defaultTopic
+    : "Enter the concept/context here";
 
   useEffect(() => {
+    const defaultTopic = persona
+      ? getUserTypeDefinition(persona.userType).defaultTopic
+      : "";
     const personaTopic =
       searchParams?.get("topic") || readStoredPersonaTopic(persona);
-    if (personaTopic) {
+    if (personaTopic && personaTopic !== defaultTopic) {
       setGenerationMode("topic");
       setProfession((current) => current || personaTopic);
     }
@@ -288,7 +295,7 @@ export default function QuizForm() {
       Boolean(PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey]);
     const touched = touchedGenerationFieldsRef.current;
 
-    if (!touched.audienceType) {
+    if (!hasApplicablePreset && !touched.audienceType) {
       setAudienceType(
         queryAudienceOrDefault(queryAudience, defaults.audienceType),
       );
@@ -298,17 +305,17 @@ export default function QuizForm() {
         queryCustomInstruction || defaults.customInstruction,
       );
     }
-    if (!touched.difficultyLevel) {
+    if (!hasApplicablePreset && !touched.difficultyLevel) {
       setDifficultyLevel(
         queryDifficultyOrDefault(queryDifficulty, defaults.difficultyLevel),
       );
     }
-    if (!touched.numQuestions) {
+    if (!hasApplicablePreset && !touched.numQuestions) {
       setNumQuestions(
         queryQuestionCountOrDefault(queryNumQuestions, defaults.numQuestions),
       );
     }
-    if (!touched.questionType) {
+    if (!hasApplicablePreset && !touched.questionType) {
       setQuestionType(
         queryQuestionTypeOrDefault(queryQuestionType, defaults.questionType),
       );
@@ -693,6 +700,7 @@ export default function QuizForm() {
         <PersonaBadge
           userType={persona.userType}
           className="mb-6"
+          audienceFallback={t("learner", "plural")}
           appliedDefaults={{
             audienceType,
             difficultyLevel,
@@ -707,6 +715,7 @@ export default function QuizForm() {
           setGenerationMode={setGenerationMode}
           profession={profession}
           setProfession={setProfession}
+          professionPlaceholder={personaTopicPlaceholder}
           documentTitle={documentTitle}
           setDocumentTitle={setDocumentTitle}
           documentInputMode={documentInputMode}

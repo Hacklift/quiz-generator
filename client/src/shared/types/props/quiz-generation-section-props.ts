@@ -5,6 +5,7 @@ export interface QuizGenerationSectionProps {
   setGenerationMode: Dispatch<SetStateAction<"document" | "topic">>;
   profession: string;
   setProfession: Dispatch<SetStateAction<string>>;
+  professionPlaceholder?: string;
   documentTitle: string;
   setDocumentTitle: Dispatch<SetStateAction<string>>;
   documentInputMode: "paste" | "upload";

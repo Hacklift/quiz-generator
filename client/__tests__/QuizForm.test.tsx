@@ -125,7 +125,7 @@ describe("QuizForm", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByPlaceholderText("Enter the concept/context here"),
+        screen.getByPlaceholderText("Photosynthesis — Grade 8 biology"),
       ).toHaveValue("Photosynthesis");
     });
     expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
@@ -171,16 +171,13 @@ describe("QuizForm", () => {
       category: "school",
       persona: "lecturer",
       preset: "lecture-recap",
-      topic: "Introduction to microeconomics",
     });
 
     render(<QuizForm />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByPlaceholderText("Enter the concept/context here"),
-      ).toHaveValue("Introduction to microeconomics");
-    });
+    expect(
+      screen.getByPlaceholderText("Introduction to microeconomics"),
+    ).toHaveValue("");
     expect(screen.getByPlaceholderText("Audience")).toHaveValue(
       "undergraduates",
     );
@@ -277,18 +274,36 @@ describe("QuizForm", () => {
 
   test("applies the same defaults when persona comes from profile without query params", async () => {
     mockPersona = { category: "school", userType: "parent" };
-    mockSearchParams = new URLSearchParams({
-      topic: "Multiplication tables",
-    });
+    mockSearchParams = new URLSearchParams();
 
     render(<QuizForm />);
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
     });
+    expect(
+      screen.getByPlaceholderText("Multiplication tables — ages 7 to 9"),
+    ).toHaveValue("");
     expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
     expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+  });
+
+  test("keeps explicit non-default topic query params as the concept value", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      topic: "Cell respiration",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("Photosynthesis — Grade 8 biology"),
+      ).toHaveValue("Cell respiration");
+    });
   });
 
   test("allows query params to override persona defaults", async () => {

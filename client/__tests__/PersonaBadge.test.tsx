@@ -57,4 +57,21 @@ describe("PersonaBadge", () => {
     expect(screen.getByText("Short Answer")).toBeInTheDocument();
     expect(screen.getByText("6")).toBeInTheDocument();
   });
+
+  test("uses audience fallback when the live audience value is empty", () => {
+    render(
+      <PersonaBadge
+        userType="teacher"
+        audienceFallback="students"
+        appliedDefaults={{
+          audienceType: "",
+          difficultyLevel: "medium",
+          numQuestions: 10,
+          questionType: "multichoice",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Students")).toBeInTheDocument();
+  });
 });

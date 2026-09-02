@@ -15,6 +15,7 @@ export interface PersonaBadgeProps {
   userType: PersonaUserType;
   className?: string;
   showDefaults?: boolean;
+  audienceFallback?: string;
   appliedDefaults?: {
     audienceType: string;
     difficultyLevel: string;
@@ -28,6 +29,7 @@ export default function PersonaBadge({
   userType,
   className = "",
   showDefaults = true,
+  audienceFallback = "Learners",
   appliedDefaults,
 }: PersonaBadgeProps) {
   const definition = getUserTypeDefinition(userType);
@@ -38,6 +40,7 @@ export default function PersonaBadge({
 
   const formatLabel =
     FORMAT_LABELS[defaults.questionType] || defaults.questionType;
+  const audienceLabel = defaults.audienceType.trim() || audienceFallback;
 
   return (
     <div
@@ -60,7 +63,7 @@ export default function PersonaBadge({
           <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium text-slate-700 shadow-xs border border-slate-200">
             <span className="text-slate-400">Audience:</span>
             <strong className="text-slate-800 font-semibold">
-              {capitalize(defaults.audienceType)}
+              {capitalize(audienceLabel)}
             </strong>
           </span>
 
