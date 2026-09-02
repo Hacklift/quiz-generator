@@ -31,10 +31,7 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
       id: "self-test",
       title: "Self-test",
       badge: "Auto-marked / Immediate feedback",
-      description: `Practise any topic with an auto-marked ${t(
-        "assignment",
-      )} that scores itself the moment you finish, so you know straight
-      away what to revise next.`,
+      description: `Practise any topic with an auto-marked ${t("assignment")} that scores itself the moment you finish, so you know straight away what to revise next.`,
       href: studentPresetHref(persona, "self-test"),
     },
   ];
