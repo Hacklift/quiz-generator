@@ -196,7 +196,6 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const appliedPresetRef = useRef<string | null>(null);
-  const appliedPersonaDefaultsRef = useRef<string | null>(null);
   const touchedGenerationFieldsRef = useRef({
     audienceType: false,
     customInstruction: false,
@@ -278,10 +277,7 @@ export default function QuizForm() {
   // #133: Apply persona-aware generation defaults on form load.
   useEffect(() => {
     if (!persona) return;
-    const personaKey = `${persona.category}:${persona.userType}`;
-    if (appliedPersonaDefaultsRef.current === personaKey) return;
 
-    appliedPersonaDefaultsRef.current = personaKey;
     const defaults = getPersonaGenerationDefaults(persona.userType);
     if (!defaults) return;
 

@@ -165,6 +165,38 @@ describe("QuizForm", () => {
     );
   });
 
+  test("reconciles defaults when a preset is removed for the same persona", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      preset: "class-quiz",
+    });
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+    );
+
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+    });
+    rerender(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /medium/i }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use clear classroom language, include marking-friendly questions, and keep the answer key suitable for teacher review.",
+    );
+  });
+
   test("applies lecturer lecture recap preset from persona dashboard query params", async () => {
     mockPersona = { category: "school", userType: "lecturer" };
     mockSearchParams = new URLSearchParams({
