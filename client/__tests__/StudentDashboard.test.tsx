@@ -48,7 +48,7 @@ describe("StudentDashboard", () => {
     expect(screen.getByText("Self-test")).toBeInTheDocument();
     expect(
       screen.getByText(
-        (_, element) => element?.textContent === "Joining a live lesson?",
+        (_, element) => element?.textContent === "Joining a live class quiz?",
       ),
     ).toBeInTheDocument();
   });
