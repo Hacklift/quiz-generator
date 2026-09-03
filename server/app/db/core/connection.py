@@ -31,6 +31,9 @@ quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
 live_quiz_invitations_collection = database["live_quiz_invitations"]
+training_runs_collection = database["training_runs"]
+training_assignments_collection = database["training_assignments"]
+training_audit_events_collection = database["training_audit_events"]
 
 
 folders_collection = database["folders"]
@@ -72,6 +75,12 @@ async def ensure_notification_indexes(notifications_collection: AsyncIOMotorColl
         expireAfterSeconds=0,
         name="expires_at_1",
     )
+    await notifications_collection.create_index(
+        "dedupe_key",
+        unique=True,
+        sparse=True,
+        name="notification_dedupe_key",
+    )
 
 
 async def ensure_live_quiz_session_indexes(
@@ -82,6 +91,7 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index("guest_id")
     await live_quiz_sessions_collection.create_index("status")
     await live_quiz_sessions_collection.create_index("expires_at")
+    await live_quiz_sessions_collection.create_index("training_run_id")
 
 
 async def ensure_document_rag_cache_indexes(
@@ -128,6 +138,29 @@ async def ensure_live_quiz_invitation_indexes(
     )
 
 
+async def ensure_training_run_indexes(
+    training_runs_collection: AsyncIOMotorCollection,
+    training_assignments_collection: AsyncIOMotorCollection,
+    training_audit_events_collection: AsyncIOMotorCollection,
+):
+    """Indexes for the run-based corporate training workflow."""
+    await training_runs_collection.create_index("access_code", unique=True, sparse=True)
+    await training_runs_collection.create_index([("owner_user_id", 1), ("created_at", -1)])
+    await training_runs_collection.create_index([("status", 1), ("closes_at", 1)])
+    await training_assignments_collection.create_index(
+        [("training_run_id", 1), ("recipient_email", 1)], unique=True
+    )
+    await training_assignments_collection.create_index(
+        [("recipient_user_id", 1), ("status", 1), ("due_at", 1)], sparse=True
+    )
+    await training_assignments_collection.create_index(
+        [("recipient_email", 1), ("status", 1), ("due_at", 1)]
+    )
+    await training_audit_events_collection.create_index(
+        [("training_run_id", 1), ("occurred_at", 1)]
+    )
+
+
 async def startUp():
     await ensure_user_collections(
         database,
@@ -143,6 +176,11 @@ async def startUp():
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
     await ensure_document_rag_cache_indexes(document_rag_cache_collection)
     await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
+    await ensure_training_run_indexes(
+        training_runs_collection,
+        training_assignments_collection,
+        training_audit_events_collection,
+    )
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -218,6 +256,18 @@ def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
     if live_quiz_invitations_collection is None:
         raise RuntimeError("[DB Error] live_quiz_invitations_collection has not been initialized properly.")
     return live_quiz_invitations_collection
+
+
+def get_training_runs_collection() -> AsyncIOMotorCollection:
+    return training_runs_collection
+
+
+def get_training_assignments_collection() -> AsyncIOMotorCollection:
+    return training_assignments_collection
+
+
+def get_training_audit_events_collection() -> AsyncIOMotorCollection:
+    return training_audit_events_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:

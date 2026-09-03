@@ -3,7 +3,7 @@ import hashlib
 import logging
 import secrets
 import string
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import HTTPException, status
 from pydantic import EmailStr, TypeAdapter, ValidationError
@@ -38,9 +38,17 @@ class LiveQuizSessionService:
         self,
         repository: LiveQuizSessionRepository,
         broadcaster: Optional[LiveQuizRealtimeBroadcaster] = None,
+        assignment_repository=None,
+        assignment_completion_notifier: Optional[Callable[[dict], Awaitable[None]]] = None,
+        training_owner_completion_notifier: Optional[
+            Callable[[dict, Optional[dict]], Awaitable[None]]
+        ] = None,
     ):
         self.repository = repository
         self.broadcaster = broadcaster
+        self.assignment_repository = assignment_repository
+        self.assignment_completion_notifier = assignment_completion_notifier
+        self.training_owner_completion_notifier = training_owner_completion_notifier
 
     async def generate_access_code(
         self,
@@ -255,21 +263,56 @@ class LiveQuizSessionService:
         # For public mode, email is still helpful - require it but soft
         # (spec says recommended for both modes)
 
-        participant_token = secrets.token_urlsafe(32)
+        return await self.start_session_for_quiz(
+            quiz,
+            participant_name=participant_name,
+            participant_email=normalized_email or None,
+            time_limit_minutes=int(quiz["time_limit_minutes"]),
+            invitation_repository=invitation_repository,
+        )
+
+    async def start_session_for_quiz(
+        self,
+        quiz: Dict[str, Any],
+        *,
+        participant_name: str,
+        participant_email: Optional[str],
+        time_limit_minutes: int,
+        invitation_repository=None,
+        training_run_id: Optional[str] = None,
+        training_assignment_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        participant_type: str = "guest",
+        quiz_snapshot: Optional[Dict[str, Any]] = None,
+        training_closes_at: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Create a normal session for either a public quiz or a training assignment."""
+        questions = quiz.get("questions") or []
+        if not questions:
+            raise HTTPException(status_code=400, detail="Quiz has no questions")
+        if not participant_name or not participant_name.strip():
+            raise HTTPException(status_code=400, detail="Participant name is required")
+
+        normalized_email = participant_email.strip().lower() if participant_email else ""
         started_at = _utc_now()
-        time_limit_minutes = int(quiz["time_limit_minutes"])
         duration_seconds = time_limit_minutes * 60
         expires_at = started_at + timedelta(minutes=time_limit_minutes)
+        if training_closes_at and expires_at > _as_utc(training_closes_at):
+            raise HTTPException(
+                status_code=409,
+                detail="There is not enough time left to complete this training before it closes",
+            )
         server_now = started_at
         guest_id = f"guest_{secrets.token_urlsafe(12)}"
+        participant_token = secrets.token_urlsafe(32)
 
         creator_user_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
 
         session_data = {
             "quiz_id": str(quiz["_id"]),
             "creator_user_id": creator_user_id,
-            "participant_type": "guest",
-            "user_id": None,
+            "participant_type": participant_type,
+            "user_id": user_id,
             "participant_name": participant_name.strip(),
             "participant_email": normalized_email if normalized_email else None,
             "guest_id": guest_id,
@@ -284,12 +327,19 @@ class LiveQuizSessionService:
             "score": None,
             "total_questions": len(questions),
             "duration_seconds": duration_seconds,
+            "time_limit_minutes": time_limit_minutes,
             "duration_used_seconds": None,
             "percentage": None,
             "auto_submitted": False,
             "created_at": started_at,
             "updated_at": started_at,
         }
+        if training_run_id:
+            session_data["training_run_id"] = training_run_id
+        if training_assignment_id:
+            session_data["training_assignment_id"] = training_assignment_id
+        if quiz_snapshot:
+            session_data["quiz_snapshot"] = quiz_snapshot
         session_id = await self.repository.create_session(session_data)
         remaining_seconds = self._remaining_seconds(expires_at, server_now)
 
@@ -338,7 +388,9 @@ class LiveQuizSessionService:
         participant_token: str,
     ) -> Dict[str, Any]:
         session = await self._get_authorized_session(session_id, participant_token)
-        quiz = await self.repository.get_quiz_by_id(session["quiz_id"])
+        if session.get("status") != "submitted":
+            await self._ensure_training_run_open(session)
+        quiz = await self._get_session_quiz(session)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
@@ -365,10 +417,11 @@ class LiveQuizSessionService:
         next_question_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         session = await self._get_authorized_session(session_id, participant_token)
+        await self._ensure_training_run_open(session)
         if session.get("status") not in {"active", "joined", "disconnected"}:
             raise HTTPException(status_code=409, detail="Session is not active")
         if self._is_expired(session):
-            quiz = await self.repository.get_quiz_by_id(session["quiz_id"])
+            quiz = await self._get_session_quiz(session)
             if quiz:
                 await self._finalize_session(session, quiz, auto_submitted=True)
             raise HTTPException(status_code=409, detail="Session has expired")
@@ -409,7 +462,9 @@ class LiveQuizSessionService:
         invitation_repository=None,
     ) -> Dict[str, Any]:
         session = await self._get_authorized_session(session_id, participant_token)
-        quiz = await self.repository.get_quiz_by_id(session["quiz_id"])
+        if session.get("status") != "submitted":
+            await self._ensure_training_run_open(session)
+        quiz = await self._get_session_quiz(session)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
@@ -569,6 +624,28 @@ class LiveQuizSessionService:
             raise HTTPException(status_code=403, detail="Invalid participant token")
         return session
 
+    async def _get_session_quiz(self, session: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        snapshot = session.get("quiz_snapshot")
+        if snapshot and snapshot.get("questions"):
+            return {
+                **snapshot,
+                "_id": session["quiz_id"],
+            }
+        return await self.repository.get_quiz_by_id(session["quiz_id"])
+
+    async def _ensure_training_run_open(self, session: Dict[str, Any]) -> None:
+        """Prevent post-close writes that would diverge from a closed audit snapshot."""
+        run_id = session.get("training_run_id")
+        if not run_id or not self.assignment_repository:
+            return
+        run = await self.assignment_repository.get_run(run_id)
+        if (
+            not run
+            or run.get("status") != "open"
+            or _as_utc(run["closes_at"]) <= _utc_now()
+        ):
+            raise HTTPException(status_code=409, detail="Training run is closed")
+
     async def _finalize_session(
         self,
         session: Dict[str, Any],
@@ -595,6 +672,32 @@ class LiveQuizSessionService:
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Session not found")
+        assignment = None
+        assignment_id = updated.get("training_assignment_id")
+        if assignment_id and self.assignment_repository:
+            assignment = await self.assignment_repository.record_submission(
+                assignment_id=assignment_id,
+                session_id=str(updated["_id"]),
+                score=graded["score"],
+                percentage=graded["percentage"],
+                submitted_at=submitted_at,
+            )
+            if assignment and self.assignment_completion_notifier:
+                try:
+                    await self.assignment_completion_notifier(assignment)
+                except Exception:
+                    logger.exception(
+                        "Could not create training completion notification for assignment %s",
+                        assignment_id,
+                    )
+        if updated.get("training_run_id") and self.training_owner_completion_notifier:
+            try:
+                await self.training_owner_completion_notifier(updated, assignment)
+            except Exception:
+                logger.exception(
+                    "Could not create owner completion notification for training session %s",
+                    updated["_id"],
+                )
         return updated
 
     def _grade_session(
@@ -646,7 +749,11 @@ class LiveQuizSessionService:
             )
 
         server_now = _utc_now()
-        time_limit_minutes = int(quiz["time_limit_minutes"])
+        time_limit_minutes = int(
+            session.get("time_limit_minutes") or quiz.get("time_limit_minutes") or 0
+        )
+        if not time_limit_minutes:
+            raise HTTPException(status_code=400, detail="Quiz time limit is not configured")
         duration_seconds = session.get("duration_seconds") or time_limit_minutes * 60
         started_at = _as_utc(session["started_at"])
         expires_at = _as_utc(session["expires_at"])

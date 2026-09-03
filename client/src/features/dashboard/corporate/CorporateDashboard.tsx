@@ -55,6 +55,43 @@ export default function CorporateDashboard({
   const copy = CORPORATE_COPY[persona.userType as CorporateUserType];
 
   const greetingName = user.full_name?.split(" ")[0] || user.username;
+  const quickActions =
+    persona.userType === "employee"
+      ? [
+          {
+            label: "Assigned training",
+            description: "Start required training, track due dates, and view completed scores.",
+            href: "/assigned-training",
+          },
+          {
+            label: `Practice ${t("quiz")}`,
+            description: "Generate a private practice quiz for your next skill.",
+            href: personaGenerateHref(persona.userType),
+          },
+        ]
+      : [
+          {
+            label:
+              persona.userType === "hr"
+                ? "New compliance quiz"
+                : `New ${t("quiz")}`,
+            description: `Generate a ${t("quiz")} for any training topic, with the answer key included.`,
+            href: personaGenerateHref(persona.userType),
+          },
+          {
+            label:
+              persona.userType === "hr" ? "Compliance runs" : "Training runs",
+            description: "Assign training, share access, and review completion in one workspace.",
+            href: `/training-runs?kind=${
+              persona.userType === "hr" ? "compliance" : "business"
+            }`,
+          },
+          {
+            label: `Run ${t("live_quiz")}`,
+            description: "Manage existing live training and review participant activity.",
+            href: "/my-live-quizzes",
+          },
+        ];
 
   return (
     <DashboardShell
@@ -63,25 +100,7 @@ export default function CorporateDashboard({
       lede={`${copy.lede(t)} Everything for your ${t("group", "plural")} is in one place.`}
     >
       <div className="flex flex-col gap-[36px]">
-        <QuickActions
-          actions={[
-            {
-              label: `New ${t("quiz")}`,
-              description: `Generate a ${t("quiz")} for any training topic, with the answer key included.`,
-              href: personaGenerateHref(persona.userType),
-            },
-            {
-              label: `Run ${t("live_quiz")}`,
-              description: "Manage live training and review participation from one workspace.",
-              href: "/my-live-quizzes",
-            },
-            {
-              label: "Assigned to me",
-              description: "Assigned training will appear here when assignment workflows arrive.",
-              unavailable: true,
-            },
-          ]}
-        />
+        <QuickActions actions={quickActions} />
 
         <RecentQuizzes
           heading="Recent training activity"

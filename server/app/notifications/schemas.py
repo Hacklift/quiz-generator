@@ -10,6 +10,7 @@ class NotificationType(str, Enum):
     SECURITY = "security"
     SYSTEM = "system"
     ADMIN = "admin"
+    TRAINING = "training"
 
 
 class NotificationCreate(BaseModel):
@@ -19,6 +20,7 @@ class NotificationCreate(BaseModel):
     type: NotificationType = NotificationType.SYSTEM
     action_url: Optional[str] = None
     expires_at: Optional[datetime] = None
+    dedupe_key: Optional[str] = Field(default=None, max_length=200)
 
 
 class AdminNotificationCreate(NotificationCreate):

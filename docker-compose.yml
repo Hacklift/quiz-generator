@@ -66,6 +66,23 @@ services:
       server:
         condition: service_started
 
+  celery-beat:
+    build:
+      context: .
+      target: backend-service
+    volumes:
+      - ./server:/server
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/
+    command: ["celery", "-A", "server.celery_config.celery_app", "beat", "--loglevel=info"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   mongodb:
     image: mongo:latest
     ports:

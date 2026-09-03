@@ -37,6 +37,15 @@ celery_app.conf.update(
 celery_app.conf.task_routes = {
     "tasks.send_quiz_email": {"queue": "email"},
     "tasks.send_email_generic": {"queue": "email"},
+    "tasks.close_expired_training_runs": {"queue": "celery"},
+}
+
+celery_app.conf.beat_schedule = {
+    "close-expired-training-runs": {
+        "task": "tasks.close_expired_training_runs",
+        "schedule": 60.0,
+    },
 }
 
 import server.app.email_platform.email_tasks
+import server.app.quiz.tasks.training_run_tasks

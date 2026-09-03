@@ -4,6 +4,7 @@ from typing import Iterable
 from bson import ObjectId
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.errors import DuplicateKeyError
 
 from server.app.notifications.schemas import (
     NotificationCreate,
@@ -45,8 +46,17 @@ async def create_notification(
     notification: NotificationCreate,
 ) -> NotificationResponse:
     document = NotificationDB(**notification.model_dump()).model_dump()
-    result = await notifications_collection.insert_one(document)
-    created = await notifications_collection.find_one({"_id": result.inserted_id})
+    try:
+        result = await notifications_collection.insert_one(document)
+        created = await notifications_collection.find_one({"_id": result.inserted_id})
+    except DuplicateKeyError:
+        if not notification.dedupe_key:
+            raise
+        created = await notifications_collection.find_one(
+            {"dedupe_key": notification.dedupe_key}
+        )
+        if created is None:
+            raise
     return _to_response(created)
 
 
