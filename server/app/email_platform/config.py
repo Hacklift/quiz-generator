@@ -3,11 +3,11 @@
 import os
 
 
-def require_sender_email() -> str:
-    """Return the single configured sender identity or fail before delivery."""
-    sender_email = os.getenv("SENDER_EMAIL", "").strip()
-    if not sender_email:
+def require_env(var_name: str) -> str:
+    """Read a required non-blank environment value without provider coupling."""
+    value = os.getenv(var_name, "").strip()
+    if not value:
         raise EnvironmentError(
-            "[Config Error] Required environment variable 'SENDER_EMAIL' is missing."
+            f"[Config Error] Required environment variable '{var_name}' is missing."
         )
-    return sender_email
+    return value

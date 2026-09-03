@@ -1,10 +1,10 @@
 from email.mime.text import MIMEText
 import os
 
-from .config import require_sender_email
+from .config import require_env
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").rstrip("/")
-SENDER_EMAIL = require_sender_email()
+SENDER_EMAIL = require_env("SENDER_EMAIL")
 
 def render_email(template_id: str, to: str, vars: dict) -> MIMEText:
     """

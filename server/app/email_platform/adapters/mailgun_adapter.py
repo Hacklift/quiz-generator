@@ -4,7 +4,7 @@ import requests
 from email.mime.text import MIMEText
 from ..models import EmailPayload, SendResult
 from ..renderer import render_email
-from ..config import require_sender_email
+from ..config import require_env
 
 logger = logging.getLogger(__name__)
 MAILGUN_REQUEST_TIMEOUT_SECONDS = 20
@@ -18,7 +18,7 @@ class MailgunAdapter:
     def __init__(self):
         self.api_key = os.getenv("MAILGUN_API_KEY")
         self.domain = os.getenv("MAILGUN_DOMAIN")
-        self.sender_email = require_sender_email()
+        self.sender_email = require_env("SENDER_EMAIL")
         self.base_url = f"https://api.mailgun.net/v3/{self.domain}" if self.domain else None
 
         if not self.api_key or not self.domain:

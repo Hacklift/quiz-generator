@@ -1,5 +1,3 @@
-import os
-
 import logging
 
 import smtplib
@@ -14,7 +12,7 @@ from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
-from .config import require_sender_email
+from .config import require_env
 
 
 load_dotenv()
@@ -26,18 +24,7 @@ logger.setLevel(logging.INFO)
 
 
 
-def require_env(var_name: str) -> str:
-
-    value = os.getenv(var_name)
-
-    if value is None:
-
-        raise EnvironmentError(f"[Config Error] Required environment variable '{var_name}' is missing.")
-
-    return value
-
-
-sender_email = require_sender_email()
+sender_email = require_env("SENDER_EMAIL")
 
 sender_password = require_env("SENDER_PASSWORD")
 
@@ -163,4 +150,3 @@ def send_email(recipient: str, message: MIMEText) -> None:
                 )
 
                 raise
-

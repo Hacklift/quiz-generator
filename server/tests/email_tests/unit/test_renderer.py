@@ -106,3 +106,15 @@ def test_renderer_requires_configured_sender_email(monkeypatch):
 
     # A failed reload must not leave the shared module unusable for later tests.
     importlib.reload(renderer_module)
+
+
+def test_renderer_rejects_blank_sender_email(monkeypatch):
+    import server.app.email_platform.renderer as renderer_module
+
+    with monkeypatch.context() as isolated_env:
+        isolated_env.setenv("SENDER_EMAIL", "   ")
+
+        with pytest.raises(EnvironmentError, match="SENDER_EMAIL"):
+            importlib.reload(renderer_module)
+
+    importlib.reload(renderer_module)
