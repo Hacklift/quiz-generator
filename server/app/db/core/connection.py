@@ -92,6 +92,10 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index("status")
     await live_quiz_sessions_collection.create_index("expires_at")
     await live_quiz_sessions_collection.create_index("training_run_id")
+    await live_quiz_sessions_collection.create_index(
+        [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
+        name="creator_quiz_submitted_at",
+    )
 
 
 async def ensure_document_rag_cache_indexes(

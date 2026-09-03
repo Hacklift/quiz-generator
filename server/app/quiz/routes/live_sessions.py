@@ -40,6 +40,7 @@ from server.app.email_platform.service import EmailService
 from server.app.users.identity import ACTIVE_USER_STATUSES, coerce_user_status, now_utc
 from server.app.users.repository import build_user_out_payload, get_active_session
 from server.app.quiz.schemas.live_session_schemas import (
+    LiveQuizAttemptDetail,
     LiveQuizAnalyticsRow,
     LiveQuizSummaryRow,
     LiveQuizSessionState,
@@ -269,6 +270,23 @@ async def list_live_quiz_participants(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
     return await service.list_analytics(quiz_id, current_user.id)
+
+
+@router.get(
+    "/quizzes/{quiz_id}/live-sessions/{session_id}",
+    response_model=LiveQuizAttemptDetail,
+)
+async def get_live_quiz_attempt_detail(
+    quiz_id: str,
+    session_id: str,
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+):
+    return await service.get_attempt_detail(
+        quiz_id,
+        session_id,
+        current_user.id,
+    )
 
 
 async def _get_verified_user_from_websocket_token(
