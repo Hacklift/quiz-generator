@@ -8,6 +8,7 @@ const push = jest.fn();
 const listRuns = jest.fn();
 const listMyAssignments = jest.fn();
 const startAssignment = jest.fn();
+const toastError = jest.fn();
 
 jest.mock("next/router", () => ({
   useRouter: () => ({ push, query: {}, pathname: "/dashboard" }),
@@ -34,6 +35,11 @@ jest.mock("@features/training/api/trainingRunApi", () => ({
 
 jest.mock("@features/live-quiz/api/liveQuizService", () => ({
   saveParticipantToken: jest.fn(),
+}));
+
+jest.mock("react-hot-toast", () => ({
+  __esModule: true,
+  default: { error: (...args: unknown[]) => toastError(...args) },
 }));
 
 const user = {
@@ -75,6 +81,21 @@ describe("Corporate persona dashboards", () => {
     expect(await screen.findByText("Security basics")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start training" }));
     await waitFor(() => expect(startAssignment).toHaveBeenCalledWith("assignment-1"));
+  });
+
+  test("Employee receives feedback when an assigned training cannot start", async () => {
+    listMyAssignments.mockResolvedValue([
+      {
+        id: "assignment-1", title: "Security basics", status: "assigned",
+        due_at: null, is_overdue: false, attempts_used: 0, can_retry: true,
+      },
+    ]);
+    startAssignment.mockRejectedValue({ response: { data: { detail: "Training run is closed" } } });
+    render(<EmployeeDashboard persona={{ category: "corporate", userType: "employee" }} user={user} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start training" }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Training run is closed"));
   });
 
   test("HR presents compliance presets and completion-register entry", async () => {

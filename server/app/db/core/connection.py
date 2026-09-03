@@ -163,6 +163,11 @@ async def ensure_training_run_indexes(
     await training_audit_events_collection.create_index(
         [("training_run_id", 1), ("occurred_at", 1)]
     )
+    await training_audit_events_collection.create_index(
+        [("training_run_id", 1), ("event_type", 1)],
+        unique=True,
+        name="training_run_audit_event_once",
+    )
 
 
 async def startUp():

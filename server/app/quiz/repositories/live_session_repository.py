@@ -92,6 +92,25 @@ class LiveQuizSessionRepository:
         except InvalidId:
             return None
 
+    async def finalize_session(
+        self,
+        session_id: str,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Finalize once so concurrent polling cannot duplicate completion side effects."""
+        try:
+            updates["updated_at"] = datetime.now(timezone.utc)
+            return await self.sessions_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(session_id),
+                    "status": {"$in": ["active", "joined", "disconnected"]},
+                },
+                {"$set": updates},
+                return_document=ReturnDocument.AFTER,
+            )
+        except InvalidId:
+            return None
+
     async def save_answer(
         self,
         session_id: str,

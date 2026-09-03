@@ -22,6 +22,32 @@ class FakeAssignmentRepository:
         return self.run if run_id == "run-1" else None
 
 
+class FakeTrainingSessionRepository:
+    def __init__(self, quiz):
+        self.quiz = quiz
+        self.session = None
+
+    async def create_session(self, session_data):
+        self.session = {**session_data, "_id": "session-1"}
+        return "session-1"
+
+    async def get_session(self, session_id):
+        return self.session
+
+    async def get_quiz_by_id(self, quiz_id):
+        return self.quiz
+
+    async def update_session(self, session_id, updates):
+        self.session = {**self.session, **updates}
+        return self.session
+
+    async def finalize_session(self, session_id, updates):
+        if self.session["status"] == "submitted":
+            return None
+        self.session = {**self.session, **updates}
+        return self.session
+
+
 def test_assigned_only_training_requires_recipient_and_valid_schedule():
     closes_at = datetime.now(timezone.utc) + timedelta(days=2)
     with pytest.raises(ValidationError):
@@ -127,6 +153,56 @@ async def test_closed_training_run_rejects_post_close_session_writes(monkeypatch
 
     assert error.value.status_code == 409
     assert error.value.detail == "Training run is closed"
+
+
+@pytest.mark.asyncio
+async def test_expired_training_session_finalizes_after_scheduled_run_closure(monkeypatch):
+    started_at = datetime(2026, 8, 30, tzinfo=timezone.utc)
+    now = {"value": started_at}
+    monkeypatch.setattr(live_session_module, "_utc_now", lambda: now["value"])
+    quiz = {
+        "_id": "quiz-1",
+        "quiz_type": "multichoice",
+        "questions": [{"question": "Q", "answer": "A", "options": ["A", "B"]}],
+    }
+    repository = FakeTrainingSessionRepository(quiz)
+    service = LiveQuizSessionService(
+        repository,
+        assignment_repository=FakeAssignmentRepository(
+            {"status": "closed", "closes_at": started_at + timedelta(minutes=1)}
+        ),
+    )
+    service._grade_session = lambda session, quiz: {"score": 1, "percentage": 100}
+    started = await service.start_session_for_quiz(
+        quiz,
+        participant_name="Learner",
+        participant_email=None,
+        time_limit_minutes=1,
+        training_run_id="run-1",
+        training_closes_at=started_at + timedelta(minutes=1),
+    )
+
+    now["value"] = started_at + timedelta(minutes=1, seconds=1)
+    state = await service.get_session_state("session-1", started["participant_token"])
+
+    assert state["status"] == "submitted"
+    assert repository.session["score"] == 1
+
+    now["value"] = started_at
+    restarted = await service.start_session_for_quiz(
+        quiz,
+        participant_name="Learner",
+        participant_email=None,
+        time_limit_minutes=1,
+        training_run_id="run-1",
+        training_closes_at=started_at + timedelta(minutes=1),
+    )
+    now["value"] = started_at + timedelta(minutes=1, seconds=1)
+    submission = await service.submit_session(
+        "session-1", restarted["participant_token"], auto_submitted=True
+    )
+
+    assert submission["status"] == "submitted"
 
 
 def test_training_start_requires_enough_time_for_the_selected_duration(monkeypatch):

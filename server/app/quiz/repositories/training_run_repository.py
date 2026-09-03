@@ -81,7 +81,11 @@ class TrainingRunRepository:
         object_id = self._object_id(run_id)
         if not object_id:
             return None
-        query: dict[str, Any] = {"_id": object_id, "status": "open"}
+        query: dict[str, Any] = {
+            "_id": object_id,
+            "status": "open",
+            "closure_in_progress": {"$ne": True},
+        }
         if owner_user_id:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(

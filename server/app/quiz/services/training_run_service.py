@@ -181,7 +181,13 @@ class TrainingRunService:
             raise HTTPException(status_code=404, detail="Training run not found")
         closed = await self._close_run(run, owner_user_id)
         if not closed:
-            raise HTTPException(status_code=409, detail="Training run is already closed")
+            current = await self.repository.get_run(run_id)
+            detail = (
+                "Training run is being finalized"
+                if current and current.get("closure_in_progress")
+                else "Training run is already closed"
+            )
+            raise HTTPException(status_code=409, detail=detail)
         assignments = await self.repository.list_assignments_for_run(run_id)
         sessions = await self.repository.list_sessions_for_run(run_id)
         return self._run_summary(closed, assignments, sessions)
@@ -293,16 +299,8 @@ class TrainingRunService:
         return run, quiz
 
     async def _close_if_due(self, run: dict) -> None:
-        if run.get("status") == "open" and _as_utc(run["closes_at"]) <= _utc_now():
-            await self._close_run(run, owner_user_id=None)
-
-    async def close_expired_runs(self) -> int:
-        runs = await self.repository.list_expired_open_runs(_utc_now())
-        closed_count = 0
-        for run in runs:
-            if await self._close_run(run, owner_user_id=None):
-                closed_count += 1
-        return closed_count
+        """Automatic closure is owned by the worker so it can finalize sessions first."""
+        return None
 
     async def _close_run(self, run: dict, owner_user_id: Optional[str]) -> Optional[dict]:
         closed_at = _utc_now()

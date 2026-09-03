@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import toast from "react-hot-toast";
 import { useTerms } from "@features/persona/hooks/useTerms";
 import { trainingRunApi, type TrainingAssignment } from "@features/training/api/trainingRunApi";
 import { saveParticipantToken } from "@features/live-quiz/api/liveQuizService";
@@ -36,6 +37,8 @@ export default function EmployeeDashboard({ persona }: DashboardViewProps) {
       const session = await trainingRunApi.startAssignment(assignmentId);
       saveParticipantToken(session.session_id, session.participant_token);
       await router.push(session.redirect_url);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || "Could not start training.");
     } finally {
       setStartingId(null);
     }
