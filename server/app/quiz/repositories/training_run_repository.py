@@ -5,6 +5,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 
 class TrainingRunRepository:
@@ -17,12 +18,14 @@ class TrainingRunRepository:
         assignments_collection: AsyncIOMotorCollection,
         audit_events_collection: AsyncIOMotorCollection,
         sessions_collection: Optional[AsyncIOMotorCollection] = None,
+        email_deliveries_collection: Optional[AsyncIOMotorCollection] = None,
     ):
         self.quizzes_collection = quizzes_collection
         self.runs_collection = runs_collection
         self.assignments_collection = assignments_collection
         self.audit_events_collection = audit_events_collection
         self.sessions_collection = sessions_collection
+        self.email_deliveries_collection = email_deliveries_collection
 
     @staticmethod
     def _object_id(value: str) -> Optional[ObjectId]:
@@ -71,13 +74,10 @@ class TrainingRunRepository:
         cursor = self.runs_collection.find({"owner_user_id": owner_user_id}).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def list_expired_open_runs(self, now: datetime, limit: int = 500) -> list[dict]:
-        cursor = self.runs_collection.find(
-            {"status": "open", "closes_at": {"$lte": now}}
-        ).sort("closes_at", 1).limit(limit)
-        return await cursor.to_list(length=limit)
-
-    async def close_run(self, run_id: str, owner_user_id: Optional[str], closed_at: datetime) -> Optional[dict]:
+    async def claim_run_closure(
+        self, run_id: str, owner_user_id: Optional[str], started_at: datetime
+    ) -> Optional[dict]:
+        """Claim finalization before changing the visible run status."""
         object_id = self._object_id(run_id)
         if not object_id:
             return None
@@ -90,13 +90,73 @@ class TrainingRunRepository:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(
             query,
-            {"$set": {"status": "closed", "closed_at": closed_at, "updated_at": closed_at}},
+            {
+                "$set": {
+                    "closure_in_progress": True,
+                    "closure_started_at": started_at,
+                    "updated_at": started_at,
+                }
+            },
             return_document=ReturnDocument.AFTER,
+        )
+
+    async def finalize_run_closure(
+        self, run_id: str, owner_user_id: Optional[str], closed_at: datetime
+    ) -> Optional[dict]:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return None
+        query: dict[str, Any] = {
+            "_id": object_id,
+            "status": "open",
+            "closure_in_progress": True,
+        }
+        if owner_user_id:
+            query["owner_user_id"] = owner_user_id
+        return await self.runs_collection.find_one_and_update(
+            query,
+            {
+                "$set": {
+                    "status": "closed",
+                    "closed_at": closed_at,
+                    "updated_at": closed_at,
+                },
+                "$unset": {
+                    "closure_in_progress": "",
+                    "closure_started_at": "",
+                },
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def release_run_closure(
+        self, run_id: str, owner_user_id: Optional[str]
+    ) -> None:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return
+        query: dict[str, Any] = {
+            "_id": object_id,
+            "status": "open",
+            "closure_in_progress": True,
+        }
+        if owner_user_id:
+            query["owner_user_id"] = owner_user_id
+        await self.runs_collection.update_one(
+            query,
+            {"$unset": {"closure_in_progress": "", "closure_started_at": ""}},
         )
 
     async def create_assignments(self, assignments: list[dict]) -> None:
         if assignments:
             await self.assignments_collection.insert_many(assignments, ordered=False)
+
+    async def create_invitation_deliveries(self, deliveries: list[dict]) -> None:
+        if not deliveries:
+            return
+        if self.email_deliveries_collection is None:
+            raise RuntimeError("Training email deliveries collection is not configured")
+        await self.email_deliveries_collection.insert_many(deliveries, ordered=False)
 
     async def list_assignments_for_run(self, run_id: str) -> list[dict]:
         cursor = self.assignments_collection.find({"training_run_id": run_id}).sort("recipient_email", 1)
@@ -147,19 +207,22 @@ class TrainingRunRepository:
 
     async def bind_assignments_to_user(self, recipient_email: str, user_id: str) -> list[dict]:
         """Bind only previously-unclaimed assignments and return those newly bound."""
-        pending = await self.assignments_collection.find(
-            {"recipient_email": recipient_email, "recipient_user_id": None}
-        ).to_list(length=500)
         bound = []
         now = datetime.now(timezone.utc)
-        for assignment in pending:
-            updated = await self.assignments_collection.find_one_and_update(
-                {"_id": assignment["_id"], "recipient_user_id": None},
-                {"$set": {"recipient_user_id": user_id, "updated_at": now}},
-                return_document=ReturnDocument.AFTER,
-            )
-            if updated:
-                bound.append(updated)
+        while True:
+            pending = await self.assignments_collection.find(
+                {"recipient_email": recipient_email, "recipient_user_id": None}
+            ).limit(500).to_list(length=500)
+            if not pending:
+                return bound
+            for assignment in pending:
+                updated = await self.assignments_collection.find_one_and_update(
+                    {"_id": assignment["_id"], "recipient_user_id": None},
+                    {"$set": {"recipient_user_id": user_id, "updated_at": now}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                if updated:
+                    bound.append(updated)
         return bound
 
     async def list_assignments_for_recipient(self, recipient_email: str, user_id: str, limit: int = 100) -> list[dict]:
@@ -231,4 +294,17 @@ class TrainingRunRepository:
         )
 
     async def create_audit_event(self, event: dict) -> None:
-        await self.audit_events_collection.insert_one(event)
+        try:
+            await self.audit_events_collection.insert_one(event)
+        except DuplicateKeyError:
+            # Closure retries must be able to complete after the immutable
+            # snapshot was written but before the run status was finalized.
+            existing = await self.audit_events_collection.find_one(
+                {
+                    "training_run_id": event["training_run_id"],
+                    "event_type": event["event_type"],
+                },
+                {"_id": 1},
+            )
+            if not existing:
+                raise

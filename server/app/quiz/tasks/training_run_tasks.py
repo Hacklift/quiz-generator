@@ -188,7 +188,7 @@ def _finalize_expired_session(
     )
 
 
-@celery_app.task(name="tasks.close_expired_training_runs")
+@celery_app.task(name="tasks.close_expired_training_runs", ignore_result=True)
 def close_expired_training_runs() -> int:
     """Finalize due sessions, then close each run with one final audit snapshot."""
     client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"))

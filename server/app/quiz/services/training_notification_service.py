@@ -1,13 +1,19 @@
+from datetime import datetime, timezone
+import logging
 from typing import Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo import UpdateOne
 
 from server.app.notifications.repository import create_notification
 from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.users.identity import normalize_email
 from server.app.users.repository import active_user_query
+
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingNotificationService:
@@ -54,6 +60,43 @@ class TrainingNotificationService:
                 dedupe_key=f"training-assignment:{assignment['_id']}:assigned",
             ),
         )
+
+    async def notify_assignments(self, assignments: list[dict], run: dict) -> None:
+        """Create known-recipient assignment notifications in one idempotent write."""
+        now = datetime.now(timezone.utc)
+        operations = []
+        for assignment in assignments:
+            user_id = assignment.get("recipient_user_id")
+            if not user_id:
+                continue
+            document = {
+                "user_id": user_id,
+                "title": "Training assigned",
+                "message": (
+                    f"{run['title']} is assigned to you. "
+                    f"Complete it before {run['closes_at'].strftime('%d %b %Y, %H:%M UTC')}."
+                ),
+                "type": NotificationType.TRAINING.value,
+                "action_url": "/assigned-training",
+                "dedupe_key": f"training-assignment:{assignment['_id']}:assigned",
+                "expires_at": None,
+                "read": False,
+                "created_at": now,
+            }
+            operations.append(
+                UpdateOne(
+                    {"dedupe_key": document["dedupe_key"]},
+                    {"$setOnInsert": document},
+                    upsert=True,
+                )
+            )
+        if operations:
+            try:
+                await self.notifications_collection.bulk_write(operations, ordered=False)
+            except Exception:
+                # In-app alerts supplement the durable assignment and must not
+                # make a successfully-created training run appear to have failed.
+                logger.exception("Could not create training assignment notifications")
 
     async def notify_completion(self, assignment: dict) -> None:
         user_id = assignment.get("recipient_user_id")

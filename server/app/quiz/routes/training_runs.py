@@ -5,8 +5,6 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 from server.app.core.dependencies import get_verified_user
 from server.app.core.rate_limiter import RateLimits, limiter
-from server.app.email_platform.deps import get_email_service
-from server.app.email_platform.service import EmailService
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.schemas.live_session_schemas import StartLiveQuizSessionResponse
@@ -28,6 +26,7 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
     get_training_assignments_collection,
     get_training_audit_events_collection,
+    get_training_email_deliveries_collection,
     get_training_runs_collection,
     get_notifications_collection,
     get_users_collection,
@@ -46,7 +45,9 @@ def get_training_run_service(
     audit_events_collection: AsyncIOMotorCollection = Depends(get_training_audit_events_collection),
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
     notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
-    email_service: EmailService = Depends(get_email_service),
+    email_deliveries_collection: AsyncIOMotorCollection = Depends(
+        get_training_email_deliveries_collection
+    ),
 ) -> TrainingRunService:
     repository = TrainingRunRepository(
         quizzes_collection,
@@ -54,6 +55,7 @@ def get_training_run_service(
         assignments_collection,
         audit_events_collection,
         sessions_collection,
+        email_deliveries_collection,
     )
     notification_service = TrainingNotificationService(
         users_collection,
@@ -70,7 +72,6 @@ def get_training_run_service(
     return TrainingRunService(
         repository,
         live_service,
-        email_service=email_service,
         notification_service=notification_service,
     )
 

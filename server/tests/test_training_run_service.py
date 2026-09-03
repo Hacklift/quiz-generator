@@ -85,6 +85,20 @@ class CreateRunRepository:
     async def create_audit_event(self, event):
         self.audit_event = event
 
+    async def create_invitation_deliveries(self, deliveries):
+        self.deliveries = deliveries
+
+
+class BatchNotificationService:
+    def __init__(self):
+        self.notified_assignments = None
+
+    async def verified_user_ids_by_email(self, emails):
+        return {"learner@example.com": "learner-1"}
+
+    async def notify_assignments(self, assignments, run):
+        self.notified_assignments = assignments
+
 
 class AuthorizationRepository:
     def __init__(self, run=None, assignment=None):
@@ -161,9 +175,31 @@ class ManualCloseRepository:
         ]
         self.audit_event = None
 
-    async def close_run(self, run_id, owner_user_id, closed_at):
-        self.run = {**self.run, "status": "closed", "closed_at": closed_at}
+    async def claim_run_closure(self, run_id, owner_user_id, started_at):
+        if self.run.get("closure_in_progress"):
+            return None
+        self.run = {
+            **self.run,
+            "closure_in_progress": True,
+            "closure_started_at": started_at,
+        }
         return self.run
+
+    async def finalize_run_closure(self, run_id, owner_user_id, closed_at):
+        if not self.run.get("closure_in_progress"):
+            return None
+        self.run = {
+            **self.run,
+            "status": "closed",
+            "closed_at": closed_at,
+        }
+        self.run.pop("closure_in_progress", None)
+        self.run.pop("closure_started_at", None)
+        return self.run
+
+    async def release_run_closure(self, run_id, owner_user_id):
+        self.run.pop("closure_in_progress", None)
+        self.run.pop("closure_started_at", None)
 
     async def mark_in_progress_assignments_incomplete(self, run_id, closed_at):
         for assignment in self.assignments:
@@ -293,6 +329,33 @@ async def test_closed_training_run_rejects_post_close_session_writes(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_manual_closure_claim_blocks_expired_session_finalization(monkeypatch):
+    now = datetime(2026, 8, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_session_module, "_utc_now", lambda: now)
+    service = LiveQuizSessionService(
+        repository=None,
+        assignment_repository=FakeAssignmentRepository(
+            {
+                "status": "open",
+                "closure_in_progress": True,
+                "closes_at": now + timedelta(minutes=10),
+            }
+        ),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await service._ensure_training_expiry_can_finalize(
+            {
+                "training_run_id": "run-1",
+                "expires_at": now - timedelta(seconds=1),
+            }
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Training run is closed"
+
+
+@pytest.mark.asyncio
 async def test_expired_training_session_finalizes_after_scheduled_run_closure(monkeypatch):
     started_at = datetime(2026, 8, 30, tzinfo=timezone.utc)
     now = {"value": started_at}
@@ -306,7 +369,11 @@ async def test_expired_training_session_finalizes_after_scheduled_run_closure(mo
     service = LiveQuizSessionService(
         repository,
         assignment_repository=FakeAssignmentRepository(
-            {"status": "closed", "closes_at": started_at + timedelta(minutes=1)}
+            {
+                "status": "closed",
+                "closes_at": started_at + timedelta(minutes=1),
+                "closed_at": started_at + timedelta(minutes=1),
+            }
         ),
     )
     service._grade_session = lambda session, quiz: {"score": 1, "percentage": 100}
@@ -440,6 +507,44 @@ async def test_assigned_only_run_does_not_generate_an_unused_access_code():
 
 
 @pytest.mark.asyncio
+async def test_training_invitation_email_is_persisted_then_dispatched(monkeypatch):
+    repository = CreateRunRepository()
+    notifications = BatchNotificationService()
+    send_task = []
+    from server.celery_config import celery_app
+
+    monkeypatch.setattr(
+        celery_app,
+        "send_task",
+        lambda *args, **kwargs: send_task.append((args, kwargs)),
+    )
+    service = TrainingRunService(
+        repository,
+        live_quiz_service=None,
+        notification_service=notifications,
+    )
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+        send_email_invitations=True,
+    )
+
+    await service.create_run(payload, "owner-1")
+
+    assert len(notifications.notified_assignments) == 1
+    assert len(repository.deliveries) == 1
+    assert repository.deliveries[0]["status"] == "pending"
+    assert repository.deliveries[0]["recipient_email"] == "learner@example.com"
+    assert send_task == [
+        (
+            ("tasks.dispatch_training_invitation_deliveries",),
+            {"queue": "email", "ignore_result": True},
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_training_run_owner_endpoints_hide_other_owners_runs():
     run = {"_id": "run-1", "owner_user_id": "owner-1"}
     service = TrainingRunService(
@@ -549,3 +654,20 @@ async def test_manual_close_marks_active_attempts_incomplete_before_audit_snapsh
     completion_register = repository.audit_event["payload"]["completion_register"]
     assert completion_register[0]["status"] == "incomplete"
     assert completion_register[1]["status"] == "abandoned"
+
+
+@pytest.mark.asyncio
+async def test_manual_close_releases_its_claim_when_audit_persistence_fails():
+    repository = ManualCloseRepository()
+
+    async def fail_audit(_event):
+        raise RuntimeError("audit storage unavailable")
+
+    repository.create_audit_event = fail_audit
+    service = TrainingRunService(repository, live_quiz_service=None)
+
+    with pytest.raises(RuntimeError, match="audit storage unavailable"):
+        await service._close_run(repository.run, "owner-1")
+
+    assert repository.run["status"] == "open"
+    assert "closure_in_progress" not in repository.run

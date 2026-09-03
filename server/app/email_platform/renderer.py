@@ -1,8 +1,10 @@
 from email.mime.text import MIMEText
 import os
-from server.app.email_platform.platform_email_utils import compose_quiz_email, sender_email
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").rstrip("/")
+SENDER_EMAIL = os.getenv(
+    "SENDER_EMAIL", os.getenv("MAILGUN_SENDER_EMAIL", "no-reply@example.com")
+)
 
 def render_email(template_id: str, to: str, vars: dict) -> MIMEText:
     """
@@ -15,7 +17,18 @@ def render_email(template_id: str, to: str, vars: dict) -> MIMEText:
       - custom:         subject, body
     """
     if template_id == "quiz_link":
-        return compose_quiz_email(to, vars["title"], vars["description"], vars["link"])
+        subject = f"Check out this quiz: {vars['title']}"
+        body = (
+            f"Here's a quiz we thought you'd like:\n\n"
+            f"Title: {vars['title']}\n"
+            f"Description: {vars['description']}\n"
+            f"Access it here: {vars['link']}\n\nEnjoy!"
+        )
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = to
+        return msg
 
     if template_id == "live_quiz_invite":
         title = vars.get("title", "Live Quiz")
@@ -41,7 +54,7 @@ Open the live quiz link:
 """
         msg = MIMEText(body)
         msg["Subject"] = subject
-        msg["From"] = sender_email
+        msg["From"] = SENDER_EMAIL
         msg["To"] = to
         return msg
 
@@ -75,6 +88,6 @@ If you didn't request this, just ignore this message.
 
     msg = MIMEText(body)
     msg["Subject"] = subject
-    msg["From"] = sender_email
+    msg["From"] = SENDER_EMAIL
     msg["To"] = to
     return msg

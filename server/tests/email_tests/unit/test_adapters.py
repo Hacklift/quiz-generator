@@ -110,7 +110,7 @@ async def test_direct_adapter_propagates_smtp_error(monkeypatch, email_payload_f
     def _raise(recipient, message):
         raise RuntimeError("smtp down")
 
-    monkeypatch.setattr("server.app.email_platform.adapters.direct_adapter.send_email", _raise)
+    monkeypatch.setattr("server.app.email_platform.platform_email_utils.send_email", _raise)
     adapter = DirectAdapter()
     payload = email_payload_factory()
     with pytest.raises(RuntimeError):
@@ -171,7 +171,7 @@ async def test_mailgun_non_200_raises(monkeypatch):
             self.headers = {}
         def get(self, url, timeout=None):
             return FakeResp(code=200)
-        def post(self, url, data=None):
+        def post(self, url, data=None, timeout=None):
             return FakeResp(code=500, text='server error')
 
     monkeypatch.setattr('requests.Session', FakeSession)
@@ -194,7 +194,7 @@ async def test_mailgun_request_exception_propagates(monkeypatch):
             self.headers = {}
         def get(self, url, timeout=None):
             return None
-        def post(self, url, data=None):
+        def post(self, url, data=None, timeout=None):
             raise requests.RequestException('network')
 
     monkeypatch.setattr('requests.Session', FakeSession2)

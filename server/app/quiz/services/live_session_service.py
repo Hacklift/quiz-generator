@@ -393,6 +393,7 @@ class LiveQuizSessionService:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
         if self._is_expired(session) and session.get("status") in {"active", "joined", "disconnected"}:
+            await self._ensure_training_expiry_can_finalize(session)
             session = await self._finalize_session(
                 session,
                 quiz,
@@ -472,6 +473,8 @@ class LiveQuizSessionService:
         is_expired = self._is_expired(session)
         if not is_expired:
             await self._ensure_training_run_open(session)
+        else:
+            await self._ensure_training_expiry_can_finalize(session)
         if auto_submitted and not is_expired:
             logger.info(
                 {
@@ -696,8 +699,36 @@ class LiveQuizSessionService:
         if (
             not run
             or run.get("status") != "open"
+            or run.get("closure_in_progress")
             or _as_utc(run["closes_at"]) <= _utc_now()
         ):
+            raise HTTPException(status_code=409, detail="Training run is closed")
+
+    async def _ensure_training_expiry_can_finalize(
+        self, session: Dict[str, Any]
+    ) -> None:
+        """Allow only natural closure to finish an already-expired attempt.
+
+        A manual early close deliberately abandons active attempts. A scheduled
+        close may still auto-submit an attempt whose timer expired at the same
+        boundary, preventing network latency from losing a valid score.
+        """
+        run_id = session.get("training_run_id")
+        if not run_id or not self.assignment_repository:
+            return
+        run = await self.assignment_repository.get_run(run_id)
+        if not run:
+            raise HTTPException(status_code=409, detail="Training run is closed")
+
+        closes_at = _as_utc(run["closes_at"])
+        now = _utc_now()
+        if run.get("status") == "open":
+            if run.get("closure_in_progress") and now < closes_at:
+                raise HTTPException(status_code=409, detail="Training run is closed")
+            return
+
+        closed_at = run.get("closed_at")
+        if not closed_at or _as_utc(closed_at) < closes_at:
             raise HTTPException(status_code=409, detail="Training run is closed")
 
     async def _finalize_session(

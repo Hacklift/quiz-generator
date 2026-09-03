@@ -32,11 +32,16 @@ celery_app.conf.update(
     result_serializer="json",
     result_expires=int(os.getenv("CELERY_RESULT_EXPIRES", "3600")),
     broker_connection_retry_on_startup=True,
+    # A blocking Redis read wakes immediately for queued work. Increasing this
+    # timeout prevents an idle worker from repeatedly consuming request quota.
+    broker_transport_options={"polling_interval": 30},
 )
 
 celery_app.conf.task_routes = {
     "tasks.send_quiz_email": {"queue": "email"},
     "tasks.send_email_generic": {"queue": "email"},
+    "tasks.dispatch_training_invitation_deliveries": {"queue": "email"},
+    "tasks.deliver_training_invitation": {"queue": "email"},
     "tasks.close_expired_training_runs": {"queue": "celery"},
 }
 
@@ -45,7 +50,13 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.close_expired_training_runs",
         "schedule": 60.0,
     },
+    "dispatch-training-invitation-deliveries": {
+        "task": "tasks.dispatch_training_invitation_deliveries",
+        # New runs dispatch immediately. This is only the durable recovery path.
+        "schedule": 300.0,
+    },
 }
 
 import server.app.email_platform.email_tasks
+import server.app.quiz.tasks.training_email_delivery_tasks
 import server.app.quiz.tasks.training_run_tasks

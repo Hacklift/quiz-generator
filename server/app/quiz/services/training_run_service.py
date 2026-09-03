@@ -5,6 +5,7 @@ import secrets
 import string
 from typing import Optional
 
+from bson import ObjectId
 from fastapi import HTTPException, status
 
 from server.app.core.config import settings
@@ -31,12 +32,10 @@ class TrainingRunService:
         self,
         repository: TrainingRunRepository,
         live_quiz_service: LiveQuizSessionService,
-        email_service=None,
         notification_service=None,
     ):
         self.repository = repository
         self.live_quiz_service = live_quiz_service
-        self.email_service = email_service
         self.notification_service = notification_service
 
     async def list_owned_quizzes(self, owner_user_id: str) -> list[dict]:
@@ -106,6 +105,7 @@ class TrainingRunService:
         run_id = str(run["_id"])
         assignments = [
             {
+                "_id": ObjectId(),
                 "training_run_id": run_id,
                 "quiz_id": str(quiz["_id"]),
                 "owner_user_id": owner_user_id,
@@ -126,11 +126,8 @@ class TrainingRunService:
             for email in payload.recipient_emails
         ]
         await self.repository.create_assignments(assignments)
-        for assignment in assignments:
-            if assignment["recipient_user_id"]:
-                await self._notify_assignment_safely(
-                    assignment, run, assignment["recipient_user_id"]
-                )
+        if self.notification_service:
+            await self.notification_service.notify_assignments(assignments, run)
         await self.repository.create_audit_event(
             {
                 "training_run_id": run_id,
@@ -146,29 +143,28 @@ class TrainingRunService:
             }
         )
         if payload.send_email_invitations and assignments:
-            await self._send_assignment_emails(run, assignments)
+            await self.repository.create_invitation_deliveries(
+                self._invitation_deliveries(run, assignments, now)
+            )
+            self._enqueue_invitation_delivery_dispatch()
         return self._run_summary(run, assignments, [])
 
     async def list_owner_runs(self, owner_user_id: str) -> list[dict]:
         runs = await self.repository.list_runs_for_owner(owner_user_id)
         summaries = []
         for run in runs:
-            await self._close_if_due(run)
-            current = await self.repository.get_run(str(run["_id"])) or run
-            assignments = await self.repository.list_assignments_for_run(str(current["_id"]))
-            sessions = await self.repository.list_sessions_for_run(str(current["_id"]))
-            summaries.append(self._run_summary(current, assignments, sessions))
+            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
+            summaries.append(self._run_summary(run, assignments, sessions))
         return summaries
 
     async def get_owner_run(self, run_id: str, owner_user_id: str) -> dict:
         run = await self.repository.get_run(run_id)
         if not run or run.get("owner_user_id") != owner_user_id:
             raise HTTPException(status_code=404, detail="Training run not found")
-        await self._close_if_due(run)
-        current = await self.repository.get_run(run_id) or run
         assignments = await self.repository.list_assignments_for_run(run_id)
         sessions = await self.repository.list_sessions_for_run(run_id)
-        summary = self._run_summary(current, assignments, sessions)
+        summary = self._run_summary(run, assignments, sessions)
         summary["completion_register"] = [
             *[self._completion_row(assignment) for assignment in assignments],
             *[
@@ -209,9 +205,7 @@ class TrainingRunService:
             run = await self.repository.get_run(assignment["training_run_id"])
             if not run:
                 continue
-            await self._close_if_due(run)
-            current = await self.repository.get_run(str(run["_id"])) or run
-            result.append(self._assignment_summary(assignment, current))
+            result.append(self._assignment_summary(assignment, run))
         return result
 
     async def start_assignment(self, assignment_id: str, user) -> dict:
@@ -230,9 +224,7 @@ class TrainingRunService:
         run = await self.repository.get_run(assignment["training_run_id"])
         if not run:
             raise HTTPException(status_code=404, detail="Training run not found")
-        await self._close_if_due(run)
-        run = await self.repository.get_run(str(run["_id"])) or run
-        if run.get("status") != "open":
+        if run.get("status") != "open" or run.get("closure_in_progress"):
             raise HTTPException(status_code=409, detail="Training run is closed")
         if _as_utc(run["closes_at"]) <= _utc_now():
             raise HTTPException(status_code=409, detail="Training run is closed")
@@ -293,9 +285,7 @@ class TrainingRunService:
         run = await self.repository.get_run_by_access_code(access_code)
         if not run:
             raise HTTPException(status_code=404, detail="Training run not found")
-        await self._close_if_due(run)
-        run = await self.repository.get_run(str(run["_id"])) or run
-        if run.get("status") != "open":
+        if run.get("status") != "open" or run.get("closure_in_progress"):
             raise HTTPException(status_code=410, detail="Training run is closed")
         # The worker writes the final audit snapshot, but public access must stop
         # immediately at the configured boundary rather than waiting for its next run.
@@ -308,52 +298,61 @@ class TrainingRunService:
             raise HTTPException(status_code=404, detail="Quiz for training run not found")
         return run, quiz
 
-    async def _close_if_due(self, run: dict) -> None:
-        """Automatic closure is owned by the worker so it can finalize sessions first."""
-        return None
-
     async def _close_run(self, run: dict, owner_user_id: Optional[str]) -> Optional[dict]:
         closed_at = _utc_now()
-        closed = await self.repository.close_run(str(run["_id"]), owner_user_id, closed_at)
-        if not closed:
+        claimed = await self.repository.claim_run_closure(
+            str(run["_id"]), owner_user_id, closed_at
+        )
+        if not claimed:
             return None
-        # Manual closure is an immediate cutoff, not an implicit partial submission.
-        # Persist terminal states before building the immutable audit snapshot.
-        await self.repository.mark_in_progress_assignments_incomplete(
-            str(closed["_id"]), closed_at
-        )
-        await self.repository.abandon_active_sessions_for_run(str(closed["_id"]), closed_at)
-        assignments = await self.repository.list_assignments_for_run(str(closed["_id"]))
-        sessions = await self.repository.list_sessions_for_run(str(closed["_id"]))
-        await self.repository.create_audit_event(
-            {
-                "training_run_id": str(closed["_id"]),
-                "event_type": "run_closed",
-                "actor_user_id": owner_user_id,
-                "occurred_at": closed_at,
-                # No update/delete operation is exposed for a final audit snapshot.
-                "payload": {
-                    "run": {
-                        "quiz_id": closed["quiz_id"],
-                        "title": closed["title"],
-                        "kind": closed["kind"],
-                        "purpose": closed["purpose"],
-                        "quiz_content_fingerprint": closed.get("quiz_content_fingerprint"),
-                        "quiz_snapshot": closed.get("quiz_snapshot"),
-                        "closes_at": closed["closes_at"],
-                    },
-                    "completion_register": [
-                        *[self._audit_assignment_row(item) for item in assignments],
-                        *[
-                            self._audit_shared_session_row(session)
-                            for session in sessions
-                            if not session.get("training_assignment_id")
+        try:
+            # Manual closure is an immediate cutoff, not an implicit partial
+            # submission. Persist terminal states before the immutable snapshot.
+            await self.repository.mark_in_progress_assignments_incomplete(
+                str(claimed["_id"]), closed_at
+            )
+            await self.repository.abandon_active_sessions_for_run(
+                str(claimed["_id"]), closed_at
+            )
+            assignments = await self.repository.list_assignments_for_run(str(claimed["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(claimed["_id"]))
+            await self.repository.create_audit_event(
+                {
+                    "training_run_id": str(claimed["_id"]),
+                    "event_type": "run_closed",
+                    "actor_user_id": owner_user_id,
+                    "occurred_at": closed_at,
+                    # No update/delete operation is exposed for a final audit snapshot.
+                    "payload": {
+                        "run": {
+                            "quiz_id": claimed["quiz_id"],
+                            "title": claimed["title"],
+                            "kind": claimed["kind"],
+                            "purpose": claimed["purpose"],
+                            "quiz_content_fingerprint": claimed.get("quiz_content_fingerprint"),
+                            "quiz_snapshot": claimed.get("quiz_snapshot"),
+                            "closes_at": claimed["closes_at"],
+                        },
+                        "completion_register": [
+                            *[self._audit_assignment_row(item) for item in assignments],
+                            *[
+                                self._audit_shared_session_row(session)
+                                for session in sessions
+                                if not session.get("training_assignment_id")
+                            ],
                         ],
-                    ],
-                },
-            }
-        )
-        return closed
+                    },
+                }
+            )
+            closed = await self.repository.finalize_run_closure(
+                str(claimed["_id"]), owner_user_id, closed_at
+            )
+            if not closed:
+                raise RuntimeError("Training run closure could not be finalized")
+            return closed
+        except Exception:
+            await self.repository.release_run_closure(str(claimed["_id"]), owner_user_id)
+            raise
 
     @staticmethod
     def _quiz_snapshot(quiz: dict) -> dict:
@@ -514,20 +513,57 @@ class TrainingRunService:
                 return code
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate training access code")
 
-    async def _send_assignment_emails(self, run: dict, assignments: list[dict]) -> None:
-        if not self.email_service:
-            return
-        due_text = _as_utc(run["due_at"]).strftime("%d %b %Y, %H:%M UTC") if run.get("due_at") else "before the run closes"
-        for assignment in assignments:
-            try:
-                await self.email_service.send_email(
-                    to=assignment["recipient_email"], template_id="custom",
-                    template_vars={
-                        "subject": f"Training assigned: {run['title']}",
-                        "body": f"You have been assigned {run['title']}. Sign in with this email to complete it by {due_text}.\n\n{settings.FRONTEND_BASE_URL}/assigned-training",
-                    },
-                    purpose="live_quiz_invitation", priority="default",
-                )
-            except Exception:
-                # A delivery failure must not roll back the durable assignment.
-                continue
+    @staticmethod
+    def _invitation_deliveries(
+        run: dict, assignments: list[dict], now: datetime
+    ) -> list[dict]:
+        due_text = (
+            _as_utc(run["due_at"]).strftime("%d %b %Y, %H:%M UTC")
+            if run.get("due_at")
+            else "before the run closes"
+        )
+        return [
+            {
+                "delivery_key": (
+                    f"training-run:{run['_id']}:recipient:"
+                    f"{assignment['recipient_email']}:invitation"
+                ),
+                "training_run_id": str(run["_id"]),
+                "recipient_email": assignment["recipient_email"],
+                "template_id": "custom",
+                "template_vars": {
+                    "subject": f"Training assigned: {run['title']}",
+                    "body": (
+                        f"You have been assigned {run['title']}. Sign in with this email "
+                        f"to complete it by {due_text}.\n\n"
+                        f"{settings.FRONTEND_BASE_URL}/assigned-training"
+                    ),
+                },
+                "purpose": "training_invitation",
+                "status": "pending",
+                "attempt_count": 0,
+                "next_attempt_at": now,
+                "lease_expires_at": None,
+                "last_error": None,
+                "provider": None,
+                "provider_message_id": None,
+                "sent_at": None,
+                "created_at": now,
+                "updated_at": now,
+            }
+            for assignment in assignments
+        ]
+
+    @staticmethod
+    def _enqueue_invitation_delivery_dispatch() -> None:
+        try:
+            from server.celery_config import celery_app
+
+            celery_app.send_task(
+                "tasks.dispatch_training_invitation_deliveries",
+                queue="email",
+                ignore_result=True,
+            )
+        except Exception:
+            # The periodic dispatcher will recover any durable pending records.
+            logger.exception("Could not enqueue training invitation delivery dispatch")

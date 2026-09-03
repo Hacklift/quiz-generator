@@ -6,6 +6,7 @@ from ..models import EmailPayload, SendResult
 from ..renderer import render_email
 
 logger = logging.getLogger(__name__)
+MAILGUN_REQUEST_TIMEOUT_SECONDS = 20
 
 class MailgunAdapter:
     """
@@ -29,7 +30,7 @@ class MailgunAdapter:
         self.session.auth = ("api", self.api_key)
         self.session.headers.update({"User-Agent": "QuizAppVault-Mailer"})
 
-        if os.getenv("MAILGUN_WARMUP", "1") == "1":
+        if os.getenv("MAILGUN_WARMUP", "0") == "1":
             try:
                 self.session.get("https://api.mailgun.net/v3/domains", timeout=5)
             except Exception as e:
@@ -53,11 +54,23 @@ class MailgunAdapter:
 
         try:
             logger.info(f"[MailgunAdapter] Sending email to {payload.to} via Mailgun...")
-            response = self.session.post(f"{self.base_url}/messages", data=data)
+            response = self.session.post(
+                f"{self.base_url}/messages",
+                data=data,
+                timeout=MAILGUN_REQUEST_TIMEOUT_SECONDS,
+            )
 
-            if response.status_code == 200:
+            if 200 <= response.status_code < 300:
                 logger.info(f"[MailgunAdapter] Mailgun sent email to {payload.to}.")
-                return SendResult(ok=True, adapter="mailgun")
+                try:
+                    provider_message_id = response.json().get("id")
+                except (AttributeError, ValueError):
+                    provider_message_id = None
+                return SendResult(
+                    ok=True,
+                    adapter="mailgun",
+                    provider_message_id=provider_message_id,
+                )
 
             else:
                 logger.error(f"[MailgunAdapter] Mailgun send failed ({response.status_code}): {response.text}")

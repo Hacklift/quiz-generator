@@ -4,7 +4,6 @@ import smtplib
 import socket
 from email.mime.text import MIMEText
 from server.celery_config import celery_app
-from server.app.email_platform.platform_email_utils import send_email, sender_email
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -25,6 +24,8 @@ def send_email_generic(self, recipient: str, subject: str, body: str):
     This task adds job-level retries to handle transient provider/network issues.
     """
     try:
+        from server.app.email_platform.platform_email_utils import send_email, sender_email
+
         msg = MIMEText(body)
         msg["Subject"] = subject
         msg["From"] = sender_email
@@ -35,4 +36,3 @@ def send_email_generic(self, recipient: str, subject: str, body: str):
     except Exception as e:
         logger.error(f"[Celery Task Error] Failure in send_email_generic: {e}", exc_info=True)
         raise
-

@@ -34,6 +34,7 @@ live_quiz_invitations_collection = database["live_quiz_invitations"]
 training_runs_collection = database["training_runs"]
 training_assignments_collection = database["training_assignments"]
 training_audit_events_collection = database["training_audit_events"]
+training_email_deliveries_collection = database["training_email_deliveries"]
 
 
 folders_collection = database["folders"]
@@ -146,6 +147,7 @@ async def ensure_training_run_indexes(
     training_runs_collection: AsyncIOMotorCollection,
     training_assignments_collection: AsyncIOMotorCollection,
     training_audit_events_collection: AsyncIOMotorCollection,
+    training_email_deliveries_collection: AsyncIOMotorCollection,
 ):
     """Indexes for the run-based corporate training workflow."""
     await training_runs_collection.create_index("access_code", unique=True, sparse=True)
@@ -168,6 +170,17 @@ async def ensure_training_run_indexes(
         unique=True,
         name="training_run_audit_event_once",
     )
+    await training_email_deliveries_collection.create_index(
+        "delivery_key", unique=True, name="training_email_delivery_once"
+    )
+    await training_email_deliveries_collection.create_index(
+        [("status", 1), ("next_attempt_at", 1)],
+        name="training_email_delivery_dispatch",
+    )
+    await training_email_deliveries_collection.create_index(
+        [("training_run_id", 1), ("recipient_email", 1)],
+        name="training_email_delivery_run_recipient",
+    )
 
 
 async def startUp():
@@ -189,6 +202,7 @@ async def startUp():
         training_runs_collection,
         training_assignments_collection,
         training_audit_events_collection,
+        training_email_deliveries_collection,
     )
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
@@ -277,6 +291,10 @@ def get_training_assignments_collection() -> AsyncIOMotorCollection:
 
 def get_training_audit_events_collection() -> AsyncIOMotorCollection:
     return training_audit_events_collection
+
+
+def get_training_email_deliveries_collection() -> AsyncIOMotorCollection:
+    return training_email_deliveries_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:
