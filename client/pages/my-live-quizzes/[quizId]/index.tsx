@@ -333,6 +333,9 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Duration
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Results
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
@@ -385,6 +388,23 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       {formatDuration(p.duration_seconds)}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm">
+                      {p.submitted_at ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/my-live-quizzes/${quizId}/attempts/${p.session_id}`,
+                            )
+                          }
+                          className="font-semibold text-[#0a3264] underline"
+                        >
+                          View answers
+                        </button>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

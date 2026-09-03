@@ -17,6 +17,7 @@ import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import { useAuth } from "@features/auth/context/authContext";
 import RequireAuth from "@features/auth/components/RequireAuth";
+import { useTerms } from "@features/persona/hooks/useTerms";
 
 interface QuizQuestion {
   question: string;
@@ -248,6 +249,7 @@ const DisplaySavedQuizzesPage: React.FC<{
   const [renameTitle, setRenameTitle] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const router = useRouter();
+  const t = useTerms();
 
   const toggleSelectQuiz = (quizId: string) => {
     setSelectedQuizIds((prev) =>
@@ -312,7 +314,7 @@ const DisplaySavedQuizzesPage: React.FC<{
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
-              Saved Quizzes
+              Saved {t("quiz", "plural")}
             </h1>
 
             {selectedQuizIds.length > 0 && (
@@ -327,7 +329,7 @@ const DisplaySavedQuizzesPage: React.FC<{
 
           {savedQuizzes.length === 0 ? (
             <p className="text-center text-gray-600">
-              You haven’t saved any quizzes yet.
+              You haven’t saved any {t("quiz", "plural")} yet.
             </p>
           ) : (
             savedQuizzes.map((quiz) => (

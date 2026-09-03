@@ -111,6 +111,16 @@ class FakeAnalyticsRepository:
             if sess.get("quiz_id") == quiz_id
         ]
 
+    async def get_session_by_id_and_creator(
+        self, session_id, creator_user_id, quiz_id=None
+    ):
+        session = self.sessions.get(session_id)
+        if not session or session.get("creator_user_id") != creator_user_id:
+            return None
+        if quiz_id is not None and session.get("quiz_id") != quiz_id:
+            return None
+        return session
+
 
 @pytest.mark.asyncio
 async def test_participant_joins_and_appears_in_analytics(monkeypatch):
@@ -120,7 +130,7 @@ async def test_participant_joins_and_appears_in_analytics(monkeypatch):
     repository = FakeAnalyticsRepository()
     service = LiveQuizSessionService(repository)
 
-    await service.start_session(
+    started = await service.start_session(
         code="ABC123",
         participant_name="Alice",
         participant_email="alice@example.com",
@@ -134,6 +144,12 @@ async def test_participant_joins_and_appears_in_analytics(monkeypatch):
     assert rows[0]["started_at"] == fixed_now
     assert rows[0]["score"] is None
     assert rows[0]["submitted_at"] is None
+
+    session_state = await service.get_session_state(
+        started["session_id"], started["participant_token"]
+    )
+    assert "correct_answer" not in session_state["question"]
+    assert "answer" not in session_state["question"]
 
 
 @pytest.mark.asyncio
@@ -173,6 +189,99 @@ async def test_participant_submits_and_score_appears_in_analytics(monkeypatch):
     assert rows[0]["submitted_at"] == current_time["value"]
     assert rows[0]["score"] is not None
     assert rows[0]["total_questions"] == 2
+
+
+@pytest.mark.asyncio
+async def test_submission_persists_graded_answers_and_owner_can_read_detail(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    service = LiveQuizSessionService(repository)
+
+    started = await service.start_session("ABC123", "Sam", None)
+    await service.save_answer(
+        started["session_id"], started["participant_token"], 0, "A", 1
+    )
+    await service.save_answer(
+        started["session_id"], started["participant_token"], 1, "A", 1
+    )
+    result = await service.submit_session(
+        started["session_id"], started["participant_token"]
+    )
+
+    assert result["score"] == 1
+    stored = repository.sessions[started["session_id"]]
+    assert stored["graded_answers"] == [
+        {
+            "question_index": 0,
+            "question": "Q1",
+            "selected_answer": "A",
+            "correct_answer": "A",
+            "question_type": "multichoice",
+            "is_correct": True,
+        },
+        {
+            "question_index": 1,
+            "question": "Q2",
+            "selected_answer": "A",
+            "correct_answer": "B",
+            "question_type": "multichoice",
+            "is_correct": False,
+        },
+    ]
+
+    detail = await service.get_attempt_detail(
+        "quiz-1", started["session_id"], "creator-1"
+    )
+    assert detail["score"] == 1
+    assert detail["percentage"] == 50
+    assert [answer["is_correct"] for answer in detail["graded_answers"]] == [
+        True,
+        False,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_attempt_detail_rejects_non_owner_and_cross_quiz(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    service = LiveQuizSessionService(repository)
+    started = await service.start_session("ABC123", "Sam", None)
+    await service.submit_session(started["session_id"], started["participant_token"])
+
+    with pytest.raises(HTTPException) as non_owner:
+        await service.get_attempt_detail("quiz-1", started["session_id"], "intruder")
+    assert non_owner.value.status_code == 403
+
+    with pytest.raises(HTTPException) as cross_quiz:
+        await service.get_attempt_detail("quiz-2", started["session_id"], "creator-1")
+    assert cross_quiz.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_historical_submitted_session_without_snapshot_is_regraded(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    service = LiveQuizSessionService(repository)
+    started = await service.start_session("ABC123", "Legacy child", None)
+    session = repository.sessions[started["session_id"]]
+    session.update(
+        {
+            "status": "submitted",
+            "submitted_at": fixed_now,
+            "score": 0,
+            "percentage": 0,
+            "answers": [],
+        }
+    )
+
+    detail = await service.get_attempt_detail(
+        "quiz-1", started["session_id"], "creator-1"
+    )
+    assert len(detail["graded_answers"]) == 2
+    assert all(answer["is_correct"] is False for answer in detail["graded_answers"])
 
 
 @pytest.mark.asyncio

@@ -21,7 +21,7 @@ profile.persona {category, user_type}      ← server/app/users/persona.py
         ▼
 usePersona()                                ← features/persona/context
         │  profile > ?persona= > localStorage > none
-        ├──► useTerms()   "students" vs "employees"
+        ├──► useTerms()   "students" vs "team members"
         └──► /dashboard   category dispatch → user-type view
 ```
 
@@ -58,8 +58,9 @@ usePersona()                                ← features/persona/context
 | Issue | Story | Landed as |
 |---|---|---|
 | #119 | Persona on the user profile | `server/app/users/{persona,models,repository,services,validators,identity}.py` |
-| #123 | Terminology + nav shell | `shared/config/terminology.ts`, `features/quiz/components/NavBar.tsx` |
+| #123 | Terminology + nav shell | `shared/config/terminology.ts`, `features/quiz/components/{NavBar,Sidebar,Footer}.tsx` |
 | #124 | School dashboard shell | `features/dashboard/school/SchoolDashboard.tsx` |
+| #125 | Corporate dashboard shell | `features/dashboard/corporate/CorporateDashboard.tsx` |
 
 ### Ready to pick up
 
@@ -68,7 +69,6 @@ usePersona()                                ← features/persona/context
 | #120 | Onboarding picker after signup | new `features/auth` wiring | `PersonaPicker` is built — you own where/when it appears and the show-once rule |
 | #121 | Carry home persona through signup | `features/auth/components/SignUpModal.tsx` | Storage + query resolution already exist; carry the value across the auth hop |
 | #122 | Edit persona in settings | `features/profile/pages/ProfilePage.tsx` | Drop in `PersonaPicker`, save via `updatePersona` |
-| #125 | Corporate dashboard shell | `features/dashboard/corporate/CorporateDashboard.tsx` | Mirror `SchoolDashboard.tsx` |
 | #126 | Teacher view | `features/dashboard/school/views/TeacherDashboard.tsx` | |
 | #127 | Lecturer view | `features/dashboard/school/views/LecturerDashboard.tsx` | |
 | #128 | Student view | `features/dashboard/school/views/StudentDashboard.tsx` | Blocked on #143 for scored history |

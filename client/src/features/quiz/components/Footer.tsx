@@ -3,25 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { FaGithub, FaTwitter, FaLinkedin } from "react-icons/fa";
-
-const footerSections = [
-  {
-    title: "Explore",
-    links: [
-      { label: "Generate Quiz", href: "/generate" },
-      { label: "Popular Quizzes", href: "/popular" },
-      { label: "Join Live Quiz", href: "/quiz-access" },
-    ],
-  },
-  {
-    title: "Workspace",
-    links: [
-      { label: "Saved Quizzes", href: "/saved_quiz" },
-      { label: "Quiz History", href: "/quiz_history" },
-      { label: "Folders", href: "/folders" },
-    ],
-  },
-];
+import { useTerms } from "@features/persona/hooks/useTerms";
+import { titleCaseTerm } from "@shared/config/terminology";
 
 const socialLinks = [
   {
@@ -43,6 +26,25 @@ const socialLinks = [
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
+  const t = useTerms();
+  const footerSections = [
+    {
+      title: "Explore",
+      links: [
+        { label: `Create ${t("quiz")}`, href: "/generate" },
+        { label: `Popular ${t("quiz", "plural")}`, href: "/popular" },
+        { label: `Join ${t("live_quiz")}`, href: "/quiz-access" },
+      ],
+    },
+    {
+      title: "Workspace",
+      links: [
+        { label: `Saved ${t("quiz", "plural")}`, href: "/saved_quiz" },
+        { label: `${titleCaseTerm(t("quiz"))} history`, href: "/quiz_history" },
+        { label: "Folders", href: "/folders" },
+      ],
+    },
+  ];
 
   return (
     <footer className="mt-8 bg-gray-900 text-white">

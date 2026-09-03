@@ -48,6 +48,11 @@ jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({
   getUserQuizHistory: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock("@features/dashboard/components/RecentQuizzes", () => ({
+  __esModule: true,
+  default: ({ heading }: { heading: string }) => <section>{heading}</section>,
+}));
+
 jest.mock("@features/persona/components/PersonaPicker", () => ({
   __esModule: true,
   default: () => <div>persona-picker</div>,
@@ -94,7 +99,27 @@ describe("DashboardPage dispatch", () => {
 
     render(<DashboardPage />);
 
-    expect(screen.getByText("Welcome back, Casey")).toBeInTheDocument();
-    expect(screen.getByText(/New homework/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Welcome back, Casey\. Plan your next class quiz\./),
+    ).toBeInTheDocument();
+    expect(screen.getByText("New class quiz")).toBeInTheDocument();
+    expect(screen.getByText("Join live class quiz")).toBeInTheDocument();
+    expect(screen.getByText("Revision practice")).toBeInTheDocument();
+  });
+
+  test("corporate dashboard uses training actions and employee-aware copy", () => {
+    mockPersona = { category: "corporate", userType: "employee" };
+
+    render(<DashboardPage />);
+
+    expect(
+      screen.getByText(/Welcome back, Casey\. Keep your learning moving\./),
+    ).toBeInTheDocument();
+    expect(screen.getByText("New training quiz")).toBeInTheDocument();
+    expect(screen.getByText("Run live training session")).toBeInTheDocument();
+    expect(screen.getByText("Assigned to me")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /assigned to me/i }),
+    ).toBeDisabled();
   });
 });
