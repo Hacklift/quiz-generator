@@ -69,7 +69,11 @@ class TrainingRunService:
         if not quiz.get("questions"):
             raise HTTPException(status_code=400, detail="Quiz has no questions")
 
-        access_code = await self._generate_unique_code()
+        access_code = (
+            await self._generate_unique_code()
+            if payload.access_mode == "public"
+            else None
+        )
         title = (payload.title or "").strip() or quiz.get("title") or "Training run"
         quiz_snapshot = self._quiz_snapshot(quiz)
         recipient_user_ids = (
@@ -230,6 +234,8 @@ class TrainingRunService:
         run = await self.repository.get_run(str(run["_id"])) or run
         if run.get("status") != "open":
             raise HTTPException(status_code=409, detail="Training run is closed")
+        if _as_utc(run["closes_at"]) <= _utc_now():
+            raise HTTPException(status_code=409, detail="Training run is closed")
         self._ensure_enough_time_to_start(run)
         quiz = await self._quiz_for_run(run)
         if not quiz:
@@ -291,6 +297,10 @@ class TrainingRunService:
         run = await self.repository.get_run(str(run["_id"])) or run
         if run.get("status") != "open":
             raise HTTPException(status_code=410, detail="Training run is closed")
+        # The worker writes the final audit snapshot, but public access must stop
+        # immediately at the configured boundary rather than waiting for its next run.
+        if _as_utc(run["closes_at"]) <= _utc_now():
+            raise HTTPException(status_code=410, detail="Training run is closed")
         if run.get("access_mode") != "public":
             raise HTTPException(status_code=403, detail="This training is available from an assignment")
         quiz = await self._quiz_for_run(run)
@@ -307,6 +317,12 @@ class TrainingRunService:
         closed = await self.repository.close_run(str(run["_id"]), owner_user_id, closed_at)
         if not closed:
             return None
+        # Manual closure is an immediate cutoff, not an implicit partial submission.
+        # Persist terminal states before building the immutable audit snapshot.
+        await self.repository.mark_in_progress_assignments_incomplete(
+            str(closed["_id"]), closed_at
+        )
+        await self.repository.abandon_active_sessions_for_run(str(closed["_id"]), closed_at)
         assignments = await self.repository.list_assignments_for_run(str(closed["_id"]))
         sessions = await self.repository.list_sessions_for_run(str(closed["_id"]))
         await self.repository.create_audit_event(
@@ -384,7 +400,11 @@ class TrainingRunService:
 
     def _run_summary(self, run: dict, assignments: list[dict], sessions: list[dict]) -> dict:
         completed = [item for item in assignments if item.get("status") == "completed"]
-        started = [item for item in assignments if item.get("status") in {"in_progress", "completed"}]
+        started = [
+            item
+            for item in assignments
+            if item.get("status") in {"in_progress", "incomplete", "completed"}
+        ]
         shared_sessions = [item for item in sessions if not item.get("training_assignment_id")]
         shared_completed = [item for item in shared_sessions if item.get("status") == "submitted"]
         scores = [
@@ -447,7 +467,13 @@ class TrainingRunService:
             "assignment_id": str(session["_id"]),
             "recipient_email": session.get("participant_email"),
             "recipient_name": session.get("participant_name"),
-            "status": "completed" if session.get("status") == "submitted" else "in_progress",
+            "status": (
+                "completed"
+                if session.get("status") == "submitted"
+                else "incomplete"
+                if session.get("status") == "abandoned"
+                else "in_progress"
+            ),
             "due_at": None,
             "attempts_used": 1,
             "max_attempts": None,

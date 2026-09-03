@@ -34,7 +34,7 @@ export interface TrainingCompletionRow {
   assignment_id: string;
   recipient_email?: string | null;
   recipient_name?: string | null;
-  status: "assigned" | "in_progress" | "completed";
+  status: "assigned" | "in_progress" | "incomplete" | "completed";
   due_at?: string | null;
   attempts_used: number;
   max_attempts?: number | null;
@@ -55,7 +55,7 @@ export interface TrainingAssignment {
   title: string;
   kind: TrainingKind;
   purpose: TrainingPurpose;
-  status: "assigned" | "in_progress" | "completed";
+  status: "assigned" | "in_progress" | "incomplete" | "completed";
   due_at?: string | null;
   closes_at: string;
   latest_start_at: string;

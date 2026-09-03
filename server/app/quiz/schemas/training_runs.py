@@ -99,7 +99,7 @@ class TrainingAssignmentSummary(BaseModel):
     title: str
     kind: TrainingRunKind
     purpose: TrainingPurpose
-    status: Literal["assigned", "in_progress", "completed"]
+    status: Literal["assigned", "in_progress", "incomplete", "completed"]
     due_at: Optional[datetime] = None
     closes_at: datetime
     latest_start_at: datetime
@@ -116,7 +116,7 @@ class TrainingCompletionRow(BaseModel):
     assignment_id: str
     recipient_email: Optional[EmailStr] = None
     recipient_name: Optional[str] = None
-    status: Literal["assigned", "in_progress", "completed"]
+    status: Literal["assigned", "in_progress", "incomplete", "completed"]
     due_at: Optional[datetime] = None
     attempts_used: int
     max_attempts: Optional[int] = None

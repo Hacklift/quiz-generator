@@ -1,6 +1,10 @@
+import asyncio
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
+from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
 
@@ -11,6 +15,7 @@ from server.app.quiz.schemas.training_runs import (
     CreateTrainingRunRequest,
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
+from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.services.training_run_service import TrainingRunService
 
 
@@ -46,6 +51,138 @@ class FakeTrainingSessionRepository:
             return None
         self.session = {**self.session, **updates}
         return self.session
+
+
+class CreateRunRepository:
+    def __init__(self):
+        self.quiz = {
+            "_id": ObjectId(),
+            "title": "Onboarding quiz",
+            "quiz_type": "multichoice",
+            "questions": [{"question": "Q", "answer": "A", "options": ["A", "B"]}],
+        }
+        self.created_run = None
+        self.access_code_checks = 0
+
+    async def get_owned_quiz(self, quiz_id, owner_user_id):
+        return self.quiz
+
+    async def access_code_exists_on_run(self, access_code):
+        self.access_code_checks += 1
+        return False
+
+    async def access_code_exists_on_quiz(self, access_code):
+        self.access_code_checks += 1
+        return False
+
+    async def create_run(self, payload):
+        self.created_run = {**payload, "_id": ObjectId()}
+        return self.created_run
+
+    async def create_assignments(self, assignments):
+        self.assignments = assignments
+
+    async def create_audit_event(self, event):
+        self.audit_event = event
+
+
+class AuthorizationRepository:
+    def __init__(self, run=None, assignment=None):
+        self.run = run
+        self.assignment = assignment
+
+    async def get_run(self, run_id):
+        return self.run
+
+    async def get_assignment(self, assignment_id):
+        return self.assignment
+
+    async def bind_assignments_to_user(self, recipient_email, user_id):
+        return []
+
+
+class ConcurrentAssignmentsCollection:
+    """Makes two reservations read the same attempt count before either updates it."""
+
+    def __init__(self, document):
+        self.document = deepcopy(document)
+        self._read_count = 0
+        self._both_reads_complete = asyncio.Event()
+
+    async def find_one(self, query):
+        snapshot = deepcopy(self.document)
+        self._read_count += 1
+        if self._read_count == 2:
+            self._both_reads_complete.set()
+        await self._both_reads_complete.wait()
+        return snapshot
+
+    async def find_one_and_update(self, query, update, return_document):
+        if (
+            query["_id"] != self.document["_id"]
+            or query["recipient_user_id"] != self.document["recipient_user_id"]
+            or query["attempts_used"] != self.document["attempts_used"]
+            or self.document["status"] not in query["status"]["$in"]
+        ):
+            return None
+        self.document["attempts_used"] += update["$inc"]["attempts_used"]
+        self.document.update(update["$set"])
+        return deepcopy(self.document)
+
+
+class ManualCloseRepository:
+    def __init__(self):
+        self.run = {
+            "_id": ObjectId(),
+            "quiz_id": "quiz-1",
+            "title": "Security training",
+            "kind": "compliance",
+            "purpose": "health_and_safety",
+            "quiz_content_fingerprint": "fingerprint",
+            "quiz_snapshot": {"questions": [{"question": "Q"}]},
+            "closes_at": datetime.now(timezone.utc) + timedelta(days=1),
+            "status": "open",
+        }
+        self.assignments = [
+            {
+                "_id": ObjectId(),
+                "recipient_email": "learner@example.com",
+                "status": "in_progress",
+                "attempts_used": 1,
+                "max_attempts": 1,
+            }
+        ]
+        self.sessions = [
+            {
+                "_id": ObjectId(),
+                "participant_name": "Learner",
+                "status": "active",
+            }
+        ]
+        self.audit_event = None
+
+    async def close_run(self, run_id, owner_user_id, closed_at):
+        self.run = {**self.run, "status": "closed", "closed_at": closed_at}
+        return self.run
+
+    async def mark_in_progress_assignments_incomplete(self, run_id, closed_at):
+        for assignment in self.assignments:
+            if assignment["status"] == "in_progress":
+                assignment["status"] = "incomplete"
+
+    async def abandon_active_sessions_for_run(self, run_id, closed_at):
+        for session in self.sessions:
+            if session["status"] in {"active", "joined", "disconnected"}:
+                session["status"] = "abandoned"
+
+    async def list_assignments_for_run(self, run_id):
+        return self.assignments
+
+    async def list_sessions_for_run(self, run_id):
+        return self.sessions
+
+    async def create_audit_event(self, event):
+        self.audit_event = event
 
 
 def test_assigned_only_training_requires_recipient_and_valid_schedule():
@@ -282,3 +419,133 @@ async def test_new_run_requires_a_full_duration_before_its_close_time(monkeypatc
 
     assert error.value.status_code == 400
     assert error.value.detail == "Run close time must allow one full training duration"
+
+
+@pytest.mark.asyncio
+async def test_assigned_only_run_does_not_generate_an_unused_access_code():
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+    )
+
+    summary = await service.create_run(payload, "owner-1")
+
+    assert repository.created_run["access_code"] is None
+    assert repository.access_code_checks == 0
+    assert summary["access_code"] is None
+    assert summary["access_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_training_run_owner_endpoints_hide_other_owners_runs():
+    run = {"_id": "run-1", "owner_user_id": "owner-1"}
+    service = TrainingRunService(
+        AuthorizationRepository(run=run), live_quiz_service=None
+    )
+
+    with pytest.raises(HTTPException) as get_error:
+        await service.get_owner_run("run-1", "owner-2")
+    with pytest.raises(HTTPException) as close_error:
+        await service.close_owner_run("run-1", "owner-2")
+
+    assert get_error.value.status_code == 404
+    assert close_error.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_training_assignment_start_hides_other_recipients_assignments():
+    service = TrainingRunService(
+        AuthorizationRepository(
+            assignment={
+                "_id": "assignment-1",
+                "recipient_user_id": "recipient-1",
+                "training_run_id": "run-1",
+            }
+        ),
+        live_quiz_service=None,
+    )
+    user = SimpleNamespace(
+        id="recipient-2",
+        email="recipient-2@example.com",
+        full_name="Recipient Two",
+        username="recipient-two",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await service.start_assignment("assignment-1", user)
+
+    assert error.value.status_code == 404
+    assert error.value.detail == "Training assignment not found"
+
+
+@pytest.mark.asyncio
+async def test_reserve_attempt_allows_only_one_concurrent_last_attempt():
+    assignment = {
+        "_id": ObjectId(),
+        "recipient_user_id": "recipient-1",
+        "status": "assigned",
+        "attempts_used": 0,
+        "max_attempts": 1,
+    }
+    assignments_collection = ConcurrentAssignmentsCollection(assignment)
+    repository = TrainingRunRepository(
+        quizzes_collection=None,
+        runs_collection=None,
+        assignments_collection=assignments_collection,
+        audit_events_collection=None,
+    )
+    now = datetime.now(timezone.utc)
+
+    first, second = await asyncio.gather(
+        repository.reserve_attempt(str(assignment["_id"]), "recipient-1", now),
+        repository.reserve_attempt(str(assignment["_id"]), "recipient-1", now),
+    )
+
+    assert sum(result is not None for result in (first, second)) == 1
+    assert assignments_collection.document["attempts_used"] == 1
+    assert assignments_collection.document["status"] == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_public_access_stops_at_close_time_before_background_closure(monkeypatch):
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(training_run_module, "_utc_now", lambda: now)
+    run = {
+        "_id": "run-1",
+        "status": "open",
+        "access_mode": "public",
+        "closes_at": now,
+    }
+
+    class PublicRunRepository:
+        async def get_run_by_access_code(self, access_code):
+            return run
+
+        async def get_run(self, run_id):
+            return run
+
+    service = TrainingRunService(PublicRunRepository(), live_quiz_service=None)
+
+    with pytest.raises(HTTPException) as error:
+        await service.access_preview("PUBLIC123")
+
+    assert error.value.status_code == 410
+    assert error.value.detail == "Training run is closed"
+
+
+@pytest.mark.asyncio
+async def test_manual_close_marks_active_attempts_incomplete_before_audit_snapshot():
+    repository = ManualCloseRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+
+    closed = await service._close_run(repository.run, "owner-1")
+
+    assert closed["status"] == "closed"
+    assert repository.assignments[0]["status"] == "incomplete"
+    assert repository.sessions[0]["status"] == "abandoned"
+    completion_register = repository.audit_event["payload"]["completion_register"]
+    assert completion_register[0]["status"] == "incomplete"
+    assert completion_register[1]["status"] == "abandoned"

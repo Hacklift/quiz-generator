@@ -108,6 +108,39 @@ class TrainingRunRepository:
         cursor = self.sessions_collection.find({"training_run_id": run_id}).sort("created_at", 1)
         return await cursor.to_list(length=2_000)
 
+    async def mark_in_progress_assignments_incomplete(
+        self, run_id: str, closed_at: datetime
+    ) -> None:
+        """Make an owner-initiated early closure terminal for active assignees."""
+        await self.assignments_collection.update_many(
+            {"training_run_id": run_id, "status": "in_progress"},
+            {
+                "$set": {
+                    "status": "incomplete",
+                    "updated_at": closed_at,
+                }
+            },
+        )
+
+    async def abandon_active_sessions_for_run(
+        self, run_id: str, closed_at: datetime
+    ) -> None:
+        if self.sessions_collection is None:
+            return
+        await self.sessions_collection.update_many(
+            {
+                "training_run_id": run_id,
+                "status": {"$in": ["active", "joined", "disconnected"]},
+            },
+            {
+                "$set": {
+                    "status": "abandoned",
+                    "abandoned_at": closed_at,
+                    "updated_at": closed_at,
+                }
+            },
+        )
+
     async def get_assignment(self, assignment_id: str) -> Optional[dict]:
         object_id = self._object_id(assignment_id)
         return await self.assignments_collection.find_one({"_id": object_id}) if object_id else None

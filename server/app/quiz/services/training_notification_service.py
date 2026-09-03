@@ -89,8 +89,7 @@ class TrainingNotificationService:
             return
 
         participant = (
-            assignment.get("recipient_name")
-            or assignment.get("recipient_email")
+            assignment.get("recipient_email")
             if assignment
             else session.get("participant_name") or session.get("participant_email")
         )

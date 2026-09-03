@@ -166,7 +166,7 @@ def _finalize_expired_session(
             )
 
     participant = (
-        assignment.get("recipient_name") or assignment.get("recipient_email")
+        assignment.get("recipient_email")
         if assignment
         else updated.get("participant_name") or updated.get("participant_email")
     ) or "A participant"

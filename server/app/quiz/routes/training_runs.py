@@ -84,8 +84,10 @@ async def list_owned_training_quizzes(
 
 
 @router.post("/training-runs", response_model=TrainingRunSummary)
+@limiter.limit("10/hour")
 async def create_training_run(
     payload: CreateTrainingRunRequest,
+    request: Request,
     current_user: UserOut = Depends(get_verified_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
