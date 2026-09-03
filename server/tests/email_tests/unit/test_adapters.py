@@ -121,6 +121,8 @@ async def test_direct_adapter_propagates_smtp_error(monkeypatch, email_payload_f
 async def test_mailgun_adapter_success(monkeypatch, mock_requests_session, email_payload_factory):
     monkeypatch.setenv('MAILGUN_API_KEY', 'key')
     monkeypatch.setenv('MAILGUN_DOMAIN', 'domain.test')
+    monkeypatch.setenv('SENDER_EMAIL', 'sender@quizwerk.test')
+    monkeypatch.setenv('MAILGUN_SENDER_EMAIL', 'different@quizwerk.test')
     adapter = MailgunAdapter()
     payload = email_payload_factory()
     res = await adapter.send(payload)
@@ -137,6 +139,8 @@ async def test_mailgun_adapter_success(monkeypatch, mock_requests_session, email
     assert expected.get_payload() in data["text"]
     assert adapter.session.auth[0] == "api"
     assert isinstance(adapter.session.auth[1], str) and len(adapter.session.auth[1]) > 0
+    assert adapter.sender_email == "sender@quizwerk.test"
+    assert data["from"] == "QuizAppVault <sender@quizwerk.test>"
 
 
 @pytest.mark.asyncio

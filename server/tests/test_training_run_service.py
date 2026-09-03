@@ -615,6 +615,45 @@ async def test_reserve_attempt_allows_only_one_concurrent_last_attempt():
 
 
 @pytest.mark.asyncio
+async def test_reserve_attempt_rejects_concurrent_attempt_while_in_progress():
+    class InProgressAssignmentCollection:
+        def __init__(self, document):
+            self.document = deepcopy(document)
+            self.last_reservation_query = None
+
+        async def find_one(self, _query):
+            return deepcopy(self.document)
+
+        async def find_one_and_update(self, query, _update, return_document):
+            self.last_reservation_query = query
+            return None
+
+    assignment = {
+        "_id": ObjectId(),
+        "recipient_user_id": "recipient-1",
+        "status": "in_progress",
+        "attempts_used": 1,
+        "max_attempts": 2,
+    }
+    assignments_collection = InProgressAssignmentCollection(assignment)
+    repository = TrainingRunRepository(
+        quizzes_collection=None,
+        runs_collection=None,
+        assignments_collection=assignments_collection,
+        audit_events_collection=None,
+    )
+
+    reservation = await repository.reserve_attempt(
+        str(assignment["_id"]), "recipient-1", datetime.now(timezone.utc)
+    )
+
+    assert reservation is None
+    assert assignments_collection.document["attempts_used"] == 1
+    assert assignments_collection.document["status"] == "in_progress"
+    assert "in_progress" not in assignments_collection.last_reservation_query["status"]["$in"]
+
+
+@pytest.mark.asyncio
 async def test_public_access_stops_at_close_time_before_background_closure(monkeypatch):
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
     monkeypatch.setattr(training_run_module, "_utc_now", lambda: now)

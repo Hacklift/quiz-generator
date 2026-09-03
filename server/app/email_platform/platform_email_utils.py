@@ -14,6 +14,8 @@ from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
+from .config import require_sender_email
+
 
 load_dotenv()
 
@@ -35,7 +37,7 @@ def require_env(var_name: str) -> str:
     return value
 
 
-sender_email = require_env("SENDER_EMAIL")
+sender_email = require_sender_email()
 
 sender_password = require_env("SENDER_PASSWORD")
 
@@ -161,5 +163,4 @@ def send_email(recipient: str, message: MIMEText) -> None:
                 )
 
                 raise
-
 

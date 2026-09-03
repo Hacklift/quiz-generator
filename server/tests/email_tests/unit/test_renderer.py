@@ -1,6 +1,8 @@
 import importlib
 import os
 
+import pytest
+
 from server.app.email_platform.renderer import render_email
 from server.app.email_platform.platform_email_utils import sender_email
 
@@ -91,3 +93,16 @@ def test_renderer_uses_allowed_origins_for_links(monkeypatch):
     msg = renderer_module.render_email("verification", "user@example.com", {"code": "999", "token": "tok"})
     body = msg.get_payload()
     assert "https://example.com/auth/verify-email/?token=tok" in body
+
+
+def test_renderer_requires_configured_sender_email(monkeypatch):
+    import server.app.email_platform.renderer as renderer_module
+
+    with monkeypatch.context() as isolated_env:
+        isolated_env.delenv("SENDER_EMAIL", raising=False)
+
+        with pytest.raises(EnvironmentError, match="SENDER_EMAIL"):
+            importlib.reload(renderer_module)
+
+    # A failed reload must not leave the shared module unusable for later tests.
+    importlib.reload(renderer_module)

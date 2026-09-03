@@ -244,7 +244,10 @@ class TrainingRunRepository:
                 "_id": assignment["_id"],
                 "recipient_user_id": user_id,
                 "attempts_used": attempts_used,
-                "status": {"$in": ["assigned", "in_progress", "completed"]},
+                # A retry is allowed only once the preceding attempt has a
+                # terminal result. This prevents two browser tabs from
+                # creating concurrent sessions for the same assignment.
+                "status": {"$in": ["assigned", "completed"]},
             },
             {"$inc": {"attempts_used": 1}, "$set": {"status": "in_progress", "started_at": now, "updated_at": now}},
             return_document=ReturnDocument.AFTER,
