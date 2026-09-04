@@ -553,7 +553,7 @@ class LiveQuizSessionService:
         questions = quiz.get("questions") or []
         participants = []
         for session in await self.repository.list_quiz_sessions(quiz_id):
-            if session.get("status") != "submitted" and not session.get("submitted_at"):
+            if session.get("status") != "submitted" or not session.get("submitted_at"):
                 continue
             if isinstance(session.get("graded_answers"), list):
                 graded = {
@@ -561,16 +561,18 @@ class LiveQuizSessionService:
                     "score": session.get("score", 0),
                     "percentage": session.get("percentage", 0),
                 }
+                total_questions = session.get("total_questions", len(questions))
             else:
                 # Compatibility for attempts finalized before graded_answers
                 # was persisted. This uses the existing server-side grader.
                 graded = self._grade_session(session, quiz)
+                total_questions = len(questions)
             participants.append(
                 {
                     "participant_name": session.get("participant_name") or "Anonymous",
                     "graded_answers": graded["graded_answers"],
                     "score": graded["score"],
-                    "total_questions": len(questions),
+                    "total_questions": total_questions,
                     "percentage": graded["percentage"],
                 }
             )

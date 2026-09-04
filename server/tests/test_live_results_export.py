@@ -97,6 +97,71 @@ async def test_owner_export_uses_persisted_server_grades_for_multiple_participan
 
 
 @pytest.mark.asyncio
+async def test_export_only_includes_fully_submitted_sessions():
+    completed = completed_participant(
+        "Completed",
+        [{"question_index": 0, "selected_answer": "A", "is_correct": True}],
+        1,
+        33.33,
+    )
+    active_with_timestamp = {
+        **completed_participant("Active with timestamp", [], 0, 0),
+        "status": "active",
+    }
+    submitted_without_timestamp = {
+        **completed_participant("Submitted without timestamp", [], 0, 0),
+        "submitted_at": None,
+    }
+    active = {
+        **completed_participant("Active", [], 0, 0),
+        "status": "active",
+        "submitted_at": None,
+    }
+
+    payload = await LiveQuizSessionService(
+        ResultsRepository(
+            sessions=[
+                completed,
+                active_with_timestamp,
+                submitted_without_timestamp,
+                active,
+            ]
+        )
+    ).build_results_export("quiz-1", "teacher-1")
+
+    assert [row["participant_name"] for row in payload["participants"]] == [
+        "Completed"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_export_preserves_historical_session_question_count():
+    session = completed_participant(
+        "Historical Participant",
+        [
+            {"question_index": 0, "selected_answer": "A", "is_correct": True},
+            {"question_index": 1, "selected_answer": "B", "is_correct": True},
+            {"question_index": 2, "selected_answer": "A", "is_correct": False},
+        ],
+        2,
+        66.67,
+    )
+    session["total_questions"] = 3
+    repository = ResultsRepository(sessions=[session])
+    repository.quiz["questions"].append({"question": "Q4", "answer": "D"})
+
+    payload = await LiveQuizSessionService(repository).build_results_export(
+        "quiz-1", "teacher-1"
+    )
+    csv_text = generate_live_results_csv(payload).getvalue()
+
+    assert payload["participants"][0]["total_questions"] == 3
+    assert payload["participants"][0]["percentage"] == 66.67
+    assert "2/3,66.67%" in csv_text
+    assert "2/4" not in csv_text
+
+
+@pytest.mark.asyncio
 async def test_ownerless_or_other_owner_cannot_export_results():
     service = LiveQuizSessionService(ResultsRepository(owner_id="teacher-1"))
     with pytest.raises(HTTPException) as error:
