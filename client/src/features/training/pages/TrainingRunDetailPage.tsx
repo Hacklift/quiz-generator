@@ -8,6 +8,7 @@ import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import { trainingRunApi, type TrainingRunDetail } from "@features/training/api/trainingRunApi";
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
+import { ROUTES } from "@shared/config/patterns/routes";
 
 const displayDate = (value?: string | null) => value ? new Date(value).toLocaleString() : "-";
 const completionLabel = (run: TrainingRunDetail) =>
@@ -28,7 +29,7 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
       setRun(await trainingRunApi.getRun(runId));
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || "Could not load training run.");
-      await router.replace("/training-runs");
+      await router.replace(ROUTES.TRAINING_RUNS);
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +69,7 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
           {isLoading || !run ? <div className="flex min-h-[40vh] items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-brand" /></div> : <>
             <header className="border-b-2 border-divider pb-[28px]">
               <Kicker>{run.kind === "compliance" ? "Compliance register" : "Training completion"}</Kicker>
-              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" onClick={() => router.push("/training-runs")} className={BTN_GHOST}>All runs</button>{run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
+              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" onClick={() => router.push(ROUTES.TRAINING_RUNS)} className={BTN_GHOST}>All runs</button>{run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
             </header>
             <div className="grid gap-[36px] pt-[36px] lg:grid-cols-[minmax(0,1fr)_300px]">
               <section aria-labelledby="register-heading"><Kicker>Per-run register</Kicker><h2 id="register-heading" className="text-[20px] font-extrabold">Completion by person</h2><div className="mt-[20px] overflow-x-auto border-2 border-divider"><table className="min-w-full divide-y-2 divide-divider text-left text-[13px]"><thead className="bg-ink text-paper"><tr><th className="px-[14px] py-[12px]">Recipient</th><th className="px-[14px] py-[12px]">State</th><th className="px-[14px] py-[12px]">Submitted</th><th className="px-[14px] py-[12px]">Score</th><th className="px-[14px] py-[12px]">Attempts</th></tr></thead><tbody className="divide-y divide-divider">{run.completion_register.map((row) => <tr key={row.assignment_id}><td className="px-[14px] py-[12px] font-semibold">{row.recipient_email || row.recipient_name || "Shared-link participant"}</td><td className="px-[14px] py-[12px]">{row.status.replace("_", " ")}</td><td className="px-[14px] py-[12px]">{displayDate(row.completed_at)}</td><td className="px-[14px] py-[12px]">{row.latest_percentage != null ? `${row.latest_percentage}%` : "-"}</td><td className="px-[14px] py-[12px]">{row.attempts_used}/{row.max_attempts ?? "∞"}</td></tr>)}{!run.completion_register.length && <tr><td className="px-[14px] py-[20px] text-ink/70" colSpan={5}>No participants have started this run.</td></tr>}</tbody></table></div></section>

@@ -8,9 +8,9 @@ from pymongo.errors import DuplicateKeyError
 
 from server.app.notifications.schemas import (
     NotificationCreate,
-    NotificationDB,
     NotificationResponse,
 )
+from server.app.notifications.documents import build_notification_document
 
 
 def _object_id(notification_id: str) -> ObjectId:
@@ -45,7 +45,7 @@ async def create_notification(
     notifications_collection: AsyncIOMotorCollection,
     notification: NotificationCreate,
 ) -> NotificationResponse:
-    document = NotificationDB(**notification.model_dump()).model_dump()
+    document = build_notification_document(notification)
     try:
         result = await notifications_collection.insert_one(document)
         created = await notifications_collection.find_one({"_id": result.inserted_id})
@@ -68,7 +68,7 @@ async def create_notifications_for_users(
     documents = []
     for user_id in user_ids:
         payload = notification.model_copy(update={"user_id": user_id})
-        documents.append(NotificationDB(**payload.model_dump()).model_dump())
+        documents.append(build_notification_document(payload))
 
     if not documents:
         return 0

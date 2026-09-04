@@ -53,6 +53,11 @@ class FakeTrainingSessionRepository:
         return self.session
 
 
+class FailingRealtimeBroadcaster:
+    async def publish(self, _quiz_id, _event):
+        raise RuntimeError("realtime transport unavailable")
+
+
 class CreateRunRepository:
     def __init__(self):
         self.quiz = {
@@ -144,6 +149,26 @@ class ConcurrentAssignmentsCollection:
         return deepcopy(self.document)
 
 
+class QueryCapturingCursor:
+    def sort(self, *_args):
+        return self
+
+    def limit(self, _limit):
+        return self
+
+    async def to_list(self, *, length):
+        return []
+
+
+class QueryCapturingAssignmentsCollection:
+    def __init__(self):
+        self.query = None
+
+    def find(self, query):
+        self.query = query
+        return QueryCapturingCursor()
+
+
 class ManualCloseRepository:
     def __init__(self):
         self.run = {
@@ -196,10 +221,6 @@ class ManualCloseRepository:
         self.run.pop("closure_in_progress", None)
         self.run.pop("closure_started_at", None)
         return self.run
-
-    async def release_run_closure(self, run_id, owner_user_id):
-        self.run.pop("closure_in_progress", None)
-        self.run.pop("closure_started_at", None)
 
     async def mark_in_progress_assignments_incomplete(self, run_id, closed_at):
         for assignment in self.assignments:
@@ -259,6 +280,13 @@ def test_assigned_only_training_requires_recipient_and_valid_schedule():
             closes_at=closes_at,
             recipient_emails=["learner@example.com"],
             max_attempts=3,
+        )
+    with pytest.raises(ValidationError, match="title must not contain"):
+        CreateTrainingRunRequest(
+            quiz_id="quiz-1",
+            closes_at=closes_at,
+            recipient_emails=["learner@example.com"],
+            title="Legitimate\r\nBcc: injected@example.com",
         )
     with pytest.raises(ValidationError):
         CreateTrainingRunRequest(
@@ -356,7 +384,7 @@ async def test_manual_closure_claim_blocks_expired_session_finalization(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_expired_training_session_finalizes_after_scheduled_run_closure(monkeypatch):
+async def test_expired_training_session_does_not_mutate_after_scheduled_run_closure(monkeypatch):
     started_at = datetime(2026, 8, 30, tzinfo=timezone.utc)
     now = {"value": started_at}
     monkeypatch.setattr(live_session_module, "_utc_now", lambda: now["value"])
@@ -376,7 +404,6 @@ async def test_expired_training_session_finalizes_after_scheduled_run_closure(mo
             }
         ),
     )
-    service._grade_session = lambda session, quiz: {"score": 1, "percentage": 100}
     started = await service.start_session_for_quiz(
         quiz,
         participant_name="Learner",
@@ -387,26 +414,38 @@ async def test_expired_training_session_finalizes_after_scheduled_run_closure(mo
     )
 
     now["value"] = started_at + timedelta(minutes=1, seconds=1)
-    state = await service.get_session_state("session-1", started["participant_token"])
+    with pytest.raises(HTTPException) as error:
+        await service.get_session_state("session-1", started["participant_token"])
 
-    assert state["status"] == "submitted"
-    assert repository.session["score"] == 1
+    assert error.value.status_code == 409
+    assert repository.session["status"] == "joined"
 
-    now["value"] = started_at
-    restarted = await service.start_session_for_quiz(
+
+@pytest.mark.asyncio
+async def test_realtime_publish_failure_does_not_undo_a_persisted_session():
+    quiz = {
+        "_id": "quiz-1",
+        "quiz_type": "multichoice",
+        "questions": [{"question": "Q", "answer": "A", "options": ["A", "B"]}],
+    }
+    repository = FakeTrainingSessionRepository(quiz)
+    service = LiveQuizSessionService(
+        repository,
+        broadcaster=FailingRealtimeBroadcaster(),
+    )
+
+    started = await service.start_session_for_quiz(
         quiz,
         participant_name="Learner",
         participant_email=None,
-        time_limit_minutes=1,
+        time_limit_minutes=20,
         training_run_id="run-1",
-        training_closes_at=started_at + timedelta(minutes=1),
-    )
-    now["value"] = started_at + timedelta(minutes=1, seconds=1)
-    submission = await service.submit_session(
-        "session-1", restarted["participant_token"], auto_submitted=True
+        training_assignment_id="assignment-1",
     )
 
-    assert submission["status"] == "submitted"
+    assert started["session_id"] == "session-1"
+    assert repository.session["training_assignment_id"] == "assignment-1"
+    assert repository.session["status"] == "joined"
 
 
 def test_training_start_requires_enough_time_for_the_selected_duration(monkeypatch):
@@ -465,6 +504,61 @@ async def test_training_run_uses_its_immutable_quiz_snapshot():
     assert stored_snapshot["questions"][0]["question"] == "Q"
 
 
+def test_in_progress_assignment_is_not_presented_as_retryable():
+    now = datetime.now(timezone.utc)
+    service = TrainingRunService(repository=None, live_quiz_service=None)
+    summary = service._assignment_summary(
+        {
+            "_id": "assignment-1",
+            "training_run_id": "run-1",
+            "quiz_id": "quiz-1",
+            "recipient_email": "learner@example.com",
+            "status": "in_progress",
+            "attempts_used": 1,
+            "max_attempts": 2,
+        },
+        {
+            "_id": "run-1",
+            "title": "Training",
+            "kind": "business",
+            "purpose": "onboarding",
+            "status": "open",
+            "time_limit_minutes": 20,
+            "closes_at": now + timedelta(hours=1),
+        },
+    )
+
+    assert summary["can_retry"] is False
+
+
+def test_assignment_is_not_presented_as_startable_at_the_exact_close_boundary(monkeypatch):
+    now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    monkeypatch.setattr(training_run_module, "_utc_now", lambda: now)
+    service = TrainingRunService(repository=None, live_quiz_service=None)
+    summary = service._assignment_summary(
+        {
+            "_id": "assignment-1",
+            "training_run_id": "run-1",
+            "quiz_id": "quiz-1",
+            "recipient_email": "learner@example.com",
+            "status": "assigned",
+            "attempts_used": 0,
+            "max_attempts": 1,
+        },
+        {
+            "_id": "run-1",
+            "title": "Training",
+            "kind": "business",
+            "purpose": "onboarding",
+            "status": "open",
+            "time_limit_minutes": 20,
+            "closes_at": now + timedelta(minutes=20),
+        },
+    )
+
+    assert summary["can_retry"] is False
+
+
 @pytest.mark.asyncio
 async def test_new_run_requires_a_full_duration_before_its_close_time(monkeypatch):
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
@@ -504,6 +598,40 @@ async def test_assigned_only_run_does_not_generate_an_unused_access_code():
     assert repository.access_code_checks == 0
     assert summary["access_code"] is None
     assert summary["access_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_legacy_quiz_title_cannot_poison_training_email_headers():
+    repository = CreateRunRepository()
+    repository.quiz["title"] = "Legitimate\r\nBcc: injected@example.com"
+    service = TrainingRunService(repository, live_quiz_service=None)
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+    )
+
+    with pytest.raises(HTTPException, match="Training title") as error:
+        await service.create_run(payload, "owner-1")
+
+    assert error.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_legacy_quiz_title_cannot_exceed_training_title_limit():
+    repository = CreateRunRepository()
+    repository.quiz["title"] = "x" * 181
+    service = TrainingRunService(repository, live_quiz_service=None)
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+    )
+
+    with pytest.raises(HTTPException, match="must not exceed") as error:
+        await service.create_run(payload, "owner-1")
+
+    assert error.value.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -584,6 +712,31 @@ async def test_training_assignment_start_hides_other_recipients_assignments():
 
     assert error.value.status_code == 404
     assert error.value.detail == "Training assignment not found"
+
+
+@pytest.mark.asyncio
+async def test_assignment_email_fallback_only_includes_unclaimed_assignments():
+    assignments_collection = QueryCapturingAssignmentsCollection()
+    repository = TrainingRunRepository(
+        quizzes_collection=None,
+        runs_collection=None,
+        assignments_collection=assignments_collection,
+        audit_events_collection=None,
+    )
+
+    await repository.list_assignments_for_recipient(
+        "learner@example.com", "learner-1"
+    )
+
+    assert assignments_collection.query == {
+        "$or": [
+            {"recipient_user_id": "learner-1"},
+            {
+                "recipient_email": "learner@example.com",
+                "recipient_user_id": None,
+            },
+        ]
+    }
 
 
 @pytest.mark.asyncio
@@ -696,7 +849,7 @@ async def test_manual_close_marks_active_attempts_incomplete_before_audit_snapsh
 
 
 @pytest.mark.asyncio
-async def test_manual_close_releases_its_claim_when_audit_persistence_fails():
+async def test_manual_close_keeps_its_claim_when_audit_persistence_fails():
     repository = ManualCloseRepository()
 
     async def fail_audit(_event):
@@ -709,4 +862,22 @@ async def test_manual_close_releases_its_claim_when_audit_persistence_fails():
         await service._close_run(repository.run, "owner-1")
 
     assert repository.run["status"] == "open"
-    assert "closure_in_progress" not in repository.run
+    assert repository.run["closure_in_progress"] is True
+
+
+@pytest.mark.asyncio
+async def test_manual_close_keeps_its_claim_when_finalization_fails_after_audit():
+    repository = ManualCloseRepository()
+
+    async def fail_finalization(_run_id, _owner_user_id, _closed_at):
+        return None
+
+    repository.finalize_run_closure = fail_finalization
+    service = TrainingRunService(repository, live_quiz_service=None)
+
+    with pytest.raises(RuntimeError, match="could not be finalized"):
+        await service._close_run(repository.run, "owner-1")
+
+    assert repository.audit_event is not None
+    assert repository.run["status"] == "open"
+    assert repository.run["closure_in_progress"] is True

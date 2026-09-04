@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class NotificationType(str, Enum):
@@ -21,6 +21,14 @@ class NotificationCreate(BaseModel):
     action_url: Optional[str] = None
     expires_at: Optional[datetime] = None
     dedupe_key: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("dedupe_key")
+    @classmethod
+    def normalize_dedupe_key(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 class AdminNotificationCreate(NotificationCreate):

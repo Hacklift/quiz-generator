@@ -73,7 +73,22 @@ class TrainingRunService:
             if payload.access_mode == "public"
             else None
         )
-        title = (payload.title or "").strip() or quiz.get("title") or "Training run"
+        title = (payload.title or "").strip()
+        if not title:
+            legacy_quiz_title = quiz.get("title")
+            title = legacy_quiz_title.strip() if isinstance(legacy_quiz_title, str) else "Training run"
+        if "\r" in title or "\n" in title:
+            # Quiz titles can predate the current schema, so validate the
+            # resolved value rather than trusting only the request payload.
+            raise HTTPException(
+                status_code=400,
+                detail="Training title must not contain carriage returns or newlines",
+            )
+        if len(title) > 180:
+            raise HTTPException(
+                status_code=400,
+                detail="Training title must not exceed 180 characters",
+            )
         quiz_snapshot = self._quiz_snapshot(quiz)
         recipient_user_ids = (
             await self.notification_service.verified_user_ids_by_email(
@@ -351,7 +366,10 @@ class TrainingRunService:
                 raise RuntimeError("Training run closure could not be finalized")
             return closed
         except Exception:
-            await self.repository.release_run_closure(str(claimed["_id"]), owner_user_id)
+            # Closure is irreversible once its terminalization starts. Keep the
+            # lock so no new work can make an immutable snapshot stale; Beat
+            # resumes a stale closure idempotently.
+            logger.exception("Training run closure is awaiting recovery: %s", claimed["_id"])
             raise
 
     @staticmethod
@@ -441,7 +459,8 @@ class TrainingRunService:
             "max_attempts": max_attempts, "attempts_used": attempts_used,
             "can_retry": (
                 run.get("status") == "open"
-                and now <= latest_start_at
+                and assignment.get("status") in {"assigned", "completed"}
+                and now < latest_start_at
                 and (max_attempts is None or attempts_used < max_attempts)
             ),
             "latest_score": assignment.get("latest_score"),

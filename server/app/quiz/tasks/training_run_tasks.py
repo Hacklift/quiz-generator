@@ -7,11 +7,14 @@ from bson.errors import InvalidId
 from pymongo import MongoClient, ReturnDocument
 
 from server.celery_config import celery_app
+from server.app.notifications.documents import build_notification_document
+from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.quiz.utils.session_grading import grade_live_session
 
 
 logger = logging.getLogger(__name__)
 ACTIVE_SESSION_STATUSES = ["active", "joined", "disconnected"]
+CLOSING_SESSION_STATUS = "closing"
 LOCK_STALE_AFTER = timedelta(minutes=15)
 
 
@@ -61,17 +64,18 @@ def _notification_document(
     dedupe_key: str,
     now: datetime,
 ) -> dict:
-    return {
-        "user_id": user_id,
-        "title": title,
-        "message": message,
-        "type": "training",
-        "action_url": action_url,
-        "expires_at": None,
-        "dedupe_key": dedupe_key,
-        "read": False,
-        "created_at": now,
-    }
+    document = build_notification_document(
+        NotificationCreate(
+            user_id=user_id,
+            title=title,
+            message=message,
+            type=NotificationType.TRAINING,
+            action_url=action_url,
+            dedupe_key=dedupe_key,
+        )
+    )
+    document["created_at"] = now
+    return document
 
 
 def _upsert_notification(notifications, document: dict) -> None:
@@ -107,7 +111,7 @@ def _finalize_expired_session(
     updated = sessions.find_one_and_update(
         {
             "_id": session["_id"],
-            "status": {"$in": ACTIVE_SESSION_STATUSES},
+            "status": {"$in": [*ACTIVE_SESSION_STATUSES, CLOSING_SESSION_STATUS]},
             "expires_at": {"$lte": now},
         },
         {
@@ -188,6 +192,51 @@ def _finalize_expired_session(
     )
 
 
+def _reconcile_submitted_assignment_sessions(assignments, sessions, run_id: str, now: datetime) -> None:
+    """Finish the tiny session/assignment write gap before sealing an audit snapshot.
+
+    A participant can submit just before the closure worker claims the run. The
+    live-session write is durable first, while its assignment summary follows
+    immediately after. Reconcile only assignments still marked in progress so
+    a prior completed attempt can never overwrite a later retry.
+    """
+    assignment_rows = list(
+        assignments.find({"training_run_id": run_id, "status": "in_progress"})
+    )
+    submitted_by_assignment: dict[str, dict] = {}
+    for session in sessions.find(
+        {
+            "training_run_id": run_id,
+            "training_assignment_id": {"$exists": True},
+            "status": "submitted",
+        }
+    ):
+        assignment_id = session.get("training_assignment_id")
+        if not assignment_id:
+            continue
+        previous = submitted_by_assignment.get(str(assignment_id))
+        if not previous or _as_utc(session["submitted_at"]) > _as_utc(previous["submitted_at"]):
+            submitted_by_assignment[str(assignment_id)] = session
+
+    for assignment in assignment_rows:
+        session = submitted_by_assignment.get(str(assignment["_id"]))
+        if not session:
+            continue
+        assignments.update_one(
+            {"_id": assignment["_id"], "status": "in_progress"},
+            {
+                "$set": {
+                    "status": "completed",
+                    "latest_session_id": str(session["_id"]),
+                    "latest_score": session.get("score"),
+                    "latest_percentage": session.get("percentage"),
+                    "completed_at": session.get("submitted_at") or now,
+                    "updated_at": now,
+                }
+            },
+        )
+
+
 @celery_app.task(name="tasks.close_expired_training_runs", ignore_result=True)
 def close_expired_training_runs() -> int:
     """Finalize due sessions, then close each run with one final audit snapshot."""
@@ -204,44 +253,106 @@ def close_expired_training_runs() -> int:
 
         due_query = {
             "status": "open",
-            "closes_at": {"$lte": now},
             "$or": [
-                {"closure_in_progress": {"$ne": True}},
-                {"closure_started_at": {"$lte": now - LOCK_STALE_AFTER}},
+                {
+                    "closes_at": {"$lte": now},
+                    "closure_in_progress": {"$ne": True},
+                },
+                {
+                    "closure_in_progress": True,
+                    "closure_started_at": {"$lte": now - LOCK_STALE_AFTER},
+                },
             ],
         }
         for candidate in runs.find(due_query):
-            run = runs.find_one_and_update(
-                {"_id": candidate["_id"], **due_query},
-                {
-                    "$set": {
+            is_recovery = candidate.get("closure_in_progress") is True
+            claim_query = {
+                "_id": candidate["_id"],
+                "status": "open",
+                "closure_in_progress": True,
+                "closure_started_at": {"$lte": now - LOCK_STALE_AFTER},
+            } if is_recovery else {
+                "_id": candidate["_id"],
+                "status": "open",
+                "closure_in_progress": {"$ne": True},
+                "closes_at": {"$lte": now},
+            }
+            claim_update = {
+                "$set": {"closure_started_at": now, "updated_at": now},
+            }
+            if not is_recovery:
+                claim_update["$set"].update(
+                    {
                         "closure_in_progress": True,
-                        "closure_started_at": now,
+                        "closure_mode": "scheduled",
+                        "closure_actor_user_id": None,
                     }
-                },
+                )
+            run = runs.find_one_and_update(
+                claim_query,
+                claim_update,
                 return_document=ReturnDocument.AFTER,
             )
             if not run:
                 continue
             run_id = str(run["_id"])
             try:
-                expiring_sessions = sessions.find(
-                    {
-                        "training_run_id": run_id,
-                        "status": {"$in": ACTIVE_SESSION_STATUSES},
-                        "expires_at": {"$lte": now},
-                    }
-                )
-                for session in expiring_sessions:
-                    _finalize_expired_session(
-                        session=session,
-                        run=run,
-                        assignments=assignments,
-                        sessions=sessions,
-                        notifications=notifications,
-                        now=now,
+                if run.get("closure_mode") == "manual":
+                    assignments.update_many(
+                        {"training_run_id": run_id, "status": "in_progress"},
+                        {"$set": {"status": "incomplete", "updated_at": now}},
                     )
+                    sessions.update_many(
+                        {
+                            "training_run_id": run_id,
+                            "status": {"$in": ACTIVE_SESSION_STATUSES},
+                        },
+                        {
+                            "$set": {
+                                "status": "abandoned",
+                                "abandoned_at": now,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                else:
+                    # Claim expiring sessions before grading. A participant
+                    # that started its submit just before this claim can still
+                    # win, but the reconciliation below records that durable
+                    # session before the immutable register is written.
+                    sessions.update_many(
+                        {
+                            "training_run_id": run_id,
+                            "status": {"$in": ACTIVE_SESSION_STATUSES},
+                            "expires_at": {"$lte": now},
+                        },
+                        {
+                            "$set": {
+                                "status": CLOSING_SESSION_STATUS,
+                                "updated_at": now,
+                            }
+                        },
+                    )
+                    expiring_sessions = sessions.find(
+                        {
+                            "training_run_id": run_id,
+                            "status": CLOSING_SESSION_STATUS,
+                            "expires_at": {"$lte": now},
+                        }
+                    )
+                    for session in expiring_sessions:
+                        _finalize_expired_session(
+                            session=session,
+                            run=run,
+                            assignments=assignments,
+                            sessions=sessions,
+                            notifications=notifications,
+                            now=now,
+                        )
 
+                    _reconcile_submitted_assignment_sessions(
+                        assignments, sessions, run_id, now
+                    )
                 assignment_rows = list(assignments.find({"training_run_id": run_id}))
                 session_rows = list(sessions.find({"training_run_id": run_id}))
                 audit_events.update_one(
@@ -250,7 +361,7 @@ def close_expired_training_runs() -> int:
                         "$setOnInsert": {
                             "training_run_id": run_id,
                             "event_type": "run_closed",
-                            "actor_user_id": None,
+                            "actor_user_id": run.get("closure_actor_user_id"),
                             "occurred_at": now,
                             "payload": {
                                 "run": {
@@ -290,6 +401,8 @@ def close_expired_training_runs() -> int:
                         "$unset": {
                             "closure_in_progress": "",
                             "closure_started_at": "",
+                            "closure_mode": "",
+                            "closure_actor_user_id": "",
                         },
                     },
                     return_document=ReturnDocument.AFTER,
@@ -298,10 +411,8 @@ def close_expired_training_runs() -> int:
                     closed_count += 1
             except Exception:
                 logger.exception("Could not close training run %s", run_id)
-                runs.update_one(
-                    {"_id": run["_id"], "status": "open"},
-                    {"$unset": {"closure_in_progress": "", "closure_started_at": ""}},
-                )
+                # Do not reopen a partially terminalized run. The next stale
+                # recovery pass resumes from the same durable lock.
 
         return closed_count
     finally:

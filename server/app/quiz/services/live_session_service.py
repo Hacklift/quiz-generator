@@ -707,12 +707,7 @@ class LiveQuizSessionService:
     async def _ensure_training_expiry_can_finalize(
         self, session: Dict[str, Any]
     ) -> None:
-        """Allow only natural closure to finish an already-expired attempt.
-
-        A manual early close deliberately abandons active attempts. A scheduled
-        close may still auto-submit an attempt whose timer expired at the same
-        boundary, preventing network latency from losing a valid score.
-        """
+        """Keep HTTP writes outside the immutable training-run close boundary."""
         run_id = session.get("training_run_id")
         if not run_id or not self.assignment_repository:
             return
@@ -720,16 +715,13 @@ class LiveQuizSessionService:
         if not run:
             raise HTTPException(status_code=409, detail="Training run is closed")
 
-        closes_at = _as_utc(run["closes_at"])
-        now = _utc_now()
-        if run.get("status") == "open":
-            if run.get("closure_in_progress") and now < closes_at:
-                raise HTTPException(status_code=409, detail="Training run is closed")
+        if run.get("status") == "open" and not run.get("closure_in_progress"):
             return
 
-        closed_at = run.get("closed_at")
-        if not closed_at or _as_utc(closed_at) < closes_at:
-            raise HTTPException(status_code=409, detail="Training run is closed")
+        # The closure worker owns all finalization once it has claimed the
+        # run. Letting an HTTP request mutate a session after that point could
+        # race the immutable completion-register snapshot.
+        raise HTTPException(status_code=409, detail="Training run is closed")
 
     async def _finalize_session(
         self,
@@ -997,17 +989,26 @@ class LiveQuizSessionService:
     ) -> None:
         if not self.broadcaster:
             return
-        session = await self.repository.get_session(session_id)
-        if not session:
-            return
-        await self.broadcaster.publish(
-            quiz_id,
-            {
-                "type": event_type,
-                "quiz_id": quiz_id,
-                "participant": self._analytics_row(session),
-            },
-        )
+        try:
+            session = await self.repository.get_session(session_id)
+            if not session:
+                return
+            await self.broadcaster.publish(
+                quiz_id,
+                {
+                    "type": event_type,
+                    "quiz_id": quiz_id,
+                    "participant": self._analytics_row(session),
+                },
+            )
+        except Exception:
+            # Realtime is a best-effort projection of durable session state.
+            # It must never invalidate a completed session write or attempt.
+            logger.exception(
+                "Could not publish live quiz event %s for session %s",
+                event_type,
+                session_id,
+            )
 
     def _is_expired(self, session: Dict[str, Any]) -> bool:
         return _as_utc(session["expires_at"]) <= _utc_now()

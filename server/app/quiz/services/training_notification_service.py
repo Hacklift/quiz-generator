@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import UpdateOne
 
 from server.app.notifications.repository import create_notification
+from server.app.notifications.documents import build_notification_document
 from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.users.identity import normalize_email
 from server.app.users.repository import active_user_query
@@ -69,20 +70,20 @@ class TrainingNotificationService:
             user_id = assignment.get("recipient_user_id")
             if not user_id:
                 continue
-            document = {
-                "user_id": user_id,
-                "title": "Training assigned",
-                "message": (
-                    f"{run['title']} is assigned to you. "
-                    f"Complete it before {run['closes_at'].strftime('%d %b %Y, %H:%M UTC')}."
-                ),
-                "type": NotificationType.TRAINING.value,
-                "action_url": "/assigned-training",
-                "dedupe_key": f"training-assignment:{assignment['_id']}:assigned",
-                "expires_at": None,
-                "read": False,
-                "created_at": now,
-            }
+            document = build_notification_document(
+                NotificationCreate(
+                    user_id=user_id,
+                    title="Training assigned",
+                    message=(
+                        f"{run['title']} is assigned to you. "
+                        f"Complete it before {run['closes_at'].strftime('%d %b %Y, %H:%M UTC')}."
+                    ),
+                    type=NotificationType.TRAINING,
+                    action_url="/assigned-training",
+                    dedupe_key=f"training-assignment:{assignment['_id']}:assigned",
+                )
+            )
+            document["created_at"] = now
             operations.append(
                 UpdateOne(
                     {"dedupe_key": document["dedupe_key"]},

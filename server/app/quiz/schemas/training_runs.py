@@ -25,8 +25,16 @@ class CreateTrainingRunRequest(BaseModel):
     due_at: Optional[datetime] = None
     access_mode: TrainingAccessMode = "assigned_only"
     recipient_emails: list[EmailStr] = Field(default_factory=list, max_length=1_000)
+    # None is the explicit, supported representation for unlimited retries.
     max_attempts: Optional[Literal[1, 2]] = 1
     send_email_invitations: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def reject_header_characters_in_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and ("\r" in value or "\n" in value):
+            raise ValueError("title must not contain carriage returns or newlines")
+        return value
 
     @field_validator("recipient_emails")
     @classmethod

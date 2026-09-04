@@ -12,7 +12,8 @@ from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 
-from .config import require_env
+from .config import require_smtp_config
+from .renderer import validate_header_value
 
 
 load_dotenv()
@@ -24,13 +25,11 @@ logger.setLevel(logging.INFO)
 
 
 
-sender_email = require_env("SENDER_EMAIL")
-
-sender_password = require_env("SENDER_PASSWORD")
-
-email_host = require_env("EMAIL_HOST")
-
-email_port = int(require_env("EMAIL_PORT"))
+smtp_config = require_smtp_config()
+sender_email = smtp_config.sender_email
+sender_password = smtp_config.sender_password
+email_host = smtp_config.host
+email_port = smtp_config.port
 
 
 
@@ -60,11 +59,9 @@ def compose_quiz_email(recipient: str, title: str, description: str, shareable_l
 
     message = MIMEText(body)
 
-    message["Subject"] = subject
-
-    message["From"] = sender_email
-
-    message["To"] = recipient
+    message["Subject"] = validate_header_value("Subject", subject)
+    message["From"] = validate_header_value("From", sender_email)
+    message["To"] = validate_header_value("To", recipient)
 
     return message
 

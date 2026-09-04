@@ -4,7 +4,7 @@ import requests
 from email.mime.text import MIMEText
 from ..models import EmailPayload, SendResult
 from ..renderer import render_email
-from ..config import require_env
+from ..config import require_mailgun_config
 
 logger = logging.getLogger(__name__)
 MAILGUN_REQUEST_TIMEOUT_SECONDS = 20
@@ -16,16 +16,11 @@ class MailgunAdapter:
     """
 
     def __init__(self):
-        self.api_key = os.getenv("MAILGUN_API_KEY")
-        self.domain = os.getenv("MAILGUN_DOMAIN")
-        self.sender_email = require_env("SENDER_EMAIL")
-        self.base_url = f"https://api.mailgun.net/v3/{self.domain}" if self.domain else None
-
-        if not self.api_key or not self.domain:
-            logger.warning("[MailgunAdapter] Missing MAILGUN_API_KEY or MAILGUN_DOMAIN — adapter will be skipped if used.")
-        
+        self.api_key = None
+        self.domain = None
+        self.sender_email = None
+        self.base_url = None
         self.session = requests.Session()
-        self.session.auth = ("api", self.api_key)
         self.session.headers.update({"User-Agent": "QuizAppVault-Mailer"})
 
         if os.getenv("MAILGUN_WARMUP", "0") == "1":
@@ -35,11 +30,19 @@ class MailgunAdapter:
                 logger.warning(f"[MailgunAdapter] Mailgun session warmed up error: {e}")
 
     async def send(self, payload: EmailPayload) -> SendResult:
-        if not self.api_key or not self.domain:
-            logger.error("[MailgunAdapter] Cannot send — missing configuration.")
-            raise RuntimeError("Mailgun not configured")
+        config = require_mailgun_config()
+        self.api_key = config.api_key
+        self.domain = config.domain
+        self.sender_email = config.sender_email
+        self.base_url = f"https://api.mailgun.net/v3/{self.domain}"
+        self.session.auth = ("api", self.api_key)
 
-        msg: MIMEText = render_email(payload.template_id, payload.to, payload.template_vars)
+        msg: MIMEText = render_email(
+            payload.template_id,
+            payload.to,
+            payload.template_vars,
+            sender_email=self.sender_email,
+        )
         subject = msg["Subject"]
         body = msg.get_payload()
 

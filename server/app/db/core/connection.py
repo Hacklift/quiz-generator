@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 
 import os
 import logging
+from collections.abc import Mapping
 
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
@@ -76,12 +77,34 @@ async def ensure_notification_indexes(notifications_collection: AsyncIOMotorColl
         expireAfterSeconds=0,
         name="expires_at_1",
     )
-    await notifications_collection.create_index(
-        "dedupe_key",
-        unique=True,
-        sparse=True,
-        name="notification_dedupe_key",
-    )
+    # A sparse unique index still indexes explicit nulls. Notification writes
+    # intentionally omit an absent dedupe key, while this partial index also
+    # protects the collection from legacy null-bearing documents.
+    dedupe_partial_filter = {"dedupe_key": {"$type": "string"}}
+    has_current_dedupe_index = False
+    for index_name, index in index_info.items():
+        if index_name == "_id_":
+            continue
+        key = index.get("key", [])
+        key_items = list(key.items()) if isinstance(key, Mapping) else list(key)
+        if key_items != [("dedupe_key", 1)]:
+            continue
+        if (
+            index.get("unique")
+            and not index.get("sparse")
+            and index.get("partialFilterExpression") == dedupe_partial_filter
+        ):
+            has_current_dedupe_index = True
+            continue
+        await notifications_collection.drop_index(index_name)
+
+    if not has_current_dedupe_index:
+        await notifications_collection.create_index(
+            "dedupe_key",
+            unique=True,
+            partialFilterExpression=dedupe_partial_filter,
+            name="notification_dedupe_key",
+        )
 
 
 async def ensure_live_quiz_session_indexes(

@@ -7,6 +7,7 @@ import { trainingRunApi, type TrainingRunSummary } from "@features/training/api/
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import { personaGenerateHref } from "@shared/config/persona";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
+import { ROUTES } from "@shared/config/patterns/routes";
 
 const formatDate = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString() : "No deadline";
@@ -36,9 +37,27 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
   const router = useRouter();
   const t = useTerms();
   const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    void trainingRunApi.listRuns().then(setRuns).catch(() => setRuns([]));
+    let active = true;
+    void trainingRunApi
+      .listRuns()
+      .then((items) => {
+        if (!active) return;
+        setRuns(items);
+        setLoadError(false);
+      })
+      .catch(() => {
+        if (active) setLoadError(true);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const presets = [
@@ -67,7 +86,7 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
               Start with a focused preset, then distribute it through an assigned training run or a shareable live link.
             </p>
           </div>
-          <button type="button" onClick={() => router.push("/training-runs?kind=business")} className={BTN_PRIMARY}>
+          <button type="button" onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)} className={BTN_PRIMARY}>
             Manage training runs
           </button>
         </div>
@@ -107,15 +126,21 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
               See who has started, completed, and needs a reminder without opening each {t("session")}.
             </p>
           </div>
-          <button type="button" onClick={() => router.push("/training-runs?kind=business")} className={BTN_GHOST}>View all runs</button>
+          <button type="button" onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)} className={BTN_GHOST}>View all runs</button>
         </div>
-        {runs.length ? (
+        {isLoading ? (
+          <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] text-ink/70">Loading training runs...</p>
+        ) : loadError ? (
+          <p role="alert" className="mt-[20px] border-2 border-brand bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
+            Training runs could not be loaded. Refresh the page to try again.
+          </p>
+        ) : runs.length ? (
           <div className="mt-[20px] grid gap-[12px]">
             {runs.slice(0, 3).map((run) => (
               <button
                 key={run.id}
                 type="button"
-                onClick={() => router.push(`/training-runs/${run.id}`)}
+                onClick={() => router.push(ROUTES.trainingRun(run.id))}
                 className="grid w-full grid-cols-1 gap-[12px] border-2 border-divider bg-paper p-[16px] text-left transition hover:border-ink/60 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
               >
                 <span><strong className="block text-ink">{run.title}</strong><span className="mt-[3px] block text-[13px] text-ink/65">Closes {formatDate(run.closes_at)}</span></span>

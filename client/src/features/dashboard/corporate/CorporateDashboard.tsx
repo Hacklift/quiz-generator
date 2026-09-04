@@ -12,6 +12,7 @@ import DashboardShell from "@features/dashboard/components/DashboardShell";
 import QuickActions from "@features/dashboard/components/QuickActions";
 import RecentQuizzes from "@features/dashboard/components/RecentQuizzes";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
+import { ROUTES } from "@shared/config/patterns/routes";
 import BusinessDashboard from "./views/BusinessDashboard";
 import EmployeeDashboard from "./views/EmployeeDashboard";
 import HrDashboard from "./views/HrDashboard";
@@ -61,7 +62,7 @@ export default function CorporateDashboard({
           {
             label: "Assigned training",
             description: "Start required training, track due dates, and view completed scores.",
-            href: "/assigned-training",
+            href: ROUTES.ASSIGNED_TRAINING,
           },
           {
             label: `Practice ${t("quiz")}`,
@@ -82,7 +83,7 @@ export default function CorporateDashboard({
             label:
               persona.userType === "hr" ? "Compliance runs" : "Training runs",
             description: "Assign training, share access, and review completion in one workspace.",
-            href: `/training-runs?kind=${
+            href: `${ROUTES.TRAINING_RUNS}?kind=${
               persona.userType === "hr" ? "compliance" : "business"
             }`,
           },

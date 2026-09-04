@@ -12,7 +12,9 @@ import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 
 const stateLabel = (assignment: TrainingAssignment) => {
   if (assignment.status === "completed") return `Completed${assignment.latest_percentage != null ? ` · ${assignment.latest_percentage}%` : ""}`;
-  if (new Date(assignment.latest_start_at) < new Date()) return "Start window closed";
+  if (!assignment.can_retry && assignment.status === "in_progress") return "Attempt in progress";
+  if (!assignment.can_retry && new Date(assignment.latest_start_at) < new Date()) return "Start window closed";
+  if (!assignment.can_retry && assignment.max_attempts != null && assignment.attempts_used >= assignment.max_attempts) return "Attempts used";
   if (assignment.is_overdue) return "Overdue";
   return assignment.due_at ? `Due ${new Date(assignment.due_at).toLocaleString()}` : "No due date";
 };

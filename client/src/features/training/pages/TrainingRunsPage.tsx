@@ -15,6 +15,7 @@ import {
   type TrainingRunSummary,
 } from "@features/training/api/trainingRunApi";
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
+import { ROUTES } from "@shared/config/patterns/routes";
 
 const localDateTime = (daysFromNow: number) => {
   const date = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
@@ -57,18 +58,29 @@ export default function TrainingRunsPage() {
   const [maxAttempts, setMaxAttempts] = useState("1");
   const [sendEmails, setSendEmails] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
-    const [ownedQuizzes, ownerRuns] = await Promise.all([
-      trainingRunApi.listOwnedQuizzes(),
-      trainingRunApi.listRuns(),
-    ]);
-    setQuizzes(ownedQuizzes);
-    setRuns(ownerRuns);
+    try {
+      setIsLoading(true);
+      const [ownedQuizzes, ownerRuns] = await Promise.all([
+        trainingRunApi.listOwnedQuizzes(),
+        trainingRunApi.listRuns(),
+      ]);
+      setQuizzes(ownedQuizzes);
+      setRuns(ownerRuns);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      toast.error("Could not load training runs.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void load().catch(() => toast.error("Could not load training runs."));
+    void load();
   }, [load]);
 
   useEffect(() => {
@@ -122,7 +134,7 @@ export default function TrainingRunsPage() {
         send_email_invitations: sendEmails && recipientEmails.length > 0,
       });
       toast.success("Training run created.");
-      await router.push(`/training-runs/${run.id}`);
+      await router.push(ROUTES.trainingRun(run.id));
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || "Could not create training run.");
     } finally {
@@ -148,8 +160,8 @@ export default function TrainingRunsPage() {
                 <button type="button" onClick={() => void load()} className={BTN_GHOST}>Refresh</button>
               </div>
               <div className="mt-[20px] grid gap-[12px]">
-                {runs.length ? runs.map((run) => (
-                  <button key={run.id} type="button" onClick={() => router.push(`/training-runs/${run.id}`)} className="grid w-full grid-cols-1 gap-[10px] border-2 border-divider bg-paper p-[16px] text-left transition hover:border-ink/60 sm:grid-cols-[minmax(0,1fr)_auto]">
+                {isLoading ? <p className="border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">Loading training runs...</p> : loadError ? <p role="alert" className="border-2 border-brand bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">Training runs could not be loaded. Refresh to try again.</p> : runs.length ? runs.map((run) => (
+                  <button key={run.id} type="button" onClick={() => router.push(ROUTES.trainingRun(run.id))} className="grid w-full grid-cols-1 gap-[10px] border-2 border-divider bg-paper p-[16px] text-left transition hover:border-ink/60 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <span><strong className="block">{run.title}</strong><span className="mt-[3px] block text-[13px] text-ink/65">{run.kind === "compliance" ? "Compliance" : "Business"} · {run.status === "closed" ? "Closed" : `Closes ${new Date(run.closes_at).toLocaleDateString()}`}</span></span>
                     <span className="text-[13px] font-extrabold">{completionLabel(run)}</span>
                   </button>

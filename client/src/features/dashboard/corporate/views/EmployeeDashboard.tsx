@@ -9,6 +9,7 @@ import { saveParticipantToken } from "@features/live-quiz/api/liveQuizService";
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import { personaGenerateHref } from "@shared/config/persona";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
+import { ROUTES } from "@shared/config/patterns/routes";
 
 const dueLabel = (assignment: TrainingAssignment) => {
   if (assignment.status === "completed") return "Completed";
@@ -23,12 +24,27 @@ export default function EmployeeDashboard({ persona }: DashboardViewProps) {
   const t = useTerms();
   const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
+    let active = true;
     void trainingRunApi
       .listMyAssignments()
-      .then(setAssignments)
-      .catch(() => setAssignments([]));
+      .then((items) => {
+        if (!active) return;
+        setAssignments(items);
+        setLoadError(false);
+      })
+      .catch(() => {
+        if (active) setLoadError(true);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const start = async (assignmentId: string) => {
@@ -55,9 +71,15 @@ export default function EmployeeDashboard({ persona }: DashboardViewProps) {
               Complete required training at your own pace. Your completed score is visible to the person who assigned it.
             </p>
           </div>
-          <button type="button" onClick={() => router.push("/assigned-training")} className={BTN_GHOST}>View all training</button>
+          <button type="button" onClick={() => router.push(ROUTES.ASSIGNED_TRAINING)} className={BTN_GHOST}>View all training</button>
         </div>
-        {assignments.length ? (
+        {isLoading ? (
+          <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] text-ink/70">Loading assigned training...</p>
+        ) : loadError ? (
+          <p role="alert" className="mt-[20px] border-2 border-brand bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
+            Assigned training could not be loaded. Refresh the page to try again.
+          </p>
+        ) : assignments.length ? (
           <div className="mt-[20px] grid gap-[12px]">
             {assignments.slice(0, 4).map((assignment) => (
               <article key={assignment.id} className="flex flex-wrap items-center justify-between gap-[16px] border-2 border-divider bg-paper p-[16px]">

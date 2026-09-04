@@ -94,6 +94,8 @@ class TrainingRunRepository:
                 "$set": {
                     "closure_in_progress": True,
                     "closure_started_at": started_at,
+                    "closure_mode": "manual" if owner_user_id else "scheduled",
+                    "closure_actor_user_id": owner_user_id,
                     "updated_at": started_at,
                 }
             },
@@ -124,27 +126,11 @@ class TrainingRunRepository:
                 "$unset": {
                     "closure_in_progress": "",
                     "closure_started_at": "",
+                    "closure_mode": "",
+                    "closure_actor_user_id": "",
                 },
             },
             return_document=ReturnDocument.AFTER,
-        )
-
-    async def release_run_closure(
-        self, run_id: str, owner_user_id: Optional[str]
-    ) -> None:
-        object_id = self._object_id(run_id)
-        if not object_id:
-            return
-        query: dict[str, Any] = {
-            "_id": object_id,
-            "status": "open",
-            "closure_in_progress": True,
-        }
-        if owner_user_id:
-            query["owner_user_id"] = owner_user_id
-        await self.runs_collection.update_one(
-            query,
-            {"$unset": {"closure_in_progress": "", "closure_started_at": ""}},
         )
 
     async def create_assignments(self, assignments: list[dict]) -> None:
@@ -227,7 +213,15 @@ class TrainingRunRepository:
 
     async def list_assignments_for_recipient(self, recipient_email: str, user_id: str, limit: int = 100) -> list[dict]:
         cursor = self.assignments_collection.find(
-            {"$or": [{"recipient_user_id": user_id}, {"recipient_email": recipient_email}]}
+            {
+                "$or": [
+                    {"recipient_user_id": user_id},
+                    {
+                        "recipient_email": recipient_email,
+                        "recipient_user_id": None,
+                    },
+                ]
+            }
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
