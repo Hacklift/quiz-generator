@@ -18,6 +18,7 @@ export default function QuizGenerationSection({
   setGenerationMode,
   profession,
   setProfession,
+  professionPlaceholder = "Enter the concept/context here",
   documentTitle,
   setDocumentTitle,
   documentInputMode,
@@ -156,7 +157,7 @@ export default function QuizGenerationSection({
                 type="text"
                 value={profession}
                 onChange={(e) => setProfession(e.target.value)}
-                placeholder="Enter the concept/context here"
+                placeholder={professionPlaceholder}
                 className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
                 required
               />

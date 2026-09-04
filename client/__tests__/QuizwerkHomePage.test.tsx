@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import QuizwerkHomePage from "@features/home/QuizwerkHomePage";
 
 const mockRouterPush = jest.fn();
@@ -72,12 +72,12 @@ describe("QuizwerkHomePage", () => {
   test("routes to the generate page with persona context", () => {
     render(<QuizwerkHomePage />);
 
-    screen.getByText("Teacher").click();
+    fireEvent.click(screen.getByText("Teacher"));
 
     expect(mockRouterPush).toHaveBeenCalledTimes(1);
     const href = mockRouterPush.mock.calls[0][0] as string;
     expect(href).toContain("/generate?persona=");
     expect(href).toContain("category=school");
-    expect(href).toContain("topic=");
+    expect(href).not.toContain("topic=");
   });
 });
