@@ -59,7 +59,7 @@ describe("parsePersona", () => {
         category: categoryForUserType(userType),
         userType,
       });
-      expect(params.get("topic")).toBeTruthy();
+      expect(params.get("topic")).toBeNull();
     }
   });
 });

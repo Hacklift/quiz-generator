@@ -13,22 +13,12 @@ jest.mock("@features/live-quiz/api/liveQuizService", () => ({
 }));
 
 const listLiveQuizzes = liveQuizService.listLiveQuizzes as jest.Mock;
-const props = {
-  persona: { category: "school", userType: "parent" } as const,
-  user: {
-    id: "parent-1",
-    username: "pat",
-    email: "pat@example.com",
-    is_verified: true,
-  },
-};
-
 describe("ParentDashboard", () => {
   beforeEach(() => listLiveQuizzes.mockReset());
 
   test("shows the create action and empty state", async () => {
     listLiveQuizzes.mockResolvedValue([]);
-    render(<ParentDashboard {...props} />);
+    render(<ParentDashboard />);
     expect(screen.getByRole("link", { name: "Create Practice" })).toHaveAttribute(
       "href",
       "/parent-practice/new",
@@ -48,7 +38,7 @@ describe("ParentDashboard", () => {
         latest_percentage: 80,
       },
     ]);
-    render(<ParentDashboard {...props} />);
+    render(<ParentDashboard />);
     expect(await screen.findByText("Multiplication Tables")).toBeInTheDocument();
     expect(screen.getByText(/2 completed attempts · Latest: 8 \(80%\)/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View results" })).toHaveAttribute(

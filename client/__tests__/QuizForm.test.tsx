@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import QuizForm from "@features/quiz/components/QuizForm";
-import type { Persona } from "@shared/config/persona";
+import type { Persona, PersonaUserType } from "@shared/config/persona";
 
 const mockPush = jest.fn();
 let mockSearchParams = new URLSearchParams();
@@ -110,11 +110,6 @@ describe("QuizForm", () => {
         expect.stringContaining("/quiz_display?"),
       );
     });
-
-    expect(publicApi.post).toHaveBeenCalledWith(
-      "/api/get-questions",
-      expect.objectContaining({ audience_type: "learners" }),
-    );
   });
 
   test("applies teacher class quiz preset from persona dashboard query params", async () => {
@@ -130,7 +125,7 @@ describe("QuizForm", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByPlaceholderText("Enter the concept/context here"),
+        screen.getByPlaceholderText("Photosynthesis — Grade 8 biology"),
       ).toHaveValue("Photosynthesis");
     });
     expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
@@ -142,22 +137,79 @@ describe("QuizForm", () => {
     );
   });
 
+  test("allows query params to override teacher preset defaults", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      preset: "class-quiz",
+      difficultyLevel: "hard",
+      numQuestions: "6",
+      audienceType: "exam candidates",
+      questionType: "short-answer",
+      customInstruction: "Prioritize applied reasoning questions.",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+        "exam candidates",
+      );
+    });
+    expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("6")).toBeInTheDocument();
+    expect(screen.getByLabelText("Short Answer")).toBeChecked();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Prioritize applied reasoning questions.",
+    );
+  });
+
+  test("reconciles defaults when a preset is removed for the same persona", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      preset: "class-quiz",
+    });
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create a marking-ready in-class quiz with clear answer options and an answer key.",
+    );
+
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+    });
+    rerender(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /medium/i }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use clear classroom language, include marking-friendly questions, and keep the answer key suitable for teacher review.",
+    );
+  });
+
   test("applies lecturer lecture recap preset from persona dashboard query params", async () => {
     mockPersona = { category: "school", userType: "lecturer" };
     mockSearchParams = new URLSearchParams({
       category: "school",
       persona: "lecturer",
       preset: "lecture-recap",
-      topic: "Introduction to microeconomics",
     });
 
     render(<QuizForm />);
 
-    await waitFor(() => {
-      expect(
-        screen.getByPlaceholderText("Enter the concept/context here"),
-      ).toHaveValue("Introduction to microeconomics");
-    });
+    expect(
+      screen.getByPlaceholderText("Introduction to microeconomics"),
+    ).toHaveValue("");
     expect(screen.getByPlaceholderText("Audience")).toHaveValue(
       "undergraduates",
     );
@@ -168,4 +220,242 @@ describe("QuizForm", () => {
       "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
     );
   });
+
+  const PERSONA_DEFAULT_CASES: Array<{
+    userType: PersonaUserType;
+    category: Persona["category"];
+    audience: string;
+    difficulty: RegExp;
+    questionType: string;
+  }> = [
+    {
+      userType: "teacher",
+      category: "school",
+      audience: "students",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "lecturer",
+      category: "school",
+      audience: "undergraduates",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "student",
+      category: "school",
+      audience: "students",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "parent",
+      category: "school",
+      audience: "children",
+      difficulty: /easy/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "business",
+      category: "corporate",
+      audience: "employees",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "employee",
+      category: "corporate",
+      audience: "employees",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+    {
+      userType: "hr",
+      category: "corporate",
+      audience: "employees",
+      difficulty: /medium/i,
+      questionType: "Multiple Choice",
+    },
+  ];
+
+  test.each(PERSONA_DEFAULT_CASES)(
+    "applies persona generation defaults for $userType",
+    async ({ userType, category, audience, difficulty, questionType }) => {
+      mockPersona = { category, userType };
+      mockSearchParams = new URLSearchParams({
+        category,
+        persona: userType,
+      });
+
+      render(<QuizForm />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("Audience")).toHaveValue(audience);
+      });
+      expect(
+        screen.getByRole("button", { name: difficulty }),
+      ).toBeInTheDocument();
+      expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+      expect(screen.getByLabelText(questionType)).toBeChecked();
+      expect(
+        screen.getByPlaceholderText("Add specific instruction"),
+      ).not.toHaveValue("");
+    },
+  );
+
+  test("applies the same defaults when persona comes from profile without query params", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    mockSearchParams = new URLSearchParams();
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
+    });
+    expect(
+      screen.getByPlaceholderText("Multiplication tables — ages 7 to 9"),
+    ).toHaveValue("");
+    expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+  });
+
+  test("keeps explicit non-default topic query params as the concept value", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      topic: "Cell respiration",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText("Photosynthesis — Grade 8 biology"),
+      ).toHaveValue("Cell respiration");
+    });
+  });
+
+  test("allows query params to override persona defaults", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "parent",
+      difficultyLevel: "hard",
+      numQuestions: "5",
+      audienceType: "toddlers",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("toddlers");
+    });
+    expect(screen.getByRole("button", { name: /hard/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("5")).toBeInTheDocument();
+  });
+
+  test("re-applies defaults when a preliminary persona resolves to the profile persona", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use child-friendly wording, simple examples, and auto-marked questions a parent can review quickly.",
+    );
+
+    mockPersona = { category: "school", userType: "teacher" };
+    rerender(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+    expect(screen.getByRole("button", { name: /medium/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Use clear classroom language, include marking-friendly questions, and keep the answer key suitable for teacher review.",
+    );
+  });
+
+  test("does not clobber manual form edits if persona changes after defaults apply", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    const { rerender } = render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Audience"), {
+      target: { value: "my custom audience" },
+    });
+    fireEvent.change(screen.getByDisplayValue("10"), {
+      target: { value: "4" },
+    });
+
+    mockPersona = { category: "school", userType: "parent" };
+    rerender(<QuizForm />);
+
+    expect(screen.getByPlaceholderText("Audience")).toHaveValue(
+      "my custom audience",
+    );
+    expect(screen.getByDisplayValue("4")).toBeInTheDocument();
+  });
+
+  test("clamps excessive query param question counts to the generation maximum", async () => {
+    mockPersona = { category: "school", userType: "teacher" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "teacher",
+      numQuestions: "100000",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    });
+  });
+
+  test("ignores invalid query param overrides and falls back to persona defaults", async () => {
+    mockPersona = { category: "school", userType: "parent" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "parent",
+      difficultyLevel: "extreme",
+      numQuestions: "many",
+      questionType: "essay",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("children");
+    });
+    expect(screen.getByRole("button", { name: /easy/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    expect(screen.getByLabelText("Multiple Choice")).toBeChecked();
+  });
+
+  test("applies persona custom instruction when preset query is not applicable", async () => {
+    mockPersona = { category: "school", userType: "student" };
+    mockSearchParams = new URLSearchParams({
+      category: "school",
+      persona: "student",
+      preset: "class-quiz",
+    });
+
+    render(<QuizForm />);
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Audience")).toHaveValue("students");
+    });
+    expect(screen.getByPlaceholderText("Add specific instruction")).toHaveValue(
+      "Create self-practice questions with immediate learning value and wording suited to exam revision.",
+    );
+  });
 });
+
