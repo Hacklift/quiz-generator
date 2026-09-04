@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, Request
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from server.app.core.dependencies import get_verified_user
+from server.app.core.dependencies import get_training_manager_user, get_verified_user
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
@@ -78,7 +78,7 @@ def get_training_run_service(
 
 @router.get("/training-runs/owned-quizzes")
 async def list_owned_training_quizzes(
-    current_user: UserOut = Depends(get_verified_user),
+    current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.list_owned_quizzes(str(current_user.id))
@@ -89,7 +89,7 @@ async def list_owned_training_quizzes(
 async def create_training_run(
     payload: CreateTrainingRunRequest,
     request: Request,
-    current_user: UserOut = Depends(get_verified_user),
+    current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.create_run(payload, str(current_user.id))
@@ -97,7 +97,7 @@ async def create_training_run(
 
 @router.get("/training-runs", response_model=List[TrainingRunSummary])
 async def list_training_runs(
-    current_user: UserOut = Depends(get_verified_user),
+    current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.list_owner_runs(str(current_user.id))
@@ -106,7 +106,7 @@ async def list_training_runs(
 @router.get("/training-runs/{run_id}", response_model=TrainingRunDetail)
 async def get_training_run(
     run_id: str,
-    current_user: UserOut = Depends(get_verified_user),
+    current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.get_owner_run(run_id, str(current_user.id))
@@ -116,7 +116,7 @@ async def get_training_run(
 async def close_training_run(
     run_id: str,
     payload: CloseTrainingRunRequest,
-    current_user: UserOut = Depends(get_verified_user),
+    current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.close_owner_run(run_id, str(current_user.id))

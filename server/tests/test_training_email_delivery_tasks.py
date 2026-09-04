@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import asyncio
+from types import SimpleNamespace
 
 from bson import ObjectId
 
@@ -9,6 +11,7 @@ from server.app.email_platform.models import SendResult
 class FakeDeliveryCollection:
     def __init__(self, document):
         self.document = document
+        self.lease_renewals = 0
 
     def find_one_and_update(self, query, update, return_document):
         if self.document["_id"] != query["_id"] or self.document["status"] != query["status"]:
@@ -22,9 +25,14 @@ class FakeDeliveryCollection:
         if self.document["_id"] != query["_id"] or self.document["status"] != query["status"]:
             return None
         if query.get("lease_token") != self.document.get("lease_token"):
-            return None
+            return SimpleNamespace(matched_count=0)
+        if (
+            update["$set"].get("lease_expires_at") is not None
+            and "status" not in update["$set"]
+        ):
+            self.lease_renewals += 1
         self.document.update(update["$set"])
-        return None
+        return SimpleNamespace(matched_count=1)
 
 
 class FakeDatabase:
@@ -132,3 +140,29 @@ def test_stale_delivery_task_cannot_claim_a_newer_lease(monkeypatch):
 
     assert delivered is False
     assert collection.document["status"] == "queued"
+
+
+def test_delivery_worker_renews_lease_while_provider_is_still_sending(monkeypatch):
+    collection = FakeDeliveryCollection(_delivery_document())
+    client = FakeMongoClient(collection)
+
+    class SlowWorkerEmailService:
+        async def send_worker_email(self, **kwargs):
+            await asyncio.sleep(0.02)
+            return SendResult(ok=True, adapter="mailgun")
+
+    monkeypatch.setattr(delivery_tasks, "MongoClient", lambda uri: client)
+    monkeypatch.setattr(
+        delivery_tasks,
+        "build_worker_email_service",
+        SlowWorkerEmailService,
+    )
+    monkeypatch.setattr(delivery_tasks, "DELIVERY_HEARTBEAT_SECONDS", 0.001)
+
+    delivered = _task_run(delivery_tasks.deliver_training_invitation)(
+        str(collection.document["_id"]), collection.document["lease_token"]
+    )
+
+    assert delivered is True
+    assert collection.lease_renewals >= 1
+    assert collection.document["status"] == "sent"

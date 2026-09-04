@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
-import RequireAuth from "@features/auth/components/RequireAuth";
+import RequireTrainingManager from "@features/training/components/RequireTrainingManager";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import { trainingRunApi, type TrainingRunDetail } from "@features/training/api/trainingRunApi";
@@ -17,6 +17,14 @@ const completionLabel = (run: TrainingRunDetail) =>
     : `${run.completed_count} completed`;
 
 export default function TrainingRunDetailPage({ runId }: { runId: string }) {
+  return (
+    <RequireTrainingManager>
+      <TrainingRunDetailContent runId={runId} />
+    </RequireTrainingManager>
+  );
+}
+
+function TrainingRunDetailContent({ runId }: { runId: string }) {
   const router = useRouter();
   const [run, setRun] = useState<TrainingRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,8 +70,7 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
   };
 
   return (
-    <RequireAuth title="Training run" description="Sign in to view training completion.">
-      <div className="flex min-h-screen flex-col bg-paper text-ink">
+    <div className="flex min-h-screen flex-col bg-paper text-ink">
         <NavBar />
         <main className={`${CONTAINER} flex-1 py-[clamp(32px,5vw,56px)]`}>
           {isLoading || !run ? <div className="flex min-h-[40vh] items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-brand" /></div> : <>
@@ -79,7 +86,6 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
           </>}
         </main>
         <Footer />
-      </div>
-    </RequireAuth>
+    </div>
   );
 }

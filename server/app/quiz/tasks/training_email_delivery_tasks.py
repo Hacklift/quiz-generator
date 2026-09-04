@@ -5,6 +5,7 @@ delivery with a lease so broker or worker failures cannot strand invitations.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import datetime, timedelta, timezone
 import logging
 import os
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 OUTBOX_COLLECTION = "training_email_deliveries"
 DISPATCH_BATCH_SIZE = 250
 DELIVERY_LEASE = timedelta(minutes=10)
+DELIVERY_HEARTBEAT_SECONDS = 60
 MAX_DELIVERY_ATTEMPTS = 5
 
 
@@ -71,6 +73,62 @@ def _schedule_retry(
             }
         },
     )
+
+
+def _renew_delivery_lease(deliveries, delivery_id: ObjectId, lease_token: str) -> bool:
+    """Extend a lease only while this worker still owns the delivery."""
+    now = _utc_now()
+    result = deliveries.update_one(
+        {
+            "_id": delivery_id,
+            "status": "sending",
+            "lease_token": lease_token,
+        },
+        {
+            "$set": {
+                "lease_expires_at": now + DELIVERY_LEASE,
+                "updated_at": now,
+            }
+        },
+    )
+    return bool(getattr(result, "matched_count", 0))
+
+
+def _send_delivery_with_lease_heartbeat(
+    deliveries, delivery: dict, lease_token: str
+):
+    """Deliver without allowing a healthy slow provider call to lose its lease.
+
+    Provider adapters perform blocking network I/O. Running that call in a
+    dedicated thread lets this worker renew the durable Mongo lease without
+    introducing a Redis polling loop or a second delivery worker.
+    """
+    def send():
+        return asyncio.run(
+            build_worker_email_service().send_worker_email(
+                to=delivery["recipient_email"],
+                template_id=delivery["template_id"],
+                template_vars=delivery["template_vars"],
+                purpose=delivery.get("purpose", "training_invitation"),
+            )
+        )
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="training-email") as executor:
+        future = executor.submit(send)
+        while True:
+            try:
+                return future.result(timeout=DELIVERY_HEARTBEAT_SECONDS)
+            except FutureTimeoutError:
+                if not _renew_delivery_lease(
+                    deliveries, delivery["_id"], lease_token
+                ):
+                    # Do not write a terminal state after losing ownership.
+                    # The original provider call must still finish before this
+                    # task exits, but another worker now owns reconciliation.
+                    logger.warning(
+                        "Training invitation delivery %s lost its lease while sending",
+                        delivery["_id"],
+                    )
 
 
 @celery_app.task(name="tasks.dispatch_training_invitation_deliveries", ignore_result=True)
@@ -158,13 +216,8 @@ def deliver_training_invitation(delivery_id: str, lease_token: str) -> bool:
             return False
 
         try:
-            result = asyncio.run(
-                build_worker_email_service().send_worker_email(
-                    to=delivery["recipient_email"],
-                    template_id=delivery["template_id"],
-                    template_vars=delivery["template_vars"],
-                    purpose=delivery.get("purpose", "training_invitation"),
-                )
+            result = _send_delivery_with_lease_heartbeat(
+                deliveries, delivery, lease_token
             )
             deliveries.update_one(
                 {

@@ -3,7 +3,7 @@
 import React, { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
-import RequireAuth from "@features/auth/components/RequireAuth";
+import RequireTrainingManager from "@features/training/components/RequireTrainingManager";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import {
@@ -44,6 +44,14 @@ const completionLabel = (run: TrainingRunSummary) =>
     : `${run.completed_count} completed`;
 
 export default function TrainingRunsPage() {
+  return (
+    <RequireTrainingManager>
+      <TrainingRunsContent />
+    </RequireTrainingManager>
+  );
+}
+
+function TrainingRunsContent() {
   const router = useRouter();
   const [kind, setKind] = useState<TrainingKind>("business");
   const [purpose, setPurpose] = useState<TrainingPurpose>("onboarding");
@@ -143,8 +151,7 @@ export default function TrainingRunsPage() {
   };
 
   return (
-    <RequireAuth title="Training runs" description="Sign in to create and manage training runs.">
-      <div className="flex min-h-screen flex-col bg-paper text-ink">
+    <div className="flex min-h-screen flex-col bg-paper text-ink">
         <NavBar />
         <main className={`${CONTAINER} flex-1 py-[clamp(32px,5vw,56px)]`}>
           <header className="border-b-2 border-divider pb-[28px]">
@@ -191,7 +198,6 @@ export default function TrainingRunsPage() {
           </div>
         </main>
         <Footer />
-      </div>
-    </RequireAuth>
+    </div>
   );
 }
