@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useCallback, useEffect, useState } from "react";
+import React, { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
 import RequireTrainingManager from "@features/training/components/RequireTrainingManager";
@@ -68,6 +68,7 @@ function TrainingRunsContent() {
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const pendingCreateKey = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -129,6 +130,7 @@ function TrainingRunsContent() {
     }
     try {
       setIsCreating(true);
+      pendingCreateKey.current ??= crypto.randomUUID();
       const run = await trainingRunApi.createRun({
         quiz_id: quizId,
         kind,
@@ -140,7 +142,8 @@ function TrainingRunsContent() {
         recipient_emails: recipientEmails,
         max_attempts: maxAttempts === "unlimited" ? null : Number(maxAttempts),
         send_email_invitations: sendEmails && recipientEmails.length > 0,
-      });
+      }, pendingCreateKey.current);
+      pendingCreateKey.current = null;
       toast.success("Training run created.");
       await router.push(ROUTES.trainingRun(run.id));
     } catch (error: any) {

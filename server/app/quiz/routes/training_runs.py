@@ -1,6 +1,7 @@
+import re
 from typing import List
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from server.app.core.dependencies import get_training_manager_user, get_verified_user
@@ -90,10 +91,22 @@ async def create_training_run(
     payload: CreateTrainingRunRequest,
     request: Request,
     response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.create_run(payload, str(current_user.id))
+    normalized_key = idempotency_key.strip() if idempotency_key else ""
+    if not (
+        8 <= len(normalized_key) <= 200
+        and re.fullmatch(r"[A-Za-z0-9._:-]+", normalized_key)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="A valid Idempotency-Key header is required to create a training run",
+        )
+    return await service.create_run(
+        payload, str(current_user.id), normalized_key
+    )
 
 
 @router.get("/training-runs", response_model=List[TrainingRunSummary])

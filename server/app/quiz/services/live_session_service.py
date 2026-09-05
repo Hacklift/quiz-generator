@@ -443,7 +443,7 @@ class LiveQuizSessionService:
             next_index,
         )
         if not updated:
-            raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=409, detail="Session is no longer active")
         await self._publish_participant_event(
             updated["quiz_id"],
             str(updated["_id"]),
@@ -454,6 +454,13 @@ class LiveQuizSessionService:
             "current_question_index": updated["current_question_index"],
             "remaining_seconds": self._remaining_seconds(updated["expires_at"]),
         }
+
+    async def abandon_unattached_training_session(self, session_id: str) -> None:
+        """Invalidate a session created after its assignment lost a close race."""
+        await self.repository.update_session(
+            session_id,
+            {"status": "abandoned", "abandoned_at": _utc_now()},
+        )
 
     async def submit_session(
         self,
@@ -527,7 +534,7 @@ class LiveQuizSessionService:
         if session.get("status") not in {"active", "joined"}:
             return {"status": session.get("status")}
 
-        updated = await self.repository.update_session(
+        updated = await self.repository.update_active_session(
             session_id,
             {"status": "disconnected"},
         )
@@ -538,7 +545,8 @@ class LiveQuizSessionService:
                 "participant_disconnected",
             )
             return {"status": "disconnected"}
-        return {"status": session.get("status")}
+        current = await self.repository.get_session(session_id)
+        return {"status": current.get("status") if current else session.get("status")}
 
     async def list_analytics(self, quiz_id: str, requester_id: str) -> List[Dict[str, Any]]:
         quiz = await self.repository.get_quiz_by_id(quiz_id)
@@ -729,6 +737,22 @@ class LiveQuizSessionService:
         quiz: Dict[str, Any],
         auto_submitted: bool,
     ) -> Dict[str, Any]:
+        assignment_id = session.get("training_assignment_id")
+        submission_claimed = False
+        if assignment_id and self.assignment_repository:
+            claimed = await self.assignment_repository.claim_submission(
+                assignment_id, str(session["_id"]), _utc_now()
+            )
+            if not claimed:
+                # A duplicate submit may have completed while this request was
+                # waiting. Return that result; otherwise close won the single
+                # assignment-state arbitration point.
+                current = await self.repository.get_session(str(session["_id"]))
+                if current and current.get("status") == "submitted":
+                    return current
+                raise HTTPException(status_code=409, detail="Training run is closed")
+            submission_claimed = True
+
         graded = self._grade_session(session, quiz)
         submitted_at = _utc_now()
 
@@ -746,15 +770,31 @@ class LiveQuizSessionService:
             "auto_submitted": auto_submitted,
         }
         finalize = getattr(self.repository, "finalize_session", None)
-        updated = (
-            await finalize(str(session["_id"]), updates)
-            if finalize
-            else await self.repository.update_session(str(session["_id"]), updates)
-        )
+        try:
+            updated = (
+                await finalize(str(session["_id"]), updates)
+                if finalize
+                else await self.repository.update_session(str(session["_id"]), updates)
+            )
+        except Exception:
+            if submission_claimed:
+                await self.assignment_repository.release_submission(
+                    assignment_id, str(session["_id"]), _utc_now()
+                )
+            raise
         if not updated:
             current = await self.repository.get_session(str(session["_id"]))
             if current and current.get("status") == "submitted":
+                if submission_claimed:
+                    await self.assignment_repository.release_submission(
+                        assignment_id, str(session["_id"]), _utc_now()
+                    )
                 return current
+            if submission_claimed:
+                await self.assignment_repository.release_submission(
+                    assignment_id, str(session["_id"]), _utc_now()
+                )
+                raise HTTPException(status_code=409, detail="Training run is closed")
             raise HTTPException(status_code=404, detail="Session not found")
         assignment = None
         assignment_id = updated.get("training_assignment_id")
@@ -766,6 +806,15 @@ class LiveQuizSessionService:
                 percentage=graded["percentage"],
                 submitted_at=submitted_at,
             )
+            if not assignment:
+                # Manual closure won after the session write but before the
+                # completion commit. Keep the participant result out of the
+                # immutable training register and report the cutoff honestly.
+                await self.repository.update_session(
+                    str(updated["_id"]),
+                    {"status": "abandoned", "abandoned_at": _utc_now()},
+                )
+                raise HTTPException(status_code=409, detail="Training run is closed")
             if assignment and self.assignment_completion_notifier:
                 try:
                     await self.assignment_completion_notifier(assignment)
@@ -774,7 +823,11 @@ class LiveQuizSessionService:
                         "Could not create training completion notification for assignment %s",
                         assignment_id,
                     )
-        if updated.get("training_run_id") and self.training_owner_completion_notifier:
+        if (
+            updated.get("training_run_id")
+            and self.training_owner_completion_notifier
+            and (not assignment_id or assignment is not None)
+        ):
             try:
                 await self.training_owner_completion_notifier(updated, assignment)
             except Exception:

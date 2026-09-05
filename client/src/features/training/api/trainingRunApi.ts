@@ -112,8 +112,10 @@ export const trainingRunApi = {
     recipient_emails: string[];
     max_attempts: number | null;
     send_email_invitations: boolean;
-  }): Promise<TrainingRunSummary> {
-    const { data } = await api.post("/api/v1/training-runs", payload);
+  }, idempotencyKey: string): Promise<TrainingRunSummary> {
+    const { data } = await api.post("/api/v1/training-runs", payload, {
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
     return data;
   },
 

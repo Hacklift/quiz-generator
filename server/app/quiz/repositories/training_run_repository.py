@@ -4,7 +4,7 @@ from typing import Any, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError
 
 
@@ -63,6 +63,37 @@ class TrainingRunRepository:
         result = await self.runs_collection.insert_one(payload)
         return {**payload, "_id": result.inserted_id}
 
+    async def get_run_by_idempotency_key(
+        self, owner_user_id: str, idempotency_key: str
+    ) -> Optional[dict]:
+        return await self.runs_collection.find_one(
+            {"owner_user_id": owner_user_id, "idempotency_key": idempotency_key}
+        )
+
+    async def mark_run_open(self, run_id: str, now: datetime) -> Optional[dict]:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return None
+        return await self.runs_collection.find_one_and_update(
+            {"_id": object_id, "status": "provisioning"},
+            {"$set": {"status": "open", "updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def mark_provisioning_complete(self, run_id: str, now: datetime) -> None:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return
+        await self.runs_collection.update_one(
+            {"_id": object_id, "status": "open"},
+            {
+                "$set": {
+                    "provisioning_complete": True,
+                    "updated_at": now,
+                }
+            },
+        )
+
     async def get_run(self, run_id: str) -> Optional[dict]:
         object_id = self._object_id(run_id)
         return await self.runs_collection.find_one({"_id": object_id}) if object_id else None
@@ -71,7 +102,9 @@ class TrainingRunRepository:
         return await self.runs_collection.find_one({"access_code": access_code.strip().upper()})
 
     async def list_runs_for_owner(self, owner_user_id: str, limit: int = 100) -> list[dict]:
-        cursor = self.runs_collection.find({"owner_user_id": owner_user_id}).sort("created_at", -1).limit(limit)
+        cursor = self.runs_collection.find(
+            {"owner_user_id": owner_user_id, "status": {"$in": ["open", "closed"]}}
+        ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
     async def claim_run_closure(
@@ -135,14 +168,51 @@ class TrainingRunRepository:
 
     async def create_assignments(self, assignments: list[dict]) -> None:
         if assignments:
-            await self.assignments_collection.insert_many(assignments, ordered=False)
+            await self.assignments_collection.bulk_write(
+                [
+                    UpdateOne(
+                        {
+                            "training_run_id": assignment["training_run_id"],
+                            "recipient_email": assignment["recipient_email"],
+                        },
+                        {"$setOnInsert": assignment},
+                        upsert=True,
+                    )
+                    for assignment in assignments
+                ],
+                ordered=False,
+            )
 
     async def create_invitation_deliveries(self, deliveries: list[dict]) -> None:
         if not deliveries:
             return
         if self.email_deliveries_collection is None:
             raise RuntimeError("Training email deliveries collection is not configured")
-        await self.email_deliveries_collection.insert_many(deliveries, ordered=False)
+        await self.email_deliveries_collection.bulk_write(
+            [
+                UpdateOne(
+                    {"delivery_key": delivery["delivery_key"]},
+                    {"$setOnInsert": delivery},
+                    upsert=True,
+                )
+                for delivery in deliveries
+            ],
+            ordered=False,
+        )
+
+    async def activate_invitation_deliveries(self, run_id: str, now: datetime) -> None:
+        if self.email_deliveries_collection is None:
+            raise RuntimeError("Training email deliveries collection is not configured")
+        await self.email_deliveries_collection.update_many(
+            {"training_run_id": run_id, "status": "staged"},
+            {
+                "$set": {
+                    "status": "pending",
+                    "next_attempt_at": now,
+                    "updated_at": now,
+                }
+            },
+        )
 
     async def list_assignments_for_run(self, run_id: str) -> list[dict]:
         cursor = self.assignments_collection.find({"training_run_id": run_id}).sort("recipient_email", 1)
@@ -159,7 +229,7 @@ class TrainingRunRepository:
     ) -> None:
         """Make an owner-initiated early closure terminal for active assignees."""
         await self.assignments_collection.update_many(
-            {"training_run_id": run_id, "status": "in_progress"},
+            {"training_run_id": run_id, "status": {"$in": ["in_progress", "submitting"]}},
             {
                 "$set": {
                     "status": "incomplete",
@@ -243,8 +313,76 @@ class TrainingRunRepository:
                 # creating concurrent sessions for the same assignment.
                 "status": {"$in": ["assigned", "completed"]},
             },
-            {"$inc": {"attempts_used": 1}, "$set": {"status": "in_progress", "started_at": now, "updated_at": now}},
+            {"$inc": {"attempts_used": 1}, "$set": {"status": "in_progress", "started_at": now, "active_session_id": None, "updated_at": now}},
             return_document=ReturnDocument.AFTER,
+        )
+
+    async def attach_session_to_attempt(
+        self, assignment_id: str, user_id: str, session_id: str, now: datetime
+    ) -> Optional[dict]:
+        object_id = self._object_id(assignment_id)
+        if not object_id:
+            return None
+        return await self.assignments_collection.find_one_and_update(
+            {
+                "_id": object_id,
+                "recipient_user_id": user_id,
+                "status": "in_progress",
+                "active_session_id": None,
+            },
+            {"$set": {"active_session_id": session_id, "updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def claim_submission(
+        self, assignment_id: str, session_id: str, now: datetime
+    ) -> Optional[dict]:
+        """Reserve the one completion transition before grading a session.
+
+        Manual closure competes on this assignment state, giving both paths a
+        single Mongo write that determines whether the attempt is counted.
+        """
+        object_id = self._object_id(assignment_id)
+        if not object_id:
+            return None
+        return await self.assignments_collection.find_one_and_update(
+            {
+                "_id": object_id,
+                "status": "in_progress",
+                # Runs created before session fencing did not persist an active
+                # session id. Preserve those in-flight attempts while keeping
+                # all newly-created attempts bound to their exact session.
+                "$or": [
+                    {"active_session_id": session_id},
+                    {"active_session_id": {"$exists": False}},
+                ],
+            },
+            {
+                "$set": {
+                    "status": "submitting",
+                    "submission_session_id": session_id,
+                    "updated_at": now,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def release_submission(
+        self, assignment_id: str, session_id: str, now: datetime
+    ) -> None:
+        object_id = self._object_id(assignment_id)
+        if not object_id:
+            return
+        await self.assignments_collection.update_one(
+            {
+                "_id": object_id,
+                "status": "submitting",
+                "submission_session_id": session_id,
+            },
+            {
+                "$set": {"status": "in_progress", "updated_at": now},
+                "$unset": {"submission_session_id": ""},
+            },
         )
 
     async def release_attempt(
@@ -281,12 +419,19 @@ class TrainingRunRepository:
         if not object_id:
             return None
         return await self.assignments_collection.find_one_and_update(
-            {"_id": object_id},
-            {"$set": {
-                "status": "completed", "latest_session_id": session_id,
-                "latest_score": score, "latest_percentage": percentage,
-                "completed_at": submitted_at, "updated_at": submitted_at,
-            }},
+            {
+                "_id": object_id,
+                "status": "submitting",
+                "submission_session_id": session_id,
+            },
+            {
+                "$set": {
+                    "status": "completed", "latest_session_id": session_id,
+                    "latest_score": score, "latest_percentage": percentage,
+                    "completed_at": submitted_at, "updated_at": submitted_at,
+                },
+                "$unset": {"submission_session_id": ""},
+            },
             return_document=ReturnDocument.AFTER,
         )
 
@@ -305,3 +450,6 @@ class TrainingRunRepository:
             )
             if not existing:
                 raise
+            # The event is immutable and uniquely keyed by its run/type. A
+            # successful prior insert means this retry has no further work.
+            return

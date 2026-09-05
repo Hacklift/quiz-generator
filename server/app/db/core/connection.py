@@ -174,6 +174,15 @@ async def ensure_training_run_indexes(
 ):
     """Indexes for the run-based corporate training workflow."""
     await training_runs_collection.create_index("access_code", unique=True, sparse=True)
+    await training_runs_collection.create_index(
+        [("owner_user_id", 1), ("idempotency_key", 1)],
+        unique=True,
+        # Compound sparse indexes still index legacy rows with an owner but no
+        # idempotency key as a shared null value. Only new string keys belong
+        # in this uniqueness domain.
+        partialFilterExpression={"idempotency_key": {"$type": "string"}},
+        name="training_run_owner_idempotency_key",
+    )
     await training_runs_collection.create_index([("owner_user_id", 1), ("created_at", -1)])
     await training_runs_collection.create_index([("status", 1), ("closes_at", 1)])
     await training_assignments_collection.create_index(
@@ -199,6 +208,10 @@ async def ensure_training_run_indexes(
     await training_email_deliveries_collection.create_index(
         [("status", 1), ("next_attempt_at", 1)],
         name="training_email_delivery_dispatch",
+    )
+    await training_email_deliveries_collection.create_index(
+        [("status", 1), ("created_at", 1)],
+        name="training_email_delivery_staged_recovery",
     )
     await training_email_deliveries_collection.create_index(
         [("training_run_id", 1), ("recipient_email", 1)],

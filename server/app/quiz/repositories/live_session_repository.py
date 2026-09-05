@@ -92,6 +92,30 @@ class LiveQuizSessionRepository:
         except InvalidId:
             return None
 
+    async def update_active_session(
+        self,
+        session_id: str,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Write only while the participant session remains mutable.
+
+        Training-run closure transitions active sessions to ``abandoned``. This
+        status predicate prevents a request that read the old state just before
+        closure from reviving or changing that terminal session afterwards.
+        """
+        try:
+            updates["updated_at"] = datetime.now(timezone.utc)
+            return await self.sessions_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(session_id),
+                    "status": {"$in": ["active", "joined", "disconnected"]},
+                },
+                {"$set": updates},
+                return_document=ReturnDocument.AFTER,
+            )
+        except InvalidId:
+            return None
+
     async def finalize_session(
         self,
         session_id: str,
@@ -136,7 +160,7 @@ class LiveQuizSessionRepository:
             }
         )
         answers.sort(key=lambda answer: answer["question_index"])
-        return await self.update_session(
+        return await self.update_active_session(
             session_id,
             {
                 "answers": answers,

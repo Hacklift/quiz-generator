@@ -27,6 +27,10 @@ DELIVERY_HEARTBEAT_SECONDS = 60
 MAX_DELIVERY_ATTEMPTS = 5
 
 
+class DeliveryLeaseLost(RuntimeError):
+    """The provider call completed after another worker took ownership."""
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -122,12 +126,16 @@ def _send_delivery_with_lease_heartbeat(
                 if not _renew_delivery_lease(
                     deliveries, delivery["_id"], lease_token
                 ):
-                    # Do not write a terminal state after losing ownership.
-                    # The original provider call must still finish before this
-                    # task exits, but another worker now owns reconciliation.
+                    # The provider call is bounded by adapter timeouts. Once
+                    # ownership is lost, wait for that bounded call to finish
+                    # but never continue to renew or persist its result.
                     logger.warning(
                         "Training invitation delivery %s lost its lease while sending",
                         delivery["_id"],
+                    )
+                    future.result()
+                    raise DeliveryLeaseLost(
+                        "Delivery lease was lost while the provider call was in flight"
                     )
 
 
@@ -136,8 +144,35 @@ def dispatch_training_invitation_deliveries() -> int:
     """Queue a bounded number of due outbox records for independent delivery."""
     client = MongoClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"))
     try:
-        deliveries = _database(client)[OUTBOX_COLLECTION]
+        database = _database(client)
+        deliveries = database[OUTBOX_COLLECTION]
+        runs = database["training_runs"]
         now = _utc_now()
+        # Recovery for a crash after run visibility but before the service
+        # promoted its staged outbox rows. This uses the existing dispatcher
+        # cadence and only Mongo reads/writes.
+        staged = deliveries.find({"status": "staged"}).sort("created_at", 1).limit(
+            DISPATCH_BATCH_SIZE
+        )
+        for delivery in staged:
+            try:
+                run_id = ObjectId(delivery["training_run_id"])
+            except (InvalidId, TypeError):
+                continue
+            run = runs.find_one(
+                {"_id": run_id, "status": "open"}, {"_id": 1}
+            )
+            if run:
+                deliveries.update_one(
+                    {"_id": delivery["_id"], "status": "staged"},
+                    {
+                        "$set": {
+                            "status": "pending",
+                            "next_attempt_at": now,
+                            "updated_at": now,
+                        }
+                    },
+                )
         dispatched = 0
         candidates = deliveries.find(_due_delivery_query(now)).sort(
             "created_at", 1

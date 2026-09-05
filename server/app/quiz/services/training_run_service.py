@@ -1,5 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 import logging
 import secrets
 import string
@@ -7,6 +9,7 @@ from typing import Optional
 
 from bson import ObjectId
 from fastapi import HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
@@ -50,7 +53,9 @@ class TrainingRunService:
             for quiz in quizzes
         ]
 
-    async def create_run(self, payload, owner_user_id: str) -> dict:
+    async def create_run(
+        self, payload, owner_user_id: str, idempotency_key: str
+    ) -> dict:
         now = _utc_now()
         closes_at = _as_utc(payload.closes_at)
         due_at = _as_utc(payload.due_at) if payload.due_at else None
@@ -61,6 +66,18 @@ class TrainingRunService:
                 status_code=400,
                 detail="Run close time must allow one full training duration",
             )
+
+        request_fingerprint = self._request_fingerprint(payload)
+        existing = await self.repository.get_run_by_idempotency_key(
+            owner_user_id, idempotency_key
+        )
+        if existing:
+            if existing.get("request_fingerprint") != request_fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency key was already used for a different training run",
+                )
+            return await self._resume_or_return_run(existing, now)
 
         quiz = await self.repository.get_owned_quiz(payload.quiz_id, owner_user_id)
         if not quiz:
@@ -97,39 +114,145 @@ class TrainingRunService:
             if self.notification_service
             else {}
         )
-        run = await self.repository.create_run(
+        try:
+            run = await self.repository.create_run(
+                {
+                    "quiz_id": str(quiz["_id"]),
+                    "owner_user_id": owner_user_id,
+                    "idempotency_key": idempotency_key,
+                    "request_fingerprint": request_fingerprint,
+                    "title": title,
+                    "kind": payload.kind,
+                    "purpose": payload.purpose,
+                    # A partially persisted run is never returned by owner or
+                    # public read paths. The same key resumes this workflow.
+                    "status": "provisioning",
+                    "access_mode": payload.access_mode,
+                    "access_code": access_code,
+                    "time_limit_minutes": payload.time_limit_minutes,
+                    "due_at": due_at,
+                    "closes_at": closes_at,
+                    "closed_at": None,
+                    "quiz_content_fingerprint": quiz.get("content_fingerprint"),
+                    "quiz_snapshot": quiz_snapshot,
+                    "recipient_emails": [
+                        normalize_email(str(email)) for email in payload.recipient_emails
+                    ],
+                    "recipient_user_ids": recipient_user_ids,
+                    "max_attempts": payload.max_attempts,
+                    "send_email_invitations": payload.send_email_invitations,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+        except DuplicateKeyError:
+            # Concurrent retries of the same request converge on one durable
+            # provisioning record and continue from its missing steps.
+            run = await self.repository.get_run_by_idempotency_key(
+                owner_user_id, idempotency_key
+            )
+            if not run:
+                raise
+            if run.get("request_fingerprint") != request_fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency key was already used for a different training run",
+                )
+        return await self._resume_or_return_run(run, now)
+
+    async def _resume_or_return_run(self, run: dict, now: datetime) -> dict:
+        """Finish an interrupted create workflow without duplicate side effects."""
+        if run.get("status") == "closed":
+            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
+            return self._run_summary(run, assignments, sessions)
+        if (
+            run.get("status") == "open"
+            and run.get("provisioning_complete") is True
+        ):
+            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
+            return self._run_summary(run, assignments, sessions)
+        if run.get("status") not in {"provisioning", "open"}:
+            raise HTTPException(status_code=409, detail="Training run is unavailable")
+
+        run_id = str(run["_id"])
+        assignments = self._provisioned_assignments(run, now)
+        await self.repository.create_assignments(assignments)
+        assignments = await self.repository.list_assignments_for_run(run_id)
+        await self.repository.create_audit_event(
             {
-                "quiz_id": str(quiz["_id"]),
-                "owner_user_id": owner_user_id,
-                "title": title,
-                "kind": payload.kind,
-                "purpose": payload.purpose,
-                "status": "open",
-                "access_mode": payload.access_mode,
-                "access_code": access_code,
-                "time_limit_minutes": payload.time_limit_minutes,
-                "due_at": due_at,
-                "closes_at": closes_at,
-                "closed_at": None,
-                "quiz_content_fingerprint": quiz.get("content_fingerprint"),
-                "quiz_snapshot": quiz_snapshot,
-                "created_at": now,
-                "updated_at": now,
+                "training_run_id": run_id,
+                "event_type": "run_created",
+                "actor_user_id": run["owner_user_id"],
+                "occurred_at": now,
+                "payload": {
+                    "kind": run["kind"],
+                    "purpose": run["purpose"],
+                    "recipient_count": len(assignments),
+                    "closes_at": run["closes_at"],
+                },
             }
         )
-        run_id = str(run["_id"])
-        assignments = [
+        # Persist the outbox intent before making this run visible. A retry or
+        # the existing dispatcher can safely promote staged rows after a crash.
+        if run.get("send_email_invitations") and assignments:
+            await self.repository.create_invitation_deliveries(
+                self._invitation_deliveries(run, assignments, now)
+            )
+        ready = run
+        if run.get("status") == "provisioning":
+            ready = await self.repository.mark_run_open(run_id, now)
+        if ready is None:
+            ready = await self.repository.get_run(run_id)
+        if not ready or ready.get("status") != "open":
+            raise RuntimeError("Training run provisioning could not be finalized")
+
+        if self.notification_service:
+            await self.notification_service.notify_assignments(assignments, ready)
+        if ready.get("send_email_invitations") and assignments:
+            await self.repository.activate_invitation_deliveries(run_id, now)
+        await self.repository.mark_provisioning_complete(run_id, now)
+        if ready.get("send_email_invitations") and assignments:
+            self._enqueue_invitation_delivery_dispatch()
+        return self._run_summary(ready, assignments, [])
+
+    @staticmethod
+    def _request_fingerprint(payload) -> str:
+        canonical = {
+            "quiz_id": payload.quiz_id,
+            "kind": payload.kind,
+            "purpose": payload.purpose,
+            "title": (payload.title or "").strip(),
+            "time_limit_minutes": payload.time_limit_minutes,
+            "closes_at": _as_utc(payload.closes_at).isoformat(),
+            "due_at": _as_utc(payload.due_at).isoformat() if payload.due_at else None,
+            "access_mode": payload.access_mode,
+            "recipient_emails": sorted(
+                normalize_email(str(email)) for email in payload.recipient_emails
+            ),
+            "max_attempts": payload.max_attempts,
+            "send_email_invitations": payload.send_email_invitations,
+        }
+        encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _provisioned_assignments(run: dict, now: datetime) -> list[dict]:
+        recipient_user_ids = run.get("recipient_user_ids") or {}
+        return [
             {
                 "_id": ObjectId(),
-                "training_run_id": run_id,
-                "quiz_id": str(quiz["_id"]),
-                "owner_user_id": owner_user_id,
-                "recipient_email": normalize_email(str(email)),
-                "recipient_user_id": recipient_user_ids.get(normalize_email(str(email))),
+                "training_run_id": str(run["_id"]),
+                "quiz_id": run["quiz_id"],
+                "owner_user_id": run["owner_user_id"],
+                "recipient_email": email,
+                "recipient_user_id": recipient_user_ids.get(email),
                 "status": "assigned",
-                "due_at": due_at,
-                "max_attempts": payload.max_attempts,
+                "due_at": run.get("due_at"),
+                "max_attempts": run.get("max_attempts"),
                 "attempts_used": 0,
+                "active_session_id": None,
                 "started_at": None,
                 "completed_at": None,
                 "latest_session_id": None,
@@ -138,31 +261,8 @@ class TrainingRunService:
                 "created_at": now,
                 "updated_at": now,
             }
-            for email in payload.recipient_emails
+            for email in run.get("recipient_emails", [])
         ]
-        await self.repository.create_assignments(assignments)
-        if self.notification_service:
-            await self.notification_service.notify_assignments(assignments, run)
-        await self.repository.create_audit_event(
-            {
-                "training_run_id": run_id,
-                "event_type": "run_created",
-                "actor_user_id": owner_user_id,
-                "occurred_at": now,
-                "payload": {
-                    "kind": payload.kind,
-                    "purpose": payload.purpose,
-                    "recipient_count": len(assignments),
-                    "closes_at": closes_at,
-                },
-            }
-        )
-        if payload.send_email_invitations and assignments:
-            await self.repository.create_invitation_deliveries(
-                self._invitation_deliveries(run, assignments, now)
-            )
-            self._enqueue_invitation_delivery_dispatch()
-        return self._run_summary(run, assignments, [])
 
     async def list_owner_runs(self, owner_user_id: str) -> list[dict]:
         runs = await self.repository.list_runs_for_owner(owner_user_id)
@@ -175,7 +275,11 @@ class TrainingRunService:
 
     async def get_owner_run(self, run_id: str, owner_user_id: str) -> dict:
         run = await self.repository.get_run(run_id)
-        if not run or run.get("owner_user_id") != owner_user_id:
+        if (
+            not run
+            or run.get("owner_user_id") != owner_user_id
+            or run.get("status") not in {"open", "closed"}
+        ):
             raise HTTPException(status_code=404, detail="Training run not found")
         assignments = await self.repository.list_assignments_for_run(run_id)
         sessions = await self.repository.list_sessions_for_run(run_id)
@@ -192,7 +296,11 @@ class TrainingRunService:
 
     async def close_owner_run(self, run_id: str, owner_user_id: str) -> dict:
         run = await self.repository.get_run(run_id)
-        if not run or run.get("owner_user_id") != owner_user_id:
+        if (
+            not run
+            or run.get("owner_user_id") != owner_user_id
+            or run.get("status") not in {"open", "closed"}
+        ):
             raise HTTPException(status_code=404, detail="Training run not found")
         closed = await self._close_run(run, owner_user_id)
         if not closed:
@@ -251,7 +359,7 @@ class TrainingRunService:
         if not reserved:
             raise HTTPException(status_code=409, detail="No attempts remain for this assignment")
         try:
-            return await self.live_quiz_service.start_session_for_quiz(
+            session = await self.live_quiz_service.start_session_for_quiz(
                 quiz,
                 participant_name=user.full_name or user.username,
                 participant_email=normalized_email,
@@ -263,6 +371,17 @@ class TrainingRunService:
                 quiz_snapshot=run.get("quiz_snapshot"),
                 training_closes_at=run["closes_at"],
             )
+            attached = await self.repository.attach_session_to_attempt(
+                assignment_id, user_id, session["session_id"], _utc_now()
+            )
+            if not attached:
+                # Closure won after attempt reservation. The newly-created
+                # session must never become an orphaned usable attempt.
+                await self.live_quiz_service.abandon_unattached_training_session(
+                    session["session_id"]
+                )
+                raise HTTPException(status_code=409, detail="Training run is closed")
+            return session
         except Exception:
             await self.repository.release_attempt(
                 assignment_id,
@@ -559,7 +678,10 @@ class TrainingRunService:
                     ),
                 },
                 "purpose": "training_invitation",
-                "status": "pending",
+                # The outbox is staged until the parent run is visible. The
+                # existing dispatcher promotes staged rows for open runs after
+                # a process crash, without a new queue or Redis schedule.
+                "status": "staged",
                 "attempt_count": 0,
                 "next_attempt_at": now,
                 "lease_expires_at": None,

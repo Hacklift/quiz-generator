@@ -12,6 +12,8 @@ class FakeDeliveryCollection:
     def __init__(self, document):
         self.document = document
         self.lease_renewals = 0
+        self.lease_renewal_attempts = 0
+        self.lose_lease_on_renewal = False
 
     def find_one_and_update(self, query, update, return_document):
         if self.document["_id"] != query["_id"] or self.document["status"] != query["status"]:
@@ -30,6 +32,10 @@ class FakeDeliveryCollection:
             update["$set"].get("lease_expires_at") is not None
             and "status" not in update["$set"]
         ):
+            self.lease_renewal_attempts += 1
+            if self.lose_lease_on_renewal:
+                self.document["lease_token"] = "new-owner-lease"
+                return SimpleNamespace(matched_count=0)
             self.lease_renewals += 1
         self.document.update(update["$set"])
         return SimpleNamespace(matched_count=1)
@@ -166,3 +172,28 @@ def test_delivery_worker_renews_lease_while_provider_is_still_sending(monkeypatc
     assert delivered is True
     assert collection.lease_renewals >= 1
     assert collection.document["status"] == "sent"
+
+
+def test_delivery_worker_stops_renewing_after_lease_loss(monkeypatch):
+    collection = FakeDeliveryCollection(_delivery_document())
+    collection.lose_lease_on_renewal = True
+    client = FakeMongoClient(collection)
+
+    class SlowWorkerEmailService:
+        async def send_worker_email(self, **kwargs):
+            await asyncio.sleep(0.02)
+            return SendResult(ok=True, adapter="mailgun")
+
+    monkeypatch.setattr(delivery_tasks, "MongoClient", lambda uri: client)
+    monkeypatch.setattr(
+        delivery_tasks, "build_worker_email_service", SlowWorkerEmailService
+    )
+    monkeypatch.setattr(delivery_tasks, "DELIVERY_HEARTBEAT_SECONDS", 0.001)
+
+    delivered = _task_run(delivery_tasks.deliver_training_invitation)(
+        str(collection.document["_id"]), "lease-1"
+    )
+
+    assert delivered is False
+    assert collection.lease_renewal_attempts == 1
+    assert collection.document["lease_token"] == "new-owner-lease"

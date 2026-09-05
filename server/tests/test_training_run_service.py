@@ -67,7 +67,18 @@ class CreateRunRepository:
             "questions": [{"question": "Q", "answer": "A", "options": ["A", "B"]}],
         }
         self.created_run = None
+        self.assignments = []
+        self.deliveries = []
         self.access_code_checks = 0
+
+    async def get_run_by_idempotency_key(self, owner_user_id, idempotency_key):
+        if (
+            self.created_run
+            and self.created_run["owner_user_id"] == owner_user_id
+            and self.created_run["idempotency_key"] == idempotency_key
+        ):
+            return self.created_run
+        return None
 
     async def get_owned_quiz(self, quiz_id, owner_user_id):
         return self.quiz
@@ -85,13 +96,51 @@ class CreateRunRepository:
         return self.created_run
 
     async def create_assignments(self, assignments):
-        self.assignments = assignments
+        existing = {item["recipient_email"] for item in self.assignments}
+        self.assignments.extend(
+            assignment
+            for assignment in assignments
+            if assignment["recipient_email"] not in existing
+        )
+
+    async def list_assignments_for_run(self, run_id):
+        return self.assignments
+
+    async def list_sessions_for_run(self, run_id):
+        return []
+
+    async def mark_run_open(self, run_id, now):
+        if str(self.created_run["_id"]) != run_id:
+            return None
+        self.created_run["status"] = "open"
+        self.created_run["updated_at"] = now
+        return self.created_run
+
+    async def get_run(self, run_id):
+        return self.created_run if self.created_run and str(self.created_run["_id"]) == run_id else None
 
     async def create_audit_event(self, event):
         self.audit_event = event
 
     async def create_invitation_deliveries(self, deliveries):
-        self.deliveries = deliveries
+        existing = {delivery["delivery_key"] for delivery in self.deliveries}
+        self.deliveries.extend(
+            delivery
+            for delivery in deliveries
+            if delivery["delivery_key"] not in existing
+        )
+
+    async def activate_invitation_deliveries(self, run_id, now):
+        for delivery in self.deliveries:
+            if delivery["training_run_id"] == run_id and delivery["status"] == "staged":
+                delivery.update(
+                    {"status": "pending", "next_attempt_at": now, "updated_at": now}
+                )
+
+    async def mark_provisioning_complete(self, run_id, now):
+        if str(self.created_run["_id"]) == run_id:
+            self.created_run["provisioning_complete"] = True
+            self.created_run["updated_at"] = now
 
 
 class BatchNotificationService:
@@ -240,6 +289,55 @@ class ManualCloseRepository:
 
     async def create_audit_event(self, event):
         self.audit_event = event
+
+
+class SubmissionRaceAssignmentRepository:
+    """Small state model for the close-versus-submit arbitration test."""
+
+    def __init__(self):
+        self.assignment = {
+            "status": "in_progress",
+            "active_session_id": "session-1",
+        }
+
+    async def claim_submission(self, assignment_id, session_id, now):
+        if (
+            self.assignment["status"] != "in_progress"
+            or self.assignment["active_session_id"] != session_id
+        ):
+            return None
+        self.assignment["status"] = "submitting"
+        self.assignment["submission_session_id"] = session_id
+        return dict(self.assignment)
+
+    async def record_submission(self, assignment_id, session_id, score, percentage, submitted_at):
+        if (
+            self.assignment["status"] != "submitting"
+            or self.assignment.get("submission_session_id") != session_id
+        ):
+            return None
+        self.assignment["status"] = "completed"
+        return dict(self.assignment)
+
+    async def release_submission(self, assignment_id, session_id, now):
+        if self.assignment["status"] == "submitting":
+            self.assignment["status"] = "in_progress"
+
+    def close_run(self):
+        if self.assignment["status"] in {"in_progress", "submitting"}:
+            self.assignment["status"] = "incomplete"
+
+
+class SubmissionRaceSessionRepository(FakeTrainingSessionRepository):
+    def __init__(self, quiz, assignment_repository):
+        super().__init__(quiz)
+        self.assignment_repository = assignment_repository
+
+    async def finalize_session(self, session_id, updates):
+        # The close operation wins after the submission claim but before the
+        # session/assignment completion commit.
+        self.assignment_repository.close_run()
+        return await super().finalize_session(session_id, updates)
 
 
 def test_assigned_only_training_requires_recipient_and_valid_schedule():
@@ -576,7 +674,7 @@ async def test_new_run_requires_a_full_duration_before_its_close_time(monkeypatc
     service = TrainingRunService(repository=None, live_quiz_service=None)
     with pytest.raises(HTTPException) as error:
         # The pre-repository check protects a newly-created unusable run.
-        await service.create_run(payload, "owner-1")
+        await service.create_run(payload, "owner-1", "test-key")
 
     assert error.value.status_code == 400
     assert error.value.detail == "Run close time must allow one full training duration"
@@ -592,7 +690,7 @@ async def test_assigned_only_run_does_not_generate_an_unused_access_code():
         recipient_emails=["learner@example.com"],
     )
 
-    summary = await service.create_run(payload, "owner-1")
+    summary = await service.create_run(payload, "owner-1", "test-key")
 
     assert repository.created_run["access_code"] is None
     assert repository.access_code_checks == 0
@@ -612,7 +710,7 @@ async def test_legacy_quiz_title_cannot_poison_training_email_headers():
     )
 
     with pytest.raises(HTTPException, match="Training title") as error:
-        await service.create_run(payload, "owner-1")
+        await service.create_run(payload, "owner-1", "test-key")
 
     assert error.value.status_code == 400
 
@@ -629,7 +727,7 @@ async def test_legacy_quiz_title_cannot_exceed_training_title_limit():
     )
 
     with pytest.raises(HTTPException, match="must not exceed") as error:
-        await service.create_run(payload, "owner-1")
+        await service.create_run(payload, "owner-1", "test-key")
 
     assert error.value.status_code == 400
 
@@ -658,7 +756,7 @@ async def test_training_invitation_email_is_persisted_then_dispatched(monkeypatc
         send_email_invitations=True,
     )
 
-    await service.create_run(payload, "owner-1")
+    await service.create_run(payload, "owner-1", "test-key")
 
     assert len(notifications.notified_assignments) == 1
     assert len(repository.deliveries) == 1
@@ -670,6 +768,105 @@ async def test_training_invitation_email_is_persisted_then_dispatched(monkeypatc
             {"queue": "email", "ignore_result": True},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_create_run_retry_with_same_key_reuses_the_original_run():
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+    )
+
+    first = await service.create_run(payload, "owner-1", "stable-request-key")
+    second = await service.create_run(payload, "owner-1", "stable-request-key")
+
+    assert first["id"] == second["id"]
+    assert len(repository.assignments) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_run_retry_resumes_a_provisioning_record_without_duplicates():
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+    payload = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]),
+        closes_at=datetime.now(timezone.utc) + timedelta(days=2),
+        recipient_emails=["learner@example.com"],
+    )
+    original_create_audit_event = repository.create_audit_event
+    attempts = 0
+
+    async def fail_once(event):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("audit write temporarily unavailable")
+        await original_create_audit_event(event)
+
+    repository.create_audit_event = fail_once
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        await service.create_run(payload, "owner-1", "stable-request-key")
+
+    assert repository.created_run["status"] == "provisioning"
+    resumed = await service.create_run(payload, "owner-1", "stable-request-key")
+
+    assert resumed["status"] == "open"
+    assert len(repository.assignments) == 1
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_cannot_be_reused_for_a_different_run():
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+    closes_at = datetime.now(timezone.utc) + timedelta(days=2)
+    first = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]), closes_at=closes_at,
+        recipient_emails=["learner@example.com"],
+    )
+    changed = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]), closes_at=closes_at + timedelta(days=1),
+        recipient_emails=["learner@example.com"],
+    )
+
+    await service.create_run(first, "owner-1", "stable-request-key")
+    with pytest.raises(HTTPException) as error:
+        await service.create_run(changed, "owner-1", "stable-request-key")
+
+    assert error.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_manual_close_wins_submission_race_without_mutating_final_register():
+    quiz = {
+        "_id": "quiz-1",
+        "quiz_type": "multichoice",
+        "questions": [{"question": "Q", "answer": "A", "options": ["A", "B"]}],
+    }
+    assignment_repository = SubmissionRaceAssignmentRepository()
+    session_repository = SubmissionRaceSessionRepository(quiz, assignment_repository)
+    session_repository.session = {
+        "_id": "session-1",
+        "status": "active",
+        "training_assignment_id": "assignment-1",
+        "training_run_id": "run-1",
+        "started_at": datetime.now(timezone.utc),
+        "answers": [],
+    }
+    service = LiveQuizSessionService(
+        session_repository, assignment_repository=assignment_repository
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await service._finalize_session(
+            session_repository.session, quiz, auto_submitted=False
+        )
+
+    assert error.value.status_code == 409
+    assert assignment_repository.assignment["status"] == "incomplete"
+    assert session_repository.session["status"] == "abandoned"
 
 
 @pytest.mark.asyncio
