@@ -94,25 +94,27 @@ export interface StartedTrainingSession {
   redirect_url: string;
 }
 
+export interface CreateTrainingRunPayload {
+  quiz_id: string;
+  kind: TrainingKind;
+  purpose: TrainingPurpose;
+  title?: string;
+  time_limit_minutes: number;
+  closes_at: string;
+  due_at?: string;
+  access_mode: TrainingAccessMode;
+  recipient_emails: string[];
+  max_attempts: number | null;
+  send_email_invitations: boolean;
+}
+
 export const trainingRunApi = {
   async listOwnedQuizzes(): Promise<OwnedQuiz[]> {
     const { data } = await api.get("/api/v1/training-runs/owned-quizzes");
     return data;
   },
 
-  async createRun(payload: {
-    quiz_id: string;
-    kind: TrainingKind;
-    purpose: TrainingPurpose;
-    title?: string;
-    time_limit_minutes: number;
-    closes_at: string;
-    due_at?: string;
-    access_mode: TrainingAccessMode;
-    recipient_emails: string[];
-    max_attempts: number | null;
-    send_email_invitations: boolean;
-  }, idempotencyKey: string): Promise<TrainingRunSummary> {
+  async createRun(payload: CreateTrainingRunPayload, idempotencyKey: string): Promise<TrainingRunSummary> {
     const { data } = await api.post("/api/v1/training-runs", payload, {
       headers: { "Idempotency-Key": idempotencyKey },
     });

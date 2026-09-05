@@ -8,12 +8,14 @@ import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import {
   trainingRunApi,
+  type CreateTrainingRunPayload,
   type OwnedQuiz,
   type TrainingAccessMode,
   type TrainingKind,
   type TrainingPurpose,
   type TrainingRunSummary,
 } from "@features/training/api/trainingRunApi";
+import { idempotencyKeyForTrainingRun } from "@features/training/lib/trainingRunIdempotency";
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 import { ROUTES } from "@shared/config/patterns/routes";
 
@@ -68,7 +70,7 @@ function TrainingRunsContent() {
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const pendingCreateKey = useRef<string | null>(null);
+  const pendingCreateKeys = useRef(new Map<string, string>());
 
   const load = useCallback(async () => {
     try {
@@ -130,8 +132,7 @@ function TrainingRunsContent() {
     }
     try {
       setIsCreating(true);
-      pendingCreateKey.current ??= crypto.randomUUID();
-      const run = await trainingRunApi.createRun({
+      const payload: CreateTrainingRunPayload = {
         quiz_id: quizId,
         kind,
         purpose,
@@ -142,8 +143,13 @@ function TrainingRunsContent() {
         recipient_emails: recipientEmails,
         max_attempts: maxAttempts === "unlimited" ? null : Number(maxAttempts),
         send_email_invitations: sendEmails && recipientEmails.length > 0,
-      }, pendingCreateKey.current);
-      pendingCreateKey.current = null;
+      };
+      const idempotencyKey = idempotencyKeyForTrainingRun(
+        pendingCreateKeys.current,
+        payload,
+        () => crypto.randomUUID(),
+      );
+      const run = await trainingRunApi.createRun(payload, idempotencyKey);
       toast.success("Training run created.");
       await router.push(ROUTES.trainingRun(run.id));
     } catch (error: any) {
