@@ -26,7 +26,12 @@ async def test_celery_adapter_enqueues(fake_celery_app, email_payload_factory):
     assert task["name"] == "tasks.send_email_generic"
     assert isinstance(task["args"], list)
     assert task["args"][0] == payload.to
-    expected_msg = render_email(payload.template_id, payload.to, payload.template_vars)
+    expected_msg = render_email(
+        payload.template_id,
+        payload.to,
+        payload.template_vars,
+        sender_email="test-sender@example.com",
+    )
     assert task["args"][1] == expected_msg["Subject"]
     assert task["args"][2] == expected_msg.get_payload()
     assert task["queue"] == "email"
@@ -89,7 +94,12 @@ async def test_background_adapter_adds_task(fake_background_tasks, email_payload
     assert func is putils.send_email
     assert args[0] == payload.to
     msg = args[1]
-    expected = render_email(payload.template_id, payload.to, payload.template_vars)
+    expected = render_email(
+        payload.template_id,
+        payload.to,
+        payload.template_vars,
+        sender_email=putils.sender_email,
+    )
     assert msg["Subject"] == expected["Subject"]
 
 
@@ -110,7 +120,7 @@ async def test_direct_adapter_propagates_smtp_error(monkeypatch, email_payload_f
     def _raise(recipient, message):
         raise RuntimeError("smtp down")
 
-    monkeypatch.setattr("server.app.email_platform.adapters.direct_adapter.send_email", _raise)
+    monkeypatch.setattr("server.app.email_platform.platform_email_utils.send_email", _raise)
     adapter = DirectAdapter()
     payload = email_payload_factory()
     with pytest.raises(RuntimeError):
@@ -121,6 +131,8 @@ async def test_direct_adapter_propagates_smtp_error(monkeypatch, email_payload_f
 async def test_mailgun_adapter_success(monkeypatch, mock_requests_session, email_payload_factory):
     monkeypatch.setenv('MAILGUN_API_KEY', 'key')
     monkeypatch.setenv('MAILGUN_DOMAIN', 'domain.test')
+    monkeypatch.setenv('SENDER_EMAIL', 'smtp@quizwerk.test')
+    monkeypatch.setenv('MAILGUN_SENDER_EMAIL', 'sender@domain.test')
     adapter = MailgunAdapter()
     payload = email_payload_factory()
     res = await adapter.send(payload)
@@ -132,11 +144,18 @@ async def test_mailgun_adapter_success(monkeypatch, mock_requests_session, email
     assert "subject" in data
     assert "to" in data
     assert data["to"][0] == payload.to
-    expected = render_email(payload.template_id, payload.to, payload.template_vars)
+    expected = render_email(
+        payload.template_id,
+        payload.to,
+        payload.template_vars,
+        sender_email="sender@domain.test",
+    )
     assert data["subject"] == expected["Subject"]
     assert expected.get_payload() in data["text"]
     assert adapter.session.auth[0] == "api"
     assert isinstance(adapter.session.auth[1], str) and len(adapter.session.auth[1]) > 0
+    assert adapter.sender_email == "sender@domain.test"
+    assert data["from"] == "QuizAppVault <sender@domain.test>"
 
 
 @pytest.mark.asyncio
@@ -171,18 +190,35 @@ async def test_mailgun_non_200_raises(monkeypatch):
             self.headers = {}
         def get(self, url, timeout=None):
             return FakeResp(code=200)
-        def post(self, url, data=None):
+        def post(self, url, data=None, timeout=None):
             return FakeResp(code=500, text='server error')
 
     monkeypatch.setattr('requests.Session', FakeSession)
     # Ensure MAILGUN_API_KEY and MAILGUN_DOMAIN are set for adapter to run
     monkeypatch.setenv('MAILGUN_API_KEY', 'key')
     monkeypatch.setenv('MAILGUN_DOMAIN', 'domain.test')
+    monkeypatch.setenv('MAILGUN_SENDER_EMAIL', 'sender@domain.test')
     adapter = MailgunAdapter()
     payload = EmailPayload(to='user@example.com', template_id='custom', template_vars={'subject':'hi','body':'b'})
     with pytest.raises(RuntimeError) as exc:
         await adapter.send(payload)
     assert 'server error' in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_mailgun_adapter_rejects_sender_outside_its_verified_domain(monkeypatch):
+    monkeypatch.setenv('MAILGUN_API_KEY', 'key')
+    monkeypatch.setenv('MAILGUN_DOMAIN', 'domain.test')
+    monkeypatch.setenv('MAILGUN_SENDER_EMAIL', 'sender@other.test')
+
+    with pytest.raises(EnvironmentError, match='MAILGUN_SENDER_EMAIL'):
+        await MailgunAdapter().send(
+            EmailPayload(
+                to='user@example.com',
+                template_id='custom',
+                template_vars={'subject': 'Notice', 'body': 'Body'},
+            )
+        )
     
 
 
@@ -194,12 +230,13 @@ async def test_mailgun_request_exception_propagates(monkeypatch):
             self.headers = {}
         def get(self, url, timeout=None):
             return None
-        def post(self, url, data=None):
+        def post(self, url, data=None, timeout=None):
             raise requests.RequestException('network')
 
     monkeypatch.setattr('requests.Session', FakeSession2)
     monkeypatch.setenv('MAILGUN_API_KEY', 'key')
     monkeypatch.setenv('MAILGUN_DOMAIN', 'domain.test')
+    monkeypatch.setenv('MAILGUN_SENDER_EMAIL', 'sender@domain.test')
 
     adapter = MailgunAdapter()
     payload = EmailPayload(to='user@example.com', template_id='custom', template_vars={'subject':'hi','body':'b'})

@@ -12,6 +12,10 @@ from server.app.db.core.connection import (
     get_live_quiz_invitations_collection,
     get_live_quiz_sessions_collection,
     get_quizzes_v2_collection,
+    get_training_assignments_collection,
+    get_training_audit_events_collection,
+    get_training_runs_collection,
+    get_notifications_collection,
     get_user_sessions_collection,
     get_users_collection,
 )
@@ -26,6 +30,8 @@ from server.app.core.dependencies import get_verified_user
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
+from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
+from server.app.quiz.services.training_notification_service import TrainingNotificationService
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
     LiveQuizInvitationRepository,
 )
@@ -57,12 +63,41 @@ def get_live_quiz_service(
     sessions_collection: AsyncIOMotorCollection = Depends(
         get_live_quiz_sessions_collection
     ),
+    training_runs_collection: AsyncIOMotorCollection = Depends(get_training_runs_collection),
+    training_assignments_collection: AsyncIOMotorCollection = Depends(
+        get_training_assignments_collection
+    ),
+    training_audit_events_collection: AsyncIOMotorCollection = Depends(
+        get_training_audit_events_collection
+    ),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+    notifications_collection: AsyncIOMotorCollection = Depends(
+        get_notifications_collection
+    ),
 ) -> LiveQuizSessionService:
     repository = LiveQuizSessionRepository(
         quizzes_v2_collection,
         sessions_collection,
     )
-    return LiveQuizSessionService(repository, broadcaster=live_quiz_realtime_broadcaster)
+    assignment_repository = TrainingRunRepository(
+        quizzes_v2_collection,
+        training_runs_collection,
+        training_assignments_collection,
+        training_audit_events_collection,
+        sessions_collection,
+    )
+    notification_service = TrainingNotificationService(
+        users_collection,
+        notifications_collection,
+        training_runs_collection,
+    )
+    return LiveQuizSessionService(
+        repository,
+        broadcaster=live_quiz_realtime_broadcaster,
+        assignment_repository=assignment_repository,
+        assignment_completion_notifier=notification_service.notify_completion,
+        training_owner_completion_notifier=notification_service.notify_run_owner_of_completion,
+    )
 
 
 def get_live_quiz_invitation_repository(

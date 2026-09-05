@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 
 import os
 import logging
+from collections.abc import Mapping
 
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
@@ -31,6 +32,10 @@ quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
 live_quiz_invitations_collection = database["live_quiz_invitations"]
+training_runs_collection = database["training_runs"]
+training_assignments_collection = database["training_assignments"]
+training_audit_events_collection = database["training_audit_events"]
+training_email_deliveries_collection = database["training_email_deliveries"]
 
 
 folders_collection = database["folders"]
@@ -72,6 +77,34 @@ async def ensure_notification_indexes(notifications_collection: AsyncIOMotorColl
         expireAfterSeconds=0,
         name="expires_at_1",
     )
+    # A sparse unique index still indexes explicit nulls. Notification writes
+    # intentionally omit an absent dedupe key, while this partial index also
+    # protects the collection from legacy null-bearing documents.
+    dedupe_partial_filter = {"dedupe_key": {"$type": "string"}}
+    has_current_dedupe_index = False
+    for index_name, index in index_info.items():
+        if index_name == "_id_":
+            continue
+        key = index.get("key", [])
+        key_items = list(key.items()) if isinstance(key, Mapping) else list(key)
+        if key_items != [("dedupe_key", 1)]:
+            continue
+        if (
+            index.get("unique")
+            and not index.get("sparse")
+            and index.get("partialFilterExpression") == dedupe_partial_filter
+        ):
+            has_current_dedupe_index = True
+            continue
+        await notifications_collection.drop_index(index_name)
+
+    if not has_current_dedupe_index:
+        await notifications_collection.create_index(
+            "dedupe_key",
+            unique=True,
+            partialFilterExpression=dedupe_partial_filter,
+            name="notification_dedupe_key",
+        )
 
 
 async def ensure_live_quiz_session_indexes(
@@ -82,6 +115,7 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index("guest_id")
     await live_quiz_sessions_collection.create_index("status")
     await live_quiz_sessions_collection.create_index("expires_at")
+    await live_quiz_sessions_collection.create_index("training_run_id")
     await live_quiz_sessions_collection.create_index(
         [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
         name="creator_quiz_submitted_at",
@@ -132,6 +166,59 @@ async def ensure_live_quiz_invitation_indexes(
     )
 
 
+async def ensure_training_run_indexes(
+    training_runs_collection: AsyncIOMotorCollection,
+    training_assignments_collection: AsyncIOMotorCollection,
+    training_audit_events_collection: AsyncIOMotorCollection,
+    training_email_deliveries_collection: AsyncIOMotorCollection,
+):
+    """Indexes for the run-based corporate training workflow."""
+    await training_runs_collection.create_index("access_code", unique=True, sparse=True)
+    await training_runs_collection.create_index(
+        [("owner_user_id", 1), ("idempotency_key", 1)],
+        unique=True,
+        # Compound sparse indexes still index legacy rows with an owner but no
+        # idempotency key as a shared null value. Only new string keys belong
+        # in this uniqueness domain.
+        partialFilterExpression={"idempotency_key": {"$type": "string"}},
+        name="training_run_owner_idempotency_key",
+    )
+    await training_runs_collection.create_index([("owner_user_id", 1), ("created_at", -1)])
+    await training_runs_collection.create_index([("status", 1), ("closes_at", 1)])
+    await training_assignments_collection.create_index(
+        [("training_run_id", 1), ("recipient_email", 1)], unique=True
+    )
+    await training_assignments_collection.create_index(
+        [("recipient_user_id", 1), ("status", 1), ("due_at", 1)], sparse=True
+    )
+    await training_assignments_collection.create_index(
+        [("recipient_email", 1), ("status", 1), ("due_at", 1)]
+    )
+    await training_audit_events_collection.create_index(
+        [("training_run_id", 1), ("occurred_at", 1)]
+    )
+    await training_audit_events_collection.create_index(
+        [("training_run_id", 1), ("event_type", 1)],
+        unique=True,
+        name="training_run_audit_event_once",
+    )
+    await training_email_deliveries_collection.create_index(
+        "delivery_key", unique=True, name="training_email_delivery_once"
+    )
+    await training_email_deliveries_collection.create_index(
+        [("status", 1), ("next_attempt_at", 1)],
+        name="training_email_delivery_dispatch",
+    )
+    await training_email_deliveries_collection.create_index(
+        [("status", 1), ("created_at", 1)],
+        name="training_email_delivery_staged_recovery",
+    )
+    await training_email_deliveries_collection.create_index(
+        [("training_run_id", 1), ("recipient_email", 1)],
+        name="training_email_delivery_run_recipient",
+    )
+
+
 async def startUp():
     await ensure_user_collections(
         database,
@@ -147,6 +234,12 @@ async def startUp():
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
     await ensure_document_rag_cache_indexes(document_rag_cache_collection)
     await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
+    await ensure_training_run_indexes(
+        training_runs_collection,
+        training_assignments_collection,
+        training_audit_events_collection,
+        training_email_deliveries_collection,
+    )
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -222,6 +315,22 @@ def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
     if live_quiz_invitations_collection is None:
         raise RuntimeError("[DB Error] live_quiz_invitations_collection has not been initialized properly.")
     return live_quiz_invitations_collection
+
+
+def get_training_runs_collection() -> AsyncIOMotorCollection:
+    return training_runs_collection
+
+
+def get_training_assignments_collection() -> AsyncIOMotorCollection:
+    return training_assignments_collection
+
+
+def get_training_audit_events_collection() -> AsyncIOMotorCollection:
+    return training_audit_events_collection
+
+
+def get_training_email_deliveries_collection() -> AsyncIOMotorCollection:
+    return training_email_deliveries_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:
