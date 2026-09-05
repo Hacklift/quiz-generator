@@ -5,11 +5,9 @@ type PendingKeys = Map<string, string>;
 export const trainingRunIntentFingerprint = (
   payload: CreateTrainingRunPayload,
 ): string => {
-  const recipientEmails = [
-    ...new Set(
-      payload.recipient_emails.map((email) => email.trim().toLowerCase()),
-    ),
-  ].sort();
+  const recipientEmails = Array.from(
+    new Set(payload.recipient_emails.map((email) => email.trim().toLowerCase())),
+  ).sort();
 
   // This mirrors the server's request-fingerprint normalization. Keeping the
   // same intent stable across whitespace or recipient-order changes avoids
@@ -41,4 +39,11 @@ export const idempotencyKeyForTrainingRun = (
   const key = createKey();
   pendingKeys.set(fingerprint, key);
   return key;
+};
+
+export const clearTrainingRunIdempotencyKey = (
+  pendingKeys: PendingKeys,
+  payload: CreateTrainingRunPayload,
+): void => {
+  pendingKeys.delete(trainingRunIntentFingerprint(payload));
 };

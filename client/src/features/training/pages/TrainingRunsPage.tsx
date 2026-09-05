@@ -15,7 +15,10 @@ import {
   type TrainingPurpose,
   type TrainingRunSummary,
 } from "@features/training/api/trainingRunApi";
-import { idempotencyKeyForTrainingRun } from "@features/training/lib/trainingRunIdempotency";
+import {
+  clearTrainingRunIdempotencyKey,
+  idempotencyKeyForTrainingRun,
+} from "@features/training/lib/trainingRunIdempotency";
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 import { ROUTES } from "@shared/config/patterns/routes";
 
@@ -150,6 +153,9 @@ function TrainingRunsContent() {
         () => crypto.randomUUID(),
       );
       const run = await trainingRunApi.createRun(payload, idempotencyKey);
+      // A confirmed response completes this create intent. A subsequent,
+      // deliberate submission with the same fields must create a new run.
+      clearTrainingRunIdempotencyKey(pendingCreateKeys.current, payload);
       toast.success("Training run created.");
       await router.push(ROUTES.trainingRun(run.id));
     } catch (error: any) {

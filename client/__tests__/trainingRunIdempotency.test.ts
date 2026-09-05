@@ -1,5 +1,6 @@
 import type { CreateTrainingRunPayload } from "@features/training/api/trainingRunApi";
 import {
+  clearTrainingRunIdempotencyKey,
   idempotencyKeyForTrainingRun,
   trainingRunIntentFingerprint,
 } from "@features/training/lib/trainingRunIdempotency";
@@ -49,5 +50,18 @@ describe("training run idempotency", () => {
     expect(trainingRunIntentFingerprint(original)).not.toBe(
       trainingRunIntentFingerprint(edited),
     );
+  });
+
+  it("releases a successful intent so a later identical run is new", () => {
+    const keys = new Map<string, string>();
+    const createKey = jest
+      .fn()
+      .mockReturnValueOnce("key-first-run")
+      .mockReturnValueOnce("key-second-run");
+    const request = payload();
+
+    expect(idempotencyKeyForTrainingRun(keys, request, createKey)).toBe("key-first-run");
+    clearTrainingRunIdempotencyKey(keys, request);
+    expect(idempotencyKeyForTrainingRun(keys, request, createKey)).toBe("key-second-run");
   });
 });
