@@ -6,7 +6,6 @@ from .adapters.celery_adapter import CeleryAdapter
 from .adapters.background_adapter import BackgroundAdapter
 from .adapters.direct_adapter import DirectAdapter
 from .adapters.mailgun_adapter import MailgunAdapter
-from server.celery_config import celery_app
 
 
 class EmailService:
@@ -49,6 +48,11 @@ def worker_chain_for(purpose: str, priority: str = "default") -> list[str]:
 
 
 def build_email_service(background: BackgroundTasks | None):
+    # This factory is the composition boundary for request-dispatch adapters.
+    # Keeping Celery out of module scope prevents task registration from
+    # recursively importing this service during application startup.
+    from server.celery_config import celery_app
+
     adapters = {
         "celery": CeleryAdapter(celery_app),
         "direct": DirectAdapter(),
