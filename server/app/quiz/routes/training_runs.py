@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from server.app.core.dependencies import get_training_manager_user, get_verified_user
@@ -89,6 +89,7 @@ async def list_owned_training_quizzes(
 async def create_training_run(
     payload: CreateTrainingRunRequest,
     request: Request,
+    response: Response,
     current_user: UserOut = Depends(get_training_manager_user),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
@@ -144,6 +145,7 @@ async def start_training_assignment(
 async def preview_public_training_run(
     access_code: str,
     request: Request,
+    response: Response,
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.access_preview(access_code)
@@ -155,6 +157,7 @@ async def start_public_training_run(
     access_code: str,
     payload: StartTrainingSessionRequest,
     request: Request,
+    response: Response,
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     return await service.start_shared_session(

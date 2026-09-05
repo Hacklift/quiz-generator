@@ -2,7 +2,7 @@ import inspect
 
 import pytest
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from fastapi.params import Depends
 
 from server.app.core.dependencies import get_training_manager_user, get_verified_user
@@ -73,3 +73,15 @@ def test_training_manager_capability_composes_verified_user_requirement():
 
     assert isinstance(dependency, Depends)
     assert dependency.dependency is get_verified_user
+
+
+def test_rate_limited_training_routes_accept_fastapi_response():
+    """SlowAPI requires Response to attach rate-limit headers after a success."""
+    for endpoint in (
+        training_runs.create_training_run,
+        training_runs.preview_public_training_run,
+        training_runs.start_public_training_run,
+    ):
+        response_parameter = inspect.signature(endpoint).parameters.get("response")
+        assert response_parameter is not None
+        assert response_parameter.annotation is Response
