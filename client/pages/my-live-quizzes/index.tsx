@@ -50,6 +50,7 @@ const MyLiveQuizzesPage: React.FC = () => {
   const [quizToGenerateFor, setQuizToGenerateFor] =
     useState<LiveQuizSummary | null>(null);
   const [duration, setDuration] = useState(20);
+  const [passingThreshold, setPassingThreshold] = useState(80);
   const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -74,6 +75,7 @@ const MyLiveQuizzesPage: React.FC = () => {
   const openGenerationDialog = (quiz: LiveQuizSummary) => {
     setQuizToGenerateFor(quiz);
     setDuration(quiz.time_limit_minutes || 20);
+    setPassingThreshold(80);
     setExpiresAt(tomorrowLocalValue());
   };
 
@@ -90,6 +92,7 @@ const MyLiveQuizzesPage: React.FC = () => {
         participant_access_mode:
           quizToGenerateFor.participant_access_mode || "public",
         invited_emails: quizToGenerateFor.invited_emails || [],
+        passing_threshold_percentage: passingThreshold,
       });
       setQuizToGenerateFor(null);
       await loadLiveQuizzes();
@@ -271,6 +274,19 @@ const MyLiveQuizzesPage: React.FC = () => {
                     value={duration}
                     onChange={(event) =>
                       setDuration(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Passing threshold (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={passingThreshold}
+                    onChange={(event) =>
+                      setPassingThreshold(Number(event.target.value))
                     }
                     className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
                   />

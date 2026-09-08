@@ -67,6 +67,8 @@ export interface LiveQuizResult {
   percentage: number;
   submitted_at: string;
   auto_submitted: boolean;
+  passing_threshold_percentage: number;
+  passed: boolean;
 }
 
 export interface ParticipantRow {
@@ -85,6 +87,8 @@ export interface ParticipantRow {
   progress_percentage?: number | null;
   status: string;
   auto_submitted: boolean;
+  passing_threshold_percentage?: number | null;
+  passed?: boolean | null;
 }
 
 export interface AccessCodeResponse {
@@ -183,6 +187,7 @@ export const liveQuizService = {
     participant_access_mode?: "public" | "restricted" | "invited_only";
     invited_emails?: string[];
     send_email_invitations?: boolean;
+    passing_threshold_percentage?: number;
   }): Promise<AccessCodeResponse> {
     const { quizId, ...body } = payload;
     const { data } = await api.post(
@@ -282,6 +287,22 @@ export const liveQuizService = {
       `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-sessions/${encodeURIComponent(sessionId)}`,
     );
     return data;
+  },
+
+  async downloadCompletionReport(quizId: string): Promise<void> {
+    const { data: run } = await api.get<{ run_id: string }>(
+      `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-runs/latest`,
+    );
+    const response = await api.get(
+      `/api/v1/live-quiz-runs/${encodeURIComponent(run.run_id)}/completion-report.csv`,
+      { responseType: "blob" },
+    );
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `completion-report-${run.run_id}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   },
 
   subscribeParticipants(
