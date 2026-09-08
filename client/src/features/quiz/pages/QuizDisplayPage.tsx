@@ -14,7 +14,6 @@ import {
   SaveQuizButton,
 } from "@features/quiz/components";
 import { api } from "@shared/api/http";
-import publicApi from "@shared/api/publicHttp";
 import { TokenService } from "@shared/auth/tokenService";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
@@ -321,7 +320,7 @@ const QuizDisplayPage: React.FC = () => {
         })),
       };
 
-      const { data: report } = await publicApi.post(
+      const { data: report } = await api.post(
         `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
         payload,
       );

@@ -1,12 +1,15 @@
 import pytest
+from datetime import datetime, timedelta
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2
 from ...app.quiz.repositories.v2.models.reference_models import (
     FolderDocumentV2,
     FolderItemDocumentV2,
+    QuizAttemptDocumentV2,
     QuizHistoryDocumentV2,
     SavedQuizDocumentV2,
 )
+from ...app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
 from ...app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from ...app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 
@@ -311,3 +314,106 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
     assert str(preserved.id) == str(history.id)
     assert preserved.deleted_at is not None
     assert await repository.list_quiz_history_for_user("user-history") == []
+
+
+@pytest.mark.asyncio
+async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
+    repository = QuizAttemptV2Repository(test_db["quiz_attempts_v2"])
+
+    older = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-1",
+            quiz_id="quiz-1",
+            question_results=[
+                {
+                    "question": "Older question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+            submitted_at=datetime.utcnow() - timedelta(minutes=5),
+        )
+    )
+    newer = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-1",
+            quiz_id="quiz-2",
+            question_results=[
+                {
+                    "question": "Newer question",
+                    "user_answer": "B",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": False,
+                    "result": "Incorrect",
+                }
+            ],
+            score=0,
+            percentage=0.0,
+            submitted_at=datetime.utcnow(),
+        )
+    )
+    await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-2",
+            quiz_id="quiz-1",
+            question_results=[
+                {
+                    "question": "Other user question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+            submitted_at=datetime.utcnow() + timedelta(minutes=1),
+        )
+    )
+
+    attempts = await repository.list_attempts_for_user("user-1")
+    filtered_attempts = await repository.list_attempts_for_user("user-1", quiz_id="quiz-1")
+
+    assert [str(attempt.id) for attempt in attempts] == [str(newer.id), str(older.id)]
+    assert len(filtered_attempts) == 1
+    assert str(filtered_attempts[0].id) == str(older.id)
+
+
+@pytest.mark.asyncio
+async def test_quiz_attempt_repository_soft_delete(test_db):
+    repository = QuizAttemptV2Repository(test_db["quiz_attempts_v2"])
+
+    attempt = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-delete",
+            quiz_id="quiz-delete",
+            question_results=[
+                {
+                    "question": "Delete question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+        )
+    )
+
+    deleted_count = await repository.soft_delete_attempt_by_id(
+        str(attempt.id),
+        user_id="user-delete",
+    )
+    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete")
+
+    assert deleted_count == 1
+    assert fetched is None

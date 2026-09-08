@@ -4,8 +4,7 @@ export const PARENT_PRACTICE_LEVELS = [
   { id: "ages-9-11", label: "Ages 9–11" },
 ] as const;
 
-export type ParentPracticeLevel =
-  (typeof PARENT_PRACTICE_LEVELS)[number]["id"];
+export type ParentPracticeLevel = (typeof PARENT_PRACTICE_LEVELS)[number]["id"];
 
 export type ParentPracticePresetId =
   | "addition-subtraction"
@@ -50,7 +49,8 @@ export const PARENT_PRACTICE_PRESETS: readonly ParentPracticePreset[] = [
     topic: {
       "ages-5-7": undefined,
       "ages-7-9": "Multiplication tables from 2 to 10 — ages 7 to 9",
-      "ages-9-11": "Multiplication and division facts up to 12 × 12 — ages 9 to 11",
+      "ages-9-11":
+        "Multiplication and division facts up to 12 × 12 — ages 9 to 11",
     },
     instruction:
       "Use exact multiplication or related division facts and exactly one unambiguous correct option.",
@@ -97,7 +97,9 @@ export function resolveParentPracticePreset(
   );
   const topic = preset?.topic[level];
   if (!preset || !preset.levels.includes(level) || !topic) {
-    throw new Error("This practice preset is not available for the selected level.");
+    throw new Error(
+      "This practice preset is not available for the selected level.",
+    );
   }
   if (!Number.isInteger(numQuestions) || numQuestions < 1) {
     throw new Error("Number of questions must be a positive whole number.");

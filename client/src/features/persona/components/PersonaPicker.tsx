@@ -99,9 +99,7 @@ export default function PersonaPicker({
             key={definition.slug}
             type="button"
             disabled={isSaving}
-            onClick={() =>
-              choose({ category, userType: definition.slug })
-            }
+            onClick={() => choose({ category, userType: definition.slug })}
             className="block w-full border-t-2 border-divider px-[6px] py-[16px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="flex items-center gap-[14px]">

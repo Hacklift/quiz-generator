@@ -287,8 +287,9 @@ export default function QuizForm() {
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
     const presetKey = searchParams?.get("preset") || "";
-    const hasApplicablePreset =
-      Boolean(PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey]);
+    const hasApplicablePreset = Boolean(
+      PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey],
+    );
     const touched = touchedGenerationFieldsRef.current;
 
     if (!hasApplicablePreset && !touched.audienceType) {
@@ -348,9 +349,7 @@ export default function QuizForm() {
       );
     }
     if (!touched.customInstruction) {
-      setCustomInstruction(
-        queryCustomInstruction || preset.customInstruction,
-      );
+      setCustomInstruction(queryCustomInstruction || preset.customInstruction);
     }
     if (!touched.difficultyLevel) {
       setDifficultyLevel(
@@ -395,7 +394,9 @@ export default function QuizForm() {
           sessionStorage.setItem("user_api_token", res.data.token);
         }
       } catch (e: unknown) {
-        const typedError = e as ApiErrorLike & { response?: { status?: number } };
+        const typedError = e as ApiErrorLike & {
+          response?: { status?: number };
+        };
         if (typedError?.response?.status === 404) {
           return;
         }
@@ -600,14 +601,17 @@ export default function QuizForm() {
         access_code_expires_at: enableLiveQuiz
           ? new Date(liveAccessExpiresAt).toISOString()
           : undefined,
-        participant_access_mode: enableLiveQuiz ? participantAccessMode : undefined,
+        participant_access_mode: enableLiveQuiz
+          ? participantAccessMode
+          : undefined,
         invited_emails: enableLiveQuiz ? invitedEmails : undefined,
         send_email_invitations: enableLiveQuiz
           ? sendEmailInvitations
           : undefined,
       };
 
-      const client = enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
+      const client =
+        enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
       const { data } = await client.post("/api/get-questions", payload);
       const questions = Array.isArray(data?.questions) ? data.questions : [];
       if (!questions.length) {
@@ -629,7 +633,8 @@ export default function QuizForm() {
             },
             questions,
           );
-          canonicalQuizId = canonicalQuizId || historyResponse?.data?.quiz_id || "";
+          canonicalQuizId =
+            canonicalQuizId || historyResponse?.data?.quiz_id || "";
         } catch (historyError) {
           console.error("Error saving quiz history:", historyError);
         }

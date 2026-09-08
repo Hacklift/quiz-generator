@@ -36,7 +36,9 @@ describe("PersonaBadge", () => {
     render(<PersonaBadge userType="student" showDefaults={false} />);
 
     expect(screen.getByText("Set up for: Student")).toBeInTheDocument();
-    expect(screen.queryByTestId("persona-badge-defaults")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("persona-badge-defaults"),
+    ).not.toBeInTheDocument();
   });
 
   test("shows live applied defaults when form values override taxonomy defaults", () => {

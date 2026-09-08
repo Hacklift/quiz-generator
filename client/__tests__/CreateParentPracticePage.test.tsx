@@ -43,8 +43,12 @@ describe("CreateParentPracticePage", () => {
     fireEvent.change(screen.getByLabelText("Child age/level"), {
       target: { value: "ages-5-7" },
     });
-    expect(screen.getByRole("option", { name: "Addition & Subtraction" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Basic Fractions" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Addition & Subtraction" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Basic Fractions" }),
+    ).not.toBeInTheDocument();
   });
 
   test("selects 20 minutes by default and hides the custom input", () => {
@@ -73,7 +77,9 @@ describe("CreateParentPracticePage", () => {
       }),
       20,
     );
-    expect(screen.getByRole("region", { name: "Practice ready" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Practice ready" }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Access code ABC123/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start Practice" }));

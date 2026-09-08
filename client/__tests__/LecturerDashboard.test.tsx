@@ -39,9 +39,7 @@ describe("LecturerDashboard", () => {
   });
 
   test("renders live session emphasis and presets", () => {
-    render(
-      <LecturerDashboard persona={mockLecturerPersona} user={mockUser} />,
-    );
+    render(<LecturerDashboard persona={mockLecturerPersona} user={mockUser} />);
 
     expect(screen.getByText("Live session")).toBeInTheDocument();
     expect(screen.getByText("Quick-create presets")).toBeInTheDocument();
@@ -50,9 +48,7 @@ describe("LecturerDashboard", () => {
   });
 
   test("navigates to the persona-aware generate page with lecturer presets", () => {
-    render(
-      <LecturerDashboard persona={mockLecturerPersona} user={mockUser} />,
-    );
+    render(<LecturerDashboard persona={mockLecturerPersona} user={mockUser} />);
 
     const recapBtn = screen.getByRole("button", {
       name: /Create Lecture recap/i,
@@ -61,9 +57,15 @@ describe("LecturerDashboard", () => {
     expect(mockPush).toHaveBeenCalledWith(
       expect.stringContaining("preset=lecture-recap"),
     );
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/generate?"));
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("persona=lecturer"));
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("category=school"));
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("/generate?"),
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("persona=lecturer"),
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining("category=school"),
+    );
 
     const seminarBtn = screen.getByRole("button", {
       name: /Create Seminar prep/i,
@@ -75,9 +77,7 @@ describe("LecturerDashboard", () => {
   });
 
   test("surfaces live session controls with 1-click navigation", () => {
-    render(
-      <LecturerDashboard persona={mockLecturerPersona} user={mockUser} />,
-    );
+    render(<LecturerDashboard persona={mockLecturerPersona} user={mockUser} />);
 
     const startBtn = screen.getByRole("button", {
       name: /Start live lecture/i,
@@ -99,9 +99,7 @@ describe("LecturerDashboard", () => {
   });
 
   test("uses dynamic school terminology (cohort/lecture) in descriptions", () => {
-    render(
-      <LecturerDashboard persona={mockLecturerPersona} user={mockUser} />,
-    );
+    render(<LecturerDashboard persona={mockLecturerPersona} user={mockUser} />);
 
     expect(
       screen.getByText((content, element) => {

@@ -42,8 +42,8 @@ storage unchanged.
 
 ```tsx
 const t = useTerms();
-t("learner", "plural");   // "students" (school) · "team members" (corporate)
-t("group");               // "class" · "team" · "cohort" for a lecturer
+t("learner", "plural"); // "students" (school) · "team members" (corporate)
+t("group"); // "class" · "team" · "cohort" for a lecturer
 ```
 
 Keys live in `@shared/config/terminology.ts`, resolving user-type override →

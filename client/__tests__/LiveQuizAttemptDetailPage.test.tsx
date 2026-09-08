@@ -33,8 +33,22 @@ test("renders score and correct/incorrect status for every question", async () =
     submitted_at: "2026-08-25T10:00:00Z",
     auto_submitted: false,
     graded_answers: [
-      { question_index: 0, question: "2 × 3?", selected_answer: "6", correct_answer: "6", question_type: "multichoice", is_correct: true },
-      { question_index: 1, question: "4 × 4?", selected_answer: "14", correct_answer: "16", question_type: "multichoice", is_correct: false },
+      {
+        question_index: 0,
+        question: "2 × 3?",
+        selected_answer: "6",
+        correct_answer: "6",
+        question_type: "multichoice",
+        is_correct: true,
+      },
+      {
+        question_index: 1,
+        question: "4 × 4?",
+        selected_answer: "14",
+        correct_answer: "16",
+        question_type: "multichoice",
+        is_correct: false,
+      },
     ],
   });
 

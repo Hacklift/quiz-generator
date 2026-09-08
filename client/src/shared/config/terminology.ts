@@ -74,21 +74,23 @@ export const CATEGORY_TERMS: Record<PersonaCategory, TerminologyMap> = {
  * Overrides for a single user type, where the category default is wrong.
  * Kept deliberately sparse — most user types inherit their category.
  */
-export const USER_TYPE_TERMS: Partial<
-  Record<PersonaUserType, TerminologyMap>
-> = {
-  lecturer: {
-    group: { singular: "cohort", plural: "cohorts" },
-    session: { singular: "lecture", plural: "lectures" },
-  },
-  parent: {
-    learner: { singular: "child", plural: "children" },
-    assignment: { singular: "practice set", plural: "practice sets" },
-  },
-  hr: {
-    assignment: { singular: "compliance course", plural: "compliance courses" },
-  },
-};
+export const USER_TYPE_TERMS: Partial<Record<PersonaUserType, TerminologyMap>> =
+  {
+    lecturer: {
+      group: { singular: "cohort", plural: "cohorts" },
+      session: { singular: "lecture", plural: "lectures" },
+    },
+    parent: {
+      learner: { singular: "child", plural: "children" },
+      assignment: { singular: "practice set", plural: "practice sets" },
+    },
+    hr: {
+      assignment: {
+        singular: "compliance course",
+        plural: "compliance courses",
+      },
+    },
+  };
 
 export function resolveTerm(
   key: TermKey,
@@ -98,7 +100,9 @@ export function resolveTerm(
   const fromUserType = persona
     ? USER_TYPE_TERMS[persona.userType]?.[key]
     : undefined;
-  const fromCategory = persona ? CATEGORY_TERMS[persona.category]?.[key] : undefined;
+  const fromCategory = persona
+    ? CATEGORY_TERMS[persona.category]?.[key]
+    : undefined;
 
   const definition = fromUserType ?? fromCategory ?? DEFAULT_TERMS[key];
   return definition[form];
