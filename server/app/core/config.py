@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 from importlib.util import find_spec
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from urllib.parse import urlparse, urlunparse
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -71,6 +71,24 @@ class Settings(BaseSettings):
     ASSISTANT_PENDING_RUN_TTL_SECONDS: int = 900
     QUIZ_GENERATION_MAX_QUESTIONS: int = 10
     QUIZ_GENERATION_REQUIRES_AUTH: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def prioritize_process_environment_aliases(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        normalized = dict(data)
+        for primary, legacy in (
+            ("JWT_SECRET", "JWT_SECRET_KEY"),
+            ("EMAIL_SENDER", "SENDER_EMAIL"),
+            ("EMAIL_PASSWORD", "SENDER_PASSWORD"),
+        ):
+            value = os.environ.get(primary, os.environ.get(legacy))
+            if value is not None:
+                # A process environment value must override an .env alias.
+                normalized[primary] = value
+        return normalized
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:
