@@ -12,6 +12,7 @@ interface QuizAttemptQuestion {
   question: string;
   user_answer?: string | number | null;
   correct_answer?: string | number | null;
+  options?: string[] | null;
   question_type: string;
   accuracy_percentage?: number | null;
   is_correct: boolean;
@@ -158,6 +159,13 @@ export default function QuizHistoryDetailsPage() {
                       <p className="text-sm text-gray-600 mb-2">
                         {question.question_type} · {question.result}
                       </p>
+                      {question.options && question.options.length > 0 && (
+                        <ul className="mb-2 list-disc list-inside text-sm text-gray-700">
+                          {question.options.map((option, optionIndex) => (
+                            <li key={optionIndex}>{option}</li>
+                          ))}
+                        </ul>
+                      )}
                       <p className="text-sm text-slate-700">
                         <strong>Your answer:</strong>{" "}
                         {question.user_answer?.toString() || "No answer"}

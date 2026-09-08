@@ -71,6 +71,7 @@ const attemptHistory = [
     question_results: [
       {
         question: "What protocol serves web pages?",
+        options: ["HTTP", "SSH"],
         user_answer: "HTTP",
         correct_answer: "HTTP",
         question_type: "multichoice",
@@ -103,7 +104,7 @@ describe("QuizHistoryPage", () => {
     });
   });
 
-  test("renders scored attempts and routes to the detail page", async () => {
+  test("renders scored attempts and routes to the detail or retake page", async () => {
     render(<DisplayQuizHistory openLoginModal={jest.fn()} />);
 
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
@@ -111,11 +112,16 @@ describe("QuizHistoryPage", () => {
     expect(
       screen.getByText(/What protocol serves web pages\?/),
     ).toBeInTheDocument();
+    expect(screen.getByText("SSH")).toBeInTheDocument();
     expect(screen.getAllByText(/Correct answer:/)).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "View Details" }));
 
     expect(mockPush).toHaveBeenCalledWith("/quiz_history/attempt-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retake Quiz" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/quiz_display?quizId=quiz-1");
   });
 
   test("deletes an attempt after confirmation and removes it from the page", async () => {

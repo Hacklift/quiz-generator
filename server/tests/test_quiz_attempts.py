@@ -113,6 +113,8 @@ async def test_grade_submission_persists_attempt_for_authenticated_user():
     assert attempt.percentage == 50.0
     assert attempt.question_results[0].is_correct is True
     assert attempt.question_results[1].is_correct is False
+    assert attempt.question_results[0].options == ["HTTP", "SSH"]
+    assert attempt.question_results[1].options == ["80", "443"]
 
 
 @pytest.mark.asyncio
@@ -238,6 +240,79 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
     assert payload[0]["quiz_title"] == "Storage Basics"
     assert payload[0]["score"] == 1
     assert payload[0]["question_results"][0]["is_correct"] is True
+
+
+@pytest.mark.asyncio
+async def test_attempt_history_backfills_options_from_the_quiz_for_legacy_attempts():
+    quiz = build_quiz_document()
+    attempt = QuizAttemptDocumentV2(
+        _id=ObjectId(),
+        user_id="user-1",
+        quiz_id=str(quiz.id),
+        question_results=[
+            {
+                "question": "What protocol serves web pages?",
+                "user_answer": "SSH",
+                "correct_answer": "HTTP",
+                "question_type": "multichoice",
+                "is_correct": False,
+                "result": "Incorrect",
+            }
+        ],
+        score=0,
+        percentage=0.0,
+    )
+    service = QuizAttemptService(
+        quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
+        attempt_repository=FakeAttemptRepository(attempts=[attempt]),
+    )
+
+    payload = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
+
+    assert payload is not None
+    assert payload["question_results"][0]["options"] == ["HTTP", "SSH"]
+
+
+@pytest.mark.asyncio
+async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_them():
+    quiz = QuizDocumentV2(
+        _id=ObjectId(),
+        title="Science Facts",
+        quiz_type="true-false",
+        source="manual",
+        questions=[
+            {
+                "question": "Water boils at 100 degrees Celsius at sea level.",
+                "correct_answer": "True",
+            }
+        ],
+    )
+    attempt = QuizAttemptDocumentV2(
+        _id=ObjectId(),
+        user_id="user-1",
+        quiz_id=str(quiz.id),
+        question_results=[
+            {
+                "question": "Water boils at 100 degrees Celsius at sea level.",
+                "user_answer": "True",
+                "correct_answer": "True",
+                "question_type": "true-false",
+                "is_correct": True,
+                "result": "Correct",
+            }
+        ],
+        score=1,
+        percentage=100.0,
+    )
+    service = QuizAttemptService(
+        quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
+        attempt_repository=FakeAttemptRepository(attempts=[attempt]),
+    )
+
+    payload = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
+
+    assert payload is not None
+    assert payload["question_results"][0]["options"] == ["True", "False"]
 
 
 @pytest.mark.asyncio

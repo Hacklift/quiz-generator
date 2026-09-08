@@ -162,6 +162,10 @@ def get_v2_collection_validators() -> dict[str, dict]:
                                 "question": {"bsonType": "string", "minLength": 1},
                                 "user_answer": {"bsonType": ["string", "int", "long", "null"]},
                                 "correct_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "options": {
+                                    "bsonType": ["array", "null"],
+                                    "items": {"bsonType": "string"},
+                                },
                                 "question_type": {"bsonType": "string", "minLength": 1},
                                 "accuracy_percentage": {
                                     "bsonType": ["double", "int", "long", "decimal", "null"]

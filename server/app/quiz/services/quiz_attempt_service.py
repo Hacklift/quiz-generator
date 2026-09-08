@@ -22,12 +22,30 @@ class QuizAttemptService:
         )
 
     @staticmethod
-    def _attempt_payload(attempt, *, quiz_title: str | None) -> dict[str, Any]:
+    def _question_options_by_text(
+        quiz: QuizDocumentV2 | None,
+    ) -> dict[str, list[str] | None]:
+        if quiz is None:
+            return {}
+        default_options = ["True", "False"] if quiz.quiz_type.value == "true-false" else None
+        return {
+            question.question: question.options or default_options
+            for question in quiz.questions
+        }
+
+    @classmethod
+    def _attempt_payload(
+        cls,
+        attempt,
+        *,
+        quiz: QuizDocumentV2 | None,
+    ) -> dict[str, Any]:
+        question_options_by_text = cls._question_options_by_text(quiz)
         return {
             "_id": str(attempt.id),
             "id": str(attempt.id),
             "quiz_id": attempt.quiz_id,
-            "quiz_title": quiz_title,
+            "quiz_title": quiz.title if quiz else None,
             "score": attempt.score,
             "percentage": attempt.percentage,
             "total_questions": len(attempt.question_results),
@@ -37,6 +55,9 @@ class QuizAttemptService:
                     "question": result.question,
                     "user_answer": result.user_answer,
                     "correct_answer": result.correct_answer,
+                    "options": result.options
+                    or question_options_by_text.get(result.question)
+                    or (["True", "False"] if result.question_type == "true-false" else None),
                     "question_type": result.question_type,
                     "accuracy_percentage": result.accuracy_percentage,
                     "is_correct": result.is_correct,
@@ -67,7 +88,7 @@ class QuizAttemptService:
         payloads: list[dict[str, Any]] = []
         for attempt in attempts:
             quiz = quizzes_by_id.get(attempt.quiz_id)
-            payloads.append(self._attempt_payload(attempt, quiz_title=quiz.title if quiz else None))
+            payloads.append(self._attempt_payload(attempt, quiz=quiz))
         return payloads
 
     async def get_attempt(self, *, user_id: str, attempt_id: str) -> dict[str, Any] | None:
@@ -78,7 +99,7 @@ class QuizAttemptService:
         if attempt is None:
             return None
         quiz = await self.quiz_repository.find_by_id(attempt.quiz_id)
-        return self._attempt_payload(attempt, quiz_title=quiz.title if quiz else None)
+        return self._attempt_payload(attempt, quiz=quiz)
 
     async def delete_attempt(self, *, user_id: str, attempt_id: str) -> bool:
         return (

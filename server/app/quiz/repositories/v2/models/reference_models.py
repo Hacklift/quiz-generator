@@ -114,6 +114,7 @@ class QuizAttemptQuestionResultV2(BaseModel):
     question: str
     user_answer: str | int | None = None
     correct_answer: str | int | None = None
+    options: list[str] | None = None
     question_type: str
     accuracy_percentage: float | None = None
     is_correct: bool

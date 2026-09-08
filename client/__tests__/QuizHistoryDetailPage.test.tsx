@@ -57,6 +57,7 @@ describe("QuizHistoryDetailPage", () => {
       question_results: [
         {
           question: "What protocol serves web pages?",
+          options: ["HTTP", "SSH"],
           user_answer: "HTTP",
           correct_answer: "HTTP",
           question_type: "multichoice",
@@ -83,6 +84,7 @@ describe("QuizHistoryDetailPage", () => {
     expect(
       screen.getByText(/Which port is commonly used for HTTPS\?/),
     ).toBeInTheDocument();
+    expect(screen.getByText("SSH")).toBeInTheDocument();
     expect(screen.getByText(/Accuracy:/)).toBeInTheDocument();
   });
 

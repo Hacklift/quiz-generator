@@ -16,6 +16,7 @@ interface QuizAttemptQuestion {
   question: string;
   user_answer?: string | number | null;
   correct_answer?: string | number | null;
+  options?: string[] | null;
   is_correct: boolean;
   result: string;
   accuracy_percentage?: number | null;
@@ -102,6 +103,16 @@ const DisplayQuizHistoryPage = ({
                     <button
                       onClick={() =>
                         router.push(
+                          `/quiz_display?quizId=${encodeURIComponent(quizItem.quiz_id)}`,
+                        )
+                      }
+                      className="px-3 py-1 rounded-lg bg-emerald-700 text-white text-sm hover:bg-emerald-800"
+                    >
+                      Retake Quiz
+                    </button>
+                    <button
+                      onClick={() =>
+                        router.push(
                           `/quiz_history/${getQuizHistoryId(quizItem)}`,
                         )
                       }
@@ -159,6 +170,14 @@ const DisplayQuizHistoryPage = ({
                       <p className="text-sm text-gray-600">
                         {quizQuestion.question_type} · {quizQuestion.result}
                       </p>
+                      {quizQuestion.options &&
+                        quizQuestion.options.length > 0 && (
+                          <ul className="mt-2 list-disc list-inside text-sm text-gray-700">
+                            {quizQuestion.options.map((option, optionIndex) => (
+                              <li key={optionIndex}>{option}</li>
+                            ))}
+                          </ul>
+                        )}
                       <p className="mt-2 text-sm text-slate-700">
                         <strong>Your answer:</strong>{" "}
                         {quizQuestion.user_answer?.toString() || "No answer"}

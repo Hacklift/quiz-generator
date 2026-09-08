@@ -130,12 +130,25 @@ class QuizGradingService:
         percentage = round((score / total_questions) * 100, 2) if total_questions else 0.0
         return score, percentage
 
+    @staticmethod
+    def _history_options(
+        options: list[str] | None,
+        *,
+        question_type: str,
+    ) -> list[str] | None:
+        if options:
+            return options
+        if question_type == "true-false":
+            return ["True", "False"]
+        return None
+
     async def _store_attempt(
         self,
         *,
         user_id: str,
         quiz_id: str,
         graded_results: list[dict[str, Any]],
+        question_options_by_text: dict[str, list[str] | None],
     ) -> None:
         score, percentage = self._build_attempt_summary(graded_results)
         await self.attempt_repository.insert_attempt(
@@ -143,7 +156,17 @@ class QuizGradingService:
                 user_id=user_id,
                 quiz_id=quiz_id,
                 question_results=[
-                    QuizAttemptQuestionResultV2(**graded_result)
+                    QuizAttemptQuestionResultV2(
+                        **graded_result,
+                        options=self._history_options(
+                            question_options_by_text.get(
+                                str(graded_result.get("question") or "")
+                            ),
+                            question_type=str(
+                                graded_result.get("question_type") or ""
+                            ),
+                        ),
+                    )
                     for graded_result in graded_results
                 ],
                 score=score,
@@ -176,6 +199,7 @@ class QuizGradingService:
             {
                 "question": question.question,
                 "correct_answer": question.correct_answer,
+                "options": question.options,
             }
             for question in quiz_doc.questions
         ]
@@ -191,6 +215,13 @@ class QuizGradingService:
                     user_id=user_id,
                     quiz_id=str(quiz_doc.id),
                     graded_results=graded_results,
+                    question_options_by_text={
+                        question.question: self._history_options(
+                            question.options,
+                            question_type=quiz_doc.quiz_type.value,
+                        )
+                        for question in quiz_doc.questions
+                    },
                 )
             except Exception:
                 logger.exception(
