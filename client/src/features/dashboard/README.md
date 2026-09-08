@@ -7,7 +7,7 @@ dashboard, which dispatches to a **user-type** view.
 pages/DashboardPage.tsx        [SCAFFOLD-OWNED]  auth + persona gate + category dispatch
   school/SchoolDashboard.tsx   #124 (done)       category chrome + user-type dispatch map
     school/views/*.tsx         one ticket each   #126 #127 #128 #129
-  corporate/CorporateDashboard.tsx  #125         mirror SchoolDashboard
+  corporate/CorporateDashboard.tsx  #125 (done)  category chrome + user-type dispatch map
     corporate/views/*.tsx      one ticket each   #130 #131 #132
 components/                    [SCAFFOLD-OWNED]  DashboardShell, QuickActions,
                                                  RecentQuizzes, DashboardPlaceholder,
@@ -21,7 +21,10 @@ Your view is rendered **inside** `<DashboardShell>` by its category
 dashboard, so render sections — not page chrome, not a NavBar.
 
 ```tsx
-export default function TeacherDashboard({ persona, user }: DashboardViewProps) {
+export default function TeacherDashboard({
+  persona,
+  user,
+}: DashboardViewProps) {
   const t = useTerms();
   return (
     <section className="border-t-2 border-divider pt-[28px]">

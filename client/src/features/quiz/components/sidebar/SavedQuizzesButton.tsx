@@ -6,7 +6,7 @@ import SidebarButton from "./SidebarButton";
 import { useAuth } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
 
-const SavedQuizzesButton = () => {
+const SavedQuizzesButton = ({ label }: { label: string }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,7 +25,7 @@ const SavedQuizzesButton = () => {
   return (
     <>
       <SidebarButton
-        label="Saved Quizzes"
+        label={label}
         icon="💾"
         isActive={isActive}
         onClick={handleClick}

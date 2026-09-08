@@ -47,7 +47,7 @@ class FakeLiveQuizRepository:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("time_limit_minutes", "expected_seconds"),
-    [(1, 60), (2, 120), (10, 600), (20, 1200)],
+    [(1, 60), (2, 120), (10, 600), (20, 1200), (27, 1620), (60, 3600)],
 )
 async def test_start_session_treats_time_limit_as_minutes(
     monkeypatch,

@@ -113,6 +113,31 @@ export interface LiveQuizSummary {
   participant_count: number;
   completed_count: number;
   average_score?: number | null;
+  latest_score?: number | null;
+  latest_percentage?: number | null;
+  latest_submitted_at?: string | null;
+}
+
+export interface GradedAnswer {
+  question_index: number;
+  question: string;
+  selected_answer: string;
+  correct_answer: string;
+  question_type: string;
+  is_correct: boolean;
+}
+
+export interface LiveQuizAttemptDetail {
+  session_id: string;
+  quiz_id: string;
+  title: string;
+  participant_name: string;
+  score: number;
+  total_questions: number;
+  percentage: number;
+  submitted_at: string;
+  auto_submitted: boolean;
+  graded_answers: GradedAnswer[];
 }
 
 export type LiveQuizParticipantsEvent =
@@ -246,6 +271,16 @@ export const liveQuizService = {
 
   async listLiveQuizzes(): Promise<LiveQuizSummary[]> {
     const { data } = await api.get("/api/v1/quizzes/live");
+    return data;
+  },
+
+  async getAttemptDetail(
+    quizId: string,
+    sessionId: string,
+  ): Promise<LiveQuizAttemptDetail> {
+    const { data } = await api.get(
+      `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-sessions/${encodeURIComponent(sessionId)}`,
+    );
     return data;
   },
 

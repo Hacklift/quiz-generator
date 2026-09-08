@@ -86,6 +86,12 @@ async def get_questions(
         }
 
     except Exception as e:
+        if not request.allow_fallback:
+            logging.warning(f"Quiz generation failed with fallback disabled: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Practice generation is temporarily unavailable. Please try again.",
+            )
         ai_down = True
         notification_message = "AI model is currently unavailable. Using mock questions instead."
         logging.warning(f"Hugging Face fallback triggered: {e}")

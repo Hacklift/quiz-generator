@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useRouter } from "next/router";
+import { useTerms } from "@features/persona/hooks/useTerms";
 interface NavGenerateQuizButtonProps {
   className?: string;
 }
@@ -10,6 +11,7 @@ const NavGenerateQuizButton: React.FC<NavGenerateQuizButtonProps> = ({
   className = "",
 }) => {
   const router = useRouter();
+  const t = useTerms();
 
   return (
     <button
@@ -22,7 +24,7 @@ const NavGenerateQuizButton: React.FC<NavGenerateQuizButtonProps> = ({
         ${className}
       `}
     >
-      Generate a Quiz
+      Create {t("quiz")}
     </button>
   );
 };

@@ -97,6 +97,28 @@ class LiveQuizAnalyticsRow(BaseModel):
     auto_submitted: bool = False
 
 
+class LiveQuizGradedAnswer(BaseModel):
+    question_index: int
+    question: str
+    selected_answer: str
+    correct_answer: str
+    question_type: str
+    is_correct: bool
+
+
+class LiveQuizAttemptDetail(BaseModel):
+    session_id: str
+    quiz_id: str
+    title: str
+    participant_name: str
+    score: int
+    total_questions: int
+    percentage: float
+    submitted_at: datetime
+    auto_submitted: bool = False
+    graded_answers: List[LiveQuizGradedAnswer]
+
+
 class LiveQuizSummaryRow(BaseModel):
     quiz_id: str
     title: str
@@ -110,3 +132,6 @@ class LiveQuizSummaryRow(BaseModel):
     participant_count: int = 0
     completed_count: int = 0
     average_score: Optional[float] = None
+    latest_score: Optional[int] = None
+    latest_percentage: Optional[float] = None
+    latest_submitted_at: Optional[datetime] = None

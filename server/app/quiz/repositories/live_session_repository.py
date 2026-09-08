@@ -139,11 +139,22 @@ class LiveQuizSessionRepository:
         ).sort("created_at", -1)
         return await cursor.to_list(length=500)
 
-    async def get_session_by_id_and_creator(self, session_id: str, creator_user_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session_by_id_and_creator(
+        self,
+        session_id: str,
+        creator_user_id: str,
+        quiz_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Get a session ensuring it belongs to the creator."""
         try:
+            query = {
+                "_id": ObjectId(session_id),
+                "creator_user_id": creator_user_id,
+            }
+            if quiz_id is not None:
+                query["quiz_id"] = quiz_id
             return await self.sessions_collection.find_one(
-                {"_id": ObjectId(session_id), "creator_user_id": creator_user_id}
+                query
             )
         except InvalidId:
             return None

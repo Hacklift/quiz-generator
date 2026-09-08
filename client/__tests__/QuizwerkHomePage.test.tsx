@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import QuizwerkHomePage from "@features/home/QuizwerkHomePage";
 
 const mockRouterPush = jest.fn();
@@ -45,12 +45,18 @@ describe("QuizwerkHomePage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: /Type a topic\./ }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Pick the seat you're sitting in")).toBeInTheDocument();
-    expect(screen.getByText("Pick a plan that fits how you train")).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick the seat you're sitting in"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick a plan that fits how you train"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Built for the room, not the browser tab"),
     ).toBeInTheDocument();
-    expect(screen.getByText("The next quiz writes itself.")).toBeInTheDocument();
+    expect(
+      screen.getByText("The next quiz writes itself."),
+    ).toBeInTheDocument();
   });
 
   test("lists all seven personas", () => {
@@ -72,12 +78,12 @@ describe("QuizwerkHomePage", () => {
   test("routes to the generate page with persona context", () => {
     render(<QuizwerkHomePage />);
 
-    screen.getByText("Teacher").click();
+    fireEvent.click(screen.getByText("Teacher"));
 
     expect(mockRouterPush).toHaveBeenCalledTimes(1);
     const href = mockRouterPush.mock.calls[0][0] as string;
     expect(href).toContain("/generate?persona=");
     expect(href).toContain("category=school");
-    expect(href).toContain("topic=");
+    expect(href).not.toContain("topic=");
   });
 });

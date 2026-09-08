@@ -6,7 +6,7 @@ import SidebarButton from "./SidebarButton";
 import { useAuth } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
 
-const QuizHistoryButton: React.FC = () => {
+const QuizHistoryButton: React.FC<{ label: string }> = ({ label }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,7 +25,7 @@ const QuizHistoryButton: React.FC = () => {
   return (
     <>
       <SidebarButton
-        label="Quiz History"
+        label={label}
         icon="🕘"
         onClick={handleClick}
         isActive={isActive}

@@ -31,7 +31,7 @@ const RegisterPage: React.FC = () => {
       <SignInModal
         isOpen={showLogin}
         onClose={() => setShowLogin(false)}
-        redirectTo={ROUTES.HOME}
+        redirectTo={ROUTES.DASHBOARD}
         switchToSignUp={() => {
           setShowLogin(false);
           setShowSignUp(true);
