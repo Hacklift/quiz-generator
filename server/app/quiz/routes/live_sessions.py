@@ -1,10 +1,11 @@
 import asyncio
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
@@ -14,6 +15,12 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
     get_user_sessions_collection,
     get_users_collection,
+    get_product_events_collection,
+)
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    RESULTS_EXPORTED,
+    record_product_event,
 )
 from server.app.core.config import settings
 from server.app.users.models import UserOut
@@ -46,6 +53,12 @@ from server.app.quiz.schemas.live_session_schemas import (
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.services.live_quiz_realtime import live_quiz_realtime_broadcaster
+from server.app.quiz.services.download_service import build_download_filename
+from server.app.quiz.utils.live_results_export import (
+    generate_live_results_csv,
+    generate_live_results_pdf,
+    generate_live_results_txt,
+)
 
 
 router = APIRouter()
@@ -98,7 +111,7 @@ async def generate_quiz_access_code(
     ),
     email_service: EmailService = Depends(get_email_service),
 ):
-    return await service.generate_access_code(
+    result = await service.generate_access_code(
         quiz_id=quiz_id,
         access_code_expires_at=payload.access_code_expires_at,
         creator_id=current_user.id,
@@ -109,6 +122,14 @@ async def generate_quiz_access_code(
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
+    await record_product_event(
+        get_product_events_collection(),
+        event_type=LIVE_QUIZ_ENABLED,
+        user_id=current_user.id,
+        user=current_user,
+        quiz_id=quiz_id,
+    )
+    return result
 
 
 @router.get("/quizzes/access/{code}", response_model=QuizAccessPreview)
@@ -235,6 +256,36 @@ async def list_live_quiz_participants(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
     return await service.list_analytics(quiz_id, current_user.id)
+
+
+@router.get(
+    "/quizzes/{quiz_id}/live-sessions/export",
+)
+async def export_live_quiz_results(
+    quiz_id: str,
+    format: Literal["csv", "pdf", "txt"],
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+):
+    payload = await service.build_results_export(quiz_id, current_user.id)
+    generators = {
+        "csv": (generate_live_results_csv, "text/csv"),
+        "pdf": (generate_live_results_pdf, "application/pdf"),
+        "txt": (generate_live_results_txt, "text/plain"),
+    }
+    generator, media_type = generators[format]
+    response = StreamingResponse(generator(payload), media_type=media_type)
+    filename = build_download_filename(f'{payload["title"]} results', format)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    await record_product_event(
+        get_product_events_collection(),
+        event_type=RESULTS_EXPORTED,
+        user_id=current_user.id,
+        user=current_user,
+        quiz_id=quiz_id,
+        export_format=format,
+    )
+    return response
 
 
 @router.get(

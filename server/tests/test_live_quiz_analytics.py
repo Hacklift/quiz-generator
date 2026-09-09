@@ -10,6 +10,7 @@ Tests cover:
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import jwt
 import pytest
@@ -556,6 +557,12 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
         "FRONTEND_BASE_URL",
         "https://trusted.example",
     )
+    product_events = SimpleNamespace(insert_one=AsyncMock())
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: product_events,
+    )
 
     invitation_repository = FakeInvitationRepository()
     email_service = FakeEmailService()
@@ -587,6 +594,9 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
     body = email_service.sent[0]["template_vars"]["body"]
     assert "https://trusted.example/quiz-access/" in body
     assert "https://attacker.example" not in body
+    event = product_events.insert_one.await_args.args[0]
+    assert event["event_type"] == "live_quiz_enabled"
+    assert event["quiz_id"] == "quiz-1"
 
 
 class FakeWebSocket:
