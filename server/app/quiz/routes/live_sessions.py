@@ -17,7 +17,11 @@ from server.app.db.core.connection import (
     get_users_collection,
     get_product_events_collection,
 )
-from server.app.analytics.product_events import LIVE_QUIZ_ENABLED, record_product_event
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    RESULTS_EXPORTED,
+    record_product_event,
+)
 from server.app.core.config import settings
 from server.app.users.models import UserOut
 from server.app.quiz.schemas.quiz_schemas import (
@@ -273,6 +277,14 @@ async def export_live_quiz_results(
     response = StreamingResponse(generator(payload), media_type=media_type)
     filename = build_download_filename(f'{payload["title"]} results', format)
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    await record_product_event(
+        get_product_events_collection(),
+        event_type=RESULTS_EXPORTED,
+        user_id=current_user.id,
+        user=current_user,
+        quiz_id=quiz_id,
+        export_format=format,
+    )
     return response
 
 
