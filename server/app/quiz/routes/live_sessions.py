@@ -14,7 +14,9 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
     get_user_sessions_collection,
     get_users_collection,
+    get_product_events_collection,
 )
+from server.app.analytics.product_events import LIVE_QUIZ_ENABLED, record_product_event
 from server.app.core.config import settings
 from server.app.users.models import UserOut
 from server.app.quiz.schemas.quiz_schemas import (
@@ -98,7 +100,7 @@ async def generate_quiz_access_code(
     ),
     email_service: EmailService = Depends(get_email_service),
 ):
-    return await service.generate_access_code(
+    result = await service.generate_access_code(
         quiz_id=quiz_id,
         access_code_expires_at=payload.access_code_expires_at,
         creator_id=current_user.id,
@@ -109,6 +111,14 @@ async def generate_quiz_access_code(
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
+    await record_product_event(
+        get_product_events_collection(),
+        event_type=LIVE_QUIZ_ENABLED,
+        user_id=current_user.id,
+        user=current_user,
+        quiz_id=quiz_id,
+    )
+    return result
 
 
 @router.get("/quizzes/access/{code}", response_model=QuizAccessPreview)
