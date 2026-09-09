@@ -537,6 +537,52 @@ class LiveQuizSessionService:
             "graded_answers": graded_answers,
         }
 
+    async def build_results_export(
+        self,
+        quiz_id: str,
+        requester_id: str,
+    ) -> Dict[str, Any]:
+        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+
+        owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
+        if not owner_id or str(owner_id) != requester_id:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        questions = quiz.get("questions") or []
+        participants = []
+        for session in await self.repository.list_quiz_sessions(quiz_id):
+            if session.get("status") != "submitted" or not session.get("submitted_at"):
+                continue
+            if isinstance(session.get("graded_answers"), list):
+                graded = {
+                    "graded_answers": session["graded_answers"],
+                    "score": session.get("score", 0),
+                    "percentage": session.get("percentage", 0),
+                }
+                total_questions = session.get("total_questions", len(questions))
+            else:
+                # Compatibility for attempts finalized before graded_answers
+                # was persisted. This uses the existing server-side grader.
+                graded = self._grade_session(session, quiz)
+                total_questions = len(questions)
+            participants.append(
+                {
+                    "participant_name": session.get("participant_name") or "Anonymous",
+                    "graded_answers": graded["graded_answers"],
+                    "score": graded["score"],
+                    "total_questions": total_questions,
+                    "percentage": graded["percentage"],
+                }
+            )
+
+        return {
+            "title": quiz.get("title") or "Live Quiz",
+            "question_count": len(questions),
+            "participants": participants,
+        }
+
     async def list_creator_live_quizzes(
         self,
         creator_user_id: str,
