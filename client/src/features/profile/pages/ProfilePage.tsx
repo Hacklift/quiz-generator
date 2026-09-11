@@ -42,7 +42,6 @@ import {
   BTN_PRIMARY,
   BTN_GHOST,
   BTN_BASE,
-  CONTAINER,
 } from "@shared/ui/quizwerk";
 
 type ProfileTab = "overview" | "persona" | "billing" | "security";
@@ -116,6 +115,11 @@ export default function ProfilePage() {
       current_period_end: user.current_period_end,
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.stripe_customer_id || user.current_period_end) return;
+    void getSubscriptionSummary().then(setBillingSummary).catch(() => {});
+  }, [user?.current_period_end, user?.stripe_customer_id]);
 
   useEffect(() => {
     if (!router.isReady) {
@@ -196,6 +200,10 @@ export default function ProfilePage() {
   };
 
   const handleSaveProfile = async () => {
+    if (user?.is_verified === false) {
+      toast.error("Verify your email before editing your profile");
+      return;
+    }
     setIsSaving(true);
     setSaveError("");
     try {
