@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
@@ -50,10 +50,10 @@ export default function PersonaPicker({
     return (
       <div className="w-full max-w-full">
         <Kicker>Get set up</Kicker>
-        <h2 className="text-[clamp(22px,5vw,32px)] font-extrabold leading-tight tracking-[-0.02em]">
+        <h2 className="text-lg sm:text-xl font-extrabold leading-snug tracking-[-0.015em]">
           {heading}
         </h2>
-        <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-full">
+        <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 w-full max-w-full">
           {(Object.keys(PERSONA_TAXONOMY) as PersonaCategory[]).map((slug) => {
             const group = PERSONA_TAXONOMY[slug];
             return (
@@ -66,7 +66,7 @@ export default function PersonaPicker({
                 <span className="flex items-center gap-3 sm:gap-[14px]">
                   <span className="h-2 w-2 flex-none bg-brand" />
                   <span className="flex-1 min-w-0">
-                    <span className="block break-words text-lg font-extrabold leading-[1.2] sm:text-[20px]">
+                    <span className="block break-words text-base font-extrabold leading-[1.2] sm:text-[18px]">
                       {group.label}
                     </span>
                     <span className="mt-1 block text-xs sm:text-[14px] text-ink/70">
@@ -90,10 +90,10 @@ export default function PersonaPicker({
   return (
     <div className="w-full max-w-full">
       <Kicker>{group.label}</Kicker>
-      <h2 className="text-[clamp(22px,5vw,32px)] font-extrabold leading-tight tracking-[-0.02em]">
+      <h2 className="text-lg sm:text-xl font-extrabold leading-snug tracking-[-0.015em]">
         Which describes you best?
       </h2>
-      <div className="mt-6 sm:mt-8 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-none">
+      <div className="mt-4 sm:mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-none">
         {group.userTypes.map((definition) => (
           <button
             key={definition.slug}

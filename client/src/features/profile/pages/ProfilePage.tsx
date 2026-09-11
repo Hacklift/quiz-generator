@@ -369,7 +369,7 @@ export default function ProfilePage() {
         title="My Profile"
         description="Sign in to view and manage your profile."
       >
-        <main className={`${CONTAINER} flex-1 py-[clamp(24px,5vw,48px)]`}>
+        <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 flex-1 py-[clamp(24px,5vw,48px)]">
           {/* Header */}
           <div>
             <Kicker>ACCOUNT & PROFILE</Kicker>
@@ -482,9 +482,9 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="mt-6 overflow-x-auto border-b-2 border-divider sm:mt-8">
-            <nav className="flex min-w-max space-x-1 sm:space-x-4 md:space-x-8" aria-label="Tabs">
+          {/* Tab Navigation: 2-Column Responsive Grid on Mobile, Flex on Desktop */}
+          <div className="mt-6 sm:mt-8 border-b-0 sm:border-b-2 sm:border-divider">
+            <nav className="grid grid-cols-2 gap-2 sm:flex sm:space-x-4 md:space-x-8" aria-label="Tabs">
               {[
                 { id: "overview", label: "Overview & Details", icon: User },
                 { id: "persona", label: "Role & Persona", icon: UserCheck },
@@ -497,14 +497,14 @@ export default function ProfilePage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as ProfileTab)}
-                    className={`inline-flex items-center gap-1.5 sm:gap-2 border-b-2 px-2.5 sm:px-3 py-2.5 sm:py-3 text-xs sm:text-sm font-extrabold whitespace-nowrap transition-colors flex-shrink-0 ${
+                    className={`inline-flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 p-2.5 sm:px-3 sm:py-3 text-[11px] min-[360px]:text-xs sm:text-sm font-extrabold transition-colors border-2 sm:border-0 sm:border-b-2 ${
                       isActive
-                        ? "border-brand text-brand"
-                        : "border-transparent text-ink/60 hover:border-ink/20 hover:text-ink"
+                        ? "border-brand bg-brand-50/60 text-brand sm:bg-transparent sm:border-brand"
+                        : "border-divider bg-white text-ink/70 hover:bg-ink/[0.03] hover:text-ink sm:border-transparent sm:bg-transparent sm:hover:border-ink/20"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    <span>{tab.label}</span>
+                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <span className="truncate sm:whitespace-nowrap">{tab.label}</span>
                   </button>
                 );
               })}
@@ -541,7 +541,7 @@ export default function ProfilePage() {
                       e.preventDefault();
                       handleSaveProfile();
                     }}
-                    className="space-y-4 sm:space-y-6 max-w-2xl w-full"
+                    className="space-y-4 sm:space-y-6 max-w-5xl w-full"
                   >
                     <div>
                       <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
@@ -667,7 +667,7 @@ export default function ProfilePage() {
                     </div>
                   </form>
                 ) : (
-                  <div className="space-y-4 sm:space-y-6 max-w-3xl w-full">
+                  <div className="space-y-4 sm:space-y-6 max-w-5xl w-full">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                       <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                         <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
