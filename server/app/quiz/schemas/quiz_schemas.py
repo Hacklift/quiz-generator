@@ -78,10 +78,12 @@ class AccessCodeCreateRequest(BaseModel):
     participant_access_mode: Literal["public", "restricted", "invited_only"] = "public"
     invited_emails: List[str] = []
     send_email_invitations: bool = False
+    passing_threshold_percentage: float = Field(default=80, ge=0, le=100)
 
 
 class AccessCodeResponse(BaseModel):
     quiz_id: str
+    run_id: Optional[str] = None
     access_code: str
     live_quiz_enabled: bool
     time_limit_minutes: int
@@ -91,6 +93,7 @@ class AccessCodeResponse(BaseModel):
     invitations_created: int = 0
     invitations_delivered: int = 0
     invitations_queued: int = 0
+    passing_threshold_percentage: float = 80
 
 
 class QuizAccessPreview(BaseModel):
