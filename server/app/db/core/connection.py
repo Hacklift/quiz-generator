@@ -94,7 +94,16 @@ async def ensure_live_quiz_run_indexes(
     live_quiz_runs_collection: AsyncIOMotorCollection,
 ):
     """Indexes for immutable, run-scoped completion evidence."""
-    await live_quiz_runs_collection.create_index("access_code", unique=True)
+    indexes = await live_quiz_runs_collection.index_information()
+    # Access codes are only unique among currently live quizzes. Historical
+    # runs retain their codes for audit purposes, so they must not reserve a
+    # code forever and block a later valid delivery.
+    legacy_access_code_index = indexes.get("access_code_1")
+    if legacy_access_code_index and legacy_access_code_index.get("unique"):
+        await live_quiz_runs_collection.drop_index("access_code_1")
+    await live_quiz_runs_collection.create_index(
+        "access_code", name="live_quiz_run_access_code"
+    )
     await live_quiz_runs_collection.create_index(
         [("creator_user_id", 1), ("created_at", -1)],
         name="creator_live_quiz_runs",

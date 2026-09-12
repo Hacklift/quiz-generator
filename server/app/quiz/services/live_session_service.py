@@ -84,6 +84,31 @@ class LiveQuizSessionService:
                 if self.run_repository
                 else None
             )
+            if (
+                existing_run
+                and existing_run.get("passing_threshold_percentage", 80)
+                != passing_threshold_percentage
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="The active live quiz run already has a different passing threshold.",
+                )
+            # Runs introduced after an access code was already live need a
+            # record too; otherwise the code would be usable but unreportable.
+            if self.run_repository and not existing_run:
+                recovered_run_id = await self.run_repository.create(
+                    {
+                        "quiz_id": str(quiz["_id"]),
+                        "creator_user_id": creator_id,
+                        "title": quiz.get("title", "Live Quiz"),
+                        "access_code": existing_access_code,
+                        "access_code_expires_at": _as_utc(existing_expiration),
+                        "time_limit_minutes": quiz.get("time_limit_minutes") or time_limit_minutes,
+                        "participant_access_mode": quiz.get("participant_access_mode", "public"),
+                        "passing_threshold_percentage": passing_threshold_percentage,
+                    }
+                )
+                existing_run = await self.run_repository.get(recovered_run_id)
             return {
                 "quiz_id": str(quiz["_id"]),
                 "run_id": str(existing_run["_id"]) if existing_run else None,

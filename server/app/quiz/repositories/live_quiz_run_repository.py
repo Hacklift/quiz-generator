@@ -29,7 +29,12 @@ class LiveQuizRunRepository:
             return None
 
     async def get_by_access_code(self, access_code: str) -> Optional[dict[str, Any]]:
-        return await self.collection.find_one({"access_code": access_code.strip().upper()})
+        # Codes can be reused after expiry. The active delivery is always the
+        # newest run with this code, while older records remain auditable.
+        return await self.collection.find_one(
+            {"access_code": access_code.strip().upper()},
+            sort=[("created_at", -1)],
+        )
 
     async def latest_for_quiz(self, quiz_id: str, creator_user_id: str) -> Optional[dict[str, Any]]:
         return await self.collection.find_one(

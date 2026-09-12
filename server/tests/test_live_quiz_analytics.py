@@ -32,6 +32,7 @@ class FakeAnalyticsRepository:
             "title": "Analytics Quiz",
             "created_by": self.creator_id,
             "live_quiz_enabled": True,
+            "access_code": "ABC123",
             "time_limit_minutes": 10,
             "access_code_expires_at": datetime(2026, 6, 1, tzinfo=timezone.utc),
             "questions": [
@@ -264,6 +265,29 @@ async def test_completion_report_rejects_non_owner():
     with pytest.raises(HTTPException) as error:
         await service.completion_report("run-1", "not-the-owner")
     assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_active_run_rejects_a_conflicting_passing_threshold(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    run = {
+        "_id": "run-1", "quiz_id": "quiz-1", "creator_user_id": "creator-1",
+        "title": "Safety training", "access_code": "ABC123",
+        "passing_threshold_percentage": 80,
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(run))
+
+    with pytest.raises(HTTPException) as error:
+        await service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(days=1),
+            creator_id="creator-1",
+            time_limit_minutes=10,
+            passing_threshold_percentage=70,
+        )
+    assert error.value.status_code == 409
 
 
 @pytest.mark.asyncio
