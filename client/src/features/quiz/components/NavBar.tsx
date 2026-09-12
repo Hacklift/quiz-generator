@@ -36,7 +36,7 @@ export function navigationItems(): NavItem[] {
   return [
     { kind: "link", label: "Home", href: "/" },
     { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "action", label: "Categories", action: "browse" },
+    { kind: "link", label: "Categories", href: "/categories" },
     { kind: "link", label: "Pricing", href: "/#pricing" },
   ];
 }
@@ -106,7 +106,7 @@ const NavBar: React.FC = () => {
             }`}
             style={{ paddingTop: "64px" }}
           >
-            <Sidebar onBrowseClick={() => setIsBrowseModalOpen(true)} />
+            <Sidebar onBrowseClick={() => router.push("/categories")} />
           </div>
         </>
       )}
