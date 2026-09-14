@@ -38,7 +38,7 @@ export function navigationItems(): NavItem[] {
   return [
     { kind: "link", label: "Home", href: "/" },
     { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "link", label: "Categories", href: "/categories" },
+    { kind: "link", label: "Categories", href: ROUTES.CATEGORIES },
     { kind: "link", label: "Pricing", href: "/#pricing" },
   ];
 }
@@ -107,7 +107,7 @@ const NavBar: React.FC = () => {
             }`}
             style={{ paddingTop: "64px" }}
           >
-            <Sidebar onBrowseClick={() => router.push("/categories")} />
+            <Sidebar onBrowseClick={() => router.push(ROUTES.CATEGORIES)} />
           </div>
         </>
       )}
