@@ -40,6 +40,7 @@ async def save_ai_generated_quiz(quiz_data: dict):
             category_slug=taxonomy_fields.get("category_slug"),
             subcategory=taxonomy_fields.get("subcategory"),
             subcategory_slug=taxonomy_fields.get("subcategory_slug"),
+            persona_category=taxonomy_fields.get("persona_category"),
             classification=taxonomy_fields.get("classification"),
         )
         canonical_quiz = await canonical_service.find_or_create_quiz_v2_by_fingerprint(quiz_document)
