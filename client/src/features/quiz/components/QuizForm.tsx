@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import toast from "react-hot-toast";
 import GenerateButton from "./GenerateButton";
 import QuizGenerationSection from "./QuizGenerationSection";
@@ -19,7 +25,9 @@ import { usePersona } from "@features/persona/context/personaContext";
 import { useTerms } from "@features/persona/hooks/useTerms";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 import {
+  getPersonaGenerationDefaults,
   getUserTypeDefinition,
+  type PersonaGenerationDefaults,
   type PersonaUserType,
 } from "@shared/config/persona";
 
@@ -35,18 +43,28 @@ type ApiErrorLike = {
 const DOCUMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const DOCUMENT_TEXT_MAX_CHARS = 50_000;
 const SUPPORTED_DOCUMENT_EXTENSIONS = new Set(["pdf", "docx", "txt"]);
-interface GenerationPreset {
-  customInstruction: string;
-  difficultyLevel: string;
-  numQuestions: number;
-  questionType: string;
-}
-
+const parsedQuizGenerationMaxQuestions = Number(
+  process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS,
+);
+const QUIZ_GENERATION_MAX_QUESTIONS =
+  Number.isInteger(parsedQuizGenerationMaxQuestions) &&
+  parsedQuizGenerationMaxQuestions > 0
+    ? parsedQuizGenerationMaxQuestions
+    : 10;
+const QUERY_AUDIENCE_MAX_CHARS = 80;
+const DIFFICULTY_LEVELS = new Set(["easy", "medium", "hard"]);
+const QUESTION_TYPES = new Set([
+  "multichoice",
+  "true-false",
+  "short-answer",
+  "open-ended",
+]);
 const PERSONA_GENERATION_PRESETS: Partial<
-  Record<PersonaUserType, Record<string, GenerationPreset>>
+  Record<PersonaUserType, Record<string, PersonaGenerationDefaults>>
 > = {
   teacher: {
     "class-quiz": {
+      audienceType: "students",
       customInstruction:
         "Create a marking-ready in-class quiz with clear answer options and an answer key.",
       difficultyLevel: "easy",
@@ -54,6 +72,7 @@ const PERSONA_GENERATION_PRESETS: Partial<
       questionType: "multichoice",
     },
     "homework-check": {
+      audienceType: "students",
       customInstruction:
         "Create a homework check with concise questions and answer explanations for rapid marking.",
       difficultyLevel: "medium",
@@ -61,6 +80,7 @@ const PERSONA_GENERATION_PRESETS: Partial<
       questionType: "short-answer",
     },
     "exam-revision": {
+      audienceType: "students",
       customInstruction:
         "Create an exam revision quiz that mixes recall and application across the topic.",
       difficultyLevel: "hard",
@@ -70,6 +90,7 @@ const PERSONA_GENERATION_PRESETS: Partial<
   },
   lecturer: {
     "lecture-recap": {
+      audienceType: "undergraduates",
       customInstruction:
         "Create a concise post-lecture recap that checks retention of the key concepts covered in the lecture.",
       difficultyLevel: "medium",
@@ -77,6 +98,7 @@ const PERSONA_GENERATION_PRESETS: Partial<
       questionType: "multichoice",
     },
     "seminar-prep": {
+      audienceType: "undergraduates",
       customInstruction:
         "Create a low-stakes seminar preparation quiz that checks understanding of the assigned reading.",
       difficultyLevel: "medium",
@@ -85,6 +107,41 @@ const PERSONA_GENERATION_PRESETS: Partial<
     },
   },
 };
+
+function queryDifficultyOrDefault(
+  value: string | null | undefined,
+  fallback: PersonaGenerationDefaults["difficultyLevel"],
+) {
+  return value && DIFFICULTY_LEVELS.has(value) ? value : fallback;
+}
+
+function queryQuestionTypeOrDefault(
+  value: string | null | undefined,
+  fallback: PersonaGenerationDefaults["questionType"],
+) {
+  return value && QUESTION_TYPES.has(value) ? value : fallback;
+}
+
+function queryQuestionCountOrDefault(
+  value: string | null | undefined,
+  fallback: number,
+) {
+  const safeFallback = Math.min(QUIZ_GENERATION_MAX_QUESTIONS, fallback);
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return safeFallback;
+  }
+
+  return Math.min(QUIZ_GENERATION_MAX_QUESTIONS, parsed);
+}
+
+function queryAudienceOrDefault(
+  value: string | null | undefined,
+  fallback: string,
+) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, QUERY_AUDIENCE_MAX_CHARS) : fallback;
+}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
@@ -139,6 +196,23 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const appliedPresetRef = useRef<string | null>(null);
+  const touchedGenerationFieldsRef = useRef({
+    audienceType: false,
+    customInstruction: false,
+    difficultyLevel: false,
+    numQuestions: false,
+    questionType: false,
+  });
+
+  const markGenerationFieldTouched =
+    <T,>(
+      field: keyof typeof touchedGenerationFieldsRef.current,
+      setter: Dispatch<SetStateAction<T>>,
+    ) =>
+    (value: SetStateAction<T>) => {
+      touchedGenerationFieldsRef.current[field] = true;
+      setter(value);
+    };
 
   const handleDocumentFileChange = (file: File | null) => {
     if (!file) {
@@ -184,13 +258,63 @@ export default function QuizForm() {
   const searchParams = useSearchParams();
   const { persona } = usePersona();
   const t = useTerms();
+  const personaTopicPlaceholder = persona
+    ? getUserTypeDefinition(persona.userType).defaultTopic
+    : "Enter the concept/context here";
 
   useEffect(() => {
+    const defaultTopic = persona
+      ? getUserTypeDefinition(persona.userType).defaultTopic
+      : "";
     const personaTopic =
       searchParams?.get("topic") || readStoredPersonaTopic(persona);
-    if (personaTopic) {
+    if (personaTopic && personaTopic !== defaultTopic) {
       setGenerationMode("topic");
       setProfession((current) => current || personaTopic);
+    }
+  }, [persona, searchParams]);
+
+  // #133: Apply persona-aware generation defaults on form load.
+  useEffect(() => {
+    if (!persona) return;
+
+    const defaults = getPersonaGenerationDefaults(persona.userType);
+    if (!defaults) return;
+
+    const queryAudience = searchParams?.get("audienceType");
+    const queryCustomInstruction = searchParams?.get("customInstruction");
+    const queryDifficulty = searchParams?.get("difficultyLevel");
+    const queryNumQuestions = searchParams?.get("numQuestions");
+    const queryQuestionType = searchParams?.get("questionType");
+    const presetKey = searchParams?.get("preset") || "";
+    const hasApplicablePreset =
+      Boolean(PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey]);
+    const touched = touchedGenerationFieldsRef.current;
+
+    if (!hasApplicablePreset && !touched.audienceType) {
+      setAudienceType(
+        queryAudienceOrDefault(queryAudience, defaults.audienceType),
+      );
+    }
+    if (!hasApplicablePreset && !touched.customInstruction) {
+      setCustomInstruction(
+        queryCustomInstruction || defaults.customInstruction,
+      );
+    }
+    if (!hasApplicablePreset && !touched.difficultyLevel) {
+      setDifficultyLevel(
+        queryDifficultyOrDefault(queryDifficulty, defaults.difficultyLevel),
+      );
+    }
+    if (!hasApplicablePreset && !touched.numQuestions) {
+      setNumQuestions(
+        queryQuestionCountOrDefault(queryNumQuestions, defaults.numQuestions),
+      );
+    }
+    if (!hasApplicablePreset && !touched.questionType) {
+      setQuestionType(
+        queryQuestionTypeOrDefault(queryQuestionType, defaults.questionType),
+      );
     }
   }, [persona, searchParams]);
 
@@ -209,15 +333,40 @@ export default function QuizForm() {
       return;
     }
 
+    const queryAudience = searchParams?.get("audienceType");
+    const queryCustomInstruction = searchParams?.get("customInstruction");
+    const queryDifficulty = searchParams?.get("difficultyLevel");
+    const queryNumQuestions = searchParams?.get("numQuestions");
+    const queryQuestionType = searchParams?.get("questionType");
+    const touched = touchedGenerationFieldsRef.current;
+
     appliedPresetRef.current = presetIdentity;
     setGenerationMode("topic");
-    setAudienceType(
-      getUserTypeDefinition(userType).generationDefaults.audienceType,
-    );
-    setCustomInstruction((current) => current || preset.customInstruction);
-    setDifficultyLevel(preset.difficultyLevel);
-    setNumQuestions(preset.numQuestions);
-    setQuestionType(preset.questionType);
+    if (!touched.audienceType) {
+      setAudienceType(
+        queryAudienceOrDefault(queryAudience, preset.audienceType),
+      );
+    }
+    if (!touched.customInstruction) {
+      setCustomInstruction(
+        queryCustomInstruction || preset.customInstruction,
+      );
+    }
+    if (!touched.difficultyLevel) {
+      setDifficultyLevel(
+        queryDifficultyOrDefault(queryDifficulty, preset.difficultyLevel),
+      );
+    }
+    if (!touched.numQuestions) {
+      setNumQuestions(
+        queryQuestionCountOrDefault(queryNumQuestions, preset.numQuestions),
+      );
+    }
+    if (!touched.questionType) {
+      setQuestionType(
+        queryQuestionTypeOrDefault(queryQuestionType, preset.questionType),
+      );
+    }
   }, [persona?.userType, searchParams]);
 
   useEffect(() => {
@@ -544,7 +693,17 @@ export default function QuizForm() {
   return (
     <div className="max-w-3xl mx-auto bg-[#f7f8fa] rounded-xl p-10 shadow-lg">
       {persona ? (
-        <PersonaBadge userType={persona.userType} className="mb-6" />
+        <PersonaBadge
+          userType={persona.userType}
+          className="mb-6"
+          audienceFallback={t("learner", "plural")}
+          appliedDefaults={{
+            audienceType,
+            difficultyLevel,
+            numQuestions,
+            questionType,
+          }}
+        />
       ) : null}
       <form onSubmit={(e) => e.preventDefault()}>
         <QuizGenerationSection
@@ -552,6 +711,7 @@ export default function QuizForm() {
           setGenerationMode={setGenerationMode}
           profession={profession}
           setProfession={setProfession}
+          professionPlaceholder={personaTopicPlaceholder}
           documentTitle={documentTitle}
           setDocumentTitle={setDocumentTitle}
           documentInputMode={documentInputMode}
@@ -564,15 +724,30 @@ export default function QuizForm() {
           documentTextLimit={DOCUMENT_TEXT_MAX_CHARS}
           onDocumentFileChange={handleDocumentFileChange}
           audienceType={audienceType}
-          setAudienceType={setAudienceType}
+          setAudienceType={markGenerationFieldTouched(
+            "audienceType",
+            setAudienceType,
+          )}
           customInstruction={customInstruction}
-          setCustomInstruction={setCustomInstruction}
+          setCustomInstruction={markGenerationFieldTouched(
+            "customInstruction",
+            setCustomInstruction,
+          )}
           numQuestions={numQuestions}
-          setNumQuestions={setNumQuestions}
+          setNumQuestions={markGenerationFieldTouched(
+            "numQuestions",
+            setNumQuestions,
+          )}
           questionType={questionType}
-          setQuestionType={setQuestionType}
+          setQuestionType={markGenerationFieldTouched(
+            "questionType",
+            setQuestionType,
+          )}
           difficultyLevel={difficultyLevel}
-          setDifficultyLevel={setDifficultyLevel}
+          setDifficultyLevel={markGenerationFieldTouched(
+            "difficultyLevel",
+            setDifficultyLevel,
+          )}
           token={token}
           setToken={setToken}
           previousToken={previousToken}
