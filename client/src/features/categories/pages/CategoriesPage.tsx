@@ -21,7 +21,7 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
+  useEffect(() => {
     if (personaLoading) return;
     let cancelled = false;
     const loadCategories = async () => {
@@ -82,13 +82,13 @@ export default function CategoriesPage() {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category) => (
+            {categories.map((categoryName) => (
               <Link
-                key={category}
-                href={`/categories/${slugify(category)}`}
+                key={categoryName}
+                href={`/categories/${slugify(categoryName)}`}
                 className="rounded-2xl border border-blue-100 bg-blue-50 p-5 transition hover:border-blue-300 hover:bg-blue-100"
               >
-                <h2 className="text-lg font-semibold">{category}</h2>
+                <h2 className="text-lg font-semibold">{categoryName}</h2>
                 <p className="mt-2 text-sm text-slate-600">
                   View subcategories and quiz types.
                 </p>
