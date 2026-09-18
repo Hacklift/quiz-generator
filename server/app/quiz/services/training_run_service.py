@@ -114,36 +114,39 @@ class TrainingRunService:
             if self.notification_service
             else {}
         )
+        run_document = {
+            "quiz_id": str(quiz["_id"]),
+            "owner_user_id": owner_user_id,
+            "idempotency_key": idempotency_key,
+            "request_fingerprint": request_fingerprint,
+            "title": title,
+            "kind": payload.kind,
+            "purpose": payload.purpose,
+            # A partially persisted run is never returned by owner or
+            # public read paths. The same key resumes this workflow.
+            "status": "provisioning",
+            "access_mode": payload.access_mode,
+            "time_limit_minutes": payload.time_limit_minutes,
+            "due_at": due_at,
+            "closes_at": closes_at,
+            "closed_at": None,
+            "quiz_content_fingerprint": quiz.get("content_fingerprint"),
+            "quiz_snapshot": quiz_snapshot,
+            "recipient_emails": [
+                normalize_email(str(email)) for email in payload.recipient_emails
+            ],
+            "recipient_user_ids": recipient_user_ids,
+            "max_attempts": payload.max_attempts,
+            "send_email_invitations": payload.send_email_invitations,
+            "created_at": now,
+            "updated_at": now,
+        }
+        if access_code:
+            run_document["access_code"] = access_code
+
         try:
             run = await self.repository.create_run(
-                {
-                    "quiz_id": str(quiz["_id"]),
-                    "owner_user_id": owner_user_id,
-                    "idempotency_key": idempotency_key,
-                    "request_fingerprint": request_fingerprint,
-                    "title": title,
-                    "kind": payload.kind,
-                    "purpose": payload.purpose,
-                    # A partially persisted run is never returned by owner or
-                    # public read paths. The same key resumes this workflow.
-                    "status": "provisioning",
-                    "access_mode": payload.access_mode,
-                    "access_code": access_code,
-                    "time_limit_minutes": payload.time_limit_minutes,
-                    "due_at": due_at,
-                    "closes_at": closes_at,
-                    "closed_at": None,
-                    "quiz_content_fingerprint": quiz.get("content_fingerprint"),
-                    "quiz_snapshot": quiz_snapshot,
-                    "recipient_emails": [
-                        normalize_email(str(email)) for email in payload.recipient_emails
-                    ],
-                    "recipient_user_ids": recipient_user_ids,
-                    "max_attempts": payload.max_attempts,
-                    "send_email_invitations": payload.send_email_invitations,
-                    "created_at": now,
-                    "updated_at": now,
-                }
+                run_document
             )
         except DuplicateKeyError:
             # Concurrent retries of the same request converge on one durable

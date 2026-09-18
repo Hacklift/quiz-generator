@@ -166,6 +166,51 @@ async def ensure_live_quiz_invitation_indexes(
     )
 
 
+async def _ensure_training_run_access_code_index(
+    training_runs_collection: AsyncIOMotorCollection,
+):
+    """Keep public training codes unique without indexing non-public runs."""
+    index_name = "training_run_access_code_unique"
+    index_keys = [("access_code", 1)]
+    partial_filter = {"access_code": {"$type": "string"}}
+    index_info = await training_runs_collection.index_information()
+    has_expected_index = False
+
+    for existing_name, index in index_info.items():
+        if existing_name == "_id_":
+            continue
+        key = index.get("key", [])
+        key_items = list(key.items()) if isinstance(key, Mapping) else list(key)
+        if key_items != index_keys:
+            continue
+
+        if (
+            existing_name == index_name
+            and index.get("unique") is True
+            and not index.get("sparse")
+            and index.get("partialFilterExpression") == partial_filter
+        ):
+            has_expected_index = True
+            continue
+
+        # These names are owned by this feature. Do not silently remove an
+        # unknown access-code index that another migration may have introduced.
+        if existing_name not in {"access_code_1", index_name}:
+            raise RuntimeError(
+                "Unexpected training_runs access_code index "
+                f"'{existing_name}'; migrate it explicitly before startup."
+            )
+        await training_runs_collection.drop_index(existing_name)
+
+    if not has_expected_index:
+        await training_runs_collection.create_index(
+            index_keys,
+            name=index_name,
+            unique=True,
+            partialFilterExpression=partial_filter,
+        )
+
+
 async def ensure_training_run_indexes(
     training_runs_collection: AsyncIOMotorCollection,
     training_assignments_collection: AsyncIOMotorCollection,
@@ -173,7 +218,7 @@ async def ensure_training_run_indexes(
     training_email_deliveries_collection: AsyncIOMotorCollection,
 ):
     """Indexes for the run-based corporate training workflow."""
-    await training_runs_collection.create_index("access_code", unique=True, sparse=True)
+    await _ensure_training_run_access_code_index(training_runs_collection)
     await training_runs_collection.create_index(
         [("owner_user_id", 1), ("idempotency_key", 1)],
         unique=True,

@@ -692,7 +692,7 @@ async def test_assigned_only_run_does_not_generate_an_unused_access_code():
 
     summary = await service.create_run(payload, "owner-1", "test-key")
 
-    assert repository.created_run["access_code"] is None
+    assert "access_code" not in repository.created_run
     assert repository.access_code_checks == 0
     assert summary["access_code"] is None
     assert summary["access_url"] is None
