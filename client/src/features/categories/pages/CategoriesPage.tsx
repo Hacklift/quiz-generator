@@ -21,21 +21,32 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+    useEffect(() => {
     if (personaLoading) return;
+    let cancelled = false;
     const loadCategories = async () => {
       setIsLoading(true);
       try {
         const filter = showAll ? undefined : (category ?? undefined);
-        setCategories(await getCategories(filter));
+        const result = await getCategories(filter);
+        if (!cancelled) {
+          setCategories(result);
+        }
       } catch (error) {
-        console.error(error);
-        toast.error("Failed to load categories.");
+        if (!cancelled) {
+          console.error(error);
+          toast.error("Failed to load categories.");
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
     loadCategories();
+    return () => {
+      cancelled = true;
+    };
   }, [category, showAll, personaLoading]);
   return (
     <div className="flex min-h-screen flex-col bg-white text-[#0F2654]">
