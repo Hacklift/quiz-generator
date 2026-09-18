@@ -11,8 +11,8 @@ class CategoryService:
     def __init__(self, repository: QuizV2Repository | None = None):
         self.repository = repository or QuizV2Repository(get_quizzes_v2_collection())
 
-    async def list_categories(self) -> list[str]:
-        return await self.repository.list_category_values()
+    async def list_categories(self, persona_category: str | None = None) -> list[str]:
+        return await self.repository.list_category_values(persona_category)
 
     async def list_subcategories(self, category: str) -> list[str]:
         return await self.repository.list_subcategory_values(slugify(category))
