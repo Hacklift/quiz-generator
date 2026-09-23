@@ -1,6 +1,7 @@
 import logging
 from ..models import EmailPayload, SendResult
 from ..renderer import render_email
+from ..config import require_env
 from celery.exceptions import CeleryError
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,12 @@ class CeleryAdapter:
         except CeleryError as e:
             raise RuntimeError(f"Celery check failed: {e}")
 
-        msg = render_email(payload.template_id, payload.to, payload.template_vars)
+        msg = render_email(
+            payload.template_id,
+            payload.to,
+            payload.template_vars,
+            sender_email=require_env("SENDER_EMAIL"),
+        )
         subject = msg["Subject"]
         body = msg.get_payload()
         logger.info(f"[EmailPlatform] Enqueuing Celery task for {payload.to}")

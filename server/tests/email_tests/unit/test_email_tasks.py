@@ -10,7 +10,7 @@ def test_send_email_generic_calls_platform_send(monkeypatch):
     def fake_send(recipient, message):
         calls.append((recipient, message))
 
-    monkeypatch.setattr("server.app.email_platform.email_tasks.send_email", fake_send)
+    monkeypatch.setattr("server.app.email_platform.platform_email_utils.send_email", fake_send)
 
     recipient = "int-recipient@example.com"
     subject = "integration-subject"
@@ -32,7 +32,7 @@ def test_send_email_generic_propagates_exception(monkeypatch):
     def fake_send(recipient, message):
         raise RuntimeError("smtp fail")
 
-    monkeypatch.setattr("server.app.email_platform.email_tasks.send_email", fake_send)
+    monkeypatch.setattr("server.app.email_platform.platform_email_utils.send_email", fake_send)
 
     with pytest.raises(RuntimeError):
         orig = getattr(email_tasks.send_email_generic, "_orig_run")

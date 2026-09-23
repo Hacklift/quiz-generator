@@ -11,6 +11,8 @@ from server.app.db.core.connection import (
 )
 from server.app.users.models import UserOut
 
+TRAINING_MANAGER_PERSONAS = frozenset({"business", "hr"})
+
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 async def get_current_user(
@@ -54,5 +56,25 @@ async def get_verified_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email not verified",
+        )
+    return current_user
+
+
+async def get_training_manager_user(
+    current_user: UserOut = Depends(get_verified_user),
+) -> UserOut:
+    """Allow the Corporate personas that may create and administer training runs.
+
+    This is a capability policy built on the current persona model, not a
+    replacement for organisation-scoped RBAC. A future RBAC layer can compose
+    with this dependency without changing the training-run service contract.
+    """
+    if (
+        current_user.persona_category != "corporate"
+        or current_user.persona_user_type not in TRAINING_MANAGER_PERSONAS
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Training run management is available to Business and HR personas",
         )
     return current_user

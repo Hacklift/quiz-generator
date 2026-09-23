@@ -47,6 +47,8 @@ services:
       target: backend-service
     volumes:
       - ./server:/server
+    env_file:
+      - .env
     environment:
       - SENDER_EMAIL=${SENDER_EMAIL}
       - SENDER_PASSWORD=${SENDER_PASSWORD}
@@ -65,6 +67,25 @@ services:
         condition: service_healthy
       server:
         condition: service_started
+
+  celery-beat:
+    build:
+      context: .
+      target: backend-service
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/
+    command: ["celery", "-A", "server.celery_config.celery_app", "beat", "--loglevel=info", "--schedule=/tmp/quizwerk-celerybeat-schedule", "--pidfile=/tmp/quizwerk-celerybeat.pid"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   mongodb:
     image: mongo:latest
