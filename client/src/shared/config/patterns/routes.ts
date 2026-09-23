@@ -11,6 +11,7 @@ export const ROUTES = {
   PROFILE: "/profile",
   NOTIFICATIONS: "/notifications",
   ADMIN_NOTIFICATIONS: "/admin/notifications",
+  CATEGORIES: "/categories",
 
   NOT_FOUND: "/404",
 };
