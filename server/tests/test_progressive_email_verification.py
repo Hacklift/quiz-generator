@@ -112,10 +112,14 @@ async def test_unverified_user_can_generate_quiz():
     with patch(
         "server.app.quiz.routes.generation.get_questions",
         new=AsyncMock(return_value={"source": "mock", "questions": []}),
-    ) as get_questions_mock:
-        result = await get_quiz(
-            MagicMock(), Response(), request, current_user=current_user
-        )
+    ) as get_questions_mock, patch(
+        "server.app.quiz.routes.generation.record_product_event",
+        new=AsyncMock(),
+    ) as record_event_mock, patch(
+        "server.app.quiz.routes.generation.get_product_events_collection",
+        return_value=MagicMock(),
+    ):
+        result = await get_quiz(MagicMock(), Response(), request, current_user=current_user)
 
     assert result == {"source": "mock", "questions": []}
     get_questions_mock.assert_awaited_once_with(
@@ -124,6 +128,9 @@ async def test_unverified_user_can_generate_quiz():
         invitation_repository=ANY,
         email_service=ANY,
     )
+    record_event_mock.assert_awaited_once()
+    assert record_event_mock.await_args.kwargs["event_type"] == "quiz_generated"
+    assert record_event_mock.await_args.kwargs["user"] is current_user
 
 
 @pytest.mark.asyncio

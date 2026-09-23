@@ -14,6 +14,12 @@ from server.app.quiz.repositories.live_session_repository import LiveQuizSession
 from server.app.db.core.connection import (
     get_live_quiz_sessions_collection,
     get_quizzes_v2_collection,
+    get_product_events_collection,
+)
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    QUIZ_GENERATED,
+    record_product_event,
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.utils.ai_generate import generate_document_quiz_with_rag
@@ -224,7 +230,7 @@ async def generate_document_quiz(
             live_config.get("access_code_expires_at")
         )
 
-    return DocumentQuizResponse(
+    result = DocumentQuizResponse(
         source="document-rag",
         questions=rag_result.questions,
         title=rag_result.title,
@@ -244,3 +250,21 @@ async def generate_document_quiz(
         embedding_cache_hit=rag_result.embedding_cache_hit,
         **category_metadata,
     )
+    if current_user is not None:
+        events = get_product_events_collection()
+        await record_product_event(
+            events,
+            event_type=QUIZ_GENERATED,
+            user_id=current_user.id,
+            user=current_user,
+            quiz_id=quiz_id,
+        )
+        if live_access_code:
+            await record_product_event(
+                events,
+                event_type=LIVE_QUIZ_ENABLED,
+                user_id=current_user.id,
+                user=current_user,
+                quiz_id=quiz_id,
+            )
+    return result
