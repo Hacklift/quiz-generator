@@ -1,15 +1,19 @@
 import asyncio
+import csv
+import io
 from typing import List, Optional
 
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
 from server.app.db.core.connection import (
     get_live_quiz_invitations_collection,
+    get_live_quiz_runs_collection,
     get_live_quiz_sessions_collection,
     get_quizzes_v2_collection,
     get_user_sessions_collection,
@@ -26,6 +30,7 @@ from server.app.core.dependencies import get_verified_user
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
+from server.app.quiz.repositories.live_quiz_run_repository import LiveQuizRunRepository
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
     LiveQuizInvitationRepository,
 )
@@ -57,12 +62,20 @@ def get_live_quiz_service(
     sessions_collection: AsyncIOMotorCollection = Depends(
         get_live_quiz_sessions_collection
     ),
+    runs_collection: AsyncIOMotorCollection = Depends(get_live_quiz_runs_collection),
 ) -> LiveQuizSessionService:
     repository = LiveQuizSessionRepository(
         quizzes_v2_collection,
         sessions_collection,
     )
-    return LiveQuizSessionService(repository, broadcaster=live_quiz_realtime_broadcaster)
+    return LiveQuizSessionService(
+        repository,
+        run_repository=LiveQuizRunRepository(runs_collection),
+        invitation_repository=LiveQuizInvitationRepository(
+            get_live_quiz_invitations_collection()
+        ),
+        broadcaster=live_quiz_realtime_broadcaster,
+    )
 
 
 def get_live_quiz_invitation_repository(
@@ -106,6 +119,7 @@ async def generate_quiz_access_code(
         participant_access_mode=payload.participant_access_mode,
         invited_emails=payload.invited_emails,
         send_email_invitations=payload.send_email_invitations,
+        passing_threshold_percentage=payload.passing_threshold_percentage,
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
@@ -235,6 +249,34 @@ async def list_live_quiz_participants(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
     return await service.list_analytics(quiz_id, current_user.id)
+
+
+@router.get("/live-quiz-runs/{run_id}/completion-report.csv")
+async def export_live_quiz_completion_report(
+    run_id: str,
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+) -> StreamingResponse:
+    report = await service.completion_report(run_id, current_user.id)
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=report["columns"], extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(report["rows"])
+    filename = f"completion-report-{run_id}.csv"
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/quizzes/{quiz_id}/live-runs/latest")
+async def get_latest_live_quiz_run(
+    quiz_id: str,
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+):
+    return await service.latest_completion_run(quiz_id, current_user.id)
 
 
 @router.get(

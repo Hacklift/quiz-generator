@@ -31,6 +31,7 @@ quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
 live_quiz_invitations_collection = database["live_quiz_invitations"]
+live_quiz_runs_collection = database["live_quiz_runs"]
 
 
 folders_collection = database["folders"]
@@ -86,6 +87,28 @@ async def ensure_live_quiz_session_indexes(
         [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
         name="creator_quiz_submitted_at",
     )
+    await live_quiz_sessions_collection.create_index("run_id")
+
+
+async def ensure_live_quiz_run_indexes(
+    live_quiz_runs_collection: AsyncIOMotorCollection,
+):
+    """Indexes for immutable, run-scoped completion evidence."""
+    indexes = await live_quiz_runs_collection.index_information()
+    # Access codes are only unique among currently live quizzes. Historical
+    # runs retain their codes for audit purposes, so they must not reserve a
+    # code forever and block a later valid delivery.
+    legacy_access_code_index = indexes.get("access_code_1")
+    if legacy_access_code_index and legacy_access_code_index.get("unique"):
+        await live_quiz_runs_collection.drop_index("access_code_1")
+    await live_quiz_runs_collection.create_index(
+        "access_code", name="live_quiz_run_access_code"
+    )
+    await live_quiz_runs_collection.create_index(
+        [("creator_user_id", 1), ("created_at", -1)],
+        name="creator_live_quiz_runs",
+    )
+    await live_quiz_runs_collection.create_index("quiz_id")
 
 
 async def ensure_document_rag_cache_indexes(
@@ -126,9 +149,15 @@ async def ensure_live_quiz_invitation_indexes(
     await live_quiz_invitations_collection.create_index("quiz_id")
     await live_quiz_invitations_collection.create_index("creator_user_id")
     await live_quiz_invitations_collection.create_index("status")
+    indexes = await live_quiz_invitations_collection.index_information()
+    # The old quiz/email index would overwrite an employee's evidence when a
+    # quiz is delivered again. Keep legacy records, but make new invitations
+    # unique within their run.
+    if "quiz_id_1_email_1" in indexes:
+        await live_quiz_invitations_collection.drop_index("quiz_id_1_email_1")
     await live_quiz_invitations_collection.create_index(
-        [("quiz_id", 1), ("email", 1)],
-        unique=True,
+        [("run_id", 1), ("email", 1)], unique=True, sparse=True,
+        name="run_id_1_email_1",
     )
 
 
@@ -145,6 +174,7 @@ async def startUp():
     await ensure_user_tokens_indexes(user_tokens_collection)
     await ensure_notification_indexes(notifications_collection)
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
+    await ensure_live_quiz_run_indexes(live_quiz_runs_collection)
     await ensure_document_rag_cache_indexes(document_rag_cache_collection)
     await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
     await ensure_v2_collections_and_validators(database)
@@ -222,6 +252,12 @@ def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
     if live_quiz_invitations_collection is None:
         raise RuntimeError("[DB Error] live_quiz_invitations_collection has not been initialized properly.")
     return live_quiz_invitations_collection
+
+
+def get_live_quiz_runs_collection() -> AsyncIOMotorCollection:
+    if live_quiz_runs_collection is None:
+        raise RuntimeError("[DB Error] live_quiz_runs_collection has not been initialized properly.")
+    return live_quiz_runs_collection
 
 
 def get_quizzes_v2_collection() -> AsyncIOMotorCollection:

@@ -194,6 +194,19 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
     fetchParticipants(true);
   };
 
+  const handleExportClick = async () => {
+    try {
+      await liveQuizService.downloadCompletionReport(quizId);
+      toast.success("Completion report downloaded.");
+    } catch (requestError: any) {
+      if (requestError?.response?.status === 404) {
+        toast.error("Create an access code before exporting a completion report.");
+      } else {
+        toast.error("Could not download the completion report.");
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
@@ -257,6 +270,12 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
           </div>
           <div className="flex items-center gap-4">
             <button
+              onClick={handleExportClick}
+              className="rounded-lg border border-[#0a3264] px-4 py-2 text-sm font-medium text-[#0a3264] hover:bg-blue-50"
+            >
+              Export compliance record (CSV)
+            </button>
+            <button
               onClick={handleRefreshClick}
               className="rounded-lg bg-[#0a3264] px-4 py-2 text-sm font-medium text-white hover:bg-[#082952]"
             >
@@ -319,6 +338,9 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
                     Score
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Outcome
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Progress
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -365,6 +387,15 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
                               : ""
                           }`
                         : "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                      {p.passed == null
+                        ? "—"
+                        : `${p.passed ? "Passed" : "Failed"}${
+                            p.passing_threshold_percentage != null
+                              ? ` (${p.passing_threshold_percentage}%)`
+                              : ""
+                          }`}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       {p.progress != null

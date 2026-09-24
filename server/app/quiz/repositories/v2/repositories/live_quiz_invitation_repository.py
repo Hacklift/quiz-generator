@@ -11,10 +11,12 @@ class LiveQuizInvitationRepository:
         self.collection = collection
 
     async def upsert_invitation(self, invitation: dict) -> str:
-        existing = await self.collection.find_one({
-            "quiz_id": invitation["quiz_id"],
-            "email": invitation["email"],
-        })
+        lookup = (
+            {"run_id": invitation["run_id"], "email": invitation["email"]}
+            if invitation.get("run_id")
+            else {"quiz_id": invitation["quiz_id"], "email": invitation["email"]}
+        )
+        existing = await self.collection.find_one(lookup)
         if existing:
             await self.collection.update_one(
                 {"_id": existing["_id"]},
@@ -47,6 +49,7 @@ class LiveQuizInvitationRepository:
         status: str,
         session_id: Optional[str] = None,
         name: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> Optional[dict]:
         update = {
             "status": status,
@@ -56,8 +59,13 @@ class LiveQuizInvitationRepository:
             update["session_id"] = session_id
         if name:
             update["name"] = name
+        lookup = (
+            {"run_id": run_id, "email": email.strip().lower()}
+            if run_id
+            else {"quiz_id": quiz_id, "email": email.strip().lower()}
+        )
         return await self.collection.find_one_and_update(
-            {"quiz_id": quiz_id, "email": email.strip().lower()},
+            lookup,
             {"$set": update},
         )
 
@@ -86,6 +94,13 @@ class LiveQuizInvitationRepository:
     async def list_by_quiz(self, quiz_id: str) -> List[dict]:
         cursor = self.collection.find({"quiz_id": quiz_id}).sort("created_at", 1)
         return await cursor.to_list(length=1000)
+
+    async def list_by_run(self, run_id: str, batch_size: int = 500) -> List[dict]:
+        cursor = self.collection.find({"run_id": run_id}).sort("created_at", 1)
+        invitations: List[dict] = []
+        while batch := await cursor.to_list(length=batch_size):
+            invitations.extend(batch)
+        return invitations
 
     async def delete_by_quiz(self, quiz_id: str) -> int:
         result = await self.collection.delete_many({"quiz_id": quiz_id})

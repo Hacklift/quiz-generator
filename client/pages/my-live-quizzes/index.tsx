@@ -50,8 +50,10 @@ const MyLiveQuizzesPage: React.FC = () => {
   const [quizToGenerateFor, setQuizToGenerateFor] =
     useState<LiveQuizSummary | null>(null);
   const [duration, setDuration] = useState(20);
+  const [passingThreshold, setPassingThreshold] = useState(80);
   const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingThreshold, setIsLoadingThreshold] = useState(false);
 
   const loadLiveQuizzes = useCallback(async () => {
     try {
@@ -71,10 +73,22 @@ const MyLiveQuizzesPage: React.FC = () => {
     void loadLiveQuizzes();
   }, [loadLiveQuizzes]);
 
-  const openGenerationDialog = (quiz: LiveQuizSummary) => {
+  const openGenerationDialog = async (quiz: LiveQuizSummary) => {
     setQuizToGenerateFor(quiz);
     setDuration(quiz.time_limit_minutes || 20);
+    setPassingThreshold(80);
     setExpiresAt(tomorrowLocalValue());
+    setIsLoadingThreshold(true);
+    try {
+      const latestRun = await liveQuizService.getLatestRun(quiz.quiz_id);
+      setPassingThreshold(latestRun.passing_threshold_percentage ?? 80);
+    } catch (error: any) {
+      if (error?.response?.status !== 404) {
+        toast.error("Could not load the current passing threshold.");
+      }
+    } finally {
+      setIsLoadingThreshold(false);
+    }
   };
 
   const generateAccessCode = async (event: FormEvent) => {
@@ -90,14 +104,21 @@ const MyLiveQuizzesPage: React.FC = () => {
         participant_access_mode:
           quizToGenerateFor.participant_access_mode || "public",
         invited_emails: quizToGenerateFor.invited_emails || [],
+        passing_threshold_percentage: passingThreshold,
       });
       setQuizToGenerateFor(null);
       await loadLiveQuizzes();
       toast.success(`Access code ${response.access_code} generated.`);
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not generate access code.",
-      );
+      if (error?.response?.status === 409) {
+        toast.error(
+          "This live quiz run already has a different passing threshold. Refresh the run details and try again.",
+        );
+      } else {
+        toast.error(
+          error?.response?.data?.detail || "Could not generate access code.",
+        );
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -276,6 +297,19 @@ const MyLiveQuizzesPage: React.FC = () => {
                   />
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">
+                  Passing threshold (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={passingThreshold}
+                    onChange={(event) =>
+                      setPassingThreshold(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
                   Access code expires
                   <input
                     type="datetime-local"
@@ -289,7 +323,7 @@ const MyLiveQuizzesPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setQuizToGenerateFor(null)}
-                  disabled={isGenerating}
+                  disabled={isGenerating || isLoadingThreshold}
                   className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
@@ -299,7 +333,11 @@ const MyLiveQuizzesPage: React.FC = () => {
                   disabled={isGenerating}
                   className="rounded-md bg-[#0a3264] px-3 py-2 text-sm font-semibold text-white hover:bg-[#082952] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isGenerating ? "Generating..." : "Generate"}
+                  {isLoadingThreshold
+                    ? "Loading threshold..."
+                    : isGenerating
+                      ? "Generating..."
+                      : "Generate"}
                 </button>
               </div>
             </form>

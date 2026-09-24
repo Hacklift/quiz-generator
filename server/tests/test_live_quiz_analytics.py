@@ -20,6 +20,10 @@ from starlette.websockets import WebSocketDisconnect
 import server.app.quiz.services.live_session_service as live_quiz_session_service
 from server.app.core.config import settings
 from server.app.quiz.routes import live_sessions as live_sessions_routes
+from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
+from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
+    LiveQuizInvitationRepository,
+)
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.models import UserOut
 
@@ -32,6 +36,7 @@ class FakeAnalyticsRepository:
             "title": "Analytics Quiz",
             "created_by": self.creator_id,
             "live_quiz_enabled": True,
+            "access_code": "ABC123",
             "time_limit_minutes": 10,
             "access_code_expires_at": datetime(2026, 6, 1, tzinfo=timezone.utc),
             "questions": [
@@ -111,6 +116,12 @@ class FakeAnalyticsRepository:
             if sess.get("quiz_id") == quiz_id
         ]
 
+    async def list_run_sessions(self, run_id):
+        return [
+            sess for sess in self.sessions.values()
+            if sess.get("run_id") == run_id
+        ]
+
     async def get_session_by_id_and_creator(
         self, session_id, creator_user_id, quiz_id=None
     ):
@@ -120,6 +131,51 @@ class FakeAnalyticsRepository:
         if quiz_id is not None and session.get("quiz_id") != quiz_id:
             return None
         return session
+
+
+class FakeRunRepository:
+    def __init__(self, run):
+        self.run = run
+
+    async def get(self, run_id):
+        return self.run if run_id == str(self.run["_id"]) else None
+
+    async def get_by_access_code(self, access_code):
+        return self.run if access_code == self.run["access_code"] else None
+
+    async def latest_for_quiz(self, quiz_id, creator_user_id):
+        if self.run["quiz_id"] == quiz_id and self.run["creator_user_id"] == creator_user_id:
+            return self.run
+        return None
+
+    async def create(self, run):
+        self.run = {**run, "_id": "run-new"}
+        return "run-new"
+
+
+class FakeReportInvitationRepository:
+    async def list_by_run(self, run_id):
+        return [{"run_id": run_id, "name": "Dana", "email": "dana@example.com"}]
+
+
+class FakePagedCursor:
+    def __init__(self, records):
+        self.records = list(records)
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, length):
+        batch, self.records = self.records[:length], self.records[length:]
+        return batch
+
+
+class FakePagedCollection:
+    def __init__(self, records):
+        self.records = records
+
+    def find(self, _query):
+        return FakePagedCursor(self.records)
 
 
 @pytest.mark.asyncio
@@ -189,6 +245,152 @@ async def test_participant_submits_and_score_appears_in_analytics(monkeypatch):
     assert rows[0]["submitted_at"] == current_time["value"]
     assert rows[0]["score"] is not None
     assert rows[0]["total_questions"] == 2
+
+
+@pytest.mark.asyncio
+async def test_completion_report_uses_run_threshold_and_escapes_spreadsheet_values(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    run = {
+        "_id": "run-1",
+        "quiz_id": "quiz-1",
+        "creator_user_id": "creator-1",
+        "title": "=Safety training",
+        "access_code": "ABC123",
+        "passing_threshold_percentage": 80,
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(run))
+    started = await service.start_session("ABC123", "Alice", "alice@example.com")
+    await service.save_answer(started["session_id"], started["participant_token"], 0, "A", 1)
+    await service.save_answer(started["session_id"], started["participant_token"], 1, "B", 1)
+    result = await service.submit_session(started["session_id"], started["participant_token"])
+
+    assert result["passed"] is True
+    assert result["passing_threshold_percentage"] == 80
+    report = await service.completion_report("run-1", "creator-1")
+    assert report["rows"][0]["quiz_title"] == "'=Safety training"
+    assert report["rows"][0]["outcome"] == "passed"
+    assert report["rows"][0]["completion_timestamp_utc"] == fixed_now.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_completion_report_rejects_non_owner():
+    repository = FakeAnalyticsRepository()
+    run = {
+        "_id": "run-1",
+        "quiz_id": "quiz-1",
+        "creator_user_id": "creator-1",
+        "title": "Safety training",
+        "access_code": "ABC123",
+        "passing_threshold_percentage": 80,
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(run))
+    with pytest.raises(HTTPException) as error:
+        await service.completion_report("run-1", "not-the-owner")
+    assert error.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_active_run_rejects_a_conflicting_passing_threshold(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeAnalyticsRepository()
+    run = {
+        "_id": "run-1", "quiz_id": "quiz-1", "creator_user_id": "creator-1",
+        "title": "Safety training", "access_code": "ABC123",
+        "passing_threshold_percentage": 80,
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(run))
+
+    with pytest.raises(HTTPException) as error:
+        await service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(days=1),
+            creator_id="creator-1",
+            time_limit_minutes=10,
+            passing_threshold_percentage=70,
+        )
+    assert error.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_completion_report_keeps_an_invited_assignee_who_never_started():
+    repository = FakeAnalyticsRepository()
+    run = {
+        "_id": "run-1", "quiz_id": "quiz-1", "creator_user_id": "creator-1",
+        "title": "Safety training", "access_code": "ABC123",
+        "passing_threshold_percentage": 80,
+    }
+    service = LiveQuizSessionService(
+        repository,
+        run_repository=FakeRunRepository(run),
+        invitation_repository=FakeReportInvitationRepository(),
+    )
+    report = await service.completion_report("run-1", "creator-1")
+    assert report["rows"] == [
+        {
+            "run_id": "run-1", "quiz_id": "quiz-1", "quiz_title": "Safety training",
+            "access_code": "ABC123", "assignee_name": "Dana",
+            "assignee_email": "dana@example.com", "completion_status": "not_started",
+            "completion_timestamp_utc": "", "score": "", "total_questions": "",
+            "score_percentage": "", "passing_threshold_percentage": 80,
+            "outcome": "not_completed", "auto_submitted": False,
+            "duration_seconds": "", "report_generated_at_utc": report["rows"][0]["report_generated_at_utc"],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_repositories_retrieve_all_records_across_internal_batches():
+    records = [{"sequence": index} for index in range(1_001)]
+    session_repository = LiveQuizSessionRepository(
+        FakePagedCollection([]), FakePagedCollection(records)
+    )
+    invitation_repository = LiveQuizInvitationRepository(FakePagedCollection(records))
+
+    sessions = await session_repository.list_run_sessions("run-1", batch_size=500)
+    invitations = await invitation_repository.list_by_run("run-1", batch_size=500)
+
+    assert len(sessions) == 1_001
+    assert len(invitations) == 1_001
+
+
+@pytest.mark.asyncio
+async def test_latest_run_distinguishes_missing_quiz_non_owner_and_missing_run():
+    repository = FakeAnalyticsRepository()
+    owned_run = {
+        "_id": "run-1", "quiz_id": "quiz-1", "creator_user_id": "creator-1",
+        "passing_threshold_percentage": 80, "access_code": "ABC123",
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(owned_run))
+    assert await service.latest_completion_run("quiz-1", "creator-1") == {
+        "run_id": "run-1", "passing_threshold_percentage": 80,
+    }
+
+    with pytest.raises(HTTPException) as non_owner:
+        await service.latest_completion_run("quiz-1", "intruder")
+    assert non_owner.value.status_code == 403
+
+    async def no_quiz(_quiz_id):
+        return None
+
+    repository.get_quiz_by_id = no_quiz
+    with pytest.raises(HTTPException) as missing_quiz:
+        await service.latest_completion_run("missing", "creator-1")
+    assert missing_quiz.value.status_code == 404
+
+    no_run_repository = FakeAnalyticsRepository()
+    no_run_service = LiveQuizSessionService(
+        no_run_repository,
+        run_repository=FakeRunRepository({
+            "_id": "other-run", "quiz_id": "other-quiz",
+            "creator_user_id": "creator-1", "access_code": "OTHER",
+        }),
+    )
+    with pytest.raises(HTTPException) as missing_run:
+        await no_run_service.latest_completion_run("quiz-1", "creator-1")
+    assert missing_run.value.status_code == 404
 
 
 @pytest.mark.asyncio

@@ -37,9 +37,13 @@ class LiveQuizSessionService:
     def __init__(
         self,
         repository: LiveQuizSessionRepository,
+        run_repository=None,
+        invitation_repository=None,
         broadcaster: Optional[LiveQuizRealtimeBroadcaster] = None,
     ):
         self.repository = repository
+        self.run_repository = run_repository
+        self.invitation_repository = invitation_repository
         self.broadcaster = broadcaster
 
     async def generate_access_code(
@@ -51,6 +55,7 @@ class LiveQuizSessionService:
         participant_access_mode: str = "public",
         invited_emails: Optional[List[str]] = None,
         send_email_invitations: bool = False,
+        passing_threshold_percentage: float = 80,
         invitation_repository=None,
         email_service=None,
     ) -> Dict[str, Any]:
@@ -74,8 +79,39 @@ class LiveQuizSessionService:
                 for email in quiz.get("invited_participant_emails", [])
                 if email
             ]
+            existing_run = (
+                await self.run_repository.get_by_access_code(existing_access_code)
+                if self.run_repository
+                else None
+            )
+            if (
+                existing_run
+                and existing_run.get("passing_threshold_percentage", 80)
+                != passing_threshold_percentage
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="The active live quiz run already has a different passing threshold.",
+                )
+            # Runs introduced after an access code was already live need a
+            # record too; otherwise the code would be usable but unreportable.
+            if self.run_repository and not existing_run:
+                recovered_run_id = await self.run_repository.create(
+                    {
+                        "quiz_id": str(quiz["_id"]),
+                        "creator_user_id": creator_id,
+                        "title": quiz.get("title", "Live Quiz"),
+                        "access_code": existing_access_code,
+                        "access_code_expires_at": _as_utc(existing_expiration),
+                        "time_limit_minutes": quiz.get("time_limit_minutes") or time_limit_minutes,
+                        "participant_access_mode": quiz.get("participant_access_mode", "public"),
+                        "passing_threshold_percentage": passing_threshold_percentage,
+                    }
+                )
+                existing_run = await self.run_repository.get(recovered_run_id)
             return {
                 "quiz_id": str(quiz["_id"]),
+                "run_id": str(existing_run["_id"]) if existing_run else None,
                 "access_code": existing_access_code,
                 "live_quiz_enabled": True,
                 "time_limit_minutes": quiz.get("time_limit_minutes") or time_limit_minutes,
@@ -85,6 +121,11 @@ class LiveQuizSessionService:
                 "invitations_created": len(invited),
                 "invitations_delivered": 0,
                 "invitations_queued": 0,
+                "passing_threshold_percentage": (
+                    existing_run.get("passing_threshold_percentage", 80)
+                    if existing_run
+                    else passing_threshold_percentage
+                ),
             }
 
         if _as_utc(access_code_expires_at) <= _utc_now():
@@ -115,6 +156,21 @@ class LiveQuizSessionService:
         if not updated_quiz:
             raise HTTPException(status_code=500, detail="Could not enable live quiz")
 
+        run_id = None
+        if self.run_repository:
+            run_id = await self.run_repository.create(
+                {
+                    "quiz_id": str(updated_quiz["_id"]),
+                    "creator_user_id": creator_id,
+                    "title": updated_quiz.get("title", "Live Quiz"),
+                    "access_code": code,
+                    "access_code_expires_at": _as_utc(access_code_expires_at),
+                    "time_limit_minutes": time_limit_minutes,
+                    "participant_access_mode": participant_access_mode,
+                    "passing_threshold_percentage": passing_threshold_percentage,
+                }
+            )
+
         invitations_created = 0
         invitations_delivered = 0
         invitations_queued = 0
@@ -125,6 +181,7 @@ class LiveQuizSessionService:
                 invitation_id = await invitation_repository.upsert_invitation(
                     {
                         "quiz_id": str(updated_quiz["_id"]),
+                        "run_id": run_id,
                         "creator_user_id": creator_id,
                         "access_code": code,
                         "email": email,
@@ -187,6 +244,7 @@ class LiveQuizSessionService:
 
         return {
             "quiz_id": str(updated_quiz["_id"]),
+            "run_id": run_id,
             "access_code": code,
             "live_quiz_enabled": True,
             "time_limit_minutes": time_limit_minutes,
@@ -196,6 +254,7 @@ class LiveQuizSessionService:
             "invitations_created": invitations_created,
             "invitations_delivered": invitations_delivered,
             "invitations_queued": invitations_queued,
+            "passing_threshold_percentage": passing_threshold_percentage,
         }
 
     async def validate_access_code(self, code: str) -> Dict[str, Any]:
@@ -264,9 +323,18 @@ class LiveQuizSessionService:
         guest_id = f"guest_{secrets.token_urlsafe(12)}"
 
         creator_user_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
+        run = (
+            await self.run_repository.get_by_access_code(code)
+            if self.run_repository
+            else None
+        )
+        passing_threshold_percentage = (
+            run.get("passing_threshold_percentage", 80) if run else 80
+        )
 
         session_data = {
             "quiz_id": str(quiz["_id"]),
+            "run_id": str(run["_id"]) if run else None,
             "creator_user_id": creator_user_id,
             "participant_type": "guest",
             "user_id": None,
@@ -286,6 +354,8 @@ class LiveQuizSessionService:
             "duration_seconds": duration_seconds,
             "duration_used_seconds": None,
             "percentage": None,
+            "passing_threshold_percentage": passing_threshold_percentage,
+            "passed": None,
             "auto_submitted": False,
             "created_at": started_at,
             "updated_at": started_at,
@@ -302,6 +372,7 @@ class LiveQuizSessionService:
                     status="joined",
                     session_id=session_id,
                     name=participant_name.strip(),
+                    run_id=session_data.get("run_id"),
                 )
             except Exception as e:
                 logger.warning(f"Could not update invitation status: {e}")
@@ -449,6 +520,7 @@ class LiveQuizSessionService:
                         email=participant_email,
                         status=inv_status,
                         session_id=session_id,
+                        run_id=session.get("run_id"),
                     )
                 except Exception as e:
                     logger.warning(f"Could not update invitation status on submit: {e}")
@@ -643,6 +715,7 @@ class LiveQuizSessionService:
                 "submitted_at": submitted_at,
                 "score": graded["score"],
                 "percentage": graded["percentage"],
+                "passed": graded["percentage"] >= session.get("passing_threshold_percentage", 80),
                 "graded_answers": graded.get("graded_answers", []),
                 "duration_used_seconds": duration_used_seconds,
                 "auto_submitted": auto_submitted,
@@ -783,6 +856,8 @@ class LiveQuizSessionService:
             "submitted_at": _as_utc(session["submitted_at"]),
             "auto_submitted": session.get("auto_submitted", False),
             "duration_used_seconds": session.get("duration_used_seconds"),
+            "passing_threshold_percentage": session.get("passing_threshold_percentage", 80),
+            "passed": bool(session.get("passed", False)),
         }
 
     def _analytics_row(self, session: Dict[str, Any]) -> Dict[str, Any]:
@@ -823,7 +898,109 @@ class LiveQuizSessionService:
             "progress_percentage": progress_percentage,
             "status": status,
             "auto_submitted": session.get("auto_submitted", False),
+            "passing_threshold_percentage": session.get("passing_threshold_percentage"),
+            "passed": session.get("passed"),
         }
+
+    async def completion_report(self, run_id: str, requester_id: str) -> Dict[str, Any]:
+        """Return CSV-safe, owner-authorized completion evidence for one run."""
+        if not self.run_repository:
+            raise HTTPException(status_code=404, detail="Completion report not found")
+        run = await self.run_repository.get(run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Completion report not found")
+        if str(run.get("creator_user_id")) != requester_id:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        sessions = await self.repository.list_run_sessions(run_id)
+        invitations = (
+            await self.invitation_repository.list_by_run(run_id)
+            if self.invitation_repository
+            else []
+        )
+        started_emails = {
+            self._normalized_email(session.get("participant_email"))
+            for session in sessions
+            if self._normalized_email(session.get("participant_email"))
+        }
+        generated_at = _utc_now().isoformat()
+        columns = [
+            "run_id", "quiz_id", "quiz_title", "access_code", "assignee_name",
+            "assignee_email", "completion_status", "completion_timestamp_utc", "score",
+            "total_questions", "score_percentage", "passing_threshold_percentage",
+            "outcome", "auto_submitted", "duration_seconds", "report_generated_at_utc",
+        ]
+        return {
+            "columns": columns,
+            "rows": [
+                {
+                    "run_id": self._csv_value(run_id),
+                    "quiz_id": self._csv_value(run.get("quiz_id")),
+                    "quiz_title": self._csv_value(run.get("title")),
+                    "access_code": self._csv_value(run.get("access_code")),
+                    "assignee_name": self._csv_value(session.get("participant_name")),
+                    "assignee_email": self._csv_value(session.get("participant_email")),
+                    "completion_status": "timed_out" if session.get("auto_submitted") else session.get("status", "not_started"),
+                    "completion_timestamp_utc": session["submitted_at"].isoformat() if session.get("submitted_at") else "",
+                    "score": session.get("score", ""),
+                    "total_questions": session.get("total_questions", ""),
+                    "score_percentage": session.get("percentage", ""),
+                    "passing_threshold_percentage": session.get("passing_threshold_percentage", run.get("passing_threshold_percentage", 80)),
+                    "outcome": "passed" if session.get("passed") is True else "failed" if session.get("submitted_at") else "not_completed",
+                    "auto_submitted": session.get("auto_submitted", False),
+                    "duration_seconds": session.get("duration_used_seconds", ""),
+                    "report_generated_at_utc": generated_at,
+                }
+                for session in sessions
+            ] + [
+                {
+                    "run_id": self._csv_value(run_id),
+                    "quiz_id": self._csv_value(run.get("quiz_id")),
+                    "quiz_title": self._csv_value(run.get("title")),
+                    "access_code": self._csv_value(run.get("access_code")),
+                    "assignee_name": self._csv_value(invitation.get("name")),
+                    "assignee_email": self._csv_value(invitation.get("email")),
+                    "completion_status": "not_started",
+                    "completion_timestamp_utc": "",
+                    "score": "",
+                    "total_questions": "",
+                    "score_percentage": "",
+                    "passing_threshold_percentage": run.get("passing_threshold_percentage", 80),
+                    "outcome": "not_completed",
+                    "auto_submitted": False,
+                    "duration_seconds": "",
+                    "report_generated_at_utc": generated_at,
+                }
+                for invitation in invitations
+                if self._normalized_email(invitation.get("email")) not in started_emails
+            ],
+        }
+
+    async def latest_completion_run(self, quiz_id: str, requester_id: str) -> Dict[str, Any]:
+        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        owner_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
+        if not owner_id or str(owner_id) != requester_id:
+            raise HTTPException(status_code=403, detail="Not allowed")
+        if not self.run_repository:
+            raise HTTPException(status_code=404, detail="No completion run found")
+        run = await self.run_repository.latest_for_quiz(quiz_id, requester_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="No completion run found")
+        return {
+            "run_id": str(run["_id"]),
+            "passing_threshold_percentage": run.get("passing_threshold_percentage", 80),
+        }
+
+    @staticmethod
+    def _csv_value(value: Any) -> str:
+        text = "" if value is None else str(value)
+        return f"'{text}" if text.startswith(("=", "+", "-", "@")) else text
+
+    @staticmethod
+    def _normalized_email(value: Any) -> str:
+        return str(value or "").strip().lower()
 
     def _quiz_status(
         self,
