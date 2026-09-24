@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SignInModal from "@features/auth/components/SignInModal";
+import { login } from "@features/auth/api/authApi";
 import { ROUTES } from "@shared/config/patterns/routes";
 
 const mockRouterPush = jest.fn();
@@ -25,6 +26,8 @@ jest.mock("@features/auth/api/authApi", () => ({
   }),
 }));
 
+const mockLogin = login as jest.Mock;
+
 describe("SignInModal", () => {
   const mockOnClose = jest.fn();
   const mockSwitchToSignUp = jest.fn();
@@ -34,6 +37,11 @@ describe("SignInModal", () => {
     mockSwitchToSignUp.mockClear();
     mockRouterPush.mockClear();
     mockAuthLogin.mockClear();
+    mockLogin.mockReset();
+    mockLogin.mockResolvedValue({
+      access_token: "test-access-token",
+      token_type: "bearer",
+    });
   });
 
   test("renders the modal when isOpen is true", () => {
@@ -159,5 +167,34 @@ describe("SignInModal", () => {
     fireEvent.click(container.firstChild as Element);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("shows a concrete login error when the request fails", async () => {
+    mockLogin.mockRejectedValue(new Error("Account is not active"));
+
+    render(
+      <SignInModal
+        isOpen={true}
+        onClose={mockOnClose}
+        switchToSignUp={mockSwitchToSignUp}
+      />,
+    );
+
+    fireEvent.change(
+      screen.getByPlaceholderText("email@example.com or username"),
+      {
+        target: { value: "blocked-user@example.com" },
+      },
+    );
+    fireEvent.change(screen.getByPlaceholderText("Enter your password"), {
+      target: { value: "password123" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(
+      await screen.findByText("Account is not active"),
+    ).toBeInTheDocument();
+    expect(mockOnClose).not.toHaveBeenCalled();
   });
 });

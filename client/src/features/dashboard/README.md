@@ -21,7 +21,10 @@ Your view is rendered **inside** `<DashboardShell>` by its category
 dashboard, so render sections — not page chrome, not a NavBar.
 
 ```tsx
-export default function TeacherDashboard({ persona, user }: DashboardViewProps) {
+export default function TeacherDashboard({
+  persona,
+  user,
+}: DashboardViewProps) {
   const t = useTerms();
   return (
     <section className="border-t-2 border-divider pt-[28px]">

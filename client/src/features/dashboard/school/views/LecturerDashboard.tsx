@@ -69,8 +69,8 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
               Built for large {t("group", "plural")} — put a join code on the
-              projector, track {t("group")} size as {t("learner", "plural")}
-              {" "}join, and score them in real time.
+              projector, track {t("group")} size as {t("learner", "plural")}{" "}
+              join, and score them in real time.
             </p>
           </div>
 
@@ -89,8 +89,8 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
             Recent {t("session", "plural")}
           </p>
           <p className="mt-[8px] text-[13.5px] leading-[22px] text-ink/70">
-            Nothing here yet. Once you start a live {t("session")}, it will
-            show up here with {t("group")} size and participation counts.
+            Nothing here yet. Once you start a live {t("session")}, it will show
+            up here with {t("group")} size and participation counts.
           </p>
         </div>
       </section>
@@ -107,8 +107,8 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
           Quick-create presets
         </h2>
         <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-          Jumpstart your {t("assignment")} without generic configuration.
-          Every preset is pre-configured for large {t("group", "plural")}.
+          Jumpstart your {t("assignment")} without generic configuration. Every
+          preset is pre-configured for large {t("group", "plural")}.
         </p>
 
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">

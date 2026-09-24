@@ -122,14 +122,14 @@ describe("PersonaProvider", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(setItemSpy).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(localStorage.getItem("quizwerk.persona") || "{}")).toEqual(
-      {
-        category: "school",
-        userType: "lecturer",
-        topic: "Introduction to microeconomics",
-        v: 1,
-      },
-    );
+    expect(
+      JSON.parse(localStorage.getItem("quizwerk.persona") || "{}"),
+    ).toEqual({
+      category: "school",
+      userType: "lecturer",
+      topic: "Introduction to microeconomics",
+      v: 1,
+    });
 
     setItemSpy.mockRestore();
   });
@@ -354,14 +354,14 @@ describe("PersonaProvider", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(setItemSpy).not.toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem("quizwerk.persona") || "{}")).toEqual(
-      {
-        category: "school",
-        userType: "lecturer",
-        topic: "Introduction to microeconomics",
-        v: 1,
-      },
-    );
+    expect(
+      JSON.parse(localStorage.getItem("quizwerk.persona") || "{}"),
+    ).toEqual({
+      category: "school",
+      userType: "lecturer",
+      topic: "Introduction to microeconomics",
+      v: 1,
+    });
 
     setItemSpy.mockRestore();
   });

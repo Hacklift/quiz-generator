@@ -18,7 +18,9 @@ export async function createParentPractice(
     durationMinutes < 1 ||
     durationMinutes > 180
   ) {
-    throw new Error("Duration must be a whole number between 1 and 180 minutes.");
+    throw new Error(
+      "Duration must be a whole number between 1 and 180 minutes.",
+    );
   }
   const allowFallback =
     process.env.NEXT_PUBLIC_PARENT_PRACTICE_ALLOW_FALLBACK === "true";

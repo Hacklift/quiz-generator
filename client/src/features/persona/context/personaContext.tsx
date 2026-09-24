@@ -111,7 +111,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     const normalizedTopic = hasTopicParam ? topic.trim().slice(0, 300) : "";
     const storedTopic = readStoredPersonaTopic(resolved.persona) || "";
     const storagePersona = storedPersona ?? readStoredPersona();
-    const isStoredPersonaCurrent = samePersona(storagePersona, resolved.persona);
+    const isStoredPersonaCurrent = samePersona(
+      storagePersona,
+      resolved.persona,
+    );
     const targetTopic = hasTopicParam ? normalizedTopic : storedTopic;
 
     if (!isStoredPersonaCurrent || storedTopic !== targetTopic) {
@@ -123,18 +126,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     if (!samePersona(storedPersona, resolved.persona)) {
       setStoredPersona(resolved.persona);
     }
-  }, [
-    resolved.persona,
-    resolved.source,
-    router.query?.topic,
-    storedPersona,
-  ]);
+  }, [resolved.persona, resolved.source, router.query?.topic, storedPersona]);
 
   const setPersona = useCallback(
-    async (
-      persona: Persona,
-      options: { source?: PersonaWriteSource } = {},
-    ) => {
+    async (persona: Persona, options: { source?: PersonaWriteSource } = {}) => {
       if (isAuthenticated) {
         const userId = user?.id ?? null;
         setOverride({ persona, userId });

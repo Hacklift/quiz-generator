@@ -8,6 +8,8 @@ from .quiz_models import (
 from .reference_models import (
     FolderCreateV2,
     FolderDocumentV2,
+    QuizAttemptDocumentV2,
+    QuizAttemptQuestionResultV2,
     FolderItemCreateV2,
     FolderItemDocumentV2,
     QuizHistoryCreateV2,
@@ -21,6 +23,8 @@ __all__ = [
     "FolderDocumentV2",
     "FolderItemCreateV2",
     "FolderItemDocumentV2",
+    "QuizAttemptDocumentV2",
+    "QuizAttemptQuestionResultV2",
     "QuizCreateV2",
     "QuizDocumentV2",
     "QuizHistoryCreateV2",

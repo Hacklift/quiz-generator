@@ -76,7 +76,9 @@ export default function PersonaBadge({
 
           <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium text-slate-700 shadow-xs border border-slate-200">
             <span className="text-slate-400">Format:</span>
-            <strong className="text-slate-800 font-semibold">{formatLabel}</strong>
+            <strong className="text-slate-800 font-semibold">
+              {formatLabel}
+            </strong>
           </span>
 
           <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium text-slate-700 shadow-xs border border-slate-200">

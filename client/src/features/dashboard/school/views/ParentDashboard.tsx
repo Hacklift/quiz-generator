@@ -40,7 +40,8 @@ export default function ParentDashboard() {
             Parent dashboard
           </h2>
           <p className="mt-[7px] text-[14px] text-ink/70">
-            Create an automatically marked {t("assignment")} for your {t("learner")}.
+            Create an automatically marked {t("assignment")} for your{" "}
+            {t("learner")}.
           </p>
         </div>
         <Link href="/parent-practice/new" className={BTN_PRIMARY}>
@@ -62,18 +63,25 @@ export default function ParentDashboard() {
       ) : (
         <ul className="mt-[12px]">
           {practices.map((practice) => (
-            <li key={practice.quiz_id} className="border-t-2 border-divider py-[16px]">
+            <li
+              key={practice.quiz_id}
+              className="border-t-2 border-divider py-[16px]"
+            >
               <div className="flex flex-wrap items-center justify-between gap-[14px]">
                 <div>
                   <p className="font-extrabold">{practice.title}</p>
                   <p className="mt-[4px] text-[13px] text-ink/65">
-                    {practice.completed_count} completed {practice.completed_count === 1 ? "attempt" : "attempts"}
+                    {practice.completed_count} completed{" "}
+                    {practice.completed_count === 1 ? "attempt" : "attempts"}
                     {practice.latest_score != null
                       ? ` · Latest: ${practice.latest_score}${practice.latest_percentage != null ? ` (${practice.latest_percentage}%)` : ""}`
                       : ""}
                   </p>
                 </div>
-                <Link className="text-[14px] font-extrabold text-brand underline" href={`/my-live-quizzes/${practice.quiz_id}`}>
+                <Link
+                  className="text-[14px] font-extrabold text-brand underline"
+                  href={`/my-live-quizzes/${practice.quiz_id}`}
+                >
                   View results
                 </Link>
               </div>

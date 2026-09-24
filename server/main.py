@@ -23,8 +23,15 @@ from server.app.db.core.connection import (
     get_users_collection,
     startUp,
 )
-from server.app.mcp.middleware import McpAuthorizationHeaderMiddleware
-from server.app.mcp.server import create_mcp_server
+
+try:
+    from server.app.mcp.middleware import McpAuthorizationHeaderMiddleware
+    from server.app.mcp.server import create_mcp_server
+except ModuleNotFoundError as exc:
+    if exc.name != "mcp":
+        raise
+    McpAuthorizationHeaderMiddleware = None
+    create_mcp_server = None
 
 
 logging.basicConfig(
@@ -36,7 +43,11 @@ logging.basicConfig(
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 raw_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
 origins = [origin.strip() for origin in raw_origins if origin.strip() and origin.strip() != "*"]
-mcp_server = create_mcp_server()
+if create_mcp_server is None:
+    logging.warning("MCP server disabled because optional dependency 'mcp' is not installed.")
+    mcp_server = None
+else:
+    mcp_server = create_mcp_server()
 
 
 @asynccontextmanager
@@ -49,8 +60,11 @@ async def lifespan(app: FastAPI):
     app.state.auth_events_collection = get_auth_events_collection()
     app.state.quizzes_collection = get_quizzes_collection()
 
-    async with mcp_server.session_manager.run():
+    if mcp_server is None:
         yield
+    else:
+        async with mcp_server.session_manager.run():
+            yield
 
     get_users_collection().database.client.close()
     await redis_client.close()
@@ -69,4 +83,5 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 app.include_router(app_router)
-app.mount("/internal", McpAuthorizationHeaderMiddleware(mcp_server.streamable_http_app()))
+if mcp_server is not None and McpAuthorizationHeaderMiddleware is not None:
+    app.mount("/internal", McpAuthorizationHeaderMiddleware(mcp_server.streamable_http_app()))

@@ -27,14 +27,14 @@ usePersona()                                ← features/persona/context
 
 ## Files you can rely on
 
-| File | What it gives you |
-|---|---|
-| `client/src/shared/config/persona.ts` | The taxonomy: `PersonaCategory`, `PersonaUserType`, `PERSONA_TAXONOMY`, `parsePersona`, `personaGenerateHref`, per-type `generationDefaults` |
-| `server/app/users/persona.py` | The same slugs server-side, plus `build_persona` / `get_persona` / `persona_update_fields` |
-| `client/src/shared/config/terminology.ts` | `resolveTerm(key, persona, form)` — category wording with user-type overrides |
-| `client/src/features/persona/` | `usePersona()`, `useTerms()`, `PersonaPicker`, `PersonaBadge`, storage, API |
-| `client/src/shared/ui/quizwerk/` | The design kit: `CONTAINER`, `BTN_PRIMARY`, `BTN_GHOST`, `BTN_INVERSE`, `Kicker`, `Microlabel`, `archivo` |
-| `client/src/features/dashboard/` | `DashboardShell`, `QuickActions`, `RecentQuizzes`, `DashboardPlaceholder`, both dispatch maps |
+| File                                      | What it gives you                                                                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client/src/shared/config/persona.ts`     | The taxonomy: `PersonaCategory`, `PersonaUserType`, `PERSONA_TAXONOMY`, `parsePersona`, `personaGenerateHref`, per-type `generationDefaults` |
+| `server/app/users/persona.py`             | The same slugs server-side, plus `build_persona` / `get_persona` / `persona_update_fields`                                                   |
+| `client/src/shared/config/terminology.ts` | `resolveTerm(key, persona, form)` — category wording with user-type overrides                                                                |
+| `client/src/features/persona/`            | `usePersona()`, `useTerms()`, `PersonaPicker`, `PersonaBadge`, storage, API                                                                  |
+| `client/src/shared/ui/quizwerk/`          | The design kit: `CONTAINER`, `BTN_PRIMARY`, `BTN_GHOST`, `BTN_INVERSE`, `Kicker`, `Microlabel`, `archivo`                                    |
+| `client/src/features/dashboard/`          | `DashboardShell`, `QuickActions`, `RecentQuizzes`, `DashboardPlaceholder`, both dispatch maps                                                |
 
 ## House rules
 
@@ -55,33 +55,33 @@ usePersona()                                ← features/persona/context
 
 ### Done (this scaffolding)
 
-| Issue | Story | Landed as |
-|---|---|---|
-| #119 | Persona on the user profile | `server/app/users/{persona,models,repository,services,validators,identity}.py` |
-| #123 | Terminology + nav shell | `shared/config/terminology.ts`, `features/quiz/components/{NavBar,Sidebar,Footer}.tsx` |
-| #124 | School dashboard shell | `features/dashboard/school/SchoolDashboard.tsx` |
-| #125 | Corporate dashboard shell | `features/dashboard/corporate/CorporateDashboard.tsx` |
+| Issue | Story                       | Landed as                                                                              |
+| ----- | --------------------------- | -------------------------------------------------------------------------------------- |
+| #119  | Persona on the user profile | `server/app/users/{persona,models,repository,services,validators,identity}.py`         |
+| #123  | Terminology + nav shell     | `shared/config/terminology.ts`, `features/quiz/components/{NavBar,Sidebar,Footer}.tsx` |
+| #124  | School dashboard shell      | `features/dashboard/school/SchoolDashboard.tsx`                                        |
+| #125  | Corporate dashboard shell   | `features/dashboard/corporate/CorporateDashboard.tsx`                                  |
 
 ### Ready to pick up
 
-| Issue | Story | Files you own | Notes |
-|---|---|---|---|
-| #120 | Onboarding picker after signup | new `features/auth` wiring | `PersonaPicker` is built — you own where/when it appears and the show-once rule |
-| #121 | Carry home persona through signup | `features/auth/components/SignUpModal.tsx` | Storage + query resolution already exist; carry the value across the auth hop |
-| #122 | Edit persona in settings | `features/profile/pages/ProfilePage.tsx` | Drop in `PersonaPicker`, save via `updatePersona` |
-| #126 | Teacher view | `features/dashboard/school/views/TeacherDashboard.tsx` | |
-| #127 | Lecturer view | `features/dashboard/school/views/LecturerDashboard.tsx` | |
-| #128 | Student view | `features/dashboard/school/views/StudentDashboard.tsx` | Blocked on #143 for scored history |
-| #129 | Parent view | `features/dashboard/school/views/ParentDashboard.tsx` | |
-| #130 | Business view | `features/dashboard/corporate/views/BusinessDashboard.tsx` | |
-| #131 | Employee view | `features/dashboard/corporate/views/EmployeeDashboard.tsx` | |
-| #132 | HR view | `features/dashboard/corporate/views/HrDashboard.tsx` | |
-| #133 | Generation defaults | `features/quiz/components/QuizForm.tsx` | Consume `PERSONAS[type].generationDefaults` — do not re-derive |
-| #134 | Template libraries | `server/app/quiz/services/category_seed_service.py`, category pages | |
-| #135 | Class results export | new `server/app/quiz/routes/` endpoint + download UI | |
-| #136 | Compliance reporting | new endpoint + HR view section | |
-| #137 | Adoption analytics | `server/app/users/`, auth events | Indexes on `profile.persona.*` already exist |
-| #143 | Attempt history with scores | new v2 collection + `/api/quiz-attempts` | Unblocks #128 and #131 |
+| Issue | Story                             | Files you own                                                       | Notes                                                                           |
+| ----- | --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| #120  | Onboarding picker after signup    | new `features/auth` wiring                                          | `PersonaPicker` is built — you own where/when it appears and the show-once rule |
+| #121  | Carry home persona through signup | `features/auth/components/SignUpModal.tsx`                          | Storage + query resolution already exist; carry the value across the auth hop   |
+| #122  | Edit persona in settings          | `features/profile/pages/ProfilePage.tsx`                            | Drop in `PersonaPicker`, save via `updatePersona`                               |
+| #126  | Teacher view                      | `features/dashboard/school/views/TeacherDashboard.tsx`              |                                                                                 |
+| #127  | Lecturer view                     | `features/dashboard/school/views/LecturerDashboard.tsx`             |                                                                                 |
+| #128  | Student view                      | `features/dashboard/school/views/StudentDashboard.tsx`              | Blocked on #143 for scored history                                              |
+| #129  | Parent view                       | `features/dashboard/school/views/ParentDashboard.tsx`               |                                                                                 |
+| #130  | Business view                     | `features/dashboard/corporate/views/BusinessDashboard.tsx`          |                                                                                 |
+| #131  | Employee view                     | `features/dashboard/corporate/views/EmployeeDashboard.tsx`          |                                                                                 |
+| #132  | HR view                           | `features/dashboard/corporate/views/HrDashboard.tsx`                |                                                                                 |
+| #133  | Generation defaults               | `features/quiz/components/QuizForm.tsx`                             | Consume `PERSONAS[type].generationDefaults` — do not re-derive                  |
+| #134  | Template libraries                | `server/app/quiz/services/category_seed_service.py`, category pages |                                                                                 |
+| #135  | Class results export              | new `server/app/quiz/routes/` endpoint + download UI                |                                                                                 |
+| #136  | Compliance reporting              | new endpoint + HR view section                                      |                                                                                 |
+| #137  | Adoption analytics                | `server/app/users/`, auth events                                    | Indexes on `profile.persona.*` already exist                                    |
+| #143  | Attempt history with scores       | new v2 collection + `/api/quiz-attempts`                            | Unblocks #128 and #131                                                          |
 
 ---
 

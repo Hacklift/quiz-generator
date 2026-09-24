@@ -45,12 +45,18 @@ describe("QuizwerkHomePage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: /Type a topic\./ }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Pick the seat you're sitting in")).toBeInTheDocument();
-    expect(screen.getByText("Pick a plan that fits how you train")).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick the seat you're sitting in"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick a plan that fits how you train"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Built for the room, not the browser tab"),
     ).toBeInTheDocument();
-    expect(screen.getByText("The next quiz writes itself.")).toBeInTheDocument();
+    expect(
+      screen.getByText("The next quiz writes itself."),
+    ).toBeInTheDocument();
   });
 
   test("lists all seven personas", () => {

@@ -72,12 +72,14 @@ export default function CorporateDashboard({
             },
             {
               label: `Run ${t("live_quiz")}`,
-              description: "Manage live training and review participation from one workspace.",
+              description:
+                "Manage live training and review participation from one workspace.",
               href: "/my-live-quizzes",
             },
             {
               label: "Assigned to me",
-              description: "Assigned training will appear here when assignment workflows arrive.",
+              description:
+                "Assigned training will appear here when assignment workflows arrive.",
               unavailable: true,
             },
           ]}

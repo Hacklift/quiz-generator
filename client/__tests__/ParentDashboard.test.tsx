@@ -19,10 +19,9 @@ describe("ParentDashboard", () => {
   test("shows the create action and empty state", async () => {
     listLiveQuizzes.mockResolvedValue([]);
     render(<ParentDashboard />);
-    expect(screen.getByRole("link", { name: "Create Practice" })).toHaveAttribute(
-      "href",
-      "/parent-practice/new",
-    );
+    expect(
+      screen.getByRole("link", { name: "Create Practice" }),
+    ).toHaveAttribute("href", "/parent-practice/new");
     expect(await screen.findByText(/No practice yet/)).toBeInTheDocument();
   });
 
@@ -39,8 +38,12 @@ describe("ParentDashboard", () => {
       },
     ]);
     render(<ParentDashboard />);
-    expect(await screen.findByText("Multiplication Tables")).toBeInTheDocument();
-    expect(screen.getByText(/2 completed attempts · Latest: 8 \(80%\)/)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Multiplication Tables"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 completed attempts · Latest: 8 \(80%\)/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View results" })).toHaveAttribute(
       "href",
       "/my-live-quizzes/quiz-1",

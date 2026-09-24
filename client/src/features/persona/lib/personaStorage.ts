@@ -34,7 +34,9 @@ export function readStoredPersona(): Persona | null {
   }
 }
 
-export function readStoredPersonaTopic(persona?: Persona | null): string | null {
+export function readStoredPersonaTopic(
+  persona?: Persona | null,
+): string | null {
   if (typeof window === "undefined" || !persona) return null;
 
   try {
