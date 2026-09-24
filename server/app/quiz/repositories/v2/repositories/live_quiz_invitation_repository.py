@@ -95,9 +95,12 @@ class LiveQuizInvitationRepository:
         cursor = self.collection.find({"quiz_id": quiz_id}).sort("created_at", 1)
         return await cursor.to_list(length=1000)
 
-    async def list_by_run(self, run_id: str) -> List[dict]:
+    async def list_by_run(self, run_id: str, batch_size: int = 500) -> List[dict]:
         cursor = self.collection.find({"run_id": run_id}).sort("created_at", 1)
-        return await cursor.to_list(length=1000)
+        invitations: List[dict] = []
+        while batch := await cursor.to_list(length=batch_size):
+            invitations.extend(batch)
+        return invitations
 
     async def delete_by_quiz(self, quiz_id: str) -> int:
         result = await self.collection.delete_many({"quiz_id": quiz_id})

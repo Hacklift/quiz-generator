@@ -918,6 +918,11 @@ class LiveQuizSessionService:
             if self.invitation_repository
             else []
         )
+        started_emails = {
+            self._normalized_email(session.get("participant_email"))
+            for session in sessions
+            if self._normalized_email(session.get("participant_email"))
+        }
         generated_at = _utc_now().isoformat()
         columns = [
             "run_id", "quiz_id", "quiz_title", "access_code", "assignee_name",
@@ -967,14 +972,17 @@ class LiveQuizSessionService:
                     "report_generated_at_utc": generated_at,
                 }
                 for invitation in invitations
-                if not any(
-                    session.get("participant_email") == invitation.get("email")
-                    for session in sessions
-                )
+                if self._normalized_email(invitation.get("email")) not in started_emails
             ],
         }
 
     async def latest_completion_run(self, quiz_id: str, requester_id: str) -> Dict[str, Any]:
+        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        if not quiz:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        owner_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
+        if not owner_id or str(owner_id) != requester_id:
+            raise HTTPException(status_code=403, detail="Not allowed")
         if not self.run_repository:
             raise HTTPException(status_code=404, detail="No completion run found")
         run = await self.run_repository.latest_for_quiz(quiz_id, requester_id)
@@ -989,6 +997,10 @@ class LiveQuizSessionService:
     def _csv_value(value: Any) -> str:
         text = "" if value is None else str(value)
         return f"'{text}" if text.startswith(("=", "+", "-", "@")) else text
+
+    @staticmethod
+    def _normalized_email(value: Any) -> str:
+        return str(value or "").strip().lower()
 
     def _quiz_status(
         self,

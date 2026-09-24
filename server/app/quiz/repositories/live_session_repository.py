@@ -132,9 +132,14 @@ class LiveQuizSessionRepository:
         )
         return await cursor.to_list(length=500)
 
-    async def list_run_sessions(self, run_id: str) -> List[Dict[str, Any]]:
+    async def list_run_sessions(
+        self, run_id: str, batch_size: int = 500
+    ) -> List[Dict[str, Any]]:
         cursor = self.sessions_collection.find({"run_id": run_id}).sort("created_at", -1)
-        return await cursor.to_list(length=1000)
+        sessions: List[Dict[str, Any]] = []
+        while batch := await cursor.to_list(length=batch_size):
+            sessions.extend(batch)
+        return sessions
 
     async def list_quiz_sessions_by_creator(self, quiz_id: str, creator_user_id: str) -> List[Dict[str, Any]]:
         """List sessions for a quiz, filtered by creator_user_id for security."""

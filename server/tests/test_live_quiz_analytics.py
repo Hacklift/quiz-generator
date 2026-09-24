@@ -20,6 +20,10 @@ from starlette.websockets import WebSocketDisconnect
 import server.app.quiz.services.live_session_service as live_quiz_session_service
 from server.app.core.config import settings
 from server.app.quiz.routes import live_sessions as live_sessions_routes
+from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
+from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
+    LiveQuizInvitationRepository,
+)
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.models import UserOut
 
@@ -152,6 +156,26 @@ class FakeRunRepository:
 class FakeReportInvitationRepository:
     async def list_by_run(self, run_id):
         return [{"run_id": run_id, "name": "Dana", "email": "dana@example.com"}]
+
+
+class FakePagedCursor:
+    def __init__(self, records):
+        self.records = list(records)
+
+    def sort(self, *_args):
+        return self
+
+    async def to_list(self, length):
+        batch, self.records = self.records[:length], self.records[length:]
+        return batch
+
+
+class FakePagedCollection:
+    def __init__(self, records):
+        self.records = records
+
+    def find(self, _query):
+        return FakePagedCursor(self.records)
 
 
 @pytest.mark.asyncio
@@ -315,6 +339,58 @@ async def test_completion_report_keeps_an_invited_assignee_who_never_started():
             "duration_seconds": "", "report_generated_at_utc": report["rows"][0]["report_generated_at_utc"],
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_repositories_retrieve_all_records_across_internal_batches():
+    records = [{"sequence": index} for index in range(1_001)]
+    session_repository = LiveQuizSessionRepository(
+        FakePagedCollection([]), FakePagedCollection(records)
+    )
+    invitation_repository = LiveQuizInvitationRepository(FakePagedCollection(records))
+
+    sessions = await session_repository.list_run_sessions("run-1", batch_size=500)
+    invitations = await invitation_repository.list_by_run("run-1", batch_size=500)
+
+    assert len(sessions) == 1_001
+    assert len(invitations) == 1_001
+
+
+@pytest.mark.asyncio
+async def test_latest_run_distinguishes_missing_quiz_non_owner_and_missing_run():
+    repository = FakeAnalyticsRepository()
+    owned_run = {
+        "_id": "run-1", "quiz_id": "quiz-1", "creator_user_id": "creator-1",
+        "passing_threshold_percentage": 80, "access_code": "ABC123",
+    }
+    service = LiveQuizSessionService(repository, run_repository=FakeRunRepository(owned_run))
+    assert await service.latest_completion_run("quiz-1", "creator-1") == {
+        "run_id": "run-1", "passing_threshold_percentage": 80,
+    }
+
+    with pytest.raises(HTTPException) as non_owner:
+        await service.latest_completion_run("quiz-1", "intruder")
+    assert non_owner.value.status_code == 403
+
+    async def no_quiz(_quiz_id):
+        return None
+
+    repository.get_quiz_by_id = no_quiz
+    with pytest.raises(HTTPException) as missing_quiz:
+        await service.latest_completion_run("missing", "creator-1")
+    assert missing_quiz.value.status_code == 404
+
+    no_run_repository = FakeAnalyticsRepository()
+    no_run_service = LiveQuizSessionService(
+        no_run_repository,
+        run_repository=FakeRunRepository({
+            "_id": "other-run", "quiz_id": "other-quiz",
+            "creator_user_id": "creator-1", "access_code": "OTHER",
+        }),
+    )
+    with pytest.raises(HTTPException) as missing_run:
+        await no_run_service.latest_completion_run("quiz-1", "creator-1")
+    assert missing_run.value.status_code == 404
 
 
 @pytest.mark.asyncio

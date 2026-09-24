@@ -34,6 +34,7 @@ jest.mock("@features/live-quiz/api/liveQuizService", () => ({
     downloadCompletionReport: jest.fn(),
     listLiveQuizzes: jest.fn(),
     createAccessCode: jest.fn(),
+    getLatestRun: jest.fn(),
     subscribeParticipants: jest.fn(() => null),
   },
 }));
@@ -49,6 +50,7 @@ describe("live quiz completion reports", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedService.listParticipants.mockResolvedValue([]);
+    mockedService.getLatestRun.mockRejectedValue({ response: { status: 404 } });
   });
 
   test("shows a specific message when no reportable run exists", async () => {
@@ -99,5 +101,53 @@ describe("live quiz completion reports", () => {
     expect(threshold.value).toBe("80");
     fireEvent.change(threshold, { target: { value: "70" } });
     expect(threshold.value).toBe("70");
+  });
+
+  test("loads the persisted threshold for the latest run", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      { quiz_id: "quiz-1", title: "Safety training", status: "expired", participant_count: 0, completed_count: 0, access_code: null },
+    ]);
+    mockedService.getLatestRun.mockResolvedValue({ run_id: "run-1", passing_threshold_percentage: 70 });
+    render(<MyLiveQuizzesPage />);
+
+    await screen.findByText("Safety training");
+    fireEvent.click(screen.getByRole("button", { name: /generate access code/i }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText(/passing threshold/i) as HTMLInputElement).value).toBe("70");
+    });
+  });
+
+  test("keeps the default threshold when no previous run exists", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      { quiz_id: "quiz-1", title: "Safety training", status: "expired", participant_count: 0, completed_count: 0, access_code: null },
+    ]);
+    render(<MyLiveQuizzesPage />);
+
+    await screen.findByText("Safety training");
+    fireEvent.click(screen.getByRole("button", { name: /generate access code/i }));
+
+    await waitFor(() => {
+      expect((screen.getByLabelText(/passing threshold/i) as HTMLInputElement).value).toBe("80");
+    });
+  });
+
+  test("explains a stale-run threshold conflict", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      { quiz_id: "quiz-1", title: "Safety training", status: "expired", participant_count: 0, completed_count: 0, access_code: null },
+    ]);
+    mockedService.createAccessCode.mockRejectedValue({ response: { status: 409 } });
+    render(<MyLiveQuizzesPage />);
+
+    await screen.findByText("Safety training");
+    fireEvent.click(screen.getByRole("button", { name: /generate access code/i }));
+    await screen.findByRole("button", { name: "Generate" });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "This live quiz run already has a different passing threshold. Refresh the run details and try again.",
+      );
+    });
   });
 });

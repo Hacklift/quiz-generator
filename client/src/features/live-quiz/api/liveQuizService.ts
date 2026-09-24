@@ -305,6 +305,16 @@ export const liveQuizService = {
     URL.revokeObjectURL(url);
   },
 
+  async getLatestRun(quizId: string): Promise<{
+    run_id: string;
+    passing_threshold_percentage: number;
+  }> {
+    const { data } = await api.get(
+      `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-runs/latest`,
+    );
+    return data;
+  },
+
   subscribeParticipants(
     quizId: string,
     onEvent: (event: LiveQuizParticipantsEvent) => void,
