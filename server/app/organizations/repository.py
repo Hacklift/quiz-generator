@@ -94,11 +94,19 @@ class OrganizationMembershipRepository:
             status="active",
             joined_at=utcnow(),
         ).model_dump(by_alias=True)
+        # MongoDB rejects a field targeted by both operators. Membership role
+        # and state must be repaired on every retry, while timestamps and the
+        # immutable relationship fields belong only to initial insertion.
+        insert_fields = {
+            key: value
+            for key, value in document.items()
+            if key not in {"role", "status", "updated_at"}
+        }
         try:
             result = await self.collection.find_one_and_update(
                 query,
                 {
-                    "$setOnInsert": document,
+                    "$setOnInsert": insert_fields,
                     # A personal organization's sole member is always its
                     # owner. This repairs an interrupted migration/retry that
                     # left that membership invited, suspended, or removed.

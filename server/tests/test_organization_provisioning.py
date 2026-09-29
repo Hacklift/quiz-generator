@@ -51,6 +51,11 @@ class FakeMembershipsCollection:
         self.documents = {}
 
     async def find_one_and_update(self, query, update, *, upsert, return_document):
+        overlapping_fields = set(update.get("$setOnInsert", {})) & set(update.get("$set", {}))
+        if overlapping_fields:
+            raise AssertionError(
+                f"Mongo update operators overlap on: {sorted(overlapping_fields)}"
+            )
         key = (query["organization_id"], query["user_id"])
         document = self.documents.get(key)
         if document is None:
