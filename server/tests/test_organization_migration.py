@@ -18,6 +18,7 @@ from bson import ObjectId
 from server.scripts.migrations.organizations import backfill_organizations as migration_module
 from server.scripts.migrations.organizations.backfill_organizations import (
     OrganizationBackfillBlockedError,
+    _backfill_missing_session_organizations,
     _reconcile_users,
     backfill_organizations,
 )
@@ -118,6 +119,34 @@ async def test_dry_run_rejects_a_conflicting_default_organization_without_writin
 
     assert report.unresolved_count == 1
     assert all(collection.write_calls == 0 for collection in database.collections.values())
+
+
+@pytest.mark.asyncio
+async def test_session_backfill_only_populates_missing_active_organization_selector():
+    class SessionsCollection:
+        def __init__(self):
+            self.query = None
+            self.update = None
+
+        async def update_many(self, query, update):
+            self.query = query
+            self.update = update
+            return type("Result", (), {"modified_count": 2})()
+
+    sessions = SessionsCollection()
+    updated = await _backfill_missing_session_organizations(
+        db={"user_sessions": sessions},
+        user_id="user-1",
+        organization_id="organization-1",
+    )
+
+    assert updated == 2
+    assert sessions.query["user_id"] == "user-1"
+    assert sessions.query["$or"] == [
+        {"active_organization_id": {"$exists": False}},
+        {"active_organization_id": None},
+    ]
+    assert sessions.update == {"$set": {"active_organization_id": "organization-1"}}
 
 
 @pytest.mark.asyncio

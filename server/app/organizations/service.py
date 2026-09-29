@@ -16,6 +16,10 @@ _PERSONAL_WORKSPACE_SUFFIX = "'s workspace"
 _MAX_ORGANIZATION_NAME_LENGTH = 160
 
 
+class OrganizationProvisioningConflictError(RuntimeError):
+    """A user default points at a tenant other than their personal tenant."""
+
+
 def personal_workspace_name(display_name: str | None) -> str:
     """Build a valid, stable personal-tenant name from untrusted profile data."""
 
@@ -55,13 +59,18 @@ class OrganizationProvisioningService:
             organization_id=organization_id,
             user_id=user_id,
         )
+        user = await self.users_collection.find_one({"_id": ObjectId(user_id)})
+        if user is None:
+            raise OrganizationProvisioningConflictError("User no longer exists")
+        existing_default = user.get("default_organization_id")
+        if existing_default not in {None, organization_id}:
+            raise OrganizationProvisioningConflictError(
+                "User default organization does not match personal organization"
+            )
         await self.users_collection.update_one(
             {
                 "_id": ObjectId(user_id),
-                "$or": [
-                    {"default_organization_id": {"$exists": False}},
-                    {"default_organization_id": None},
-                ],
+                "default_organization_id": {"$in": [None, organization_id]},
             },
             {
                 "$set": {

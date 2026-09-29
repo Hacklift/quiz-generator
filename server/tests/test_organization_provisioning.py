@@ -23,6 +23,7 @@ from server.app.organizations.dependencies import get_active_organization_contex
 from server.app.organizations.models import OrganizationDocument, OrganizationPrincipal
 from server.app.organizations.repository import OrganizationMembershipRepository
 from server.app.organizations.service import (
+    OrganizationProvisioningConflictError,
     OrganizationProvisioningService,
     personal_workspace_name,
 )
@@ -72,8 +73,12 @@ class FakeMembershipsCollection:
 
 
 class FakeUsersCollection:
-    def __init__(self):
+    def __init__(self, *, default_organization_id=None):
         self.updated = []
+        self.default_organization_id = default_organization_id
+
+    async def find_one(self, _query):
+        return {"default_organization_id": self.default_organization_id}
 
     async def update_one(self, query, update):
         self.updated.append((query, update))
@@ -134,6 +139,26 @@ async def test_personal_provisioning_repairs_an_inactive_owner_membership():
 
     assert membership["role"] == "owner"
     assert membership["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_personal_provisioning_rejects_a_conflicting_user_default():
+    organizations = FakeOrganizationsCollection()
+    memberships = FakeMembershipsCollection()
+    users = FakeUsersCollection(default_organization_id="different-organization")
+    service = OrganizationProvisioningService(
+        organizations_collection=organizations,
+        memberships_collection=memberships,
+        users_collection=users,
+    )
+
+    with pytest.raises(OrganizationProvisioningConflictError):
+        await service.ensure_personal_organization(
+            user_id=str(ObjectId()),
+            organization_name="Ada",
+        )
+
+    assert users.updated == []
 
 
 @pytest.mark.asyncio

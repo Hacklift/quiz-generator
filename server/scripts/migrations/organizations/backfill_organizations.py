@@ -16,7 +16,9 @@ from server.scripts.migrations.v2.migration.lock import MigrationLockService
 
 
 logger = logging.getLogger(__name__)
-MIGRATION_NAME = "organization_personal_tenant_backfill_v1"
+# Versioned so an environment that completed v1 runs the additive session
+# reconciliation introduced in this revision exactly once on deployment.
+MIGRATION_NAME = "organization_personal_tenant_backfill_v2"
 LOCK_LEASE_SECONDS = 900
 LOCK_HEARTBEAT_SECONDS = 60
 MAX_UNRESOLVED_EXAMPLES = 25
@@ -37,6 +39,7 @@ class OrganizationBackfillReport:
     provisioned_users: int = 0
     reconciled_users: int = 0
     skipped_users: int = 0
+    backfilled_sessions: int = 0
     platform_library_created: bool = False
     unresolved_count: int = 0
     unresolved_examples: list[dict[str, str]] = field(default_factory=list)
@@ -306,6 +309,12 @@ async def _reconcile_users(
                 and (expected_organization_id, user_id) in active_owner_memberships
             )
             if has_matching_default and has_active_owner_membership:
+                if write:
+                    report.backfilled_sessions += await _backfill_missing_session_organizations(
+                        db=db,
+                        user_id=user_id,
+                        organization_id=expected_organization_id,
+                    )
                 report.skipped_users += 1
                 continue
 
@@ -313,9 +322,14 @@ async def _reconcile_users(
                 report.provisioned_users += 1
                 continue
 
-            await provisioning.ensure_personal_organization(
+            organization = await provisioning.ensure_personal_organization(
                 user_id=user_id,
-                organization_name=f"{user.get('username', 'User')}'s workspace",
+                organization_name=user.get("full_name") or user.get("username"),
+            )
+            report.backfilled_sessions += await _backfill_missing_session_organizations(
+                db=db,
+                user_id=user_id,
+                organization_id=str(organization["_id"]),
             )
             if personal_organization is None:
                 report.provisioned_users += 1
@@ -323,6 +337,24 @@ async def _reconcile_users(
                 report.reconciled_users += 1
 
         await renew_if_due(force=True)
+
+
+async def _backfill_missing_session_organizations(*, db, user_id: str, organization_id: str | None) -> int:
+    """Set legacy session scope only when a session has not selected one yet."""
+
+    if organization_id is None:
+        return 0
+    result = await db["user_sessions"].update_many(
+        {
+            "user_id": user_id,
+            "$or": [
+                {"active_organization_id": {"$exists": False}},
+                {"active_organization_id": None},
+            ],
+        },
+        {"$set": {"active_organization_id": organization_id}},
+    )
+    return result.modified_count
 
 
 def _is_active_platform_library(organization: dict[str, Any]) -> bool:
@@ -345,6 +377,7 @@ def _copy_reconciliation_report(
     target.provisioned_users = source.provisioned_users
     target.reconciled_users = source.reconciled_users
     target.skipped_users = source.skipped_users
+    target.backfilled_sessions = source.backfilled_sessions
     target.platform_library_created = source.platform_library_created
     target.unresolved_count = source.unresolved_count
     target.unresolved_examples = list(source.unresolved_examples)
