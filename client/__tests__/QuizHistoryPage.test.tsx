@@ -59,33 +59,29 @@ const mockDeleteQuizHistoryItem = deleteQuizHistoryItem as jest.Mock;
 const mockToastSuccess = toast.success as jest.Mock;
 const mockToastError = toast.error as jest.Mock;
 
-const attemptHistory = [
+const generatedHistory = [
   {
-    id: "attempt-1",
+    id: "history-1",
     quiz_id: "quiz-1",
-    quiz_title: "Networking Basics",
-    score: 1,
-    percentage: 50,
-    total_questions: 2,
-    submitted_at: "2026-08-20T10:00:00.000Z",
-    question_results: [
+    quiz_name: "Networking Basics",
+    profession: "Networking Basics",
+    created_at: "2026-08-20T10:00:00.000Z",
+    question_type: "multichoice",
+    difficulty_level: "medium",
+    live_quiz_enabled: true,
+    live_quiz_stats: {
+      invited_participants: 4,
+      joined_participants: 3,
+      completed_participants: 2,
+      average_score: 75,
+      best_score: 100,
+      quiz_status: "active",
+    },
+    questions: [
       {
         question: "What protocol serves web pages?",
         options: ["HTTP", "SSH"],
-        user_answer: "HTTP",
-        correct_answer: "HTTP",
-        question_type: "multichoice",
-        is_correct: true,
-        result: "Correct",
-      },
-      {
-        question: "Which port is commonly used for HTTPS?",
-        user_answer: "80",
-        correct_answer: "443",
-        question_type: "multichoice",
-        accuracy_percentage: 25,
-        is_correct: false,
-        result: "Incorrect",
+        answer: "HTTP",
       },
     ],
   },
@@ -98,33 +94,41 @@ describe("QuizHistoryPage", () => {
     mockDeleteQuizHistoryItem.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
-    mockGetUserQuizHistory.mockResolvedValue(attemptHistory);
+    mockGetUserQuizHistory.mockResolvedValue(generatedHistory);
     mockDeleteQuizHistoryItem.mockResolvedValue({
-      message: "Quiz attempt deleted successfully",
+      message: "Quiz history item deleted successfully",
     });
   });
 
-  test("renders scored attempts and routes to the detail or retake page", async () => {
+  test("renders generated history and preserves live-dashboard and detail actions", async () => {
     render(<DisplayQuizHistory openLoginModal={jest.fn()} />);
 
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
-    expect(screen.getByText(/Score: 1\/2 · 50%/)).toBeInTheDocument();
+    expect(screen.getByText(/multichoice · medium/)).toBeInTheDocument();
     expect(
       screen.getByText(/What protocol serves web pages\?/),
     ).toBeInTheDocument();
     expect(screen.getByText("SSH")).toBeInTheDocument();
-    expect(screen.getAllByText(/Correct answer:/)).toHaveLength(2);
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Answer: HTTP"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Live Dashboard" }));
+
+    expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes/quiz-1");
 
     fireEvent.click(screen.getByRole("button", { name: "View Details" }));
 
-    expect(mockPush).toHaveBeenCalledWith("/quiz_history/attempt-1");
+    expect(mockPush).toHaveBeenCalledWith("/quiz_history/history-1");
 
-    fireEvent.click(screen.getByRole("button", { name: "Retake Quiz" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "View graded attempts" }),
+    );
 
-    expect(mockPush).toHaveBeenCalledWith("/quiz_display?quizId=quiz-1");
+    expect(mockPush).toHaveBeenCalledWith("/quiz_attempts");
   });
 
-  test("deletes an attempt after confirmation and removes it from the page", async () => {
+  test("deletes generated history after confirmation and removes it from the page", async () => {
     render(<DisplayQuizHistory openLoginModal={jest.fn()} />);
 
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
@@ -139,15 +143,13 @@ describe("QuizHistoryPage", () => {
     );
 
     await waitFor(() => {
-      expect(mockDeleteQuizHistoryItem).toHaveBeenCalledWith("attempt-1");
+      expect(mockDeleteQuizHistoryItem).toHaveBeenCalledWith("history-1");
     });
-    expect(mockToastSuccess).toHaveBeenCalledWith("Quiz attempt deleted.");
+    expect(mockToastSuccess).toHaveBeenCalledWith("Quiz history item deleted.");
 
     await waitFor(() => {
       expect(screen.queryByText("Networking Basics")).not.toBeInTheDocument();
     });
-    expect(
-      screen.getByText("No graded quiz attempts available yet."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No quiz history available.")).toBeInTheDocument();
   });
 });

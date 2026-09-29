@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from server.app.core.dependencies import get_current_user_optional
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.services.quiz_grading_service import (
+    AttemptPersistenceError,
     QuizGradingService,
     SubmissionMismatchError,
 )
@@ -48,6 +49,8 @@ async def grade_quiz_submission(
         )
     except SubmissionMismatchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AttemptPersistenceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:

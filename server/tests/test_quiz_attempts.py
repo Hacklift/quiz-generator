@@ -6,7 +6,10 @@ from bson import ObjectId
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 from server.app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
 from server.app.quiz.services.quiz_attempt_service import QuizAttemptService
-from server.app.quiz.services.quiz_grading_service import QuizGradingService
+from server.app.quiz.services.quiz_grading_service import (
+    AttemptPersistenceError,
+    QuizGradingService,
+)
 
 
 class FakeQuizRepository:
@@ -141,7 +144,7 @@ async def test_grade_submission_does_not_persist_attempt_for_anonymous_user():
 
 
 @pytest.mark.asyncio
-async def test_grade_submission_returns_results_when_attempt_persistence_fails():
+async def test_grade_submission_reports_attempt_persistence_failure():
     quiz = build_quiz_document()
     service = QuizGradingService(
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
@@ -149,19 +152,16 @@ async def test_grade_submission_returns_results_when_attempt_persistence_fails()
         attempt_repository=FailingAttemptRepository(),
     )
 
-    results = await service.grade_submission(
-        str(quiz.id),
-        [
-            {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
-            {"question": "Which port is commonly used for HTTPS?", "user_answer": "80"},
-        ],
-        source="mock",
-        user_id="user-1",
-    )
-
-    assert len(results) == 2
-    assert results[0]["is_correct"] is True
-    assert results[1]["is_correct"] is False
+    with pytest.raises(AttemptPersistenceError):
+        await service.grade_submission(
+            str(quiz.id),
+            [
+                {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
+                {"question": "Which port is commonly used for HTTPS?", "user_answer": "80"},
+            ],
+            source="mock",
+            user_id="user-1",
+        )
 
 
 @pytest.mark.asyncio

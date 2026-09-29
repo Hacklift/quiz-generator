@@ -3,19 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@features/auth/context/authContext";
-import { getUserGeneratedQuizHistory } from "@features/quiz-history/api/quizHistoryApi";
+import { getUserQuizHistory } from "@features/quiz-history/api/quizHistoryApi";
 
 interface HistoryRow {
   _id?: string;
   id?: string;
   quiz_name?: string;
   question_type?: string;
-  questions?: Array<{ question: string }>;
+  num_questions?: number;
   created_at?: string;
 }
 
 /**
- * [SCAFFOLD-OWNED] Recent activity list for recently generated quizzes.
+ * [SCAFFOLD-OWNED] Recent activity list, read from the existing
+ * /api/quiz-history endpoint. `emptyMessage` lets each persona phrase the
+ * empty state in its own language.
  */
 export default function RecentQuizzes({
   heading,
@@ -37,7 +39,7 @@ export default function RecentQuizzes({
     }
 
     let active = true;
-    getUserGeneratedQuizHistory().then((history) => {
+    getUserQuizHistory().then((history) => {
       if (active)
         setRows(Array.isArray(history) ? history.slice(0, limit) : []);
     });
@@ -77,9 +79,9 @@ export default function RecentQuizzes({
                     {row.quiz_name || "Untitled quiz"}
                   </span>
                   <span className="text-[13px] text-ink/60">
-                    {row.question_type || "Quiz"}
-                    {Array.isArray(row.questions)
-                      ? ` · ${row.questions.length} questions`
+                    {row.question_type}
+                    {row.num_questions
+                      ? ` · ${row.num_questions} questions`
                       : ""}
                   </span>
                 </button>

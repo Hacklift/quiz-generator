@@ -34,6 +34,10 @@ class SubmissionMismatchError(ValueError):
     """A submitted answer does not correspond to a question in the quiz."""
 
 
+class AttemptPersistenceError(RuntimeError):
+    """A graded result could not be saved as the user's attempt."""
+
+
 def _normalize_true_false(value: Any) -> str:
     text = str(value).strip().lower()
     if text in {"1", "true"}:
@@ -223,10 +227,11 @@ class QuizGradingService:
                         for question in quiz_doc.questions
                     },
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Failed to persist quiz attempt for user_id=%s quiz_id=%s",
                     user_id,
                     str(quiz_doc.id),
                 )
+                raise AttemptPersistenceError("Unable to save this quiz attempt.") from exc
         return graded_results

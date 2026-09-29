@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import QuizHistoryDetailsPage from "@features/quiz-history/pages/QuizHistoryDetailPage";
 import { getQuizHistoryItem } from "@features/quiz-history/api/quizHistoryApi";
 
-let mockQuery: { historyId?: string | string[] } = { historyId: "attempt-1" };
+let mockQuery: { historyId?: string | string[] } = { historyId: "history-1" };
 const mockPush = jest.fn();
 
 jest.mock("next/router", () => ({
@@ -42,36 +42,31 @@ describe("QuizHistoryDetailPage", () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockGetQuizHistoryItem.mockReset();
-    mockQuery = { historyId: "attempt-1" };
+    mockQuery = { historyId: "history-1" };
   });
 
-  test("renders the scored-attempt detail view", async () => {
+  test("renders generated-history details and preserves the live dashboard action", async () => {
     mockGetQuizHistoryItem.mockResolvedValue({
-      id: "attempt-1",
+      id: "history-1",
       quiz_id: "quiz-1",
-      quiz_title: "Networking Basics",
-      score: 1,
-      percentage: 50,
-      total_questions: 2,
-      submitted_at: "2026-08-20T10:00:00.000Z",
-      question_results: [
+      quiz_name: "Networking Basics",
+      profession: "Networking Basics",
+      created_at: "2026-08-20T10:00:00.000Z",
+      question_type: "multichoice",
+      difficulty_level: "medium",
+      audience_type: "students",
+      live_quiz_enabled: true,
+      live_quiz_stats: {
+        invited_participants: 4,
+        joined_participants: 3,
+        completed_participants: 2,
+        quiz_status: "active",
+      },
+      questions: [
         {
           question: "What protocol serves web pages?",
           options: ["HTTP", "SSH"],
-          user_answer: "HTTP",
-          correct_answer: "HTTP",
-          question_type: "multichoice",
-          is_correct: true,
-          result: "Correct",
-        },
-        {
-          question: "Which port is commonly used for HTTPS?",
-          user_answer: "80",
-          correct_answer: "443",
-          question_type: "multichoice",
-          accuracy_percentage: 25,
-          is_correct: false,
-          result: "Incorrect",
+          answer: "HTTP",
         },
       ],
     });
@@ -79,13 +74,14 @@ describe("QuizHistoryDetailPage", () => {
     render(<QuizHistoryDetailsPage />);
 
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
-    expect(screen.getByText(/Score: 1\/2/)).toBeInTheDocument();
-    expect(screen.getByText(/Percentage: 50%/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Which port is commonly used for HTTPS\?/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Generated on:/)).toBeInTheDocument();
     expect(screen.getByText("SSH")).toBeInTheDocument();
-    expect(screen.getByText(/Accuracy:/)).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => element?.textContent === "Answer: HTTP"),
+    ).toBeInTheDocument();
+
+    screen.getByRole("button", { name: "Open Live Dashboard" }).click();
+    expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes/quiz-1");
   });
 
   test("renders the legacy generated-history detail view", async () => {
