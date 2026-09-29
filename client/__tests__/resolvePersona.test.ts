@@ -55,9 +55,7 @@ describe("parsePersona", () => {
       const href = personaGenerateHref(userType);
       const params = new URLSearchParams(href.split("?")[1]);
 
-      expect(
-        parsePersona(params.get("category"), params.get("persona")),
-      ).toEqual({
+      expect(parsePersona(params.get("category"), params.get("persona"))).toEqual({
         category: categoryForUserType(userType),
         userType,
       });
@@ -68,10 +66,7 @@ describe("parsePersona", () => {
 
 describe("persona storage", () => {
   test("persists persona and its carried topic", () => {
-    const persona = {
-      category: "school" as const,
-      userType: "teacher" as const,
-    };
+    const persona = { category: "school" as const, userType: "teacher" as const };
 
     writeStoredPersona(persona, {
       topic: "Photosynthesis — Grade 8 biology",
@@ -105,10 +100,7 @@ describe("persona storage", () => {
   });
 
   test("preserves topic when rewriting the same stored persona without topic", () => {
-    const persona = {
-      category: "school" as const,
-      userType: "teacher" as const,
-    };
+    const persona = { category: "school" as const, userType: "teacher" as const };
 
     writeStoredPersona(persona, { topic: "Photosynthesis" });
     writeStoredPersona(persona);

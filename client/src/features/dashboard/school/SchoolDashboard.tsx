@@ -54,10 +54,7 @@ const SCHOOL_COPY: Record<
  * edits its own leaf file — do not convert it to next/dynamic, the static
  * imports are what make `next build` fail loudly on a missing view.
  */
-const SCHOOL_VIEWS: Record<
-  SchoolUserType,
-  ComponentType<DashboardViewProps>
-> = {
+const SCHOOL_VIEWS: Record<SchoolUserType, ComponentType<DashboardViewProps>> = {
   teacher: TeacherDashboard,
   lecturer: LecturerDashboard,
   student: StudentDashboard,
@@ -92,8 +89,7 @@ export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
             },
             {
               label: "Revision practice",
-              description:
-                "Build a self-marking practice set from a past topic.",
+              description: "Build a self-marking practice set from a past topic.",
               href: "/popular",
             },
           ]}

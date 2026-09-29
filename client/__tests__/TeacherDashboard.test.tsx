@@ -39,7 +39,9 @@ describe("TeacherDashboard", () => {
   });
 
   test("renders teacher dashboard kicker, headings, and presets", () => {
-    render(<TeacherDashboard persona={mockTeacherPersona} user={mockUser} />);
+    render(
+      <TeacherDashboard persona={mockTeacherPersona} user={mockUser} />,
+    );
 
     expect(screen.getByText("Teacher dashboard")).toBeInTheDocument();
     expect(
@@ -51,7 +53,9 @@ describe("TeacherDashboard", () => {
   });
 
   test("navigates to the persona-aware generate page with teacher presets", () => {
-    render(<TeacherDashboard persona={mockTeacherPersona} user={mockUser} />);
+    render(
+      <TeacherDashboard persona={mockTeacherPersona} user={mockUser} />,
+    );
 
     const classQuizBtn = screen.getByRole("button", {
       name: /Create Class quiz/i,
@@ -68,12 +72,8 @@ describe("TeacherDashboard", () => {
     expect(mockPush).toHaveBeenCalledWith(
       expect.stringContaining("/generate?"),
     );
-    expect(mockPush).toHaveBeenCalledWith(
-      expect.stringContaining("persona=teacher"),
-    );
-    expect(mockPush).toHaveBeenCalledWith(
-      expect.stringContaining("category=school"),
-    );
+    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("persona=teacher"));
+    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("category=school"));
     expect(mockPush).toHaveBeenCalledWith(
       expect.stringContaining("preset=homework-check"),
     );
@@ -88,7 +88,9 @@ describe("TeacherDashboard", () => {
   });
 
   test("surfaces class session results with 1-click navigation", () => {
-    render(<TeacherDashboard persona={mockTeacherPersona} user={mockUser} />);
+    render(
+      <TeacherDashboard persona={mockTeacherPersona} user={mockUser} />,
+    );
 
     const liveResultsBtn = screen.getByRole("button", {
       name: /View live class quiz results/i,
@@ -105,7 +107,9 @@ describe("TeacherDashboard", () => {
   });
 
   test("uses dynamic school terminology in descriptions", () => {
-    render(<TeacherDashboard persona={mockTeacherPersona} user={mockUser} />);
+    render(
+      <TeacherDashboard persona={mockTeacherPersona} user={mockUser} />,
+    );
 
     expect(
       screen.getByText((content, element) => {

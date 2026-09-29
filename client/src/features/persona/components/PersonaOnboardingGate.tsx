@@ -28,7 +28,9 @@ export default function PersonaOnboardingGate() {
 
   const profilePersona = useMemo(
     () =>
-      user ? parsePersona(user.persona_category, user.persona_user_type) : null,
+      user
+        ? parsePersona(user.persona_category, user.persona_user_type)
+        : null,
     [user],
   );
 
@@ -88,13 +90,7 @@ export default function PersonaOnboardingGate() {
     user,
   ]);
 
-  if (
-    isLoading ||
-    !isAuthenticated ||
-    !user ||
-    profilePersona ||
-    isAutoSaving
-  ) {
+  if (isLoading || !isAuthenticated || !user || profilePersona || isAutoSaving) {
     return null;
   }
 

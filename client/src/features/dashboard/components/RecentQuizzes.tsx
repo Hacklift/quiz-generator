@@ -40,8 +40,7 @@ export default function RecentQuizzes({
 
     let active = true;
     getUserQuizHistory().then((history) => {
-      if (active)
-        setRows(Array.isArray(history) ? history.slice(0, limit) : []);
+      if (active) setRows(Array.isArray(history) ? history.slice(0, limit) : []);
     });
     return () => {
       active = false;
@@ -80,9 +79,7 @@ export default function RecentQuizzes({
                   </span>
                   <span className="text-[13px] text-ink/60">
                     {row.question_type}
-                    {row.num_questions
-                      ? ` · ${row.num_questions} questions`
-                      : ""}
+                    {row.num_questions ? ` · ${row.num_questions} questions` : ""}
                   </span>
                 </button>
               </li>

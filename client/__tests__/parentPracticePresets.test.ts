@@ -38,8 +38,11 @@ describe("Parent Practice presets", () => {
 
   test("allows a valid question-count override", () => {
     expect(
-      resolveParentPracticePreset("ages-9-11", "basic-fractions", 6)
-        .num_questions,
+      resolveParentPracticePreset(
+        "ages-9-11",
+        "basic-fractions",
+        6,
+      ).num_questions,
     ).toBe(6);
   });
 
