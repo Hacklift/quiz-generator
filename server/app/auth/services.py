@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import HTTPException
 from redis import Redis
 from bson import ObjectId
@@ -62,6 +64,7 @@ from server.app.email_platform.service import EmailService
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
   
 
 async def register_user_service(user: UserRegisterSchema, email_svc: EmailService) -> UserResponseSchema:
@@ -95,19 +98,31 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
             users_collection=users_collection,
         ).ensure_personal_organization(
             user_id=created_user.id,
-            organization_name=f"{created_user.full_name or created_user.username}'s workspace",
+            organization_name=created_user.full_name or created_user.username,
         )
     except Exception as exc:
         # A newly-created account must not escape registration without its
         # required tenant. Clean up only records keyed to this fresh user id;
         # established accounts are never hard-deleted by tenancy code.
-        await get_organization_memberships_collection().delete_many(
-            {"user_id": created_user.id}
+        cleanup_operations = (
+            get_organization_memberships_collection().delete_many(
+                {"user_id": created_user.id}
+            ),
+            get_organizations_collection().delete_many(
+                {"kind": "personal", "personal_owner_user_id": created_user.id}
+            ),
+            users_collection.delete_one({"_id": ObjectId(created_user.id)}),
         )
-        await get_organizations_collection().delete_many(
-            {"kind": "personal", "personal_owner_user_id": created_user.id}
-        )
-        await users_collection.delete_one({"_id": ObjectId(created_user.id)})
+        for operation in cleanup_operations:
+            try:
+                await operation
+            except Exception:
+                # Preserve the provisioning failure and leave any residual
+                # record for the idempotent login/migration reconciler.
+                logger.exception(
+                    "Failed to compensate a registration provisioning error",
+                    extra={"user_id": created_user.id},
+                )
         raise HTTPException(
             status_code=500,
             detail="Could not provision the personal organization",
@@ -325,7 +340,7 @@ async def login_service(
         )
         organization = await provisioner.ensure_personal_organization(
             user_id=user_id,
-            organization_name=f"{user.get('full_name') or user.get('username', 'User')}'s workspace",
+            organization_name=user.get("full_name") or user.get("username"),
         )
         user["default_organization_id"] = str(organization["_id"])
     session_id = str(uuid.uuid4())

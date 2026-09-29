@@ -22,7 +22,10 @@ from pydantic import ValidationError
 from server.app.organizations.dependencies import get_active_organization_context
 from server.app.organizations.models import OrganizationDocument, OrganizationPrincipal
 from server.app.organizations.repository import OrganizationMembershipRepository
-from server.app.organizations.service import OrganizationProvisioningService
+from server.app.organizations.service import (
+    OrganizationProvisioningService,
+    personal_workspace_name,
+)
 from server.app.users.models import UserOut
 
 
@@ -160,6 +163,15 @@ async def test_personal_reconciliation_requires_an_active_owner_membership():
 def test_organization_model_rejects_an_ownerless_personal_tenant():
     with pytest.raises(ValidationError):
         OrganizationDocument(kind="personal", name="Missing owner")
+
+
+def test_personal_workspace_name_is_valid_for_unbounded_profile_values():
+    assert personal_workspace_name(None) == "Personal workspace"
+    assert personal_workspace_name(" " * 20) == "Personal workspace"
+
+    workspace_name = personal_workspace_name("A" * 200)
+    assert workspace_name.endswith("'s workspace")
+    assert len(workspace_name) == 160
 
 
 def test_platform_library_is_the_only_ownerless_personal_tenant():

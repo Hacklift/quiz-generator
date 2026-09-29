@@ -12,6 +12,20 @@ from server.app.organizations.repository import (
 from server.app.users.identity import now_utc
 
 
+_PERSONAL_WORKSPACE_SUFFIX = "'s workspace"
+_MAX_ORGANIZATION_NAME_LENGTH = 160
+
+
+def personal_workspace_name(display_name: str | None) -> str:
+    """Build a valid, stable personal-tenant name from untrusted profile data."""
+
+    normalized_name = " ".join((display_name or "").split())
+    if not normalized_name:
+        return "Personal workspace"
+    max_identity_length = _MAX_ORGANIZATION_NAME_LENGTH - len(_PERSONAL_WORKSPACE_SUFFIX)
+    return f"{normalized_name[:max_identity_length].rstrip()}{_PERSONAL_WORKSPACE_SUFFIX}"
+
+
 class OrganizationProvisioningService:
     """Idempotently establishes the personal tenant required for a user."""
 
@@ -34,10 +48,10 @@ class OrganizationProvisioningService:
     ) -> dict[str, Any]:
         organization = await self.organizations.ensure_personal_organization(
             user_id=user_id,
-            name=organization_name,
+            name=personal_workspace_name(organization_name),
         )
         organization_id = str(organization["_id"])
-        await self.memberships.ensure_owner_membership(
+        await self.memberships.ensure_personal_owner_membership(
             organization_id=organization_id,
             user_id=user_id,
         )

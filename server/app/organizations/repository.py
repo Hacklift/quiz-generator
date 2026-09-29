@@ -80,12 +80,18 @@ class OrganizationMembershipRepository:
     def __init__(self, collection: AsyncIOMotorCollection):
         self.collection = collection
 
-    async def ensure_owner_membership(
+    async def ensure_personal_owner_membership(
         self,
         *,
         organization_id: str,
         user_id: str,
     ) -> dict[str, Any]:
+        """Create or repair the sole active owner membership of a personal tenant.
+
+        This is intentionally not a general organization-role upsert. Personal
+        organizations have exactly one owner: their personal owner. Future
+        invitation and role-management flows must use dedicated operations.
+        """
         query = {"organization_id": organization_id, "user_id": user_id}
         document = OrganizationMembershipDocument(
             organization_id=organization_id,
