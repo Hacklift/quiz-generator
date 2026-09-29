@@ -1,6 +1,6 @@
 # Email Platform Service
 
-Reusable, centralized email service with **fallbacks**:
+Reusable, centralized email service with provider-specific **fallbacks**:
 
 1. **Celery** (enqueue task) → 2. **BackgroundTasks** (in-process) → 3. **Direct** (sync SMTP)
 
@@ -38,10 +38,17 @@ async def send_verification(email_svc: EmailService = Depends(get_email_service)
 
 ## Environment
 
-- `SENDER_EMAIL`, `SENDER_PASSWORD`
-- `EMAIL_HOST`, `EMAIL_PORT` (587 + STARTTLS expected)
+- SMTP delivery requires `SENDER_EMAIL`, `SENDER_PASSWORD`, `EMAIL_HOST`, and
+  `EMAIL_PORT` (587 + STARTTLS expected).
+- Mailgun delivery requires `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, and
+  `MAILGUN_SENDER_EMAIL`. The configured Mailgun sender must belong to the
+  verified Mailgun domain (or one of its subdomains).
 - `BACKEND_URL` (used to build verification/reset links)
 - `REDIS_URL` (for Celery broker/backend)
+
+Email rendering does not resolve configuration itself. Each adapter supplies
+its own validated sender identity, so Mailgun can operate without SMTP
+credentials while SMTP remains a fail-fast fallback when it is selected.
 
 ## Worker
 

@@ -97,8 +97,8 @@ def mock_requests_session(monkeypatch):
         def get(self, url, timeout=None):
             return FakeResponse(status_code=200)
 
-        def post(self, url, data=None):
-            self.last_post = {"url": url, "data": data}
+        def post(self, url, data=None, timeout=None):
+            self.last_post = {"url": url, "data": data, "timeout": timeout}
             return FakeResponse(status_code=200, text="{\"id\": \"<test>@mailgun\"}")
 
     monkeypatch.setattr("requests.Session", FakeSession)
