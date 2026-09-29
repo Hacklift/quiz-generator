@@ -7,6 +7,12 @@ from server.app.quiz.utils.questions import get_questions
 from server.app.core.dependencies import get_current_user_optional
 from server.app.core.config import settings
 from server.app.db.core.connection import get_live_quiz_invitations_collection
+from server.app.db.core.connection import get_product_events_collection
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    QUIZ_GENERATED,
+    record_product_event,
+)
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
@@ -42,9 +48,27 @@ async def get_quiz(
         get_live_quiz_invitations_collection()
     )
 
-    return await get_questions(
+    result = await get_questions(
         payload,
         user_id=user_id,
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
+    if current_user is not None:
+        events = get_product_events_collection()
+        await record_product_event(
+            events,
+            event_type=QUIZ_GENERATED,
+            user_id=current_user.id,
+            user=current_user,
+            quiz_id=result.get("quiz_id"),
+        )
+        if result.get("live_quiz_enabled"):
+            await record_product_event(
+                events,
+                event_type=LIVE_QUIZ_ENABLED,
+                user_id=current_user.id,
+                user=current_user,
+                quiz_id=result.get("quiz_id"),
+            )
+    return result

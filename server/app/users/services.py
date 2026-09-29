@@ -221,6 +221,7 @@ async def request_email_change_service(
         event_type="email_change_requested",
         status="success",
         user_id=current_user.id,
+        user=current_user,
     )
 
     return MessageResponse(message="Verification code sent to new email.")
@@ -268,6 +269,7 @@ async def verify_email_change_service(
         event_type="email_change_completed",
         status="success",
         user_id=current_user.id,
+        user=current_user,
     )
 
     return MessageResponse(message="Email updated successfully.")
@@ -290,5 +292,6 @@ async def delete_account_service(
         event_type="account_deleted",
         status="success",
         user_id=current_user.id,
+        user=current_user,
     )
     return MessageResponse(message="Account deleted successfully.")

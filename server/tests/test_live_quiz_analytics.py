@@ -10,6 +10,7 @@ Tests cover:
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import jwt
 import pytest
@@ -538,6 +539,7 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
     )
 
     assert response["invitations_created"] == 2
+    assert response["_access_code_created"] is True
     assert response["invitations_queued"] == 2
     assert response["invitations_delivered"] == 0
     assert response["invited_emails"] == ["ada@example.com", "grace@example.com"]
@@ -548,7 +550,7 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_access_code_route_uses_configured_frontend_url(monkeypatch):
+async def test_generate_access_code_route_records_event_only_for_new_code(monkeypatch):
     fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
     monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
     monkeypatch.setattr(
@@ -556,10 +558,17 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
         "FRONTEND_BASE_URL",
         "https://trusted.example",
     )
+    product_events = SimpleNamespace(insert_one=AsyncMock())
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: product_events,
+    )
 
     invitation_repository = FakeInvitationRepository()
     email_service = FakeEmailService()
-    service = LiveQuizSessionService(FakeAccessCodeRepository())
+    repository = FakeAccessCodeRepository()
+    service = LiveQuizSessionService(repository)
     payload = live_sessions_routes.AccessCodeCreateRequest(
         time_limit_minutes=15,
         access_code_expires_at=fixed_now + timedelta(days=1),
@@ -575,7 +584,15 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
         status="active",
     )
 
-    await live_sessions_routes.generate_quiz_access_code(
+    first_response = await live_sessions_routes.generate_quiz_access_code(
+        quiz_id="quiz-1",
+        payload=payload,
+        current_user=current_user,
+        service=service,
+        invitation_repository=invitation_repository,
+        email_service=email_service,
+    )
+    second_response = await live_sessions_routes.generate_quiz_access_code(
         quiz_id="quiz-1",
         payload=payload,
         current_user=current_user,
@@ -587,6 +604,14 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
     body = email_service.sent[0]["template_vars"]["body"]
     assert "https://trusted.example/quiz-access/" in body
     assert "https://attacker.example" not in body
+    assert first_response["access_code"] == second_response["access_code"]
+    assert "_access_code_created" not in first_response
+    assert "_access_code_created" not in second_response
+    assert repository.enable_calls == 1
+    assert product_events.insert_one.await_count == 1
+    event = product_events.insert_one.await_args.args[0]
+    assert event["event_type"] == "live_quiz_enabled"
+    assert event["quiz_id"] == "quiz-1"
 
 
 class FakeWebSocket:
@@ -707,6 +732,7 @@ async def test_generate_access_code_returns_existing_code_without_regenerating(m
     )
 
     assert response["access_code"] == "KEEP42"
+    assert response["_access_code_created"] is False
     assert response["time_limit_minutes"] == 20
     assert repository.enable_calls == 0
 
@@ -731,6 +757,7 @@ async def test_expired_access_code_is_replaced_only_by_explicit_generation(monke
     )
 
     assert response["access_code"] != "KEEP42"
+    assert response["_access_code_created"] is True
     assert repository.enable_calls == 1
 
     replacement = await service.validate_access_code(response["access_code"])
