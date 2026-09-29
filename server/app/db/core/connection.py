@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from server.app.quiz.repositories.v2.setup import ensure_v2_collections_and_validators, ensure_v2_indexes
+from server.app.organizations.validators import ensure_organization_collections
 from server.app.users.validators import ensure_user_collections
 
 load_dotenv()
@@ -28,6 +29,8 @@ quizzes_collection = database["quizzes"]
 users_collection = database["users"]
 user_sessions_collection = database["user_sessions"]
 auth_events_collection = database["auth_events"]
+organizations_collection = database["organizations"]
+organization_memberships_collection = database["organization_memberships"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
@@ -272,6 +275,11 @@ async def startUp():
         auth_events_collection,
         backfill_limit=100_000,
     )
+    await ensure_organization_collections(
+        database,
+        organizations_collection,
+        organization_memberships_collection,
+    )
     await drop_removed_collections()
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_user_tokens_indexes(user_tokens_collection)
@@ -315,6 +323,14 @@ def get_auth_events_collection() -> AsyncIOMotorCollection:
     if auth_events_collection is None:
         raise RuntimeError("[DB Error] auth_events_collection has not been initialized properly.")
     return auth_events_collection
+
+
+def get_organizations_collection() -> AsyncIOMotorCollection:
+    return organizations_collection
+
+
+def get_organization_memberships_collection() -> AsyncIOMotorCollection:
+    return organization_memberships_collection
 
 def get_quizzes_collection() -> AsyncIOMotorCollection:
     if quizzes_collection is None:

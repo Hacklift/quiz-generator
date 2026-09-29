@@ -47,6 +47,25 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
+
+  # One-shot deploy gate. This keeps direct Docker Compose deployments safe
+  # without putting migration work in normal API or worker process startup.
+  tenancy-migrate:
+    build:
+      context: .
+      target: backend-service
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["python", "-m", "server.scripts.migrations.organizations.backfill_organizations", "--triggered-by", "docker-compose-prod"]
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
 
   celery:
     build:
@@ -108,6 +127,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
 
 volumes:
   mongo_data:

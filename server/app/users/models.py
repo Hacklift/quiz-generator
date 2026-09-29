@@ -67,6 +67,7 @@ class UserDB(BaseModel):
     is_verified: bool 
     status: str = "pending_verification"
     role: str = "user"
+    default_organization_id: Optional[str] = None
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
     subscription_plan: Optional[str] = "free"
@@ -125,6 +126,7 @@ class SeedUser(BaseModel):
     is_verified: bool = False
     status: str = "pending_verification"
     role: str = "user"
+    default_organization_id: Optional[str] = None
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
     subscription_plan: Optional[str] = "free"
@@ -160,6 +162,7 @@ class UserOut(BaseModel):
     persona_user_type: Optional[str] = None
     persona_set_at: Optional[str] = None
     role: Optional[str] = "user"
+    default_organization_id: Optional[str] = None
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
     is_active: Optional[bool] = True
@@ -249,6 +252,7 @@ class UserSession(BaseModel):
     device_info: Optional[dict[str, Any]] = None
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
+    active_organization_id: Optional[str] = None
 
     class Config:
         populate_by_name = True

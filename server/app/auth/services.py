@@ -11,9 +11,12 @@ from jwt.exceptions import (
 )
 from server.app.db.core.connection import (
     get_auth_events_collection,
+    get_organization_memberships_collection,
+    get_organizations_collection,
     get_user_sessions_collection,
     users_collection,
 )
+from server.app.organizations.service import OrganizationProvisioningService
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.users.identity import (
     ACTIVE_USER_STATUSES,
@@ -85,6 +88,30 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
     created_user = await create_user(users_collection, user_data)
     if not created_user:
         raise HTTPException(status_code=500, detail="User registration failed")
+    try:
+        await OrganizationProvisioningService(
+            organizations_collection=get_organizations_collection(),
+            memberships_collection=get_organization_memberships_collection(),
+            users_collection=users_collection,
+        ).ensure_personal_organization(
+            user_id=created_user.id,
+            organization_name=f"{created_user.full_name or created_user.username}'s workspace",
+        )
+    except Exception as exc:
+        # A newly-created account must not escape registration without its
+        # required tenant. Clean up only records keyed to this fresh user id;
+        # established accounts are never hard-deleted by tenancy code.
+        await get_organization_memberships_collection().delete_many(
+            {"user_id": created_user.id}
+        )
+        await get_organizations_collection().delete_many(
+            {"kind": "personal", "personal_owner_user_id": created_user.id}
+        )
+        await users_collection.delete_one({"_id": ObjectId(created_user.id)})
+        raise HTTPException(
+            status_code=500,
+            detail="Could not provision the personal organization",
+        ) from exc
     await record_auth_event(
         auth_events_collection,
         event_type="register",
@@ -248,6 +275,7 @@ async def login_service(
     users_collection: AsyncIOMotorCollection,
     sessions_collection: AsyncIOMotorCollection | None = None,
     auth_events_collection: AsyncIOMotorCollection | None = None,
+    organization_provisioner: OrganizationProvisioningService | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
 ):
@@ -285,6 +313,21 @@ async def login_service(
         raise HTTPException(status_code=403, detail="Account is not active")
     
     user_id = str(user["_id"])
+    if not user.get("default_organization_id"):
+        # During a zero-downtime rollout an old application instance can
+        # register a user after the migration cursor has passed. Provisioning
+        # only this compatibility case prevents a new session without a tenant
+        # while the next full migration remains the reconciliation authority.
+        provisioner = organization_provisioner or OrganizationProvisioningService(
+            organizations_collection=get_organizations_collection(),
+            memberships_collection=get_organization_memberships_collection(),
+            users_collection=users_collection,
+        )
+        organization = await provisioner.ensure_personal_organization(
+            user_id=user_id,
+            organization_name=f"{user.get('full_name') or user.get('username', 'User')}'s workspace",
+        )
+        user["default_organization_id"] = str(organization["_id"])
     session_id = str(uuid.uuid4())
     
     access_token = create_access_token({"sub": user_id}, session_id=session_id)
@@ -301,6 +344,7 @@ async def login_service(
         expires_at=expires_at,
         ip_address=ip_address,
         user_agent=user_agent,
+        active_organization_id=user.get("default_organization_id"),
     )
     
     await users_collection.update_one(

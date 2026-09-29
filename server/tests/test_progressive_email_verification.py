@@ -64,6 +64,10 @@ async def test_unverified_user_can_login():
     users_collection = AsyncMock()
     sessions_collection = AsyncMock()
     auth_events_collection = AsyncMock()
+    organization_provisioner = AsyncMock()
+    organization_provisioner.ensure_personal_organization.return_value = {
+        "_id": ObjectId()
+    }
     users_collection.find_one.return_value = {
         "_id": user_id,
         "username": "unverified",
@@ -89,12 +93,14 @@ async def test_unverified_user_can_login():
             users_collection=users_collection,
             sessions_collection=sessions_collection,
             auth_events_collection=auth_events_collection,
+            organization_provisioner=organization_provisioner,
         )
 
     assert result["access_token"] == "access-token"
     assert result["refresh_token"] == "refresh-token"
     assert result["is_verified"] is False
     users_collection.update_one.assert_awaited_once()
+    organization_provisioner.ensure_personal_organization.assert_awaited_once()
 
 
 @pytest.mark.asyncio
