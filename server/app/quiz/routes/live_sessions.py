@@ -122,13 +122,15 @@ async def generate_quiz_access_code(
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
-    await record_product_event(
-        get_product_events_collection(),
-        event_type=LIVE_QUIZ_ENABLED,
-        user_id=current_user.id,
-        user=current_user,
-        quiz_id=quiz_id,
-    )
+    created = result.pop("_access_code_created", False)
+    if created:
+        await record_product_event(
+            get_product_events_collection(),
+            event_type=LIVE_QUIZ_ENABLED,
+            user_id=current_user.id,
+            user=current_user,
+            quiz_id=quiz_id,
+        )
     return result
 
 
