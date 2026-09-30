@@ -315,6 +315,47 @@ async def test_active_context_falls_back_to_default_and_proves_membership():
 
 
 @pytest.mark.asyncio
+async def test_active_context_recovers_a_stale_session_selector_to_valid_default():
+    default_organization_id = str(ObjectId())
+    stale_organization_id = str(ObjectId())
+    user = _user(default_organization_id)
+    principal = OrganizationPrincipal(user_id=user.id, session_id="session-1")
+    sessions = FakeSessionsCollection(
+        {
+            "session_id": "session-1",
+            "user_id": user.id,
+            "revoked_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+            "active_organization_id": stale_organization_id,
+        }
+    )
+    organizations = FakeOrganizationsCollection()
+    organizations.documents["default"] = {
+        "_id": ObjectId(default_organization_id),
+        "kind": "personal",
+        "status": "active",
+    }
+    memberships = FakeMembershipsCollection()
+    memberships.documents[(default_organization_id, user.id)] = {
+        "organization_id": default_organization_id,
+        "user_id": user.id,
+        "role": "owner",
+        "status": "active",
+    }
+
+    context = await get_active_organization_context(
+        principal=principal,
+        current_user=user,
+        sessions_collection=sessions,
+        organizations_collection=organizations,
+        memberships_collection=memberships,
+    )
+
+    assert context.organization_id == default_organization_id
+    assert sessions.updated[1]["$set"]["active_organization_id"] == default_organization_id
+
+
+@pytest.mark.asyncio
 async def test_active_context_denies_a_user_without_membership():
     organization_id = str(ObjectId())
     user = _user(organization_id)

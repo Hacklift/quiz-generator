@@ -137,3 +137,21 @@ def test_policy_rejects_principal_that_does_not_match_context():
         {"organization_id": context.organization_id},
         context,
     )
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        OrganizationAction.CONTENT_READ,
+        OrganizationAction.CONTENT_UPDATE,
+        OrganizationAction.CONTENT_DELETE,
+        OrganizationAction.DELIVERY_RUN,
+        OrganizationAction.REPORT_READ,
+        OrganizationAction.AUDIT_READ,
+        OrganizationAction.ATTEMPT_COMPLETE,
+    ),
+)
+def test_resource_sensitive_actions_fail_closed_without_a_loaded_resource(action):
+    context = _context("owner")
+
+    assert not OrganizationPolicy().can(context.principal, action, None, context)

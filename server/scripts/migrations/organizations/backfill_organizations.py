@@ -131,33 +131,9 @@ async def backfill_organizations(
                 )
                 return report
 
-        # Validate the full existing state under the migration lease before
-        # introducing any tenant records. A historical conflict blocks
-        # completion but, during this additive release, does not block the
-        # application deployment. PR2/PR3 use --force --strict before they
-        # enable writes or authorization that depend on complete scoping.
-        preflight = OrganizationBackfillReport(run_id=run_id, dry_run=True)
-        await _reconcile_users(
-            db=db,
-            report=preflight,
-            batch_size=batch_size,
-            limit=None,
-            write=False,
-            lock_service=lock_service,
-        )
-        if preflight.unresolved_count:
-            _copy_reconciliation_report(source=preflight, target=report)
-            report.blocked = True
-            await lock_service.release_lock(
-                migration_name=MIGRATION_NAME,
-                run_id=run_id,
-                status="blocked",
-                summary=asdict(report),
-                error=_unresolved_error_message(report),
-            )
-            _raise_if_unresolved(report, strict=strict)
-            return report
-
+        # Reconcile every unambiguous identity even when historical conflicts
+        # exist. A conflict is recorded for operator repair, not allowed to
+        # deny healthy users the tenant invariant during this additive phase.
         await _reconcile_users(
             db=db,
             report=report,
@@ -175,7 +151,7 @@ async def backfill_organizations(
                 summary=asdict(report),
                 error=_unresolved_error_message(report),
             )
-            _raise_if_unresolved(report, strict=True)
+            _raise_if_unresolved(report, strict=strict)
             return report
 
         # A bounded run is diagnostic/reconciliation work, not evidence that
@@ -367,20 +343,6 @@ def _is_active_platform_library(organization: dict[str, Any]) -> bool:
         and organization.get("created_by_user_id") is None
         and organization.get("system_key") == "platform_library"
     )
-
-
-def _copy_reconciliation_report(
-    *, source: OrganizationBackfillReport, target: OrganizationBackfillReport
-) -> None:
-    """Carry a read-only preflight result into the durable migration report."""
-    target.scanned_users = source.scanned_users
-    target.provisioned_users = source.provisioned_users
-    target.reconciled_users = source.reconciled_users
-    target.skipped_users = source.skipped_users
-    target.backfilled_sessions = source.backfilled_sessions
-    target.platform_library_created = source.platform_library_created
-    target.unresolved_count = source.unresolved_count
-    target.unresolved_examples = list(source.unresolved_examples)
 
 
 def _restore_blocked_report(

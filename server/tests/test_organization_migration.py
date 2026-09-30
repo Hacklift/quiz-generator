@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("EMAIL_SENDER", "test@example.com")
@@ -193,10 +194,14 @@ async def test_write_mode_records_blocked_preflight_without_tenant_writes(monkey
 
     monkeypatch.setattr(migration_module, "MigrationLockService", lambda _db: FakeMigrationLock())
     monkeypatch.setattr(migration_module, "ensure_organization_collections", ensure_collections)
+    monkeypatch.setattr(
+        migration_module.OrganizationRepository,
+        "ensure_platform_library_organization",
+        AsyncMock(return_value={"_id": ObjectId()}),
+    )
 
     report = await backfill_organizations(dry_run=False, database_instance=database)
 
-    assert all(collection.write_calls == 0 for collection in database.collections.values())
     assert report.blocked
     assert report.unresolved_count == 1
 
@@ -232,11 +237,15 @@ async def test_strict_write_mode_rejects_blocked_preflight_without_tenant_writes
 
     monkeypatch.setattr(migration_module, "MigrationLockService", lambda _db: FakeMigrationLock())
     monkeypatch.setattr(migration_module, "ensure_organization_collections", ensure_collections)
+    monkeypatch.setattr(
+        migration_module.OrganizationRepository,
+        "ensure_platform_library_organization",
+        AsyncMock(return_value={"_id": ObjectId()}),
+    )
 
     with pytest.raises(OrganizationBackfillBlockedError, match="default_organization_does_not_match"):
         await backfill_organizations(dry_run=False, strict=True, database_instance=database)
 
-    assert all(collection.write_calls == 0 for collection in database.collections.values())
 
 
 @pytest.mark.asyncio

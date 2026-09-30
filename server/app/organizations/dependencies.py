@@ -23,9 +23,12 @@ from server.app.users.identity import now_utc
 from server.app.users.repository import get_active_session
 
 
+_bearer_scheme = HTTPBearer()
+
+
 async def get_organization_principal(
     current_user: UserOut = Depends(get_current_user),
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
 ) -> OrganizationPrincipal:
     """Bind the validated user to the session that carries active scope."""
     # Keep settings out of module import so data-context tests and migration
@@ -75,7 +78,9 @@ async def get_active_organization_context(
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session has been revoked")
 
-    organization_id = session.get("active_organization_id") or current_user.default_organization_id
+    selected_organization_id = session.get("active_organization_id")
+    default_organization_id = current_user.default_organization_id
+    organization_id = selected_organization_id or default_organization_id
     if not organization_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -89,6 +94,25 @@ async def get_active_organization_context(
         organization_id=organization_id,
         user_id=principal.user_id,
     )
+    # A stale session selector must not lock a multi-organization user out.
+    # Fall back only to their proven default membership; never trust a client
+    # selector or replace a still-valid explicit selection.
+    if (
+        (organization is None or membership is None)
+        and selected_organization_id
+        and default_organization_id
+        and selected_organization_id != default_organization_id
+    ):
+        fallback_organization = await organization_repository.get_active(default_organization_id)
+        fallback_membership = await membership_repository.get_active_membership(
+            organization_id=default_organization_id,
+            user_id=principal.user_id,
+        )
+        if fallback_organization is not None and fallback_membership is not None:
+            organization_id = default_organization_id
+            organization = fallback_organization
+            membership = fallback_membership
+
     if organization is None or membership is None:
         # Do not distinguish a bad selector from a missing membership.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")

@@ -69,6 +69,19 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
     ),
 }
 
+# These actions authorize creating or administering state within the already
+# proven organization context. Every action against an existing resource must
+# receive that resource so tenant and relationship checks cannot be skipped by
+# a future route implementation.
+_RESOURCELESS_ACTIONS = frozenset(
+    {
+        OrganizationAction.ORGANIZATION_MANAGE,
+        OrganizationAction.MEMBERSHIP_MANAGE,
+        OrganizationAction.BILLING_MANAGE,
+        OrganizationAction.CONTENT_CREATE,
+    }
+)
+
 
 class OrganizationPolicy:
     """Single authorization decision point for organization-scoped resources.
@@ -86,6 +99,8 @@ class OrganizationPolicy:
         context: OrganizationContext,
     ) -> bool:
         if principal.user_id != context.principal.user_id:
+            return False
+        if resource is None and action not in _RESOURCELESS_ACTIONS:
             return False
         if resource is not None and resource.get("organization_id") != context.organization_id:
             return False

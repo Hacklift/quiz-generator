@@ -19,6 +19,8 @@ from server.app.db.core.connection import (
     users_collection,
 )
 from server.app.organizations.service import OrganizationProvisioningService
+from server.app.organizations.repository import OrganizationMembershipRepository, OrganizationRepository
+from server.app.organizations.service import OrganizationProvisioningConflictError
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.users.identity import (
     ACTIVE_USER_STATUSES,
@@ -328,7 +330,26 @@ async def login_service(
         raise HTTPException(status_code=403, detail="Account is not active")
     
     user_id = str(user["_id"])
-    if not user.get("default_organization_id"):
+    default_organization_id = user.get("default_organization_id")
+    needs_personal_organization_repair = not default_organization_id
+    if default_organization_id:
+        organization_repository = OrganizationRepository(get_organizations_collection())
+        membership_repository = OrganizationMembershipRepository(
+            get_organization_memberships_collection()
+        )
+        default_organization = await organization_repository.get_active(default_organization_id)
+        owner_membership = await membership_repository.get_active_owner_membership(
+            organization_id=default_organization_id,
+            user_id=user_id,
+        )
+        needs_personal_organization_repair = (
+            default_organization is None
+            or default_organization.get("kind") != "personal"
+            or default_organization.get("personal_owner_user_id") != user_id
+            or owner_membership is None
+        )
+
+    if needs_personal_organization_repair:
         # During a zero-downtime rollout an old application instance can
         # register a user after the migration cursor has passed. Provisioning
         # only this compatibility case prevents a new session without a tenant
@@ -338,10 +359,21 @@ async def login_service(
             memberships_collection=get_organization_memberships_collection(),
             users_collection=users_collection,
         )
-        organization = await provisioner.ensure_personal_organization(
-            user_id=user_id,
-            organization_name=user.get("full_name") or user.get("username"),
-        )
+        try:
+            organization = await provisioner.ensure_personal_organization(
+                user_id=user_id,
+                organization_name=user.get("full_name") or user.get("username"),
+            )
+        except OrganizationProvisioningConflictError as exc:
+            logger.error(
+                "Login blocked by conflicting personal organization state",
+                extra={"user_id": user_id},
+                exc_info=exc,
+            )
+            raise HTTPException(
+                status_code=409,
+                detail="Organization setup requires support intervention",
+            ) from exc
         user["default_organization_id"] = str(organization["_id"])
     session_id = str(uuid.uuid4())
     

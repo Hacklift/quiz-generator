@@ -7,7 +7,9 @@ from fastapi import HTTPException, Response
 from fastapi.params import Depends
 
 from server.app.auth import routes as auth_routes
+from server.app.auth import services as auth_services
 from server.app.auth.services import login_service
+from server.app.organizations.service import OrganizationProvisioningConflictError
 from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
 from server.app.core.dependencies import get_current_user, get_verified_user
@@ -101,6 +103,80 @@ async def test_unverified_user_can_login():
     assert result["is_verified"] is False
     users_collection.update_one.assert_awaited_once()
     organization_provisioner.ensure_personal_organization.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_login_repairs_missing_personal_owner_membership():
+    user_id = ObjectId()
+    organization_id = str(ObjectId())
+    users_collection = AsyncMock()
+    sessions_collection = AsyncMock()
+    auth_events_collection = AsyncMock()
+    provisioner = AsyncMock()
+    provisioner.ensure_personal_organization.return_value = {"_id": ObjectId(organization_id)}
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "member-repair",
+        "email": "repair@example.com",
+        "hashed_password": "hashed",
+        "is_verified": True,
+        "status": "active",
+        "default_organization_id": organization_id,
+    }
+
+    with patch("server.app.auth.services.verify_password", return_value=True), patch(
+        "server.app.auth.services.create_access_token", return_value="access-token"
+    ), patch(
+        "server.app.auth.services.create_refresh_token", return_value=("refresh-token", "jti", None)
+    ), patch("server.app.auth.services.hash_token", return_value="hashed-token"), patch.object(
+        auth_services.OrganizationRepository, "get_active", new=AsyncMock(return_value={
+            "_id": ObjectId(organization_id), "kind": "personal", "personal_owner_user_id": str(user_id)
+        })
+    ), patch.object(
+        auth_services.OrganizationMembershipRepository,
+        "get_active_owner_membership",
+        new=AsyncMock(return_value=None),
+    ):
+        await login_service(
+            identifier="repair@example.com",
+            password="password",
+            users_collection=users_collection,
+            sessions_collection=sessions_collection,
+            auth_events_collection=auth_events_collection,
+            organization_provisioner=provisioner,
+        )
+
+    provisioner.ensure_personal_organization.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_login_returns_conflict_for_unrecoverable_tenant_default():
+    user_id = ObjectId()
+    users_collection = AsyncMock()
+    provisioner = AsyncMock()
+    provisioner.ensure_personal_organization.side_effect = OrganizationProvisioningConflictError("conflict")
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "conflict-user",
+        "email": "conflict@example.com",
+        "hashed_password": "hashed",
+        "is_verified": True,
+        "status": "active",
+        "default_organization_id": "",
+    }
+
+    with patch("server.app.auth.services.verify_password", return_value=True):
+        with pytest.raises(HTTPException) as exc:
+            await login_service(
+                identifier="conflict@example.com",
+                password="password",
+                users_collection=users_collection,
+                sessions_collection=AsyncMock(),
+                auth_events_collection=AsyncMock(),
+                organization_provisioner=provisioner,
+            )
+
+    assert exc.value.status_code == 409
 
 
 @pytest.mark.asyncio
