@@ -134,7 +134,7 @@ async def test_login_repairs_missing_personal_owner_membership():
         })
     ), patch.object(
         auth_services.OrganizationMembershipRepository,
-        "get_active_owner_membership",
+        "get_active_membership",
         new=AsyncMock(return_value=None),
     ):
         await login_service(

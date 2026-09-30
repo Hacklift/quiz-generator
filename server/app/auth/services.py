@@ -93,6 +93,7 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
     created_user = await create_user(users_collection, user_data)
     if not created_user:
         raise HTTPException(status_code=500, detail="User registration failed")
+    tenant_provisioning_pending = False
     try:
         await OrganizationProvisioningService(
             organizations_collection=get_organizations_collection(),
@@ -112,15 +113,13 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
             "Registration created an account whose tenant provisioning needs reconciliation",
             extra={"user_id": created_user.id},
         )
-        raise HTTPException(
-            status_code=503,
-            detail="Account setup is still being completed. Please sign in again shortly.",
-        ) from exc
+        tenant_provisioning_pending = True
     await record_auth_event(
         auth_events_collection,
         event_type="register",
         status="success",
         user_id=created_user.id,
+        metadata={"tenant_provisioning_pending": tenant_provisioning_pending},
     )
    
     redis_client = await get_redis_client()
@@ -325,15 +324,13 @@ async def login_service(
             get_organization_memberships_collection()
         )
         default_organization = await organization_repository.get_active(default_organization_id)
-        owner_membership = await membership_repository.get_active_owner_membership(
+        active_membership = await membership_repository.get_active_membership(
             organization_id=default_organization_id,
             user_id=user_id,
         )
         needs_personal_organization_repair = (
             default_organization is None
-            or default_organization.get("kind") != "personal"
-            or default_organization.get("personal_owner_user_id") != user_id
-            or owner_membership is None
+            or active_membership is None
         )
 
     if needs_personal_organization_repair:
