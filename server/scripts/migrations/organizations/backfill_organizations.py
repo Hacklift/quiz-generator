@@ -106,16 +106,15 @@ async def backfill_organizations(
     reconcile_missing_defaults_only = False
     completed_before_lock = False
     if not force:
-        completed = await lock_service.get_latest_completed_run(MIGRATION_NAME)
-        if completed is not None:
+        terminal_run = await lock_service.get_latest_terminal_run(MIGRATION_NAME)
+        if terminal_run and terminal_run["status"] == "completed":
             # A rolling deploy can create a legacy user after the original
             # cursor passed. Reconcile only users still missing a default on
             # later deploys instead of repeating a full historical scan.
             reconcile_missing_defaults_only = True
             completed_before_lock = True
-        blocked = await lock_service.get_latest_blocked_run(MIGRATION_NAME)
-        if blocked is not None:
-            _restore_blocked_report(report, blocked)
+        elif terminal_run and terminal_run["status"] == "blocked":
+            _restore_blocked_report(report, terminal_run)
             _raise_if_unresolved(report, strict=strict)
             reconcile_missing_defaults_only = True
 
@@ -128,8 +127,12 @@ async def backfill_organizations(
         # Another deployment may have completed after this process checked
         # state but before it acquired the lease.
         if not force:
-            completed = await lock_service.get_latest_completed_run(MIGRATION_NAME)
-            if completed is not None and not completed_before_lock:
+            terminal_run = await lock_service.get_latest_terminal_run(MIGRATION_NAME)
+            if (
+                terminal_run is not None
+                and terminal_run["status"] == "completed"
+                and not completed_before_lock
+            ):
                 report.already_completed = True
                 await lock_service.release_lock(
                     migration_name=MIGRATION_NAME,

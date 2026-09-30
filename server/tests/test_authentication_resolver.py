@@ -75,6 +75,7 @@ async def test_resolve_user_from_access_token_validates_session_and_returns_user
     assert user.id == user_id
     assert user.email == "test@example.com"
     assert user.session_id == session_id
+    assert "session_id" not in user.model_dump()
     assert users_collection.updated["query"] == {"_id": ObjectId(user_id)}
 
     principal = await get_organization_principal(current_user=user)

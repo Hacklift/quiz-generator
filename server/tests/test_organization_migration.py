@@ -182,10 +182,7 @@ async def test_write_mode_records_blocked_preflight_without_tenant_writes(monkey
         async def ensure_indexes(self):
             return None
 
-        async def get_latest_completed_run(self, _migration_name):
-            return None
-
-        async def get_latest_blocked_run(self, _migration_name):
+        async def get_latest_terminal_run(self, _migration_name):
             return None
 
         async def acquire_lock(self, **_kwargs):
@@ -225,10 +222,7 @@ async def test_strict_write_mode_rejects_blocked_preflight_without_tenant_writes
         async def ensure_indexes(self):
             return None
 
-        async def get_latest_completed_run(self, _migration_name):
-            return None
-
-        async def get_latest_blocked_run(self, _migration_name):
+        async def get_latest_terminal_run(self, _migration_name):
             return None
 
         async def acquire_lock(self, **_kwargs):
@@ -264,11 +258,9 @@ async def test_strict_mode_rejects_a_previously_recorded_blocked_run(monkeypatch
         async def ensure_indexes(self):
             return None
 
-        async def get_latest_completed_run(self, _migration_name):
-            return None
-
-        async def get_latest_blocked_run(self, _migration_name):
+        async def get_latest_terminal_run(self, _migration_name):
             return {
+                "status": "blocked",
                 "summary": {
                     "unresolved_count": 1,
                     "unresolved_examples": [
@@ -298,11 +290,9 @@ async def test_non_strict_mode_reconciles_missing_defaults_after_a_blocked_run(m
         async def ensure_indexes(self):
             return None
 
-        async def get_latest_completed_run(self, _migration_name):
-            return None
-
-        async def get_latest_blocked_run(self, _migration_name):
+        async def get_latest_terminal_run(self, _migration_name):
             return {
+                "status": "blocked",
                 "summary": {
                     "unresolved_count": 1,
                     "unresolved_examples": [
@@ -344,11 +334,8 @@ async def test_completed_migration_reconciles_only_users_missing_defaults(monkey
         async def ensure_indexes(self):
             return None
 
-        async def get_latest_completed_run(self, _migration_name):
-            return {"_id": "completed-run"}
-
-        async def get_latest_blocked_run(self, _migration_name):
-            return None
+        async def get_latest_terminal_run(self, _migration_name):
+            return {"_id": "completed-run", "status": "completed"}
 
         async def acquire_lock(self, **_kwargs):
             return None
@@ -366,6 +353,38 @@ async def test_completed_migration_reconciles_only_users_missing_defaults(monkey
 
     await backfill_organizations(dry_run=False, database_instance=database)
 
+    assert reconcile_users.await_args.kwargs["only_missing_default"] is True
+
+
+@pytest.mark.asyncio
+async def test_completed_migration_does_not_restore_an_older_blocked_report(monkeypatch):
+    database = FakeDatabase(users=[])
+
+    class FakeMigrationLock:
+        async def ensure_indexes(self):
+            return None
+
+        async def get_latest_terminal_run(self, _migration_name):
+            return {"_id": "completed-run", "status": "completed"}
+
+        async def acquire_lock(self, **_kwargs):
+            return None
+
+        async def release_lock(self, **_kwargs):
+            return None
+
+    async def ensure_collections(*_args):
+        return None
+
+    monkeypatch.setattr(migration_module, "MigrationLockService", lambda _db: FakeMigrationLock())
+    monkeypatch.setattr(migration_module, "ensure_organization_collections", ensure_collections)
+    reconcile_users = AsyncMock()
+    monkeypatch.setattr(migration_module, "_reconcile_users", reconcile_users)
+
+    report = await backfill_organizations(dry_run=False, database_instance=database)
+
+    assert not report.already_blocked
+    assert not report.blocked
     assert reconcile_users.await_args.kwargs["only_missing_default"] is True
 
 

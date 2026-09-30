@@ -210,3 +210,20 @@ class MigrationLockService:
             },
             sort=[("completed_at", -1)],
         )
+
+    async def get_latest_terminal_run(self, migration_name: str):
+        """Return the latest completed or blocked deployment outcome.
+
+        Older blocked runs are historical once a later full reconciliation has
+        completed. Callers that gate migrations must therefore inspect the
+        most recent terminal outcome rather than querying each status
+        independently.
+        """
+        return await self.runs.find_one(
+            {
+                "migration_name": migration_name,
+                "status": {"$in": ["completed", "blocked"]},
+                "dry_run": False,
+            },
+            sort=[("completed_at", -1)],
+        )
