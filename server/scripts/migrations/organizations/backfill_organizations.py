@@ -301,6 +301,7 @@ async def _reconcile_users(
             organization = await provisioning.ensure_personal_organization(
                 user_id=user_id,
                 organization_name=user.get("full_name") or user.get("username"),
+                repair_membership=True,
             )
             report.backfilled_sessions += await _backfill_missing_session_organizations(
                 db=db,

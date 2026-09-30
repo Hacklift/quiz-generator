@@ -135,6 +135,7 @@ async def test_personal_provisioning_repairs_an_inactive_owner_membership():
     await service.ensure_personal_organization(
         user_id=user_id,
         organization_name="Ada's workspace",
+        repair_membership=True,
     )
 
     assert membership["role"] == "owner"

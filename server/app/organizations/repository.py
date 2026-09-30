@@ -127,6 +127,30 @@ class OrganizationMembershipRepository:
             raise RuntimeError("organization membership upsert did not return a document")
         return result
 
+    async def ensure_personal_owner_membership_if_missing(
+        self,
+        *,
+        organization_id: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """Create the personal-owner membership without reviving existing state."""
+        document = OrganizationMembershipDocument(
+            organization_id=organization_id,
+            user_id=user_id,
+            role="owner",
+            status="active",
+            joined_at=utcnow(),
+        ).model_dump(by_alias=True)
+        result = await self.collection.find_one_and_update(
+            {"organization_id": organization_id, "user_id": user_id},
+            {"$setOnInsert": document},
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        if result is None:
+            raise RuntimeError("organization membership upsert did not return a document")
+        return result
+
     async def get_active_membership(
         self,
         *,

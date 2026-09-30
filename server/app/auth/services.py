@@ -20,7 +20,10 @@ from server.app.db.core.connection import (
 )
 from server.app.organizations.service import OrganizationProvisioningService
 from server.app.organizations.repository import OrganizationMembershipRepository, OrganizationRepository
-from server.app.organizations.service import OrganizationProvisioningConflictError
+from server.app.organizations.service import (
+    OrganizationProvisioningConflictError,
+    PersonalOrganizationMembershipInactiveError,
+)
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.users.identity import (
     ACTIVE_USER_STATUSES,
@@ -347,7 +350,10 @@ async def login_service(
             organization = await provisioner.ensure_personal_organization(
                 user_id=user_id,
                 organization_name=user.get("full_name") or user.get("username"),
+                replace_conflicting_default=bool(default_organization_id),
             )
+        except PersonalOrganizationMembershipInactiveError as exc:
+            raise HTTPException(status_code=403, detail="Organization access is disabled") from exc
         except OrganizationProvisioningConflictError as exc:
             logger.error(
                 "Login blocked by conflicting personal organization state",
