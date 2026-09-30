@@ -18,9 +18,9 @@ from server.app.db.core.connection import (
     get_user_sessions_collection,
     users_collection,
 )
-from server.app.organizations.service import OrganizationProvisioningService
 from server.app.organizations.repository import OrganizationMembershipRepository, OrganizationRepository
 from server.app.organizations.service import (
+    OrganizationProvisioningService,
     OrganizationProvisioningConflictError,
     PersonalOrganizationMembershipInactiveError,
 )

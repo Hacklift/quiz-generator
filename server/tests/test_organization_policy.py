@@ -141,6 +141,33 @@ def test_policy_accepts_object_id_organization_references():
     )
 
 
+@pytest.mark.parametrize(
+    ("role", "action", "relationship_field"),
+    [
+        ("author", OrganizationAction.CONTENT_UPDATE, "created_by_user_id"),
+        ("facilitator", OrganizationAction.DELIVERY_RUN, "facilitator_user_id"),
+        ("learner", OrganizationAction.ATTEMPT_COMPLETE, "assigned_user_id"),
+    ],
+)
+def test_policy_accepts_object_id_relationship_references(
+    role: str,
+    action: OrganizationAction,
+    relationship_field: str,
+):
+    user_id = ObjectId()
+    context = _context(role, user_id=str(user_id))
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        action,
+        {
+            "organization_id": context.organization_id,
+            relationship_field: user_id,
+        },
+        context,
+    )
+
+
 def test_policy_rejects_principal_that_does_not_match_context():
     context = _context("owner")
     other_principal = OrganizationPrincipal(user_id="user-2", session_id="session-2")

@@ -63,13 +63,22 @@ class MigrationLockService:
             await self.runs.insert_one(run_document)
         except DuplicateKeyError:
             # Lock-acquisition backoff reuses the external run id so the
-            # deployment has one auditable migration attempt. Only retry a
-            # run that this service previously marked failed to acquire.
+            # deployment has one auditable migration attempt. A crashed
+            # process can also leave a pre-lock ``acquiring`` row behind;
+            # reclaim it only after the original lease window has elapsed.
+            stale_acquiring_before = now - timedelta(seconds=lease_seconds)
             retry = await self.runs.update_one(
                 {
                     "_id": run_id,
                     "migration_name": migration_name,
-                    "status": "failed",
+                    "lock_acquired_at": {"$exists": False},
+                    "$or": [
+                        {"status": "failed"},
+                        {
+                            "status": "acquiring",
+                            "started_at": {"$lte": stale_acquiring_before},
+                        },
+                    ],
                 },
                 {
                     "$set": {
@@ -124,7 +133,7 @@ class MigrationLockService:
 
         run_started = await self.runs.update_one(
             {"_id": run_id, "status": "acquiring"},
-            {"$set": {"status": "running"}},
+            {"$set": {"status": "running", "lock_acquired_at": now}},
         )
         if run_started.matched_count != 1:
             await self.locks.delete_one({"_id": migration_name, "run_id": run_id})

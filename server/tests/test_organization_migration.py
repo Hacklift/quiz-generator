@@ -33,11 +33,13 @@ from server.scripts.migrations.v2.migration.types import utcnow
 
 
 def _matches(document: dict, query: dict) -> bool:
-    if "$and" in query:
-        return all(_matches(document, item) for item in query["$and"])
-    if "$or" in query:
-        return any(_matches(document, item) for item in query["$or"])
+    if "$and" in query and not all(_matches(document, item) for item in query["$and"]):
+        return False
+    if "$or" in query and not any(_matches(document, item) for item in query["$or"]):
+        return False
     for key, expected in query.items():
+        if key in {"$and", "$or"}:
+            continue
         value = document.get(key)
         if isinstance(expected, dict):
             if "$gt" in expected and not value > expected["$gt"]:
@@ -585,6 +587,58 @@ async def test_lock_service_can_retry_the_same_run_after_a_transient_lock_confli
     )
 
     assert database["migration_runs"].documents["retry-run"]["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_lock_service_reclaims_a_stale_pre_lock_run_with_the_same_run_id():
+    database = FakeLockDatabase(
+        runs=[
+            {
+                "_id": "reused-run",
+                "migration_name": "organization-backfill",
+                "status": "acquiring",
+                "dry_run": False,
+                "started_at": utcnow() - timedelta(seconds=61),
+            }
+        ]
+    )
+    service = MigrationLockService(database)
+
+    await service.acquire_lock(
+        migration_name="organization-backfill",
+        run_id="reused-run",
+        dry_run=False,
+        triggered_by="test",
+        lease_seconds=60,
+    )
+
+    assert database["migration_runs"].documents["reused-run"]["status"] == "running"
+    assert "lock_acquired_at" in database["migration_runs"].documents["reused-run"]
+
+
+@pytest.mark.asyncio
+async def test_lock_service_does_not_reclaim_a_fresh_pre_lock_run():
+    database = FakeLockDatabase(
+        runs=[
+            {
+                "_id": "fresh-run",
+                "migration_name": "organization-backfill",
+                "status": "acquiring",
+                "dry_run": False,
+                "started_at": utcnow(),
+            }
+        ]
+    )
+    service = MigrationLockService(database)
+
+    with pytest.raises(MigrationLockError, match="cannot be retried"):
+        await service.acquire_lock(
+            migration_name="organization-backfill",
+            run_id="fresh-run",
+            dry_run=False,
+            triggered_by="test",
+            lease_seconds=60,
+        )
 
 
 @pytest.mark.asyncio

@@ -113,18 +113,27 @@ class OrganizationPolicy:
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
         }:
-            return bool(resource and resource.get("created_by_user_id") == principal.user_id)
+            return bool(
+                resource
+                and str(resource.get("created_by_user_id")) == principal.user_id
+            )
 
         if role == "facilitator" and action in {
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
         }:
-            return bool(resource and resource.get("facilitator_user_id") == principal.user_id)
+            return bool(
+                resource
+                and str(resource.get("facilitator_user_id")) == principal.user_id
+            )
 
         if role == "learner" and action in {
             OrganizationAction.CONTENT_READ,
             OrganizationAction.ATTEMPT_COMPLETE,
         }:
-            return bool(resource and resource.get("assigned_user_id") == principal.user_id)
+            return bool(
+                resource
+                and str(resource.get("assigned_user_id")) == principal.user_id
+            )
 
         return True
