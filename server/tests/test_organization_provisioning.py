@@ -25,6 +25,7 @@ from server.app.organizations.repository import OrganizationMembershipRepository
 from server.app.organizations.service import (
     OrganizationProvisioningConflictError,
     OrganizationProvisioningService,
+    PersonalOrganizationMembershipInactiveError,
     personal_workspace_name,
 )
 from server.app.users.models import UserOut
@@ -140,6 +141,34 @@ async def test_personal_provisioning_repairs_an_inactive_owner_membership():
 
     assert membership["role"] == "owner"
     assert membership["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_normal_personal_provisioning_does_not_reactivate_a_disabled_membership():
+    organizations = FakeOrganizationsCollection()
+    memberships = FakeMembershipsCollection()
+    users = FakeUsersCollection()
+    user_id = str(ObjectId())
+    service = OrganizationProvisioningService(
+        organizations_collection=organizations,
+        memberships_collection=memberships,
+        users_collection=users,
+    )
+    await service.ensure_personal_organization(
+        user_id=user_id,
+        organization_name="Ada's workspace",
+    )
+    membership = next(iter(memberships.documents.values()))
+    membership.update({"role": "owner", "status": "suspended"})
+
+    with pytest.raises(PersonalOrganizationMembershipInactiveError):
+        await service.ensure_personal_organization(
+            user_id=user_id,
+            organization_name="Ada's workspace",
+        )
+
+    assert membership["role"] == "owner"
+    assert membership["status"] == "suspended"
 
 
 @pytest.mark.asyncio

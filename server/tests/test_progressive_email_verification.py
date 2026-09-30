@@ -1,4 +1,5 @@
 import inspect
+from datetime import datetime, timezone
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,10 +9,11 @@ from fastapi.params import Depends
 
 from server.app.auth import routes as auth_routes
 from server.app.auth import services as auth_services
-from server.app.auth.services import login_service
+from server.app.auth.services import login_service, register_user_service
 from server.app.organizations.service import OrganizationProvisioningConflictError
 from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
+from server.app.users.schemas import NewUserSchema, UserRegisterSchema
 from server.app.core.dependencies import get_current_user, get_verified_user
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.routes.generation import get_quiz
@@ -147,6 +149,111 @@ async def test_login_repairs_missing_personal_owner_membership():
         )
 
     provisioner.ensure_personal_organization.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_login_falls_back_to_personal_tenant_when_default_membership_is_missing():
+    user_id = ObjectId()
+    former_organization_id = str(ObjectId())
+    personal_organization_id = str(ObjectId())
+    users_collection = AsyncMock()
+    provisioner = AsyncMock()
+    provisioner.ensure_personal_organization.return_value = {"_id": ObjectId(personal_organization_id)}
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "former-member",
+        "email": "former-member@example.com",
+        "hashed_password": "hashed",
+        "is_verified": True,
+        "status": "active",
+        "default_organization_id": former_organization_id,
+    }
+
+    with patch("server.app.auth.services.verify_password", return_value=True), patch(
+        "server.app.auth.services.create_access_token", return_value="access-token"
+    ), patch(
+        "server.app.auth.services.create_refresh_token", return_value=("refresh-token", "jti", None)
+    ), patch("server.app.auth.services.hash_token", return_value="hashed-token"), patch(
+        "server.app.auth.services.create_user_session", new=AsyncMock()
+    ) as create_session, patch(
+        "server.app.auth.services.record_auth_event", new=AsyncMock()
+    ), patch.object(
+        auth_services.OrganizationRepository,
+        "get_active",
+        new=AsyncMock(return_value={"_id": ObjectId(former_organization_id), "kind": "corporate"}),
+    ), patch.object(
+        auth_services.OrganizationMembershipRepository,
+        "get_active_membership",
+        new=AsyncMock(return_value=None),
+    ):
+        await login_service(
+            identifier="former-member@example.com",
+            password="password",
+            users_collection=users_collection,
+            sessions_collection=AsyncMock(),
+            auth_events_collection=AsyncMock(),
+            organization_provisioner=provisioner,
+        )
+
+    provisioner.ensure_personal_organization.assert_awaited_once_with(
+        user_id=str(user_id),
+        organization_name="former-member",
+        replace_conflicting_default=True,
+    )
+    assert create_session.await_args.kwargs["active_organization_id"] == personal_organization_id
+
+
+@pytest.mark.asyncio
+async def test_registration_still_delivers_verification_when_tenant_provisioning_is_deferred():
+    timestamp = datetime.now(timezone.utc)
+    created_user = NewUserSchema(
+        id=str(ObjectId()),
+        username="new-user",
+        email="new-user@example.com",
+        full_name="New User",
+        is_active=True,
+        is_verified=False,
+        status="pending_verification",
+        role="user",
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+    users_collection = AsyncMock()
+    users_collection.find_one.return_value = None
+    redis_client = AsyncMock()
+    email_service = AsyncMock()
+
+    with patch.object(auth_services, "users_collection", users_collection), patch(
+        "server.app.auth.services.create_user", new=AsyncMock(return_value=created_user)
+    ), patch(
+        "server.app.auth.services.get_auth_events_collection", return_value=AsyncMock()
+    ), patch(
+        "server.app.auth.services.get_organizations_collection", return_value=AsyncMock()
+    ), patch(
+        "server.app.auth.services.get_organization_memberships_collection", return_value=AsyncMock()
+    ), patch.object(
+        auth_services.OrganizationProvisioningService,
+        "ensure_personal_organization",
+        new=AsyncMock(side_effect=RuntimeError("tenant store unavailable")),
+    ), patch("server.app.auth.services.record_auth_event", new=AsyncMock()) as record_event, patch(
+        "server.app.auth.services.get_redis_client", new=AsyncMock(return_value=redis_client)
+    ), patch("server.app.auth.services.generate_otp", return_value="123456"), patch(
+        "server.app.auth.services.generate_verification_token", return_value="verification-token"
+    ):
+        result = await register_user_service(
+            UserRegisterSchema(
+                username="new-user",
+                email="new-user@example.com",
+                full_name="New User",
+                password="Password1!",
+            ),
+            email_service,
+        )
+
+    assert result.id == created_user.id
+    assert redis_client.setex.await_count == 2
+    email_service.send_email.assert_awaited_once()
+    assert record_event.await_args.kwargs["metadata"] == {"tenant_provisioning_pending": True}
 
 
 @pytest.mark.asyncio
