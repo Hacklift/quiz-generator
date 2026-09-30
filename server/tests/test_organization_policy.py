@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from bson import ObjectId
 
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.organizations.policy import OrganizationAction, OrganizationPolicy
@@ -123,6 +124,19 @@ def test_policy_rejects_cross_organization_resource_before_role_evaluation():
         context.principal,
         OrganizationAction.CONTENT_READ,
         {"organization_id": "507f1f77bcf86cd799439012"},
+        context,
+    )
+
+
+def test_policy_accepts_object_id_organization_references():
+    organization_id = ObjectId()
+    context = _context("owner")
+    context.organization_id = str(organization_id)
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.CONTENT_READ,
+        {"organization_id": organization_id},
         context,
     )
 

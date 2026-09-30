@@ -68,6 +68,9 @@ class UserDB(BaseModel):
     status: str = "pending_verification"
     role: str = "user"
     default_organization_id: Optional[str] = None
+    # Auth-only context, populated by token resolution and excluded from API
+    # serialization. Dependencies use it instead of decoding the JWT twice.
+    session_id: Optional[str] = Field(default=None, exclude=True)
     stripe_customer_id: Optional[str] = None
     stripe_subscription_id: Optional[str] = None
     subscription_plan: Optional[str] = "free"

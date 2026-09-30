@@ -102,7 +102,7 @@ class OrganizationPolicy:
             return False
         if resource is None and action not in _RESOURCELESS_ACTIONS:
             return False
-        if resource is not None and resource.get("organization_id") != context.organization_id:
+        if resource is not None and str(resource.get("organization_id")) != context.organization_id:
             return False
 
         role = context.membership_role

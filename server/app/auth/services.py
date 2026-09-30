@@ -103,31 +103,18 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
             organization_name=created_user.full_name or created_user.username,
         )
     except Exception as exc:
-        # A newly-created account must not escape registration without its
-        # required tenant. Clean up only records keyed to this fresh user id;
-        # established accounts are never hard-deleted by tenancy code.
-        cleanup_operations = (
-            get_organization_memberships_collection().delete_many(
-                {"user_id": created_user.id}
-            ),
-            get_organizations_collection().delete_many(
-                {"kind": "personal", "personal_owner_user_id": created_user.id}
-            ),
-            users_collection.delete_one({"_id": ObjectId(created_user.id)}),
+        # Do not destructively compensate multi-document provisioning. A
+        # concurrent login can already be repairing this identity, and no
+        # external side effect should point to an account later deleted here.
+        # The personal-organization operation is idempotent, so login and the
+        # migration reconciler safely complete any partial state.
+        logger.exception(
+            "Registration created an account whose tenant provisioning needs reconciliation",
+            extra={"user_id": created_user.id},
         )
-        for operation in cleanup_operations:
-            try:
-                await operation
-            except Exception:
-                # Preserve the provisioning failure and leave any residual
-                # record for the idempotent login/migration reconciler.
-                logger.exception(
-                    "Failed to compensate a registration provisioning error",
-                    extra={"user_id": created_user.id},
-                )
         raise HTTPException(
-            status_code=500,
-            detail="Could not provision the personal organization",
+            status_code=503,
+            detail="Account setup is still being completed. Please sign in again shortly.",
         ) from exc
     await record_auth_event(
         auth_events_collection,

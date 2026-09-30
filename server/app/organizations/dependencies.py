@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from server.app.core.dependencies import get_current_user
 from server.app.db.core.connection import (
@@ -23,34 +21,12 @@ from server.app.users.identity import now_utc
 from server.app.users.repository import get_active_session
 
 
-_bearer_scheme = HTTPBearer()
-
-
 async def get_organization_principal(
     current_user: UserOut = Depends(get_current_user),
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
 ) -> OrganizationPrincipal:
     """Bind the validated user to the session that carries active scope."""
-    # Keep settings out of module import so data-context tests and migration
-    # tooling do not require unrelated email/runtime configuration.
-    from server.app.core.config import settings
-
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-    except jwt.InvalidTokenError as exc:
-        # get_current_user normally rejects this first. Keep this dependency
-        # independently safe if FastAPI dependency ordering changes.
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-        ) from exc
-
-    session_id = payload.get("sid")
-    if not isinstance(session_id, str) or not session_id:
+    session_id = current_user.session_id
+    if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session context is missing",
