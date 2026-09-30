@@ -10,7 +10,10 @@ from fastapi.params import Depends
 from server.app.auth import routes as auth_routes
 from server.app.auth import services as auth_services
 from server.app.auth.services import login_service, register_user_service
-from server.app.organizations.service import OrganizationProvisioningConflictError
+from server.app.organizations.service import (
+    OrganizationProvisioningConflictError,
+    PersonalOrganizationMembershipInactiveError,
+)
 from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
 from server.app.users.schemas import NewUserSchema, UserRegisterSchema
@@ -177,7 +180,7 @@ async def test_login_falls_back_to_personal_tenant_when_default_membership_is_mi
         "server.app.auth.services.create_user_session", new=AsyncMock()
     ) as create_session, patch(
         "server.app.auth.services.record_auth_event", new=AsyncMock()
-    ), patch.object(
+    ) as record_event, patch.object(
         auth_services.OrganizationRepository,
         "get_active",
         new=AsyncMock(return_value={"_id": ObjectId(former_organization_id), "kind": "corporate"}),
@@ -201,6 +204,116 @@ async def test_login_falls_back_to_personal_tenant_when_default_membership_is_mi
         replace_conflicting_default=True,
     )
     assert create_session.await_args.kwargs["active_organization_id"] == personal_organization_id
+    assert any(
+        call.kwargs.get("event_type") == "organization_default_recovered"
+        for call in record_event.await_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_login_uses_another_active_membership_when_personal_membership_is_suspended():
+    user_id = ObjectId()
+    inaccessible_default_id = str(ObjectId())
+    fallback_organization_id = str(ObjectId())
+    users_collection = AsyncMock()
+    provisioner = AsyncMock()
+    provisioner.ensure_personal_organization.side_effect = PersonalOrganizationMembershipInactiveError(
+        "personal membership is suspended"
+    )
+    provisioner.find_active_organization_for_user.return_value = {
+        "_id": ObjectId(fallback_organization_id)
+    }
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "shared-member",
+        "email": "shared-member@example.com",
+        "hashed_password": "hashed",
+        "is_verified": True,
+        "status": "active",
+        "default_organization_id": inaccessible_default_id,
+    }
+
+    with patch("server.app.auth.services.verify_password", return_value=True), patch(
+        "server.app.auth.services.create_access_token", return_value="access-token"
+    ), patch(
+        "server.app.auth.services.create_refresh_token", return_value=("refresh-token", "jti", None)
+    ), patch("server.app.auth.services.hash_token", return_value="hashed-token"), patch(
+        "server.app.auth.services.create_user_session", new=AsyncMock()
+    ) as create_session, patch(
+        "server.app.auth.services.record_auth_event", new=AsyncMock()
+    ) as record_event, patch.object(
+        auth_services.OrganizationRepository,
+        "get_active",
+        new=AsyncMock(return_value=None),
+    ), patch.object(
+        auth_services.OrganizationMembershipRepository,
+        "get_active_membership",
+        new=AsyncMock(return_value=None),
+    ):
+        await login_service(
+            identifier="shared-member@example.com",
+            password="password",
+            users_collection=users_collection,
+            sessions_collection=AsyncMock(),
+            auth_events_collection=AsyncMock(),
+            organization_provisioner=provisioner,
+        )
+
+    provisioner.set_default_organization.assert_awaited_once_with(
+        user_id=str(user_id),
+        organization_id=fallback_organization_id,
+        expected_default_organization_id=inaccessible_default_id,
+    )
+    assert create_session.await_args.kwargs["active_organization_id"] == fallback_organization_id
+    assert any(
+        call.kwargs.get("event_type") == "organization_default_recovered"
+        for call in record_event.await_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_login_returns_conflict_when_fallback_default_changes_concurrently():
+    user_id = ObjectId()
+    inaccessible_default_id = str(ObjectId())
+    users_collection = AsyncMock()
+    provisioner = AsyncMock()
+    provisioner.ensure_personal_organization.side_effect = PersonalOrganizationMembershipInactiveError(
+        "personal membership is suspended"
+    )
+    provisioner.find_active_organization_for_user.return_value = {"_id": ObjectId()}
+    provisioner.set_default_organization.side_effect = OrganizationProvisioningConflictError(
+        "default changed"
+    )
+    users_collection.find_one.return_value = {
+        "_id": user_id,
+        "username": "shared-member",
+        "email": "shared-member@example.com",
+        "hashed_password": "hashed",
+        "is_verified": True,
+        "status": "active",
+        "default_organization_id": inaccessible_default_id,
+    }
+
+    with patch("server.app.auth.services.verify_password", return_value=True), patch.object(
+        auth_services.OrganizationRepository,
+        "get_active",
+        new=AsyncMock(return_value=None),
+    ), patch.object(
+        auth_services.OrganizationMembershipRepository,
+        "get_active_membership",
+        new=AsyncMock(return_value=None),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await login_service(
+                identifier="shared-member@example.com",
+                password="password",
+                users_collection=users_collection,
+                sessions_collection=AsyncMock(),
+                auth_events_collection=AsyncMock(),
+                organization_provisioner=provisioner,
+            )
+
+    assert exc.value.status_code == 409
 
 
 @pytest.mark.asyncio

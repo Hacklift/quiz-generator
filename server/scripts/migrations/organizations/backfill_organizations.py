@@ -12,7 +12,10 @@ from server.app.db.core.connection import database
 from server.app.organizations.repository import OrganizationRepository
 from server.app.organizations.service import OrganizationProvisioningService
 from server.app.organizations.validators import ensure_organization_collections
-from server.scripts.migrations.v2.migration.lock import MigrationLockService
+from server.scripts.migrations.v2.migration.lock import (
+    MigrationLockError,
+    MigrationLockService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,8 @@ logger = logging.getLogger(__name__)
 MIGRATION_NAME = "organization_personal_tenant_backfill_v2"
 LOCK_LEASE_SECONDS = 900
 LOCK_HEARTBEAT_SECONDS = 60
+LOCK_ACQUIRE_MAX_ATTEMPTS = 5
+LOCK_ACQUIRE_INITIAL_RETRY_SECONDS = 5
 MAX_UNRESOLVED_EXAMPLES = 25
 
 
@@ -98,30 +103,33 @@ async def backfill_organizations(
     lock_service = MigrationLockService(db)
     await lock_service.ensure_indexes()
 
+    reconcile_missing_defaults_only = False
+    completed_before_lock = False
     if not force:
         completed = await lock_service.get_latest_completed_run(MIGRATION_NAME)
         if completed is not None:
-            report.already_completed = True
-            return report
+            # A rolling deploy can create a legacy user after the original
+            # cursor passed. Reconcile only users still missing a default on
+            # later deploys instead of repeating a full historical scan.
+            reconcile_missing_defaults_only = True
+            completed_before_lock = True
         blocked = await lock_service.get_latest_blocked_run(MIGRATION_NAME)
         if blocked is not None:
             _restore_blocked_report(report, blocked)
             _raise_if_unresolved(report, strict=strict)
-            return report
+            reconcile_missing_defaults_only = True
 
-    await lock_service.acquire_lock(
-        migration_name=MIGRATION_NAME,
+    await _acquire_lock_with_retry(
+        lock_service=lock_service,
         run_id=run_id,
-        dry_run=False,
         triggered_by=triggered_by,
-        lease_seconds=LOCK_LEASE_SECONDS,
     )
     try:
         # Another deployment may have completed after this process checked
         # state but before it acquired the lease.
         if not force:
             completed = await lock_service.get_latest_completed_run(MIGRATION_NAME)
-            if completed is not None:
+            if completed is not None and not completed_before_lock:
                 report.already_completed = True
                 await lock_service.release_lock(
                     migration_name=MIGRATION_NAME,
@@ -141,6 +149,7 @@ async def backfill_organizations(
             limit=limit,
             write=True,
             lock_service=lock_service,
+            only_missing_default=reconcile_missing_defaults_only,
         )
         if report.unresolved_count:
             report.blocked = True
@@ -187,6 +196,7 @@ async def _reconcile_users(
     limit: int | None,
     write: bool,
     lock_service: MigrationLockService | None,
+    only_missing_default: bool = False,
 ) -> None:
     organizations = OrganizationRepository(db["organizations"])
     provisioning = OrganizationProvisioningService(
@@ -225,7 +235,20 @@ async def _reconcile_users(
             last_heartbeat = time.monotonic()
 
     while limit is None or processed < limit:
-        query = {"_id": {"$gt": last_id}} if last_id is not None else {}
+        missing_default_query = {
+            "$or": [
+                {"default_organization_id": {"$exists": False}},
+                {"default_organization_id": None},
+            ]
+        }
+        if only_missing_default and last_id is not None:
+            query = {"$and": [missing_default_query, {"_id": {"$gt": last_id}}]}
+        elif only_missing_default:
+            query = missing_default_query
+        elif last_id is not None:
+            query = {"_id": {"$gt": last_id}}
+        else:
+            query = {}
         remaining = batch_size if limit is None else min(batch_size, limit - processed)
         users = await db["users"].find(query).sort("_id", 1).limit(remaining).to_list(remaining)
         if not users:
@@ -314,6 +337,36 @@ async def _reconcile_users(
                 report.reconciled_users += 1
 
         await renew_if_due(force=True)
+
+
+async def _acquire_lock_with_retry(
+    *,
+    lock_service: MigrationLockService,
+    run_id: str,
+    triggered_by: str,
+) -> None:
+    """Absorb brief overlapping deploys without weakening the deployment gate."""
+    for attempt in range(LOCK_ACQUIRE_MAX_ATTEMPTS):
+        try:
+            await lock_service.acquire_lock(
+                migration_name=MIGRATION_NAME,
+                run_id=run_id,
+                dry_run=False,
+                triggered_by=triggered_by,
+                lease_seconds=LOCK_LEASE_SECONDS,
+            )
+            return
+        except MigrationLockError:
+            if attempt == LOCK_ACQUIRE_MAX_ATTEMPTS - 1:
+                raise
+            delay_seconds = LOCK_ACQUIRE_INITIAL_RETRY_SECONDS * (2**attempt)
+            logger.warning(
+                "Organization migration lock is held; retrying in %s seconds (%s/%s)",
+                delay_seconds,
+                attempt + 1,
+                LOCK_ACQUIRE_MAX_ATTEMPTS,
+            )
+            await asyncio.sleep(delay_seconds)
 
 
 async def _backfill_missing_session_organizations(*, db, user_id: str, organization_id: str | None) -> int:

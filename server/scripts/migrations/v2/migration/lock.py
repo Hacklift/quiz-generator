@@ -51,16 +51,38 @@ class MigrationLockService:
             "started_at": now,
             "expires_at": expires_at,
         }
-        await self.runs.insert_one(
-            {
-                "_id": run_id,
-                "migration_name": migration_name,
-                "status": "acquiring",
-                "dry_run": dry_run,
-                "triggered_by": triggered_by,
-                "started_at": now,
-            }
-        )
+        run_document = {
+            "_id": run_id,
+            "migration_name": migration_name,
+            "status": "acquiring",
+            "dry_run": dry_run,
+            "triggered_by": triggered_by,
+            "started_at": now,
+        }
+        try:
+            await self.runs.insert_one(run_document)
+        except DuplicateKeyError:
+            # Lock-acquisition backoff reuses the external run id so the
+            # deployment has one auditable migration attempt. Only retry a
+            # run that this service previously marked failed to acquire.
+            retry = await self.runs.update_one(
+                {
+                    "_id": run_id,
+                    "migration_name": migration_name,
+                    "status": "failed",
+                },
+                {
+                    "$set": {
+                        "status": "acquiring",
+                        "started_at": now,
+                    },
+                    "$unset": {"completed_at": "", "error": ""},
+                },
+            )
+            if retry.matched_count != 1:
+                raise MigrationLockError(
+                    f"Migration run_id={run_id} cannot be retried"
+                )
         try:
             await self.locks.insert_one(lock_doc)
         except DuplicateKeyError as exc:

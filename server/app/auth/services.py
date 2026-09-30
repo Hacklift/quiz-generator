@@ -321,6 +321,7 @@ async def login_service(
     user_id = str(user["_id"])
     default_organization_id = user.get("default_organization_id")
     needs_personal_organization_repair = not default_organization_id
+    recovered_inaccessible_default = False
     if default_organization_id:
         organization_repository = OrganizationRepository(get_organizations_collection())
         membership_repository = OrganizationMembershipRepository(
@@ -335,6 +336,7 @@ async def login_service(
             default_organization is None
             or active_membership is None
         )
+        recovered_inaccessible_default = needs_personal_organization_repair
 
     if needs_personal_organization_repair:
         # During a zero-downtime rollout an old application instance can
@@ -353,7 +355,31 @@ async def login_service(
                 replace_conflicting_default=bool(default_organization_id),
             )
         except PersonalOrganizationMembershipInactiveError as exc:
-            raise HTTPException(status_code=403, detail="Organization access is disabled") from exc
+            # A disabled personal tenant must not be silently reactivated at
+            # login. A user can still authenticate through another active
+            # organization membership if one exists.
+            fallback_organization = await provisioner.find_active_organization_for_user(
+                user_id=user_id
+            )
+            if fallback_organization is None:
+                raise HTTPException(status_code=403, detail="Organization access is disabled") from exc
+            try:
+                await provisioner.set_default_organization(
+                    user_id=user_id,
+                    organization_id=str(fallback_organization["_id"]),
+                    expected_default_organization_id=default_organization_id,
+                )
+            except OrganizationProvisioningConflictError as recovery_exc:
+                logger.error(
+                    "Login fallback conflicted with a concurrent organization update",
+                    extra={"user_id": user_id},
+                    exc_info=recovery_exc,
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail="Organization setup requires support intervention",
+                ) from recovery_exc
+            organization = fallback_organization
         except OrganizationProvisioningConflictError as exc:
             logger.error(
                 "Login blocked by conflicting personal organization state",
@@ -365,6 +391,19 @@ async def login_service(
                 detail="Organization setup requires support intervention",
             ) from exc
         user["default_organization_id"] = str(organization["_id"])
+        if recovered_inaccessible_default:
+            await record_auth_event(
+                auth_events_collection,
+                event_type="organization_default_recovered",
+                status="success",
+                user_id=user_id,
+                metadata={
+                    "previous_default_organization_id": default_organization_id,
+                    "new_default_organization_id": user["default_organization_id"],
+                },
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     session_id = str(uuid.uuid4())
     
     access_token = create_access_token({"sub": user_id}, session_id=session_id)

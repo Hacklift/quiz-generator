@@ -19,6 +19,7 @@ from bson import ObjectId
 from server.scripts.migrations.organizations import backfill_organizations as migration_module
 from server.scripts.migrations.organizations.backfill_organizations import (
     OrganizationBackfillBlockedError,
+    _acquire_lock_with_retry,
     _backfill_missing_session_organizations,
     _reconcile_users,
     backfill_organizations,
@@ -32,6 +33,10 @@ from server.scripts.migrations.v2.migration.types import utcnow
 
 
 def _matches(document: dict, query: dict) -> bool:
+    if "$and" in query:
+        return all(_matches(document, item) for item in query["$and"])
+    if "$or" in query:
+        return any(_matches(document, item) for item in query["$or"])
     for key, expected in query.items():
         value = document.get(key)
         if isinstance(expected, dict):
@@ -40,6 +45,8 @@ def _matches(document: dict, query: dict) -> bool:
             if "$lte" in expected and not value <= expected["$lte"]:
                 return False
             if "$in" in expected and value not in expected["$in"]:
+                return False
+            if "$exists" in expected and (key in document) != expected["$exists"]:
                 return False
         elif value != expected:
             return False
@@ -82,6 +89,7 @@ class FakeDatabase:
             "users": FakeCollection(users),
             "organizations": FakeCollection(organizations),
             "organization_memberships": FakeCollection(memberships),
+            "user_sessions": FakeCollection(),
         }
 
     def __getitem__(self, name):
@@ -283,7 +291,7 @@ async def test_strict_mode_rejects_a_previously_recorded_blocked_run(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_non_strict_mode_reuses_blocked_report_without_rescanning(monkeypatch):
+async def test_non_strict_mode_reconciles_missing_defaults_after_a_blocked_run(monkeypatch):
     database = FakeDatabase(users=[{"_id": ObjectId(), "username": "should-not-be-scanned"}])
 
     class FakeMigrationLock:
@@ -306,19 +314,113 @@ async def test_non_strict_mode_reuses_blocked_report_without_rescanning(monkeypa
                 }
             }
 
+        async def acquire_lock(self, **_kwargs):
+            return None
+
+        async def release_lock(self, **_kwargs):
+            return None
+
     async def ensure_collections(*_args):
         return None
 
     monkeypatch.setattr(migration_module, "MigrationLockService", lambda _db: FakeMigrationLock())
     monkeypatch.setattr(migration_module, "ensure_organization_collections", ensure_collections)
+    reconcile_users = AsyncMock()
+    monkeypatch.setattr(migration_module, "_reconcile_users", reconcile_users)
 
     report = await backfill_organizations(dry_run=False, database_instance=database)
 
     assert report.already_blocked
     assert report.blocked
-    assert report.scanned_users == 0
     assert report.unresolved_count == 1
-    assert all(collection.write_calls == 0 for collection in database.collections.values())
+    assert reconcile_users.await_args.kwargs["only_missing_default"] is True
+
+
+@pytest.mark.asyncio
+async def test_completed_migration_reconciles_only_users_missing_defaults(monkeypatch):
+    database = FakeDatabase(users=[])
+
+    class FakeMigrationLock:
+        async def ensure_indexes(self):
+            return None
+
+        async def get_latest_completed_run(self, _migration_name):
+            return {"_id": "completed-run"}
+
+        async def get_latest_blocked_run(self, _migration_name):
+            return None
+
+        async def acquire_lock(self, **_kwargs):
+            return None
+
+        async def release_lock(self, **_kwargs):
+            return None
+
+    async def ensure_collections(*_args):
+        return None
+
+    monkeypatch.setattr(migration_module, "MigrationLockService", lambda _db: FakeMigrationLock())
+    monkeypatch.setattr(migration_module, "ensure_organization_collections", ensure_collections)
+    reconcile_users = AsyncMock()
+    monkeypatch.setattr(migration_module, "_reconcile_users", reconcile_users)
+
+    await backfill_organizations(dry_run=False, database_instance=database)
+
+    assert reconcile_users.await_args.kwargs["only_missing_default"] is True
+
+
+@pytest.mark.asyncio
+async def test_backfill_retries_a_transient_lock_conflict(monkeypatch):
+    class ContendedLock:
+        def __init__(self):
+            self.calls = 0
+
+        async def acquire_lock(self, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise MigrationLockError("Migration lock is already held")
+
+    lock = ContendedLock()
+    sleep = AsyncMock()
+    monkeypatch.setattr(migration_module.asyncio, "sleep", sleep)
+
+    await _acquire_lock_with_retry(
+        lock_service=lock,
+        run_id="run-1",
+        triggered_by="test",
+    )
+
+    assert lock.calls == 2
+    sleep.assert_awaited_once_with(5)
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_stops_when_its_migration_lease_is_lost(monkeypatch):
+    database = FakeDatabase(users=[{"_id": ObjectId(), "username": "ada"}])
+
+    class LostLeaseLock:
+        async def renew_lock(self, **_kwargs):
+            raise MigrationLockLostError("Migration lease is no longer owned")
+
+    monkeypatch.setattr(
+        migration_module.OrganizationRepository,
+        "ensure_platform_library_organization",
+        AsyncMock(return_value={"_id": ObjectId()}),
+    )
+    monkeypatch.setattr(migration_module, "LOCK_HEARTBEAT_SECONDS", -1)
+
+    with pytest.raises(MigrationLockLostError, match="no longer owned"):
+        await _reconcile_users(
+            db=database,
+            report=migration_module.OrganizationBackfillReport(
+                run_id="lost-lease-run",
+                dry_run=False,
+            ),
+            batch_size=200,
+            limit=None,
+            write=True,
+            lock_service=LostLeaseLock(),
+        )
 
 
 class FakeLockCollection:
@@ -364,6 +466,10 @@ class FakeRunsCollection:
         return None
 
     async def insert_one(self, document):
+        if document["_id"] in self.documents:
+            from pymongo.errors import DuplicateKeyError
+
+            raise DuplicateKeyError("duplicate")
         self.documents[document["_id"]] = dict(document)
 
     async def update_one(self, query, update):
@@ -371,6 +477,8 @@ class FakeRunsCollection:
         if document is None or not _matches(document, {k: v for k, v in query.items() if k != "_id"}):
             return SimpleNamespace(matched_count=0)
         document.update(update["$set"])
+        for field in update.get("$unset", {}):
+            document.pop(field, None)
         return SimpleNamespace(matched_count=1)
 
     async def find_one(self, query, **_kwargs):
@@ -426,6 +534,38 @@ async def test_lock_service_stops_a_worker_that_lost_its_lease():
             run_id="lost-run",
             lease_seconds=60,
         )
+
+
+@pytest.mark.asyncio
+async def test_lock_service_can_retry_the_same_run_after_a_transient_lock_conflict():
+    database = FakeLockDatabase(
+        lock={
+            "_id": "organization-backfill",
+            "run_id": "active-run",
+            "expires_at": utcnow() + timedelta(minutes=1),
+        }
+    )
+    service = MigrationLockService(database)
+
+    with pytest.raises(MigrationLockError):
+        await service.acquire_lock(
+            migration_name="organization-backfill",
+            run_id="retry-run",
+            dry_run=False,
+            triggered_by="test",
+            lease_seconds=60,
+        )
+
+    database["migration_locks"].document = None
+    await service.acquire_lock(
+        migration_name="organization-backfill",
+        run_id="retry-run",
+        dry_run=False,
+        triggered_by="test",
+        lease_seconds=60,
+    )
+
+    assert database["migration_runs"].documents["retry-run"]["status"] == "running"
 
 
 @pytest.mark.asyncio

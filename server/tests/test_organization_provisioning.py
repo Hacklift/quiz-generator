@@ -83,6 +83,8 @@ class FakeUsersCollection:
 
     async def update_one(self, query, update):
         self.updated.append((query, update))
+        self.default_organization_id = update["$set"]["default_organization_id"]
+        return type("Result", (), {"matched_count": 1})()
 
 
 @pytest.mark.asyncio
@@ -189,6 +191,39 @@ async def test_personal_provisioning_rejects_a_conflicting_user_default():
         )
 
     assert users.updated == []
+
+
+@pytest.mark.asyncio
+async def test_personal_provisioning_detects_a_concurrent_default_change():
+    class ConcurrentUsersCollection(FakeUsersCollection):
+        def __init__(self):
+            super().__init__()
+            self.find_calls = 0
+
+        async def find_one(self, _query):
+            self.find_calls += 1
+            return {
+                "default_organization_id": (
+                    None if self.find_calls == 1 else "concurrent-organization"
+                )
+            }
+
+        async def update_one(self, query, update):
+            self.updated.append((query, update))
+            return type("Result", (), {"matched_count": 0})()
+
+    users = ConcurrentUsersCollection()
+    service = OrganizationProvisioningService(
+        organizations_collection=FakeOrganizationsCollection(),
+        memberships_collection=FakeMembershipsCollection(),
+        users_collection=users,
+    )
+
+    with pytest.raises(OrganizationProvisioningConflictError, match="changed while"):
+        await service.ensure_personal_organization(
+            user_id=str(ObjectId()),
+            organization_name="Ada",
+        )
 
 
 @pytest.mark.asyncio

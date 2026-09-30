@@ -16,6 +16,10 @@ os.environ.setdefault("FERNET_KEY", "l65zsWSMsTUO0VNMNxhXCQ0UKlTuBXZH8QC0a5F18fM
 
 from server.app.auth.utils import create_access_token
 from server.app.core.authentication import resolve_user_from_access_token
+from server.app.organizations.dependencies import (
+    get_active_organization_context,
+    get_organization_principal,
+)
 
 
 class FakeCollection:
@@ -34,6 +38,7 @@ class FakeCollection:
 async def test_resolve_user_from_access_token_validates_session_and_returns_user():
     user_id = str(ObjectId())
     session_id = "session-1"
+    organization_id = str(ObjectId())
     users_collection = FakeCollection(
         {
             "_id": ObjectId(user_id),
@@ -44,6 +49,7 @@ async def test_resolve_user_from_access_token_validates_session_and_returns_user
             "is_verified": True,
             "status": "active",
             "role": "user",
+            "default_organization_id": organization_id,
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
         }
@@ -54,6 +60,7 @@ async def test_resolve_user_from_access_token_validates_session_and_returns_user
             "user_id": user_id,
             "revoked_at": None,
             "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+            "active_organization_id": organization_id,
         }
     )
 
@@ -67,4 +74,28 @@ async def test_resolve_user_from_access_token_validates_session_and_returns_user
 
     assert user.id == user_id
     assert user.email == "test@example.com"
+    assert user.session_id == session_id
     assert users_collection.updated["query"] == {"_id": ObjectId(user_id)}
+
+    principal = await get_organization_principal(current_user=user)
+    organizations_collection = FakeCollection(
+        {"_id": ObjectId(organization_id), "kind": "personal", "status": "active"}
+    )
+    memberships_collection = FakeCollection(
+        {
+            "organization_id": organization_id,
+            "user_id": user_id,
+            "role": "owner",
+            "status": "active",
+        }
+    )
+    context = await get_active_organization_context(
+        principal=principal,
+        current_user=user,
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
+    )
+
+    assert principal.session_id == session_id
+    assert context.organization_id == organization_id

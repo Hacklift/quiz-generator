@@ -166,6 +166,10 @@ class UserOut(BaseModel):
     persona_set_at: Optional[str] = None
     role: Optional[str] = "user"
     default_organization_id: Optional[str] = None
+    # Authentication dependencies attach this after validating the access
+    # token/session. Keep it out of API responses while allowing downstream
+    # organization dependencies to reuse the already-validated session.
+    session_id: Optional[str] = Field(default=None, exclude=True)
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
     is_active: Optional[bool] = True
