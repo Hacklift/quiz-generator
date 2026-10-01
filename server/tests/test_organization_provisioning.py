@@ -328,6 +328,14 @@ class FakeSessionsCollection:
 
     async def update_one(self, query, update):
         self.updated = (query, update)
+        if (
+            query.get("session_id") == self.session["session_id"]
+            and query.get("revoked_at") == self.session["revoked_at"]
+            and query.get("active_organization_id") == self.session.get("active_organization_id")
+        ):
+            self.session.update(update["$set"])
+            return type("Result", (), {"matched_count": 1})()
+        return type("Result", (), {"matched_count": 0})()
 
 
 def _user(default_organization_id: str) -> UserOut:
@@ -421,7 +429,57 @@ async def test_active_context_recovers_a_stale_session_selector_to_valid_default
     )
 
     assert context.organization_id == default_organization_id
+    assert context.active_scope_recovered is True
     assert sessions.updated[1]["$set"]["active_organization_id"] == default_organization_id
+
+
+@pytest.mark.asyncio
+async def test_active_context_rejects_a_concurrent_scope_switch_during_fallback():
+    default_organization_id = str(ObjectId())
+    stale_organization_id = str(ObjectId())
+    user = _user(default_organization_id)
+    principal = OrganizationPrincipal(user_id=user.id, session_id="session-1")
+
+    class ConcurrentSwitchSessions(FakeSessionsCollection):
+        async def update_one(self, query, update):
+            self.updated = (query, update)
+            self.session["active_organization_id"] = "newly-selected-organization"
+            return type("Result", (), {"matched_count": 0})()
+
+    sessions = ConcurrentSwitchSessions(
+        {
+            "session_id": "session-1",
+            "user_id": user.id,
+            "revoked_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+            "active_organization_id": stale_organization_id,
+        }
+    )
+    organizations = FakeOrganizationsCollection()
+    organizations.documents["default"] = {
+        "_id": ObjectId(default_organization_id),
+        "kind": "personal",
+        "status": "active",
+    }
+    memberships = FakeMembershipsCollection()
+    memberships.documents[(default_organization_id, user.id)] = {
+        "organization_id": default_organization_id,
+        "user_id": user.id,
+        "role": "owner",
+        "status": "active",
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_active_organization_context(
+            principal=principal,
+            current_user=user,
+            sessions_collection=sessions,
+            organizations_collection=organizations,
+            memberships_collection=memberships,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert sessions.session["active_organization_id"] == "newly-selected-organization"
 
 
 @pytest.mark.asyncio

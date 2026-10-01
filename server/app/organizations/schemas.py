@@ -72,6 +72,9 @@ class OrganizationMembershipResponse(BaseModel):
     role: MembershipRole
     status: MembershipStatus
     is_active: bool
+    # True only when the session selector was stale and the server selected
+    # this proven default membership for the current request.
+    active_scope_recovered: bool = False
 
 
 class OrganizationMemberResponse(BaseModel):

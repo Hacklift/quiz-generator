@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+from pathlib import Path
 from datetime import datetime, timezone
 
 import pytest
@@ -10,7 +12,46 @@ from server.scripts.migrations.organizations.backfill_resource_organizations imp
     backfill_resource_organizations,
     cleanup_unresolvable_resources,
     ResourceBackfillBlockedError,
+    validate_cleanup_authorization,
 )
+
+
+def _cleanup_args(**overrides):
+    values = {
+        "purge_unresolvable": True,
+        "auto": False,
+        "force": False,
+        "strict": False,
+        "local_only": False,
+        "confirm_destructive": False,
+        "dry_run": False,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def test_destructive_cleanup_requires_an_explicit_nonlocal_confirmation():
+    with pytest.raises(ValueError, match="Destructive cleanup requires"):
+        validate_cleanup_authorization(
+            _cleanup_args(),
+            mongo_uri="mongodb+srv://production.example/quizApp_db",
+        )
+
+
+def test_local_only_cleanup_rejects_any_non_compose_database():
+    with pytest.raises(ValueError, match="local-only cleanup requires"):
+        validate_cleanup_authorization(
+            _cleanup_args(local_only=True),
+            mongo_uri="mongodb://localhost:27017/quizApp_db",
+        )
+
+
+def test_production_deployment_paths_never_invoke_destructive_resource_cleanup():
+    repository_root = Path(__file__).resolve().parents[3]
+    for relative_path in ("docker-compose.prod.yml", "deploy/deploy.sh", "render.yaml"):
+        contents = (repository_root / relative_path).read_text(encoding="utf-8")
+        assert "tenancy-resource-cleanup" not in contents
+        assert "--purge-unresolvable" not in contents
 
 
 @pytest.mark.asyncio

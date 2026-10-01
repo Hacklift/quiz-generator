@@ -96,6 +96,7 @@ async def resolve_active_organization_context(
     # A stale session selector must not lock a multi-organization user out.
     # Fall back only to their proven default membership; never trust a client
     # selector or replace a still-valid explicit selection.
+    active_scope_recovered = False
     if (
         (organization is None or membership is None)
         and selected_organization_id
@@ -111,14 +112,22 @@ async def resolve_active_organization_context(
             organization_id = default_organization_id
             organization = fallback_organization
             membership = fallback_membership
+            active_scope_recovered = True
 
     if organization is None or membership is None:
         # Do not distinguish a bad selector from a missing membership.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
 
     if session.get("active_organization_id") != organization_id:
-        await sessions_collection.update_one(
-            {"session_id": principal.session_id, "revoked_at": None},
+        # A fallback is a server recovery, not an authority decision. Guard
+        # the write with the selector we read so a concurrent user-initiated
+        # switch cannot be overwritten by this request.
+        result = await sessions_collection.update_one(
+            {
+                "session_id": principal.session_id,
+                "revoked_at": None,
+                "active_organization_id": selected_organization_id,
+            },
             {
                 "$set": {
                     "active_organization_id": organization_id,
@@ -126,6 +135,11 @@ async def resolve_active_organization_context(
                 }
             },
         )
+        if result.matched_count != 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Organization selection changed; retry the request",
+            )
 
     return OrganizationContext(
         organization_id=organization_id,
@@ -133,6 +147,7 @@ async def resolve_active_organization_context(
         membership_role=membership["role"],
         principal=principal,
         membership=membership,
+        active_scope_recovered=active_scope_recovered,
     )
 
 

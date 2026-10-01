@@ -631,9 +631,17 @@ class OrganizationInvitationRepository:
             },
         )
 
-    async def revoke(self, invitation_id: ObjectId) -> dict[str, Any] | None:
+    async def revoke(
+        self,
+        invitation_id: ObjectId,
+        *,
+        expected_role: str | None = None,
+    ) -> dict[str, Any] | None:
+        query: dict[str, Any] = {"_id": invitation_id, "status": "invited"}
+        if expected_role is not None:
+            query["role"] = expected_role
         return await self.collection.find_one_and_update(
-            {"_id": invitation_id, "status": "invited"},
+            query,
             {"$set": {"status": "revoked", "revoked_at": utcnow(), "updated_at": utcnow()}},
             return_document=ReturnDocument.AFTER,
         )

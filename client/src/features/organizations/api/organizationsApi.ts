@@ -7,9 +7,13 @@ export type OrganizationMembership = {
   role: string;
   status: "active";
   is_active: boolean;
+  active_scope_recovered: boolean;
 };
 
-export type ActiveOrganization = Omit<OrganizationMembership, "status" | "is_active">;
+export type ActiveOrganization = Omit<
+  OrganizationMembership,
+  "status" | "is_active" | "active_scope_recovered"
+>;
 
 export type OrganizationInvitation = {
   id: string;

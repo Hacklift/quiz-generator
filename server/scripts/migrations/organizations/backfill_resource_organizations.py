@@ -178,11 +178,39 @@ async def _has_missing_resource_scopes(db) -> bool:
     return False
 
 
-def _is_local_compose_database() -> bool:
+def _is_local_compose_database(mongo_uri: str | None = None) -> bool:
     """Limit automatic destructive cleanup to the Compose Mongo service."""
-    mongo_uri = os.getenv("MONGO_URI", "")
+    mongo_uri = mongo_uri if mongo_uri is not None else os.getenv("MONGO_URI", "")
     parsed = urlparse(mongo_uri)
     return parsed.hostname == "mongodb" and parsed.path.rstrip("/") == "/quizApp_db"
+
+
+def validate_cleanup_authorization(args: argparse.Namespace, *, mongo_uri: str | None = None) -> None:
+    """Reject destructive cleanup unless the operator makes its scope explicit.
+
+    This is deliberately pure so deployment wiring and CLI behavior share the
+    same guard and can be tested without connecting to MongoDB.
+    """
+    if args.purge_unresolvable and args.auto:
+        raise ValueError("--purge-unresolvable cannot be combined with --auto")
+    if args.purge_unresolvable and (args.force or args.strict):
+        raise ValueError("--purge-unresolvable cannot be combined with --force or --strict")
+    if args.local_only and not args.purge_unresolvable:
+        raise ValueError("--local-only is only valid with --purge-unresolvable")
+    if args.confirm_destructive and not args.purge_unresolvable:
+        raise ValueError("--confirm-destructive is only valid with --purge-unresolvable")
+    if args.auto and (args.dry_run or args.force or args.strict):
+        raise ValueError("--auto cannot be combined with --dry-run, --force, or --strict")
+    if args.purge_unresolvable and not args.dry_run:
+        if args.local_only:
+            if not _is_local_compose_database(mongo_uri):
+                raise ValueError(
+                    "--local-only cleanup requires mongodb://mongodb:27017/quizApp_db"
+                )
+        elif not args.confirm_destructive:
+            raise ValueError(
+                "Destructive cleanup requires --local-only or --confirm-destructive"
+            )
 
 
 def _identifier_variants(value: Any) -> list[Any]:
@@ -1011,27 +1039,8 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = parse_args()
-    if args.purge_unresolvable and args.auto:
-        raise ValueError("--purge-unresolvable cannot be combined with --auto")
-    if args.purge_unresolvable and (args.force or args.strict):
-        raise ValueError("--purge-unresolvable cannot be combined with --force or --strict")
-    if args.local_only and not args.purge_unresolvable:
-        raise ValueError("--local-only is only valid with --purge-unresolvable")
-    if args.confirm_destructive and not args.purge_unresolvable:
-        raise ValueError("--confirm-destructive is only valid with --purge-unresolvable")
-    if args.auto and (args.dry_run or args.force or args.strict):
-        raise ValueError("--auto cannot be combined with --dry-run, --force, or --strict")
+    validate_cleanup_authorization(args)
     if args.purge_unresolvable:
-        if not args.dry_run:
-            if args.local_only:
-                if not _is_local_compose_database():
-                    raise ValueError(
-                        "--local-only cleanup requires mongodb://mongodb:27017/quizApp_db"
-                    )
-            elif not args.confirm_destructive:
-                raise ValueError(
-                    "Destructive cleanup requires --local-only or --confirm-destructive"
-                )
         report = await cleanup_unresolvable_resources(
             dry_run=args.dry_run,
             batch_size=args.batch_size,

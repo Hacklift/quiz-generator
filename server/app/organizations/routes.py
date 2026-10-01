@@ -114,6 +114,12 @@ async def list_my_memberships(
             {"session_id": session_id, "user_id": current_user.id, "revoked_at": None}
         )
     selected_id = session.get("active_organization_id") if session else None
+    membership_ids = {membership["organization_id"] for membership in memberships}
+    selected_is_valid = selected_id in membership_ids and selected_id in organizations_by_id
+    default_id = current_user.default_organization_id
+    default_is_valid = default_id in membership_ids and default_id in organizations_by_id
+    effective_active_id = selected_id if selected_is_valid else (default_id if default_is_valid else None)
+    active_scope_recovered = selected_id is not None and effective_active_id != selected_id
     responses: list[OrganizationMembershipResponse] = []
     for membership in memberships:
         organization = organizations_by_id.get(membership["organization_id"])
@@ -126,7 +132,10 @@ async def list_my_memberships(
                 organization_kind=organization["kind"],
                 role=membership["role"],
                 status=membership["status"],
-                is_active=membership["organization_id"] == selected_id,
+                is_active=membership["organization_id"] == effective_active_id,
+                active_scope_recovered=(
+                    active_scope_recovered and membership["organization_id"] == effective_active_id
+                ),
             )
         )
     return sorted(responses, key=lambda item: (not item.is_active, item.organization_name.casefold()))
@@ -293,9 +302,22 @@ async def revoke_invitation(
 ):
     if not policy.can(context.principal, OrganizationAction.MEMBERSHIP_MANAGE, None, context):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization invitation access denied")
-    invitation = await _invitation_service().revoke(
+    service = _invitation_service()
+    invitation = await service.get_for_revoke(
         invitation_id=invitation_id,
         organization_id=context.organization_id,
+    )
+    action = (
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE
+        if invitation["role"] == "admin"
+        else OrganizationAction.MEMBERSHIP_MANAGE
+    )
+    if not policy.can(context.principal, action, None, context):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization invitation access denied")
+    invitation = await service.revoke(
+        invitation_id=invitation_id,
+        organization_id=context.organization_id,
+        expected_role=invitation["role"],
     )
     return _invitation_response(invitation)
 

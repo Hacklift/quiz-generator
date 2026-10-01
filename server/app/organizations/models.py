@@ -158,5 +158,6 @@ class OrganizationContext(BaseModel):
     membership_role: MembershipRole
     principal: OrganizationPrincipal
     membership: dict[str, Any]
+    active_scope_recovered: bool = False
 
     model_config = ConfigDict(extra="forbid")

@@ -23,6 +23,7 @@ from server.app.organizations.invitation_service import (
     OrganizationLifecycleService,
 )
 from server.app.organizations.models import OrganizationInvitationDocument
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.core.dependencies import get_verified_user
 from server.app.organizations import routes as organization_routes
 from server.app.organizations.repository import (
@@ -34,6 +35,17 @@ from server.app.organizations.schemas import (
     CreateOrganizationRequest,
     UpdateOrganizationMembershipRequest,
 )
+
+
+def _organization_context(role: str) -> OrganizationContext:
+    principal = OrganizationPrincipal(user_id="manager-1", session_id="session-1")
+    return OrganizationContext(
+        organization_id="507f1f77bcf86cd799439011",
+        organization_kind="corporate",
+        membership_role=role,
+        principal=principal,
+        membership={"role": role, "status": "active"},
+    )
 
 
 class RecordingCollection:
@@ -223,6 +235,82 @@ async def test_verified_user_can_create_an_organization_from_any_active_tenant(m
 
     assert captured["owner_user_id"] == "author-in-another-organization"
     assert result.role == "owner"
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_revoke_an_owner_admin_invitation(monkeypatch):
+    invitation_id = str(ObjectId())
+
+    class Service:
+        async def get_for_revoke(self, **_kwargs):
+            return {
+                "_id": ObjectId(invitation_id),
+                "organization_id": _organization_context("admin").organization_id,
+                "role": "admin",
+            }
+
+        async def revoke(self, **_kwargs):
+            raise AssertionError("an admin must not revoke an admin invitation")
+
+    monkeypatch.setattr(organization_routes, "_invitation_service", lambda: Service())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await organization_routes.revoke_invitation.__wrapped__(
+            invitation_id=invitation_id,
+            request=SimpleNamespace(),
+            _current_user=SimpleNamespace(),
+            context=_organization_context("admin"),
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_owner_revoke_conditionally_preserves_the_authorized_invitation_role(monkeypatch):
+    invitation_id = str(ObjectId())
+    captured = {}
+
+    class Service:
+        async def get_for_revoke(self, **_kwargs):
+            return {
+                "_id": ObjectId(invitation_id),
+                "organization_id": _organization_context("owner").organization_id,
+                "role": "admin",
+            }
+
+        async def revoke(self, **kwargs):
+            captured.update(kwargs)
+            now = datetime.now(timezone.utc)
+            return {
+                "_id": ObjectId(invitation_id),
+                "organization_id": _organization_context("owner").organization_id,
+                "email": "member@example.com",
+                "role": "admin",
+                "status": "revoked",
+                "expires_at": now,
+                "created_at": now,
+            }
+
+    monkeypatch.setattr(organization_routes, "_invitation_service", lambda: Service())
+    response = await organization_routes.revoke_invitation.__wrapped__(
+        invitation_id=invitation_id,
+        request=SimpleNamespace(),
+        _current_user=SimpleNamespace(),
+        context=_organization_context("owner"),
+    )
+
+    assert response.role == "admin"
+    assert captured["expected_role"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_revoke_conditional_write_rejects_a_role_changed_after_authorization():
+    collection = RecordingCollection()
+    repository = OrganizationInvitationRepository(collection)
+
+    await repository.revoke(ObjectId(), expected_role="admin")
+
+    assert collection.query["role"] == "admin"
 
 
 @pytest.mark.asyncio

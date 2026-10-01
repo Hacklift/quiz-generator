@@ -283,7 +283,7 @@ class OrganizationInvitationService:
         await self._remove_pending_membership(invitation)
         return invitation
 
-    async def revoke(self, *, invitation_id: str, organization_id: str) -> dict[str, Any]:
+    async def get_for_revoke(self, *, invitation_id: str, organization_id: str) -> dict[str, Any]:
         try:
             object_id = ObjectId(invitation_id)
         except Exception as exc:
@@ -291,9 +291,25 @@ class OrganizationInvitationService:
         invitation = await self.invitations.get_for_organization(object_id, organization_id)
         if invitation is None:
             raise HTTPException(status_code=404, detail="Invitation not found")
-        updated = await self.invitations.revoke(object_id)
+        return invitation
+
+    async def revoke(
+        self,
+        *,
+        invitation_id: str,
+        organization_id: str,
+        expected_role: str,
+    ) -> dict[str, Any]:
+        try:
+            object_id = ObjectId(invitation_id)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail="Invitation not found") from exc
+        updated = await self.invitations.revoke(object_id, expected_role=expected_role)
         if updated is None:
-            raise HTTPException(status_code=409, detail="Invitation can no longer be revoked")
+            # This also covers a role change between the authorization read
+            # and conditional revoke. Never revoke a differently privileged
+            # invitation based on stale authorization.
+            raise HTTPException(status_code=409, detail="Invitation changed; refresh and retry")
         await self._remove_pending_membership(updated)
         return updated
 

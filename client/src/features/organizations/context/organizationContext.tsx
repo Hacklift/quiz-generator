@@ -49,6 +49,9 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       .then((nextMemberships) => {
         if (requestVersion.current === version) {
           setMemberships(nextMemberships);
+          if (nextMemberships.some((membership) => membership.active_scope_recovered)) {
+            toast("Your previous workspace is no longer available. Switched to your default workspace.");
+          }
         }
       })
       .catch(() => {
@@ -90,7 +93,12 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         }));
         return currentSelection.some((membership) => membership.is_active)
           ? currentSelection
-          : [...currentSelection, { ...selected, status: "active", is_active: true }];
+          : [...currentSelection, {
+              ...selected,
+              status: "active",
+              is_active: true,
+              active_scope_recovered: false,
+            }];
       });
     }
     // A new scope must tear down page-level subscriptions and reload scoped data.
