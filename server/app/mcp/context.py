@@ -16,6 +16,7 @@ class McpRequestContext:
     role: str | None = None
     scopes: set[str] = field(default_factory=set)
     tenant_id: str | None = None
+    tenant_kind: str | None = None
 
 
 def set_authorization_header(value: str | None) -> Token[str | None]:

@@ -5,6 +5,8 @@ from server.app.quiz.models.quiz_models import QuizRequest, QuizResponse
 from server.app.quiz.services.generation_policy import validate_generation_question_count
 from server.app.quiz.utils.questions import get_questions
 from server.app.core.dependencies import get_current_user_optional
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.core.config import settings
 from server.app.db.core.connection import get_live_quiz_invitations_collection
 from server.app.email_platform.deps import get_email_service
@@ -26,6 +28,7 @@ async def get_quiz(
     payload: QuizRequest,
 
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(get_optional_active_organization_context),
     email_service: EmailService = Depends(get_email_service),
 
 ):
@@ -42,9 +45,11 @@ async def get_quiz(
         get_live_quiz_invitations_collection()
     )
 
-    return await get_questions(
-        payload,
-        user_id=user_id,
-        invitation_repository=invitation_repository,
-        email_service=email_service,
-    )
+    generation_kwargs = {
+        "user_id": user_id,
+        "invitation_repository": invitation_repository,
+        "email_service": email_service,
+    }
+    if isinstance(organization, OrganizationContext):
+        generation_kwargs["organization_id"] = organization.organization_id
+    return await get_questions(payload, **generation_kwargs)

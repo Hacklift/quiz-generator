@@ -6,6 +6,7 @@ from server.app.auth.routes import router as auth_router
 from server.app.billing.routes import router as billing_router
 from server.app.core.rate_limiter import limiter
 from server.app.notifications.routes import router as notifications_router
+from server.app.organizations.routes import router as organizations_router
 from server.app.quiz.routes.categories import router as categories_router
 from server.app.quiz.routes.canonical_quizzes import router as canonical_quizzes_router
 from server.app.quiz.routes.document_quiz import router as document_quiz_router
@@ -49,4 +50,5 @@ router.include_router(categories_router, prefix="/api")
 router.include_router(live_quiz_router, prefix="/api/v1", tags=["Live Quiz"])
 router.include_router(training_runs_router, prefix="/api/v1", tags=["Training Runs"])
 router.include_router(notifications_router, prefix="/api/notifications", tags=["Notifications"])
+router.include_router(organizations_router, prefix="/api")
 router.include_router(share_router, prefix="/share", tags=["share"])

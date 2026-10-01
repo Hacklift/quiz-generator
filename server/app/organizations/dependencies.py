@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Depends, HTTPException, status
 
-from server.app.core.dependencies import get_current_user
+from server.app.core.dependencies import get_current_user, get_current_user_optional
 from server.app.db.core.connection import (
     get_organization_memberships_collection,
     get_organizations_collection,
@@ -46,6 +46,29 @@ async def get_active_organization_context(
     memberships_collection=Depends(get_organization_memberships_collection),
 ) -> OrganizationContext:
     """Resolve server-owned active scope and prove membership for every request."""
+    return await resolve_active_organization_context(
+        current_user=current_user,
+        principal=principal,
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
+    )
+
+
+async def resolve_active_organization_context(
+    *,
+    current_user: UserOut,
+    principal: OrganizationPrincipal,
+    sessions_collection,
+    organizations_collection,
+    memberships_collection,
+) -> OrganizationContext:
+    """Resolve a scope for any authenticated transport, including MCP.
+
+    The client never supplies authority here: the selected organization comes
+    from the validated server session and is re-proven against an active
+    membership before it can be used.
+    """
     session = await get_active_session(
         sessions_collection,
         session_id=principal.session_id,
@@ -110,4 +133,33 @@ async def get_active_organization_context(
         membership_role=membership["role"],
         principal=principal,
         membership=membership,
+    )
+
+
+async def get_optional_active_organization_context(
+    current_user: UserOut | None = Depends(get_current_user_optional),
+    sessions_collection=Depends(get_user_sessions_collection),
+    organizations_collection=Depends(get_organizations_collection),
+    memberships_collection=Depends(get_organization_memberships_collection),
+) -> OrganizationContext | None:
+    """Resolve tenant scope for authenticated optional-auth endpoints only."""
+    if current_user is None:
+        return None
+    session_id = current_user.session_id
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session context is missing",
+        )
+    principal = OrganizationPrincipal(
+        user_id=current_user.id,
+        session_id=session_id,
+        platform_role=current_user.role or "user",
+    )
+    return await resolve_active_organization_context(
+        current_user=current_user,
+        principal=principal,
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
     )

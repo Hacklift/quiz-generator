@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 
 from server.app.core.config import settings
 from server.app.core.dependencies import get_current_user_optional
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.models.document_quiz_models import DocumentQuizResponse
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
@@ -59,6 +61,7 @@ async def generate_document_quiz(
     access_code_expires_at: datetime | None = Form(default=None),
     document_file: UploadFile | None = File(default=None),
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(get_optional_active_organization_context),
 ):
     if not document_file and not (document_text and document_text.strip()):
         raise HTTPException(
@@ -180,26 +183,36 @@ async def generate_document_quiz(
         "token": token,
         "questions": rag_result.questions,
         "user_id": user_id,
+        "organization_id": (
+            organization.organization_id
+            if isinstance(organization, OrganizationContext)
+            else None
+        ),
+        "created_by_user_id": user_id,
     }
 
-    try:
-        save_result = await save_ai_generated_quiz(save_payload)
-        if save_result and "quiz_id" in save_result:
-            quiz_id = save_result.get("quiz_id")
-            category_metadata = {
-                "category": save_result.get("category"),
-                "category_slug": save_result.get("category_slug"),
-                "subcategory": save_result.get("subcategory"),
-                "subcategory_slug": save_result.get("subcategory_slug"),
-                "tags": save_result.get("tags") or [],
-                "classification": save_result.get("classification"),
-            }
-    except Exception:
-        logger.exception(
-            "Failed to persist generated document quiz for user %s; returning unsaved quiz",
-            user_id,
-        )
-        quiz_id = None
+    # Guest document generation is deliberately ephemeral, matching ordinary
+    # guest generation. Persisting it would create a private canonical quiz
+    # with neither an author nor an organization to authorize later.
+    if user_id:
+        try:
+            save_result = await save_ai_generated_quiz(save_payload)
+            if save_result and "quiz_id" in save_result:
+                quiz_id = save_result.get("quiz_id")
+                category_metadata = {
+                    "category": save_result.get("category"),
+                    "category_slug": save_result.get("category_slug"),
+                    "subcategory": save_result.get("subcategory"),
+                    "subcategory_slug": save_result.get("subcategory_slug"),
+                    "tags": save_result.get("tags") or [],
+                    "classification": save_result.get("classification"),
+                }
+        except Exception:
+            logger.exception(
+                "Failed to persist generated document quiz for user %s; returning unsaved quiz",
+                user_id,
+            )
+            quiz_id = None
 
     if live_quiz_enabled:
         if not quiz_id:

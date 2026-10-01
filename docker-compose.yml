@@ -42,6 +42,10 @@ services:
         condition: service_healthy
       tenancy-migrate:
         condition: service_completed_successfully
+      tenancy-resource-cleanup:
+        condition: service_completed_successfully
+      tenancy-resource-migrate:
+        condition: service_completed_successfully
 
   # One-shot, Mongo-only migration gate. It runs before application processes
   # on `docker compose up`, then exits. Completion is recorded in Mongo, so
@@ -62,6 +66,52 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+
+  # Remove only unresolvable historic development records before Protocol B.
+  # The command has an in-process URI guard, so this Compose service cannot
+  # target Atlas or another developer's MongoDB by accident.
+  tenancy-resource-cleanup:
+    build:
+      context: .
+      target: backend-service
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["python", "-m", "server.scripts.migrations.organizations.backfill_resource_organizations", "--purge-unresolvable", "--local-only", "--triggered-by", "docker-compose"]
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
+
+  # Protocol B's local development gate. A completed database only performs
+  # bounded gap checks; otherwise strict preflight and the locked write pass
+  # complete before application services start.
+  tenancy-resource-migrate:
+    build:
+      context: .
+      target: backend-service
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["python", "-m", "server.scripts.migrations.organizations.backfill_resource_organizations", "--auto", "--triggered-by", "docker-compose"]
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
+      tenancy-resource-cleanup:
+        condition: service_completed_successfully
 
   celery:
     build:

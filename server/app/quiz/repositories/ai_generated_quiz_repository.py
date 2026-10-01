@@ -33,6 +33,8 @@ async def save_ai_generated_quiz(quiz_data: dict):
             description=quiz_data.get("custom_instruction"),
             quiz_type=quiz_type,
             owner_user_id=quiz_data.get("user_id"),
+            organization_id=quiz_data.get("organization_id"),
+            created_by_user_id=quiz_data.get("created_by_user_id") or quiz_data.get("user_id"),
             source="ai",
             questions=quiz_data["questions"],
             tags=taxonomy_fields.get("tags"),

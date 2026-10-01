@@ -74,6 +74,8 @@ class QuizCreateV2(BaseModel):
     questions: List[QuizQuestionV2]
     description: Optional[str] = None
     owner_user_id: Optional[str] = None
+    organization_id: Optional[str] = None
+    created_by_user_id: Optional[str] = None
     visibility: QuizVisibilityV2 = QuizVisibilityV2.PRIVATE
     status: QuizStatusV2 = QuizStatusV2.ACTIVE
     source: QuizSourceV2 = QuizSourceV2.MANUAL
@@ -121,6 +123,9 @@ class QuizDocumentV2(BaseModel):
     questions: List[QuizQuestionV2]
     description: Optional[str] = None
     owner_user_id: Optional[str] = None
+    # Additive during Protocol B. PR 3 makes this a required tenant boundary.
+    organization_id: Optional[str] = None
+    created_by_user_id: Optional[str] = None
     visibility: QuizVisibilityV2 = QuizVisibilityV2.PRIVATE
     status: QuizStatusV2 = QuizStatusV2.ACTIVE
     source: QuizSourceV2 = QuizSourceV2.MANUAL

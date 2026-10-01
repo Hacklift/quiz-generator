@@ -51,6 +51,8 @@ class TrainingNotificationService:
             self.notifications_collection,
             NotificationCreate(
                 user_id=user_id,
+                organization_id=run.get("organization_id"),
+                created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
                 title="Training assigned",
                 message=(
                     f"{run['title']} is assigned to you. "
@@ -73,6 +75,8 @@ class TrainingNotificationService:
             document = build_notification_document(
                 NotificationCreate(
                     user_id=user_id,
+                    organization_id=run.get("organization_id"),
+                    created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
                     title="Training assigned",
                     message=(
                         f"{run['title']} is assigned to you. "
@@ -112,6 +116,8 @@ class TrainingNotificationService:
             self.notifications_collection,
             NotificationCreate(
                 user_id=user_id,
+                organization_id=run.get("organization_id"),
+                created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
                 title="Training completed",
                 message=f"You completed {run['title']}.{score}",
                 type=NotificationType.TRAINING,
@@ -144,6 +150,8 @@ class TrainingNotificationService:
             self.notifications_collection,
             NotificationCreate(
                 user_id=owner_user_id,
+                organization_id=run.get("organization_id"),
+                created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
                 title="Training completed",
                 message=f"{participant} completed {run['title']}.{score}",
                 type=NotificationType.TRAINING,

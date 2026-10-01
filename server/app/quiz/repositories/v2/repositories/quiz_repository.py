@@ -10,6 +10,7 @@ from pymongo.errors import DuplicateKeyError
 from ..models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2, QuizQuestionsUpdateV2
 
 _OWNER_SCOPE_UNSET = object()
+_ORGANIZATION_SCOPE_UNSET = object()
 
 
 class QuizV2Repository:
@@ -39,12 +40,17 @@ class QuizV2Repository:
         self,
         content_fingerprint: str,
         owner_user_id: Optional[str] | object = _OWNER_SCOPE_UNSET,
+        organization_id: Optional[str] | object = _ORGANIZATION_SCOPE_UNSET,
     ) -> Optional[QuizDocumentV2]:
         query = {"content_fingerprint": content_fingerprint}
         if owner_user_id is not _OWNER_SCOPE_UNSET:
             # MongoDB matches both an explicit null and a missing field here,
             # preserving ownerless legacy/seed deduplication.
             query["owner_user_id"] = owner_user_id
+        if organization_id is not _ORGANIZATION_SCOPE_UNSET:
+            # Private generated content must not deduplicate across tenants.
+            # Explicit None preserves compatibility for unscoped legacy rows.
+            query["organization_id"] = organization_id
         document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
@@ -207,6 +213,7 @@ class QuizV2Repository:
         existing = await self.find_by_content_fingerprint(
             quiz.content_fingerprint,
             quiz.owner_user_id,
+            quiz.organization_id,
         )
         if existing:
             return existing
@@ -216,6 +223,7 @@ class QuizV2Repository:
             existing = await self.find_by_content_fingerprint(
                 quiz.content_fingerprint,
                 quiz.owner_user_id,
+                quiz.organization_id,
             )
             if existing:
                 return existing

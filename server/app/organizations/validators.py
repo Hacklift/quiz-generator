@@ -8,6 +8,7 @@ async def ensure_organization_collections(
     database,
     organizations_collection: AsyncIOMotorCollection,
     memberships_collection: AsyncIOMotorCollection,
+    invitations_collection: AsyncIOMotorCollection | None = None,
 ) -> None:
     await _ensure_collection_validator(
         database,
@@ -21,6 +22,13 @@ async def ensure_organization_collections(
     )
     await _ensure_organization_indexes(organizations_collection)
     await _ensure_membership_indexes(memberships_collection)
+    if invitations_collection is not None:
+        await _ensure_collection_validator(
+            database,
+            "organization_invitations",
+            _invitation_validator(),
+        )
+        await _ensure_invitation_indexes(invitations_collection)
 
 
 async def _ensure_collection_validator(database, name: str, validator: dict) -> None:
@@ -76,6 +84,33 @@ async def _ensure_membership_indexes(collection: AsyncIOMotorCollection) -> None
     await collection.create_index(
         [("organization_id", 1), ("status", 1), ("role", 1)],
         name="organization_membership_scope_status_role",
+    )
+
+
+async def _ensure_invitation_indexes(collection: AsyncIOMotorCollection) -> None:
+    # Earlier development builds created these membership-only indexes on the
+    # invitation collection. Remove only our named mistakes before ensuring
+    # the correct invitation indexes; no application data is affected.
+    existing_indexes = await collection.index_information()
+    for index_name in (
+        "organization_membership_user_status",
+        "organization_membership_scope_status_role",
+    ):
+        if index_name in existing_indexes:
+            await collection.drop_index(index_name)
+    await collection.create_index(
+        [("organization_id", 1), ("email_normalized", 1)],
+        name="organization_invitation_scope_email_unique",
+        unique=True,
+    )
+    await collection.create_index(
+        "token_hash",
+        name="organization_invitation_token_unique",
+        unique=True,
+    )
+    await collection.create_index(
+        [("status", 1), ("expires_at", 1)],
+        name="organization_invitation_status_expiry",
     )
 
 
@@ -172,6 +207,48 @@ def _membership_validator() -> dict:
                 "status": {"enum": ["invited", "active", "suspended", "removed"]},
                 "joined_at": {"bsonType": ["date", "null"]},
                 "invited_by_user_id": {"bsonType": ["string", "null"]},
+                "created_at": {"bsonType": "date"},
+                "updated_at": {"bsonType": "date"},
+            },
+        }
+    }
+
+
+def _invitation_validator() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "organization_id",
+                "email",
+                "email_normalized",
+                "role",
+                "status",
+                "token_hash",
+                "invited_by_user_id",
+                "accepted_by_user_id",
+                "expires_at",
+                "accepted_at",
+                "declined_at",
+                "revoked_at",
+                "created_at",
+                "updated_at",
+            ],
+            "properties": {
+                "organization_id": {"bsonType": "string", "minLength": 1},
+                "email": {"bsonType": "string", "minLength": 3, "maxLength": 320},
+                "email_normalized": {"bsonType": "string", "minLength": 3, "maxLength": 320},
+                "role": {
+                    "enum": ["admin", "author", "facilitator", "learner", "guardian", "auditor"]
+                },
+                "status": {"enum": ["invited", "accepted", "declined", "revoked", "expired"]},
+                "token_hash": {"bsonType": "string", "minLength": 64, "maxLength": 64},
+                "invited_by_user_id": {"bsonType": "string", "minLength": 1},
+                "accepted_by_user_id": {"bsonType": ["string", "null"]},
+                "expires_at": {"bsonType": "date"},
+                "accepted_at": {"bsonType": ["date", "null"]},
+                "declined_at": {"bsonType": ["date", "null"]},
+                "revoked_at": {"bsonType": ["date", "null"]},
                 "created_at": {"bsonType": "date"},
                 "updated_at": {"bsonType": "date"},
             },
