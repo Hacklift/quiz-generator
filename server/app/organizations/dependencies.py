@@ -147,10 +147,10 @@ async def get_optional_active_organization_context(
         return None
     session_id = current_user.session_id
     if not session_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session context is missing",
-        )
+        # Optional-auth endpoints retain their anonymous behavior when an
+        # incomplete legacy identity is supplied. Normal token resolution
+        # already requires `sid`, so this is a defensive compatibility guard.
+        return None
     principal = OrganizationPrincipal(
         user_id=current_user.id,
         session_id=session_id,

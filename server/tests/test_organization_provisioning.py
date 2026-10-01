@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 # Organization dependencies compose the normal authenticated-user dependency,
 # which loads application settings. Keep this module independently runnable in
@@ -19,7 +20,10 @@ from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.dependencies import (
+    get_active_organization_context,
+    get_optional_active_organization_context,
+)
 from server.app.organizations.models import OrganizationDocument, OrganizationPrincipal
 from server.app.organizations.repository import OrganizationMembershipRepository
 from server.app.organizations.service import (
@@ -451,3 +455,13 @@ async def test_active_context_denies_a_user_without_membership():
         )
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_optional_context_treats_an_identity_without_session_scope_as_anonymous():
+    assert await get_optional_active_organization_context(
+        current_user=SimpleNamespace(session_id=None),
+        sessions_collection=object(),
+        organizations_collection=object(),
+        memberships_collection=object(),
+    ) is None

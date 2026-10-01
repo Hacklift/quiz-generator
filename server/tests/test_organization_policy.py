@@ -180,6 +180,24 @@ def test_policy_rejects_principal_that_does_not_match_context():
     )
 
 
+def test_only_an_owner_can_manage_administrator_memberships():
+    admin_context = _context("admin")
+    owner_context = _context("owner")
+
+    assert not OrganizationPolicy().can(
+        admin_context.principal,
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE,
+        None,
+        admin_context,
+    )
+    assert OrganizationPolicy().can(
+        owner_context.principal,
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE,
+        None,
+        owner_context,
+    )
+
+
 @pytest.mark.parametrize(
     "action",
     (

@@ -72,18 +72,17 @@ def _invitation_service() -> OrganizationInvitationService:
 async def create_organization(
     request: Request,
     payload: CreateOrganizationRequest,
-    _current_user: UserOut = Depends(get_verified_user),
-    context: OrganizationContext = Depends(get_active_organization_context),
+    current_user: UserOut = Depends(get_verified_user),
 ):
-    if not policy.can(context.principal, OrganizationAction.ORGANIZATION_MANAGE, None, context):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization creation access denied")
+    # Tenant creation is a platform-level capability of a verified account;
+    # it is not administration of whichever organization happens to be active.
     organization, membership = await OrganizationLifecycleService(
         organizations_collection=get_organizations_collection(),
         memberships_collection=get_organization_memberships_collection(),
     ).create_shared_organization(
         kind=payload.kind,
         name=payload.name,
-        owner_user_id=context.principal.user_id,
+        owner_user_id=current_user.id,
     )
     return ActiveOrganizationResponse(
         organization_id=str(organization["_id"]),
@@ -175,6 +174,13 @@ async def create_invitation(
 ):
     if not policy.can(context.principal, OrganizationAction.MEMBERSHIP_MANAGE, None, context):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization invitation access denied")
+    if payload.role == "admin" and not policy.can(
+        context.principal,
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE,
+        None,
+        context,
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an organization owner may invite an administrator")
     invitation = await _invitation_service().invite(
         organization_id=context.organization_id,
         inviter_user_id=context.principal.user_id,
@@ -307,13 +313,28 @@ async def update_membership_status(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership access denied")
     if user_id == context.principal.user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use organization transfer to change your own access")
-    membership = await OrganizationMembershipRepository(
-        get_organization_memberships_collection()
-    ).set_status(
+    memberships = OrganizationMembershipRepository(get_organization_memberships_collection())
+    target_membership = await memberships.get_membership(
+        organization_id=context.organization_id,
+        user_id=user_id,
+    )
+    if target_membership is None:
+        raise HTTPException(status_code=404, detail="Membership not found")
+    if target_membership["role"] == "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner membership cannot be managed here")
+    action = (
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE
+        if target_membership["role"] == "admin"
+        else OrganizationAction.MEMBERSHIP_MANAGE
+    )
+    if not policy.can(context.principal, action, None, context):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership access denied")
+    membership = await memberships.set_status(
         organization_id=context.organization_id,
         user_id=user_id,
         status=payload.status,
+        expected_role=target_membership["role"],
     )
     if membership is None:
-        raise HTTPException(status_code=404, detail="Membership not found")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Membership changed; refresh and retry")
     return {"message": "Membership updated", "status": membership["status"]}

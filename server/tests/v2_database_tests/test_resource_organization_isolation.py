@@ -11,7 +11,13 @@ from server.app.notifications.repository import (
     list_user_notifications,
     mark_notification_read,
 )
+from server.app.quiz.repositories.v2.models.reference_models import (
+    FolderDocumentV2,
+    QuizHistoryDocumentV2,
+)
+from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
+from server.app.quiz.services.quiz_user_library_service import QuizUserLibraryService
 
 
 @pytest.mark.asyncio
@@ -132,3 +138,55 @@ async def test_training_repository_rejects_cross_organization_quiz_run_and_assig
         recipient_user_id,
         organization_id=organization_a,
     ) == []
+
+
+@pytest.mark.asyncio
+async def test_same_user_cannot_read_or_mutate_folder_or_history_from_another_organization(test_db):
+    user_id = "user-1"
+    organization_a = str(ObjectId())
+    organization_b = str(ObjectId())
+    references = ReferenceV2Repository(
+        test_db["folders_v2"],
+        test_db["folder_items_v2"],
+        test_db["saved_quizzes_v2"],
+        test_db["quiz_history_v2"],
+    )
+    folder = await references.insert_folder(
+        FolderDocumentV2(user_id=user_id, organization_id=organization_b, name="Private B")
+    )
+    history = await references.insert_quiz_history(
+        QuizHistoryDocumentV2(
+            user_id=user_id,
+            organization_id=organization_b,
+            quiz_id=str(ObjectId()),
+            action="generated",
+        )
+    )
+    library = QuizUserLibraryService(
+        canonical_service=object(),
+        quiz_repository=object(),
+        reference_repository=references,
+    )
+
+    assert await library.get_folder(
+        folder_id=str(folder.id),
+        user_id=user_id,
+        organization_id=organization_a,
+    ) is None
+    assert not await library.delete_folder(
+        folder_id=str(folder.id),
+        user_id=user_id,
+        organization_id=organization_a,
+    )
+    assert await library.get_quiz_history_detail(
+        user_id=user_id,
+        history_id=str(history.id),
+        organization_id=organization_a,
+    ) is None
+    assert not await library.delete_quiz_history_entry(
+        user_id=user_id,
+        history_id=str(history.id),
+        organization_id=organization_a,
+    )
+    assert (await test_db["folders_v2"].find_one({"_id": folder.id}))["deleted_at"] is None
+    assert (await test_db["quiz_history_v2"].find_one({"_id": history.id}))["deleted_at"] is None

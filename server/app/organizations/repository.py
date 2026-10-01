@@ -394,6 +394,7 @@ class OrganizationMembershipRepository:
         organization_id: str,
         user_id: str,
         status: str,
+        expected_role: str | None = None,
     ) -> dict[str, Any] | None:
         query: dict[str, Any] = {
             "organization_id": organization_id,
@@ -410,6 +411,8 @@ class OrganizationMembershipRepository:
             query["status"] = {"$in": ["active", "suspended"]}
         else:
             raise ValueError(f"Unsupported membership status transition: {status}")
+        if expected_role is not None:
+            query["role"] = expected_role
         return await self.collection.find_one_and_update(
             query,
             {"$set": {"status": status, "updated_at": utcnow()}},

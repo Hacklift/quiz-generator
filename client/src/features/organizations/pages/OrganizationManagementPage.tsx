@@ -26,6 +26,7 @@ export default function OrganizationManagementPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const canManage = activeOrganization?.role === "owner" || activeOrganization?.role === "admin";
+  const canCreateOrganization = Boolean(activeOrganization);
   const canInvite = canManage && activeOrganization?.organization_kind !== "personal";
 
   useEffect(() => {
@@ -140,7 +141,7 @@ export default function OrganizationManagementPage() {
           <h1 className="mt-3 text-3xl font-extrabold">Workspaces and invitations</h1>
           <p className="mt-3 max-w-2xl leading-7 text-ink/75">Your personal workspace stays private. Create a shared workspace before inviting a school, tutoring, or corporate team.</p>
 
-          {canManage ? (
+          {canCreateOrganization ? (
             <form onSubmit={(event) => void createOrganization(event)} className="mt-8 border-2 border-divider p-5">
               <h2 className="text-lg font-extrabold">Create a shared organization</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto]">

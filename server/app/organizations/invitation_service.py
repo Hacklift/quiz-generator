@@ -108,12 +108,44 @@ class OrganizationInvitationService:
         # already has an account. Unknown-email invitations become a
         # membership only after that address authenticates and accepts.
         if recipient is not None:
-            await self.memberships.invite_known_user(
-                organization_id=organization_id,
-                user_id=str(recipient["_id"]),
-                role=role,
-                invited_by_user_id=inviter_user_id,
-            )
+            try:
+                prepared_membership = await self.memberships.invite_known_user(
+                    organization_id=organization_id,
+                    user_id=str(recipient["_id"]),
+                    role=role,
+                    invited_by_user_id=inviter_user_id,
+                )
+                if prepared_membership.get("status") in {"active", "suspended"}:
+                    # The membership changed after the pre-check. Withdraw the
+                    # just-created token rather than sending authority that is
+                    # no longer applicable. A failed withdrawal is logged;
+                    # acceptance still cannot reactivate a suspension.
+                    try:
+                        await self.invitations.revoke(stored["_id"])
+                    except Exception:
+                        logger.exception(
+                            "Unable to revoke stale organization invitation",
+                            extra={"invitation_id": str(stored["_id"])},
+                        )
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="An invitation cannot be created for this recipient",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                # The invitation is already durable and its acceptance path
+                # can create the membership idempotently. Do not strand a
+                # valid invitation or make a retry mandatory solely because
+                # this optimisation failed.
+                logger.exception(
+                    "Unable to prepare organization invitation membership",
+                    extra={
+                        "organization_id": organization_id,
+                        "invitation_id": str(stored["_id"]),
+                        "recipient_user_id": str(recipient["_id"]),
+                    },
+                )
 
         invitation_url = (
             f"{settings.FRONTEND_BASE_URL}/organizations/invitations/accept?token={token}"
