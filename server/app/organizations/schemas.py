@@ -86,6 +86,11 @@ class OrganizationMemberResponse(BaseModel):
     status: MembershipStatus
 
 
+class OrganizationMemberPageResponse(BaseModel):
+    items: list[OrganizationMemberResponse]
+    next_cursor: str | None = None
+
+
 class OrganizationInvitationResponse(BaseModel):
     id: str
     organization_id: str

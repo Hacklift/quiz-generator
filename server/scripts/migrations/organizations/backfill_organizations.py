@@ -10,6 +10,7 @@ from typing import Any
 
 from server.app.db.core.connection import database
 from server.app.organizations.repository import OrganizationRepository
+from server.app.organizations.invitation_service import OrganizationLifecycleService
 from server.app.organizations.service import OrganizationProvisioningService
 from server.app.organizations.validators import ensure_organization_collections
 from server.scripts.migrations.v2.migration.lock import (
@@ -45,6 +46,7 @@ class OrganizationBackfillReport:
     reconciled_users: int = 0
     skipped_users: int = 0
     backfilled_sessions: int = 0
+    reconciled_shared_organizations: int = 0
     platform_library_created: bool = False
     unresolved_count: int = 0
     unresolved_examples: list[dict[str, str]] = field(default_factory=list)
@@ -76,7 +78,7 @@ async def backfill_organizations(
     if limit is not None and limit < 1:
         raise ValueError("limit must be at least one when provided")
 
-    db = database_instance or database
+    db = database_instance if database_instance is not None else database
     run_id = run_id or str(uuid.uuid4())
     report = OrganizationBackfillReport(run_id=run_id, dry_run=dry_run)
 
@@ -207,6 +209,27 @@ async def _reconcile_users(
         memberships_collection=db["organization_memberships"],
         users_collection=db["users"],
     )
+
+    if write:
+        lifecycle = OrganizationLifecycleService(
+            organizations_collection=db["organizations"],
+            memberships_collection=db["organization_memberships"],
+            users_collection=db["users"],
+        )
+        try:
+            reconciled, unresolved_shared = await lifecycle.reconcile_provisioning_shared_organizations()
+            report.reconciled_shared_organizations += reconciled
+            for organization_id in unresolved_shared:
+                report.add_unresolved(
+                    record_id=organization_id,
+                    reason="shared_organization_provisioning_could_not_be_reconciled",
+                )
+        except Exception:
+            logger.exception("Unable to reconcile provisioning shared organizations")
+            report.add_unresolved(
+                record_id="shared_organization_provisioning",
+                reason="shared_organization_provisioning_reconciliation_failed",
+            )
 
     platform_library = await db["organizations"].find_one(
         {"system_key": "platform_library"}

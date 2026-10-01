@@ -333,9 +333,11 @@ class OrganizationLifecycleService:
         *,
         organizations_collection: AsyncIOMotorCollection,
         memberships_collection: AsyncIOMotorCollection,
+        users_collection: AsyncIOMotorCollection | None = None,
     ):
         self.organizations = OrganizationRepository(organizations_collection)
         self.memberships = OrganizationMembershipRepository(memberships_collection)
+        self.users_collection = users_collection
 
     async def create_shared_organization(
         self,
@@ -360,14 +362,63 @@ class OrganizationLifecycleService:
                 user_id=owner_user_id,
             )
         except Exception:
-            # This is a newly-created tenant with no valid owner; remove it
-            # rather than leaving an inaccessible workspace behind.
-            try:
-                await self.organizations.collection.delete_one({"_id": organization["_id"]})
-            except Exception:
-                logger.exception(
-                    "Unable to compensate an organization without an owner membership",
-                    extra={"organization_id": str(organization["_id"])},
-                )
+            # The organization remains inaccessible in `provisioning` state.
+            # A deployment reconciliation can finish it once Mongo recovers;
+            # never expose or destructively delete a partially-created tenant.
+            logger.exception(
+                "Shared organization owner membership provisioning failed",
+                extra={"organization_id": str(organization["_id"])},
+            )
             raise
-        return organization, membership
+        active_organization = await self.organizations.activate_provisioned_shared_organization(
+            organization_id=str(organization["_id"]),
+            owner_user_id=owner_user_id,
+        )
+        if active_organization is None:
+            raise RuntimeError("Shared organization provisioning could not be activated")
+        return active_organization, membership
+
+    async def reconcile_provisioning_shared_organizations(self) -> tuple[int, list[str]]:
+        """Finish only safely attributable interrupted shared-tenant creates.
+
+        This is deliberately narrower than a generic owner repair: it never
+        changes active, suspended, or archived organizations and never invents
+        an owner for an organization without a recorded creator.
+        """
+        reconciled = 0
+        unresolved: list[str] = []
+        if self.users_collection is None:
+            logger.error("Shared organization reconciliation requires a users collection")
+            return reconciled, ["users_collection_unavailable"]
+        for organization in await self.organizations.list_provisioning_shared_organizations():
+            organization_id = str(organization["_id"])
+            owner_user_id = organization.get("created_by_user_id")
+            if not isinstance(owner_user_id, str) or not owner_user_id:
+                unresolved.append(organization_id)
+                continue
+            if not ObjectId.is_valid(owner_user_id):
+                unresolved.append(organization_id)
+                continue
+            owner = await self.users_collection.find_one(
+                {"_id": ObjectId(owner_user_id), "status": {"$ne": "deleted"}},
+                projection={"_id": 1},
+            )
+            if owner is None:
+                unresolved.append(organization_id)
+                continue
+            membership = await self.memberships.create_owner_membership(
+                organization_id=organization_id,
+                user_id=owner_user_id,
+            )
+            if membership.get("role") != "owner" or membership.get("status") != "active":
+                unresolved.append(organization_id)
+                continue
+            active_organization = await self.organizations.activate_provisioned_shared_organization(
+                organization_id=organization_id,
+                owner_user_id=owner_user_id,
+            )
+            if active_organization is None:
+                unresolved.append(organization_id)
+                continue
+            reconciled += 1
+        return reconciled, unresolved

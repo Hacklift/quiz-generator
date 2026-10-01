@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 OrganizationKind = Literal["personal", "school", "tutoring", "corporate"]
-OrganizationStatus = Literal["active", "suspended", "archived"]
+OrganizationStatus = Literal["provisioning", "active", "suspended", "archived"]
 MembershipRole = Literal[
     "owner",
     "admin",

@@ -159,6 +159,44 @@ async def test_invitation_pagination_uses_the_last_returned_invitation_as_cursor
 
 
 @pytest.mark.asyncio
+async def test_member_pagination_uses_a_scoped_stable_cursor():
+    memberships = [
+        {"_id": ObjectId(), "organization_id": "org-1", "user_id": f"user-{index}"}
+        for index in range(3)
+    ]
+
+    class Cursor:
+        def sort(self, *_args):
+            return self
+
+        def limit(self, _value):
+            return self
+
+        async def to_list(self, *, length):
+            assert length == 3
+            return memberships
+
+    class MembershipsCollection:
+        def __init__(self):
+            self.query = None
+
+        def find(self, query):
+            self.query = query
+            return Cursor()
+
+    collection = MembershipsCollection()
+    page, next_cursor = await OrganizationMembershipRepository(collection).list_for_organization(
+        "org-1",
+        limit=2,
+        cursor=None,
+    )
+
+    assert collection.query == {"organization_id": "org-1"}
+    assert page == memberships[:2]
+    assert next_cursor == str(memberships[1]["_id"])
+
+
+@pytest.mark.asyncio
 async def test_replacing_an_invitation_does_not_target_created_at_twice():
     collection = RecordingCollection()
     repository = OrganizationInvitationRepository(collection)
@@ -692,6 +730,10 @@ async def test_shared_organization_creation_grants_the_creator_owner_membership(
             self.document = document
             return type("Result", (), {"inserted_id": ObjectId()})()
 
+        async def find_one_and_update(self, _query, update, **_kwargs):
+            self.document.update(update["$set"])
+            return self.document
+
     class MembershipsCollection:
         async def find_one_and_update(self, _query, update, **_kwargs):
             return update["$setOnInsert"]
@@ -709,7 +751,38 @@ async def test_shared_organization_creation_grants_the_creator_owner_membership(
     )
 
     assert organization["kind"] == "corporate"
+    assert organization["status"] == "active"
     assert organization["personal_owner_user_id"] is None
     assert membership["organization_id"] == str(organization["_id"])
     assert membership["user_id"] == "owner-1"
     assert membership["role"] == "owner"
+
+
+@pytest.mark.asyncio
+async def test_shared_organization_membership_failure_leaves_an_inaccessible_provisioning_record():
+    class OrganizationsCollection:
+        def __init__(self):
+            self.document = None
+
+        async def insert_one(self, document):
+            self.document = document
+            return type("Result", (), {"inserted_id": ObjectId()})()
+
+    class MembershipsCollection:
+        async def find_one_and_update(self, *_args, **_kwargs):
+            raise RuntimeError("temporary membership outage")
+
+    organizations = OrganizationsCollection()
+    service = OrganizationLifecycleService(
+        organizations_collection=organizations,
+        memberships_collection=MembershipsCollection(),
+    )
+
+    with pytest.raises(RuntimeError, match="temporary membership outage"):
+        await service.create_shared_organization(
+            kind="corporate",
+            name="Acme Learning",
+            owner_user_id="owner-1",
+        )
+
+    assert organizations.document["status"] == "provisioning"

@@ -14,6 +14,7 @@ from server.scripts.migrations.organizations.backfill_resource_organizations imp
     ResourceBackfillBlockedError,
     validate_cleanup_authorization,
 )
+from server.scripts.migrations.organizations.backfill_organizations import backfill_organizations
 
 
 def _cleanup_args(**overrides):
@@ -52,6 +53,45 @@ def test_production_deployment_paths_never_invoke_destructive_resource_cleanup()
         contents = (repository_root / relative_path).read_text(encoding="utf-8")
         assert "tenancy-resource-cleanup" not in contents
         assert "--purge-unresolvable" not in contents
+
+
+@pytest.mark.asyncio
+async def test_organization_backfill_recovers_an_interrupted_shared_organization_create(test_db):
+    now = datetime.now(timezone.utc)
+    owner_id = ObjectId()
+    organization_id = ObjectId()
+    await test_db["users"].insert_one(
+        {"_id": owner_id, "username": "owner", "status": "active"}
+    )
+    await test_db["organizations"].insert_one(
+        {
+            "_id": organization_id,
+            "kind": "corporate",
+            "name": "Acme",
+            "status": "provisioning",
+            "settings": {},
+            "personal_owner_user_id": None,
+            "system_key": None,
+            "created_by_user_id": str(owner_id),
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+
+    report = await backfill_organizations(
+        dry_run=False,
+        database_instance=test_db,
+        triggered_by="test-shared-provisioning",
+    )
+
+    organization = await test_db["organizations"].find_one({"_id": organization_id})
+    membership = await test_db["organization_memberships"].find_one(
+        {"organization_id": str(organization_id), "user_id": str(owner_id)}
+    )
+    assert report.reconciled_shared_organizations == 1
+    assert organization["status"] == "active"
+    assert membership["role"] == "owner"
+    assert membership["status"] == "active"
 
 
 @pytest.mark.asyncio

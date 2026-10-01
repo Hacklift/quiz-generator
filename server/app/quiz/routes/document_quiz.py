@@ -81,6 +81,12 @@ async def generate_document_quiz(
             detail="Login is required to generate a live quiz access code",
         )
 
+    if live_quiz_enabled and organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active organization is required to generate a live quiz access code",
+        )
+
     if live_quiz_enabled and (not time_limit_minutes or not access_code_expires_at):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -138,7 +144,10 @@ async def generate_document_quiz(
             detail="The provided material is too short to generate a quiz from.",
         )
 
-    user_id = str(current_user.id) if current_user else None
+    # Optional authentication degrades to guest generation when the identity
+    # cannot prove a current tenant. This prevents an unscoped canonical quiz
+    # from being written for a logged-in user during membership reconciliation.
+    user_id = str(current_user.id) if current_user and organization else None
     try:
         rag_result = await generate_document_quiz_with_rag(
             document=document,

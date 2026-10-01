@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import toast from "react-hot-toast";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import NavBar from "@features/quiz/components/NavBar";
@@ -17,7 +18,27 @@ export default function AcceptOrganizationInvitationPage() {
     if (!token) return;
     setIsSubmitting(true);
     try {
-      const result = await organizationsApi.acceptInvitation(token);
+      let result: { organization_id: string } | undefined;
+      // A concurrent click or a recoverable worker interruption can leave
+      // acceptance lease-claimed briefly. This operation is idempotent, so
+      // retry only that explicit transient state with bounded backoff.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          result = await organizationsApi.acceptInvitation(token);
+          break;
+        } catch (error) {
+          const isLeaseInProgress = isAxiosError(error)
+            && error.response?.status === 409
+            && error.response.data?.detail === "Invitation acceptance is in progress; retry shortly";
+          if (!isLeaseInProgress || attempt === 2) {
+            throw error;
+          }
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      }
+      if (!result) {
+        throw new Error("Invitation acceptance did not return an organization");
+      }
       await switchOrganization(result.organization_id);
       toast.success("You joined the organization.");
       await router.replace("/dashboard");

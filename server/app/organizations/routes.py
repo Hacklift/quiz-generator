@@ -14,7 +14,10 @@ from server.app.db.core.connection import (
 )
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
-from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.dependencies import (
+    choose_active_organization_id,
+    get_active_organization_context,
+)
 from server.app.organizations.invitation_service import (
     OrganizationInvitationService,
     OrganizationLifecycleService,
@@ -35,11 +38,13 @@ from server.app.organizations.schemas import (
     OrganizationInvitationResponse,
     OrganizationInvitationPageResponse,
     OrganizationMemberResponse,
+    OrganizationMemberPageResponse,
     OrganizationMembershipResponse,
     UpdateOrganizationMembershipRequest,
 )
 from server.app.users.identity import now_utc
 from server.app.users.models import UserOut
+from server.app.users.repository import get_active_session
 
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
@@ -79,6 +84,7 @@ async def create_organization(
     organization, membership = await OrganizationLifecycleService(
         organizations_collection=get_organizations_collection(),
         memberships_collection=get_organization_memberships_collection(),
+        users_collection=get_users_collection(),
     ).create_shared_organization(
         kind=payload.kind,
         name=payload.name,
@@ -108,18 +114,26 @@ async def list_my_memberships(
         ).list_active_by_ids([membership["organization_id"] for membership in memberships])
     }
     session_id = current_user.session_id
-    session = None
-    if session_id:
-        session = await get_user_sessions_collection().find_one(
-            {"session_id": session_id, "user_id": current_user.id, "revoked_at": None}
+    session = (
+        await get_active_session(
+            get_user_sessions_collection(),
+            session_id=session_id,
+            user_id=current_user.id,
         )
+        if session_id
+        else None
+    )
     selected_id = session.get("active_organization_id") if session else None
     membership_ids = {membership["organization_id"] for membership in memberships}
-    selected_is_valid = selected_id in membership_ids and selected_id in organizations_by_id
+    selected_is_active = selected_id in membership_ids and selected_id in organizations_by_id
     default_id = current_user.default_organization_id
-    default_is_valid = default_id in membership_ids and default_id in organizations_by_id
-    effective_active_id = selected_id if selected_is_valid else (default_id if default_is_valid else None)
-    active_scope_recovered = selected_id is not None and effective_active_id != selected_id
+    default_is_active = default_id in membership_ids and default_id in organizations_by_id
+    effective_active_id, active_scope_recovered = choose_active_organization_id(
+        selected_organization_id=selected_id,
+        default_organization_id=default_id,
+        selected_is_active=selected_is_active,
+        default_is_active=default_is_active,
+    )
     responses: list[OrganizationMembershipResponse] = []
     for membership in memberships:
         organization = organizations_by_id.get(membership["organization_id"])
@@ -228,19 +242,28 @@ async def list_invitations(
     )
 
 
-@router.get("/members", response_model=list[OrganizationMemberResponse])
+@router.get("/members", response_model=OrganizationMemberPageResponse)
 @limiter.limit(RateLimits.API_READ)
 async def list_organization_members(
     request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, min_length=24, max_length=24),
     _current_user: UserOut = Depends(get_verified_user),
     context: OrganizationContext = Depends(get_active_organization_context),
 ):
     if not policy.can(context.principal, OrganizationAction.MEMBERSHIP_MANAGE, None, context):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization member access denied")
 
-    memberships = await OrganizationMembershipRepository(
-        get_organization_memberships_collection()
-    ).list_for_organization(context.organization_id)
+    try:
+        memberships, next_cursor = await OrganizationMembershipRepository(
+            get_organization_memberships_collection()
+        ).list_for_organization(
+            context.organization_id,
+            limit=limit,
+            cursor=cursor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     member_ids = [
         ObjectId(membership["user_id"])
         for membership in memberships
@@ -253,8 +276,9 @@ async def list_organization_members(
             projection={"email": 1, "username": 1, "profile.full_name": 1},
         ).to_list(length=len(member_ids))
     } if member_ids else {}
-    return [
-        OrganizationMemberResponse(
+    return OrganizationMemberPageResponse(
+        items=[
+            OrganizationMemberResponse(
             user_id=membership["user_id"],
             email=users_by_id.get(membership["user_id"], {}).get("email"),
             username=users_by_id.get(membership["user_id"], {}).get("username"),
@@ -262,8 +286,10 @@ async def list_organization_members(
             role=membership["role"],
             status=membership["status"],
         )
-        for membership in memberships
-    ]
+            for membership in memberships
+        ],
+        next_cursor=next_cursor,
+    )
 
 
 @router.post("/invitations/accept")

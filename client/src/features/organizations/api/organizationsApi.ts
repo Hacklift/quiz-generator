@@ -34,6 +34,11 @@ export type OrganizationMember = {
   status: "active" | "suspended" | "removed";
 };
 
+export type OrganizationMemberPage = {
+  items: OrganizationMember[];
+  next_cursor: string | null;
+};
+
 export type OrganizationInvitationPage = {
   items: OrganizationInvitation[];
   next_cursor: string | null;
@@ -67,8 +72,10 @@ export const organizationsApi = {
     return data;
   },
 
-  async listMembers(): Promise<OrganizationMember[]> {
-    const { data } = await api.get<OrganizationMember[]>("/api/organizations/members");
+  async listMembers(cursor?: string): Promise<OrganizationMemberPage> {
+    const { data } = await api.get<OrganizationMemberPage>("/api/organizations/members", {
+      params: cursor ? { cursor } : undefined,
+    });
     return data;
   },
 

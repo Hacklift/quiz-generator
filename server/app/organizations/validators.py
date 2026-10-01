@@ -138,7 +138,7 @@ def _organization_validator() -> dict:
                     "properties": {
                         "kind": {"enum": ["personal", "school", "tutoring", "corporate"]},
                         "name": {"bsonType": "string", "minLength": 1, "maxLength": 160},
-                        "status": {"enum": ["active", "suspended", "archived"]},
+                        "status": {"enum": ["provisioning", "active", "suspended", "archived"]},
                         "settings": {"bsonType": "object"},
                         "personal_owner_user_id": {
                             "bsonType": ["string", "null"],

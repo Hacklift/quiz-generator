@@ -23,6 +23,8 @@ export default function OrganizationManagementPage() {
   const [nextInvitationCursor, setNextInvitationCursor] = useState<string | null>(null);
   const [isLoadingMoreInvitations, setIsLoadingMoreInvitations] = useState(false);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [nextMemberCursor, setNextMemberCursor] = useState<string | null>(null);
+  const [isLoadingMoreMembers, setIsLoadingMoreMembers] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
   const canManage = activeOrganization?.role === "owner" || activeOrganization?.role === "admin";
@@ -34,14 +36,16 @@ export default function OrganizationManagementPage() {
       setInvitations([]);
       setMembers([]);
       setNextInvitationCursor(null);
+      setNextMemberCursor(null);
       return;
     }
     setNextInvitationCursor(null);
     void Promise.all([organizationsApi.listInvitations(), organizationsApi.listMembers()])
-      .then(([invitationPage, nextMembers]) => {
+      .then(([invitationPage, memberPage]) => {
         setInvitations(invitationPage.items);
         setNextInvitationCursor(invitationPage.next_cursor);
-        setMembers(nextMembers);
+        setMembers(memberPage.items);
+        setNextMemberCursor(memberPage.next_cursor);
       })
       .catch(() => {
       toast.error("Unable to load organization invitations.");
@@ -62,6 +66,23 @@ export default function OrganizationManagementPage() {
       toast.error("Unable to load more invitations.");
     } finally {
       setIsLoadingMoreInvitations(false);
+    }
+  };
+
+  const loadMoreMembers = async () => {
+    if (!nextMemberCursor || isLoadingMoreMembers) return;
+    setIsLoadingMoreMembers(true);
+    try {
+      const page = await organizationsApi.listMembers(nextMemberCursor);
+      setMembers((current) => [
+        ...current,
+        ...page.items.filter((item) => !current.some((existing) => existing.user_id === item.user_id)),
+      ]);
+      setNextMemberCursor(page.next_cursor);
+    } catch {
+      toast.error("Unable to load more members.");
+    } finally {
+      setIsLoadingMoreMembers(false);
     }
   };
 
@@ -208,6 +229,7 @@ export default function OrganizationManagementPage() {
                     </div>
                   )) : <p className="text-sm text-ink/65">No active members have joined this organization yet.</p>}
                 </div>
+                {nextMemberCursor ? <button type="button" disabled={isLoadingMoreMembers} onClick={() => void loadMoreMembers()} className="pt-4 text-sm font-bold text-brand hover:underline disabled:opacity-60">{isLoadingMoreMembers ? "Loading members..." : "Load more members"}</button> : null}
               </div>
             </section>
           ) : null}

@@ -62,11 +62,48 @@ class OrganizationRepository:
         document = OrganizationDocument(
             kind=kind,
             name=name,
+            status="provisioning",
             created_by_user_id=created_by_user_id,
         ).model_dump(by_alias=True)
         result = await self.collection.insert_one(document)
         document["_id"] = result.inserted_id
         return document
+
+    async def activate_provisioned_shared_organization(
+        self,
+        *,
+        organization_id: str,
+        owner_user_id: str,
+    ) -> dict[str, Any] | None:
+        """Promote only the organization created for this owner lifecycle."""
+        try:
+            object_id = ObjectId(organization_id)
+        except Exception:
+            return None
+        return await self.collection.find_one_and_update(
+            {
+                "_id": object_id,
+                "status": "provisioning",
+                "created_by_user_id": owner_user_id,
+                "personal_owner_user_id": None,
+                "system_key": None,
+                "kind": {"$ne": "personal"},
+            },
+            {"$set": {"status": "active", "updated_at": utcnow()}},
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def list_provisioning_shared_organizations(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Return only inaccessible shared tenants left by an interrupted create."""
+        return await self.collection.find(
+            {
+                "status": "provisioning",
+                "kind": {"$ne": "personal"},
+                "personal_owner_user_id": None,
+                "system_key": None,
+                "created_by_user_id": {"$type": "string"},
+            }
+        ).sort("_id", 1).to_list(length=limit)
 
     async def get_active(self, organization_id: str) -> dict[str, Any] | None:
         try:
@@ -252,11 +289,26 @@ class OrganizationMembershipRepository:
             {"user_id": user_id, "status": "active"}
         ).to_list(length=None)
 
-    async def list_for_organization(self, organization_id: str) -> list[dict[str, Any]]:
-        """List members for administrators without exposing another tenant's rows."""
-        return await self.collection.find(
-            {"organization_id": organization_id}
-        ).sort("created_at", 1).to_list(length=2_000)
+    async def list_for_organization(
+        self,
+        organization_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Page members within one organization using a stable `_id` cursor."""
+        query: dict[str, Any] = {"organization_id": organization_id}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except Exception as exc:
+                raise ValueError("Invalid member cursor") from exc
+        memberships = await self.collection.find(query).sort("_id", -1).limit(limit + 1).to_list(
+            length=limit + 1
+        )
+        page = memberships[:limit]
+        next_cursor = str(page[-1]["_id"]) if len(memberships) > limit else None
+        return page, next_cursor
 
     async def invite_known_user(
         self,

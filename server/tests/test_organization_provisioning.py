@@ -523,3 +523,28 @@ async def test_optional_context_treats_an_identity_without_session_scope_as_anon
         organizations_collection=object(),
         memberships_collection=object(),
     ) is None
+
+
+@pytest.mark.asyncio
+async def test_optional_context_degrades_removed_or_unprovisioned_identity_to_guest(monkeypatch):
+    import server.app.organizations.dependencies as organization_dependencies
+
+    async def no_active_tenant(**_kwargs):
+        raise HTTPException(status_code=403, detail="Organization access denied")
+
+    monkeypatch.setattr(
+        organization_dependencies,
+        "resolve_active_organization_context",
+        no_active_tenant,
+    )
+
+    assert await get_optional_active_organization_context(
+        current_user=SimpleNamespace(
+            id="user-1",
+            session_id="session-1",
+            role="user",
+        ),
+        sessions_collection=object(),
+        organizations_collection=object(),
+        memberships_collection=object(),
+    ) is None

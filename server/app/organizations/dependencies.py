@@ -21,6 +21,24 @@ from server.app.users.identity import now_utc
 from server.app.users.repository import get_active_session
 
 
+def choose_active_organization_id(
+    *,
+    selected_organization_id: str | None,
+    default_organization_id: str | None,
+    selected_is_active: bool,
+    default_is_active: bool,
+) -> tuple[str | None, bool]:
+    """Choose only between organization memberships already proven active."""
+    if selected_is_active:
+        return selected_organization_id, False
+    if default_is_active:
+        return (
+            default_organization_id,
+            selected_organization_id is not None and selected_organization_id != default_organization_id,
+        )
+    return None, False
+
+
 async def get_organization_principal(
     current_user: UserOut = Depends(get_current_user),
 ) -> OrganizationPrincipal:
@@ -79,8 +97,7 @@ async def resolve_active_organization_context(
 
     selected_organization_id = session.get("active_organization_id")
     default_organization_id = current_user.default_organization_id
-    organization_id = selected_organization_id or default_organization_id
-    if not organization_id:
+    if not selected_organization_id and not default_organization_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Organization context has not been provisioned",
@@ -88,31 +105,40 @@ async def resolve_active_organization_context(
 
     organization_repository = OrganizationRepository(organizations_collection)
     membership_repository = OrganizationMembershipRepository(memberships_collection)
-    organization = await organization_repository.get_active(organization_id)
-    membership = await membership_repository.get_active_membership(
-        organization_id=organization_id,
-        user_id=principal.user_id,
-    )
+    organization = None
+    membership = None
+    if selected_organization_id:
+        organization = await organization_repository.get_active(selected_organization_id)
+        membership = await membership_repository.get_active_membership(
+            organization_id=selected_organization_id,
+            user_id=principal.user_id,
+        )
     # A stale session selector must not lock a multi-organization user out.
     # Fall back only to their proven default membership; never trust a client
     # selector or replace a still-valid explicit selection.
-    active_scope_recovered = False
+    selected_is_active = organization is not None and membership is not None
+    fallback_organization = None
+    fallback_membership = None
     if (
-        (organization is None or membership is None)
-        and selected_organization_id
+        not selected_is_active
         and default_organization_id
-        and selected_organization_id != default_organization_id
+        and default_organization_id != selected_organization_id
     ):
         fallback_organization = await organization_repository.get_active(default_organization_id)
         fallback_membership = await membership_repository.get_active_membership(
             organization_id=default_organization_id,
             user_id=principal.user_id,
         )
-        if fallback_organization is not None and fallback_membership is not None:
-            organization_id = default_organization_id
-            organization = fallback_organization
-            membership = fallback_membership
-            active_scope_recovered = True
+    default_is_active = fallback_organization is not None and fallback_membership is not None
+    organization_id, active_scope_recovered = choose_active_organization_id(
+        selected_organization_id=selected_organization_id,
+        default_organization_id=default_organization_id,
+        selected_is_active=selected_is_active,
+        default_is_active=default_is_active,
+    )
+    if active_scope_recovered or selected_organization_id is None:
+        organization = fallback_organization
+        membership = fallback_membership
 
     if organization is None or membership is None:
         # Do not distinguish a bad selector from a missing membership.
@@ -171,10 +197,22 @@ async def get_optional_active_organization_context(
         session_id=session_id,
         platform_role=current_user.role or "user",
     )
-    return await resolve_active_organization_context(
-        current_user=current_user,
-        principal=principal,
-        sessions_collection=sessions_collection,
-        organizations_collection=organizations_collection,
-        memberships_collection=memberships_collection,
-    )
+    try:
+        return await resolve_active_organization_context(
+            current_user=current_user,
+            principal=principal,
+            sessions_collection=sessions_collection,
+            organizations_collection=organizations_collection,
+            memberships_collection=memberships_collection,
+        )
+    except HTTPException as exc:
+        # Optional routes retain guest behavior when an authenticated identity
+        # cannot prove a usable tenant. Callers must not persist tenant-owned
+        # data unless this dependency returns an organization context.
+        if exc.status_code in {
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_409_CONFLICT,
+        }:
+            return None
+        raise
