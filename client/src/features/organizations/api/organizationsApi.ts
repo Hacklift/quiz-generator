@@ -16,7 +16,7 @@ export type OrganizationInvitation = {
   organization_id: string;
   email: string;
   role: "admin" | "author" | "facilitator" | "learner" | "guardian" | "auditor";
-  status: "invited" | "accepted" | "declined" | "revoked" | "expired";
+  status: "invited" | "accepting" | "accepted" | "declined" | "revoked" | "expired";
   expires_at: string;
   created_at: string;
 };
@@ -28,6 +28,11 @@ export type OrganizationMember = {
   full_name: string | null;
   role: string;
   status: "active" | "suspended" | "removed";
+};
+
+export type OrganizationInvitationPage = {
+  items: OrganizationInvitation[];
+  next_cursor: string | null;
 };
 
 export const organizationsApi = {
@@ -51,8 +56,10 @@ export const organizationsApi = {
     return data;
   },
 
-  async listInvitations(): Promise<OrganizationInvitation[]> {
-    const { data } = await api.get<OrganizationInvitation[]>("/api/organizations/invitations");
+  async listInvitations(cursor?: string): Promise<OrganizationInvitationPage> {
+    const { data } = await api.get<OrganizationInvitationPage>("/api/organizations/invitations", {
+      params: cursor ? { cursor } : undefined,
+    });
     return data;
   },
 
@@ -63,7 +70,7 @@ export const organizationsApi = {
 
   async updateMemberStatus(
     userId: string,
-    status: "suspended" | "removed",
+    status: "active" | "suspended" | "removed",
   ): Promise<void> {
     await api.patch(`/api/organizations/memberships/${userId}`, { status });
   },

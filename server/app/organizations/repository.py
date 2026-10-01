@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from bson import ObjectId
@@ -13,6 +13,10 @@ from server.app.organizations.models import (
     OrganizationMembershipDocument,
     utcnow,
 )
+
+
+class InvitationMembershipStateError(RuntimeError):
+    """An invitation cannot override an administrator-controlled member state."""
 
 
 class OrganizationRepository:
@@ -72,6 +76,14 @@ class OrganizationRepository:
         return await self.collection.find_one(
             {"_id": object_id, "status": "active"}
         )
+
+    async def list_active_by_ids(self, organization_ids: list[str]) -> list[dict[str, Any]]:
+        object_ids = [ObjectId(value) for value in organization_ids if ObjectId.is_valid(value)]
+        if not object_ids:
+            return []
+        return await self.collection.find(
+            {"_id": {"$in": object_ids}, "status": "active"}
+        ).to_list(length=len(object_ids))
 
     async def _upsert_once(
         self,
@@ -209,6 +221,16 @@ class OrganizationMembershipRepository:
             }
         )
 
+    async def get_membership(
+        self,
+        *,
+        organization_id: str,
+        user_id: str,
+    ) -> dict[str, Any] | None:
+        return await self.collection.find_one(
+            {"organization_id": organization_id, "user_id": user_id}
+        )
+
     async def get_active_owner_membership(
         self,
         *,
@@ -249,8 +271,31 @@ class OrganizationMembershipRepository:
         existing = await self.collection.find_one(
             {"organization_id": organization_id, "user_id": user_id}
         )
-        if existing and existing.get("status") == "active":
+        if existing and existing.get("status") in {"active", "suspended"}:
             return existing
+        if existing:
+            updated = await self.collection.find_one_and_update(
+                {
+                    "organization_id": organization_id,
+                    "user_id": user_id,
+                    "status": {"$in": ["invited", "removed"]},
+                },
+                {
+                    "$set": {
+                        "role": role,
+                        "status": "invited",
+                        "invited_by_user_id": invited_by_user_id,
+                        "updated_at": now,
+                    }
+                },
+                return_document=ReturnDocument.AFTER,
+            )
+            if updated is not None:
+                return updated
+            return await self.get_membership(
+                organization_id=organization_id,
+                user_id=user_id,
+            )
         return await self.collection.find_one_and_update(
             {"organization_id": organization_id, "user_id": user_id},
             {
@@ -285,10 +330,10 @@ class OrganizationMembershipRepository:
                 {
                     "organization_id": organization_id,
                     "user_id": user_id,
-                    # An invitation must never rewrite the role of an active
-                    # member. The unique membership index turns this into a
-                    # DuplicateKeyError in the concurrent-active case below.
-                    "status": {"$ne": "active"},
+                    # A recipient may activate only a pending invitation.
+                    # Suspension is an administrator decision and cannot be
+                    # bypassed with a new or previously issued token.
+                    "status": "invited",
                 },
                 {
                     "$set": {
@@ -304,15 +349,43 @@ class OrganizationMembershipRepository:
                         "created_at": now,
                     },
                 },
-                upsert=True,
+                upsert=False,
                 return_document=ReturnDocument.AFTER,
             )
         except DuplicateKeyError:
-            membership = await self.collection.find_one(
-                {"organization_id": organization_id, "user_id": user_id}
-            )
+            membership = None
         if membership is None:
-            raise RuntimeError("organization invitation activation did not return a membership")
+            existing = await self.get_membership(
+                organization_id=organization_id,
+                user_id=user_id,
+            )
+            if existing is not None:
+                if existing.get("status") == "active":
+                    return existing
+                raise InvitationMembershipStateError(
+                    f"Membership is {existing.get('status')} and cannot accept invitations"
+                )
+            document = OrganizationMembershipDocument(
+                organization_id=organization_id,
+                user_id=user_id,
+                role=role,
+                status="active",
+                joined_at=now,
+                invited_by_user_id=invited_by_user_id,
+            ).model_dump(by_alias=True)
+            document.pop("_id", None)
+            try:
+                await self.collection.insert_one(document)
+                membership = document
+            except DuplicateKeyError:
+                membership = await self.get_membership(
+                    organization_id=organization_id,
+                    user_id=user_id,
+                )
+                if membership is None or membership.get("status") != "active":
+                    raise InvitationMembershipStateError(
+                        "Membership changed while the invitation was accepted"
+                    )
         return membership
 
     async def set_status(
@@ -322,15 +395,23 @@ class OrganizationMembershipRepository:
         user_id: str,
         status: str,
     ) -> dict[str, Any] | None:
+        query: dict[str, Any] = {
+            "organization_id": organization_id,
+            "user_id": user_id,
+            "role": {"$ne": "owner"},
+        }
+        if status == "active":
+            # Reactivation is an explicit organization-manager action, never
+            # a side effect of invitation acceptance.
+            query["status"] = "suspended"
+        elif status == "suspended":
+            query["status"] = "active"
+        elif status == "removed":
+            query["status"] = {"$in": ["active", "suspended"]}
+        else:
+            raise ValueError(f"Unsupported membership status transition: {status}")
         return await self.collection.find_one_and_update(
-            {
-                "organization_id": organization_id,
-                "user_id": user_id,
-                "role": {"$ne": "owner"},
-                # Only an active member can be suspended or removed. A pending
-                # invitation becomes active exclusively through token acceptance.
-                "status": "active",
-            },
+            query,
             {"$set": {"status": status, "updated_at": utcnow()}},
             return_document=ReturnDocument.AFTER,
         )
@@ -378,29 +459,49 @@ class OrganizationInvitationRepository:
             return_document=ReturnDocument.AFTER,
         )
 
-    async def list_for_organization(self, organization_id: str) -> list[dict[str, Any]]:
-        now = utcnow()
-        await self.collection.update_many(
-            {
-                "organization_id": organization_id,
-                "status": "invited",
-                "expires_at": {"$lte": now},
-            },
-            {"$set": {"status": "expired", "updated_at": now}},
+    async def list_for_organization(
+        self,
+        organization_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        query: dict[str, Any] = {"organization_id": organization_id}
+        if cursor:
+            try:
+                query["_id"] = {"$lt": ObjectId(cursor)}
+            except Exception as exc:
+                raise ValueError("Invalid invitation cursor") from exc
+        invitations = await self.collection.find(query).sort("_id", -1).limit(limit + 1).to_list(
+            length=limit + 1
         )
-        return await self.collection.find(
-            {"organization_id": organization_id}
-        ).sort("created_at", -1).to_list(length=500)
+        page = invitations[:limit]
+        next_cursor = str(page[-1]["_id"]) if len(invitations) > limit else None
+        now = utcnow()
+        # Expiry is an effective read-time state. Consumption already checks
+        # `expires_at`, so this avoids an unbounded write on every GET.
+        for invitation in page:
+            expires_at = invitation.get("expires_at")
+            if (
+                invitation.get("status") == "invited"
+                and isinstance(expires_at, datetime)
+                and _as_utc(expires_at) <= now
+            ):
+                invitation["status"] = "expired"
+        return page, next_cursor
 
-    async def consume_token(
+    async def claim_token(
         self,
         *,
         token_hash: str,
         email_normalized: str,
         accepted_by_user_id: str,
+        claim_id: str,
         now: datetime,
+        lease_seconds: int = 60,
     ) -> dict[str, Any] | None:
-        return await self.collection.find_one_and_update(
+        lease_expires_at = now + timedelta(seconds=lease_seconds)
+        invitation = await self.collection.find_one_and_update(
             {
                 "token_hash": token_hash,
                 "email_normalized": email_normalized,
@@ -409,13 +510,77 @@ class OrganizationInvitationRepository:
             },
             {
                 "$set": {
-                    "status": "accepted",
+                    "status": "accepting",
                     "accepted_by_user_id": accepted_by_user_id,
-                    "accepted_at": now,
+                    "acceptance_claim_id": claim_id,
+                    "acceptance_lease_expires_at": lease_expires_at,
                     "updated_at": now,
                 }
             },
             return_document=ReturnDocument.AFTER,
+        )
+        if invitation is not None:
+            return invitation
+        # Recover after a process crash while retaining exclusive ownership of
+        # the acceptance work. A still-live claim remains unavailable.
+        return await self.collection.find_one_and_update(
+            {
+                "token_hash": token_hash,
+                "email_normalized": email_normalized,
+                "status": "accepting",
+                "accepted_by_user_id": accepted_by_user_id,
+                "acceptance_lease_expires_at": {"$lte": now},
+                "expires_at": {"$gt": now},
+            },
+            {
+                "$set": {
+                    "acceptance_claim_id": claim_id,
+                    "acceptance_lease_expires_at": lease_expires_at,
+                    "updated_at": now,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def finalize_claim(
+        self,
+        *,
+        invitation_id: ObjectId,
+        claim_id: str,
+        accepted_by_user_id: str,
+        now: datetime,
+    ) -> dict[str, Any] | None:
+        return await self.collection.find_one_and_update(
+            {
+                "_id": invitation_id,
+                "status": "accepting",
+                "accepted_by_user_id": accepted_by_user_id,
+                "acceptance_claim_id": claim_id,
+            },
+            {
+                "$set": {
+                    "status": "accepted",
+                    "accepted_at": now,
+                    "acceptance_claim_id": None,
+                    "acceptance_lease_expires_at": None,
+                    "updated_at": now,
+                },
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def get_for_token_and_recipient(
+        self,
+        *,
+        token_hash: str,
+        email_normalized: str,
+    ) -> dict[str, Any] | None:
+        """Inspect only a recipient-bound invitation after a claim race."""
+        return await self.collection.find_one(
+            {
+                "token_hash": token_hash,
+                "email_normalized": email_normalized,
+            }
         )
 
     async def decline_token(
@@ -441,18 +606,22 @@ class OrganizationInvitationRepository:
         *,
         invitation_id: ObjectId,
         accepted_by_user_id: str,
+        claim_id: str,
     ) -> None:
         """Make a transient post-consume failure safely retryable."""
         await self.collection.update_one(
             {
                 "_id": invitation_id,
-                "status": "accepted",
+                "status": "accepting",
                 "accepted_by_user_id": accepted_by_user_id,
+                "acceptance_claim_id": claim_id,
             },
             {
                 "$set": {
                     "status": "invited",
                     "accepted_by_user_id": None,
+                    "acceptance_claim_id": None,
+                    "acceptance_lease_expires_at": None,
                     "accepted_at": None,
                     "updated_at": utcnow(),
                 }
@@ -468,3 +637,8 @@ class OrganizationInvitationRepository:
 
     async def get_for_organization(self, invitation_id: ObjectId, organization_id: str) -> dict[str, Any] | None:
         return await self.collection.find_one({"_id": invitation_id, "organization_id": organization_id})
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Mongo's default codec returns UTC datetimes without tzinfo."""
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from bson import ObjectId
 
 from server.app.core.dependencies import get_current_user, get_verified_user
@@ -33,6 +33,7 @@ from server.app.organizations.schemas import (
     CreateOrganizationInvitationRequest,
     InvitationDecisionRequest,
     OrganizationInvitationResponse,
+    OrganizationInvitationPageResponse,
     OrganizationMemberResponse,
     OrganizationMembershipResponse,
     UpdateOrganizationMembershipRequest,
@@ -101,7 +102,12 @@ async def list_my_memberships(
     memberships = await OrganizationMembershipRepository(
         get_organization_memberships_collection()
     ).list_active_for_user(current_user.id)
-    organizations = OrganizationRepository(get_organizations_collection())
+    organizations_by_id = {
+        str(organization["_id"]): organization
+        for organization in await OrganizationRepository(
+            get_organizations_collection()
+        ).list_active_by_ids([membership["organization_id"] for membership in memberships])
+    }
     session_id = current_user.session_id
     session = None
     if session_id:
@@ -111,7 +117,7 @@ async def list_my_memberships(
     selected_id = session.get("active_organization_id") if session else None
     responses: list[OrganizationMembershipResponse] = []
     for membership in memberships:
-        organization = await organizations.get_active(membership["organization_id"])
+        organization = organizations_by_id.get(membership["organization_id"])
         if organization is None:
             continue
         responses.append(
@@ -180,19 +186,31 @@ async def create_invitation(
     return _invitation_response(invitation)
 
 
-@router.get("/invitations", response_model=list[OrganizationInvitationResponse])
+@router.get("/invitations", response_model=OrganizationInvitationPageResponse)
 @limiter.limit(RateLimits.API_READ)
 async def list_invitations(
     request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, min_length=24, max_length=24),
     _current_user: UserOut = Depends(get_verified_user),
     context: OrganizationContext = Depends(get_active_organization_context),
 ):
     if not policy.can(context.principal, OrganizationAction.MEMBERSHIP_MANAGE, None, context):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization invitation access denied")
-    invitations = await OrganizationInvitationRepository(
-        get_organization_invitations_collection()
-    ).list_for_organization(context.organization_id)
-    return [_invitation_response(invitation) for invitation in invitations]
+    try:
+        invitations, next_cursor = await OrganizationInvitationRepository(
+            get_organization_invitations_collection()
+        ).list_for_organization(
+            context.organization_id,
+            limit=limit,
+            cursor=cursor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return OrganizationInvitationPageResponse(
+        items=[_invitation_response(invitation) for invitation in invitations],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get("/members", response_model=list[OrganizationMemberResponse])
@@ -238,7 +256,7 @@ async def list_organization_members(
 async def accept_invitation(
     request: Request,
     payload: InvitationDecisionRequest,
-    current_user: UserOut = Depends(get_current_user),
+    current_user: UserOut = Depends(get_verified_user),
 ):
     result = await _invitation_service().accept(
         token=payload.token,
@@ -253,7 +271,7 @@ async def accept_invitation(
 async def decline_invitation(
     request: Request,
     payload: InvitationDecisionRequest,
-    current_user: UserOut = Depends(get_current_user),
+    current_user: UserOut = Depends(get_verified_user),
 ):
     await _invitation_service().decline(token=payload.token, user_email=current_user.email)
     return {"message": "Invitation declined"}

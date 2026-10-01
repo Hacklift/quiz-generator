@@ -14,6 +14,7 @@ from server.app.core.config import settings
 from server.app.email_platform.service import EmailService
 from server.app.organizations.models import OrganizationInvitationDocument, utcnow
 from server.app.organizations.repository import (
+    InvitationMembershipStateError,
     OrganizationInvitationRepository,
     OrganizationMembershipRepository,
     OrganizationRepository,
@@ -73,14 +74,19 @@ class OrganizationInvitationService:
             projection={"_id": 1},
         )
         if recipient is not None:
-            existing_membership = await self.memberships.get_active_membership(
+            existing_membership = await self.memberships.get_membership(
                 organization_id=organization_id,
                 user_id=str(recipient["_id"]),
             )
-            if existing_membership is not None:
+            if existing_membership is not None and existing_membership.get("status") in {
+                "active",
+                "suspended",
+            }:
+                # Do not disclose whether an address maps to an active account
+                # or an administrator-disabled membership.
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="This person already has an active organization membership",
+                    detail="An invitation cannot be created for this recipient",
                 )
         now = utcnow()
         token = secrets.token_urlsafe(32)
@@ -138,13 +144,41 @@ class OrganizationInvitationService:
 
     async def accept(self, *, token: str, user_id: str, user_email: str) -> dict[str, Any]:
         now = utcnow()
-        invitation = await self.invitations.consume_token(
-            token_hash=_token_hash(token),
-            email_normalized=normalize_email(user_email),
+        token_hash = _token_hash(token)
+        email_normalized = normalize_email(user_email)
+        claim_id = secrets.token_urlsafe(24)
+        invitation = await self.invitations.claim_token(
+            token_hash=token_hash,
+            email_normalized=email_normalized,
             accepted_by_user_id=user_id,
+            claim_id=claim_id,
             now=now,
         )
         if invitation is None:
+            existing = await self.invitations.get_for_token_and_recipient(
+                token_hash=token_hash,
+                email_normalized=email_normalized,
+            )
+            if (
+                existing is not None
+                and existing.get("status") == "accepted"
+                and existing.get("accepted_by_user_id") == user_id
+            ):
+                membership = await self.memberships.get_active_membership(
+                    organization_id=existing["organization_id"],
+                    user_id=user_id,
+                )
+                if membership is not None:
+                    return {"invitation": existing, "membership": membership}
+            if (
+                existing is not None
+                and existing.get("status") == "accepting"
+                and existing.get("accepted_by_user_id") == user_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Invitation acceptance is in progress; retry shortly",
+                )
             # Do not reveal whether a valid invitation exists for a different
             # address. The e-mail match is part of the atomic consume query.
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation is invalid or expired")
@@ -161,13 +195,50 @@ class OrganizationInvitationService:
                 role=invitation["role"],
                 invited_by_user_id=invitation["invited_by_user_id"],
             )
+            finalized = await self.invitations.finalize_claim(
+                invitation_id=invitation["_id"],
+                claim_id=claim_id,
+                accepted_by_user_id=user_id,
+                now=utcnow(),
+            )
+            if finalized is None:
+                # The membership write is idempotent. Do not report success
+                # until the invitation's audit state records the same outcome.
+                raise RuntimeError("Invitation acceptance claim was lost")
+        except InvitationMembershipStateError as exc:
+            await self._restore_claim_safely(invitation, user_id, claim_id)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This membership must be reactivated by an organization administrator",
+            ) from exc
         except Exception:
+            await self._restore_claim_safely(invitation, user_id, claim_id)
+            raise
+        return {"invitation": finalized, "membership": membership}
+
+    async def _restore_claim_safely(
+        self,
+        invitation: dict[str, Any],
+        user_id: str,
+        claim_id: str,
+    ) -> None:
+        """Preserve the triggering error if recovery of a claimed token fails.
+
+        A failed restore leaves an expiring `accepting` lease that the intended
+        recipient can reclaim. It must never turn a transient database issue
+        into a permanently burned invitation or mask its root cause.
+        """
+        try:
             await self.invitations.restore_consumed_invitation(
                 invitation_id=invitation["_id"],
                 accepted_by_user_id=user_id,
+                claim_id=claim_id,
             )
-            raise
-        return {"invitation": invitation, "membership": membership}
+        except Exception:
+            logger.exception(
+                "Unable to restore organization invitation acceptance claim",
+                extra={"invitation_id": str(invitation["_id"])},
+            )
 
     async def decline(self, *, token: str, user_email: str) -> dict[str, Any]:
         invitation = await self.invitations.decline_token(

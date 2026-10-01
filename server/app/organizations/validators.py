@@ -112,6 +112,10 @@ async def _ensure_invitation_indexes(collection: AsyncIOMotorCollection) -> None
         [("status", 1), ("expires_at", 1)],
         name="organization_invitation_status_expiry",
     )
+    await collection.create_index(
+        [("organization_id", 1), ("_id", -1)],
+        name="organization_invitation_scope_cursor",
+    )
 
 
 def _organization_validator() -> dict:
@@ -227,6 +231,8 @@ def _invitation_validator() -> dict:
                 "token_hash",
                 "invited_by_user_id",
                 "accepted_by_user_id",
+                "acceptance_claim_id",
+                "acceptance_lease_expires_at",
                 "expires_at",
                 "accepted_at",
                 "declined_at",
@@ -241,10 +247,12 @@ def _invitation_validator() -> dict:
                 "role": {
                     "enum": ["admin", "author", "facilitator", "learner", "guardian", "auditor"]
                 },
-                "status": {"enum": ["invited", "accepted", "declined", "revoked", "expired"]},
+                "status": {"enum": ["invited", "accepting", "accepted", "declined", "revoked", "expired"]},
                 "token_hash": {"bsonType": "string", "minLength": 64, "maxLength": 64},
                 "invited_by_user_id": {"bsonType": "string", "minLength": 1},
                 "accepted_by_user_id": {"bsonType": ["string", "null"]},
+                "acceptance_claim_id": {"bsonType": ["string", "null"]},
+                "acceptance_lease_expires_at": {"bsonType": ["date", "null"]},
                 "expires_at": {"bsonType": "date"},
                 "accepted_at": {"bsonType": ["date", "null"]},
                 "declined_at": {"bsonType": ["date", "null"]},

@@ -58,10 +58,9 @@ class UpdateOrganizationMembershipRequest(BaseModel):
     @field_validator("status")
     @classmethod
     def owner_membership_cannot_be_managed_here(cls, value: MembershipStatus) -> MembershipStatus:
-        if value not in {"suspended", "removed"}:
+        if value not in {"active", "suspended", "removed"}:
             raise ValueError(
-                "membership management may only suspend or remove an active member; "
-                "invitation acceptance is the only activation path"
+                "membership management may reactivate a suspended member, or suspend or remove a member"
             )
         return value
 
@@ -92,6 +91,11 @@ class OrganizationInvitationResponse(BaseModel):
     status: str
     expires_at: datetime
     created_at: datetime
+
+
+class OrganizationInvitationPageResponse(BaseModel):
+    items: list[OrganizationInvitationResponse]
+    next_cursor: str | None = None
 
 
 class ActiveOrganizationSelectionRequest(BaseModel):

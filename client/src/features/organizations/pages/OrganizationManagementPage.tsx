@@ -20,6 +20,8 @@ export default function OrganizationManagementPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<(typeof INVITATION_ROLES)[number]>("learner");
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
+  const [nextInvitationCursor, setNextInvitationCursor] = useState<string | null>(null);
+  const [isLoadingMoreInvitations, setIsLoadingMoreInvitations] = useState(false);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
@@ -30,17 +32,37 @@ export default function OrganizationManagementPage() {
     if (!canInvite) {
       setInvitations([]);
       setMembers([]);
+      setNextInvitationCursor(null);
       return;
     }
+    setNextInvitationCursor(null);
     void Promise.all([organizationsApi.listInvitations(), organizationsApi.listMembers()])
-      .then(([nextInvitations, nextMembers]) => {
-        setInvitations(nextInvitations);
+      .then(([invitationPage, nextMembers]) => {
+        setInvitations(invitationPage.items);
+        setNextInvitationCursor(invitationPage.next_cursor);
         setMembers(nextMembers);
       })
       .catch(() => {
       toast.error("Unable to load organization invitations.");
       });
   }, [activeOrganization?.organization_id, canInvite]);
+
+  const loadMoreInvitations = async () => {
+    if (!nextInvitationCursor || isLoadingMoreInvitations) return;
+    setIsLoadingMoreInvitations(true);
+    try {
+      const page = await organizationsApi.listInvitations(nextInvitationCursor);
+      setInvitations((current) => [
+        ...current,
+        ...page.items.filter((item) => !current.some((existing) => existing.id === item.id)),
+      ]);
+      setNextInvitationCursor(page.next_cursor);
+    } catch {
+      toast.error("Unable to load more invitations.");
+    } finally {
+      setIsLoadingMoreInvitations(false);
+    }
+  };
 
   const createOrganization = async (event: FormEvent) => {
     event.preventDefault();
@@ -89,14 +111,20 @@ export default function OrganizationManagementPage() {
 
   const updateMemberStatus = async (
     userId: string,
-    nextStatus: "suspended" | "removed",
+    nextStatus: "active" | "suspended" | "removed",
   ) => {
     try {
       await organizationsApi.updateMemberStatus(userId, nextStatus);
       setMembers((current) => current.map((member) => (
         member.user_id === userId ? { ...member, status: nextStatus } : member
       )));
-      toast.success(nextStatus === "suspended" ? "Member suspended." : "Member removed.");
+      toast.success(
+        nextStatus === "active"
+          ? "Member reactivated."
+          : nextStatus === "suspended"
+            ? "Member suspended."
+            : "Member removed.",
+      );
     } catch {
       toast.error("Unable to update this member.");
     }
@@ -151,6 +179,7 @@ export default function OrganizationManagementPage() {
                     {invitation.status === "invited" ? <button type="button" onClick={() => void revoke(invitation.id)} className="font-bold text-red-700 hover:underline">Revoke</button> : null}
                   </div>
                 )) : <p className="text-sm text-ink/65">No invitations have been sent from this organization.</p>}
+                {nextInvitationCursor ? <button type="button" disabled={isLoadingMoreInvitations} onClick={() => void loadMoreInvitations()} className="pt-2 text-sm font-bold text-brand hover:underline disabled:opacity-60">{isLoadingMoreInvitations ? "Loading invitations..." : "Load more invitations"}</button> : null}
               </div>
               <div className="mt-8 border-t-2 border-divider pt-5">
                 <h3 className="text-base font-extrabold">Members</h3>
@@ -166,6 +195,12 @@ export default function OrganizationManagementPage() {
                       {member.role !== "owner" && member.status === "active" ? (
                         <span className="flex gap-3">
                           <button type="button" onClick={() => void updateMemberStatus(member.user_id, "suspended")} className="font-bold text-amber-800 hover:underline">Suspend</button>
+                          <button type="button" onClick={() => void updateMemberStatus(member.user_id, "removed")} className="font-bold text-red-700 hover:underline">Remove</button>
+                        </span>
+                      ) : null}
+                      {member.role !== "owner" && member.status === "suspended" ? (
+                        <span className="flex gap-3">
+                          <button type="button" onClick={() => void updateMemberStatus(member.user_id, "active")} className="font-bold text-brand hover:underline">Reactivate</button>
                           <button type="button" onClick={() => void updateMemberStatus(member.user_id, "removed")} className="font-bold text-red-700 hover:underline">Remove</button>
                         </span>
                       ) : null}

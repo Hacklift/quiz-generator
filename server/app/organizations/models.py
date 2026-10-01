@@ -19,7 +19,14 @@ MembershipRole = Literal[
     "auditor",
 ]
 MembershipStatus = Literal["invited", "active", "suspended", "removed"]
-InvitationStatus = Literal["invited", "accepted", "declined", "revoked", "expired"]
+InvitationStatus = Literal[
+    "invited",
+    "accepting",
+    "accepted",
+    "declined",
+    "revoked",
+    "expired",
+]
 
 
 def utcnow() -> datetime:
@@ -109,6 +116,8 @@ class OrganizationInvitationDocument(BaseModel):
     token_hash: str = Field(min_length=64, max_length=64)
     invited_by_user_id: str = Field(min_length=1)
     accepted_by_user_id: str | None = None
+    acceptance_claim_id: str | None = None
+    acceptance_lease_expires_at: datetime | None = None
     expires_at: datetime
     accepted_at: datetime | None = None
     declined_at: datetime | None = None
