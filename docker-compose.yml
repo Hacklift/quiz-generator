@@ -40,6 +40,28 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
+
+  # One-shot, Mongo-only migration gate. It runs before application processes
+  # on `docker compose up`, then exits. Completion is recorded in Mongo, so
+  # subsequent Compose starts do not rescan users.
+  tenancy-migrate:
+    build:
+      context: .
+      target: backend-service
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["python", "-m", "server.scripts.migrations.organizations.backfill_organizations", "--triggered-by", "docker-compose"]
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
 
   celery:
     build:
@@ -86,6 +108,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
 
   mongodb:
     image: mongo:latest
@@ -113,6 +137,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
 
   redis:
     image: redis:7
