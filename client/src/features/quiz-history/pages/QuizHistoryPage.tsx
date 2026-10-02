@@ -85,6 +85,13 @@ const DisplayQuizHistoryPage = ({
           <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
             {t("quiz").charAt(0).toUpperCase() + t("quiz").slice(1)} history
           </h1>
+          <button
+            type="button"
+            onClick={() => router.push("/quiz_attempts")}
+            className="rounded-lg border border-[#0a3264] px-4 py-2 text-sm font-medium text-[#0a3264] hover:bg-blue-50"
+          >
+            View graded attempts
+          </button>
 
           {quizHistory.length === 0 ? (
             <p className="text-center text-gray-600">

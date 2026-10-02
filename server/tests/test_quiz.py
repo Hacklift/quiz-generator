@@ -165,6 +165,17 @@ def test_grade_against_stored_questions_rejects_unknown_question():
         grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
 
 
+def test_grade_against_stored_questions_rejects_incomplete_submission():
+    stored = [
+        {"question": "First question?", "correct_answer": "Yes"},
+        {"question": "Second question?", "correct_answer": "No"},
+    ]
+    submitted = [{"question": "First question?", "user_answer": "Yes"}]
+
+    with pytest.raises(SubmissionMismatchError):
+        grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
+
+
 @pytest.mark.asyncio
 async def test_generate_quiz():
     data = await get_quiz(MagicMock(), Response(), build_request("multichoice", 3), current_user=None)

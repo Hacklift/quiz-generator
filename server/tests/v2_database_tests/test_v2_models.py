@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizCreateV2, QuizMetadataUpdateV2, QuizQuestionV2
+from ...app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
 
 
 def test_quiz_create_v2_accepts_valid_payload():
@@ -80,3 +81,23 @@ def test_quiz_create_v2_rejects_invalid_quiz_type():
 def test_quiz_metadata_update_v2_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         QuizMetadataUpdateV2(title="Valid", unknown_field="nope")
+
+
+def test_quiz_attempt_document_v2_requires_non_negative_score():
+    with pytest.raises(ValidationError):
+        QuizAttemptDocumentV2(
+            user_id="user-1",
+            quiz_id="quiz-1",
+            question_results=[
+                {
+                    "question": "Q1",
+                    "user_answer": "A",
+                    "correct_answer": "B",
+                    "question_type": "multichoice",
+                    "is_correct": False,
+                    "result": "Incorrect",
+                }
+            ],
+            score=-1,
+            percentage=0,
+        )

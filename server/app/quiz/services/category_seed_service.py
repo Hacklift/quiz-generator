@@ -6,6 +6,7 @@ from server.app.db.core.connection import (
     database,
     get_folder_items_v2_collection,
     get_folders_v2_collection,
+    get_quiz_attempts_v2_collection,
     get_quiz_history_v2_collection,
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
@@ -84,6 +85,7 @@ class CategorySeedService:
             get_folder_items_v2_collection(),
             get_saved_quizzes_v2_collection(),
             get_quiz_history_v2_collection(),
+            get_quiz_attempts_v2_collection(),
         )
 
         stats = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0, "errors": 0}

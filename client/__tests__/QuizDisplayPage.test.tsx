@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DisplayQuiz from "@features/quiz/pages/QuizDisplayPage";
-import publicApi from "@shared/api/publicHttp";
+import { api } from "@shared/api/http";
 import toast from "react-hot-toast";
 
 jest.mock("next/navigation", () => ({
@@ -15,13 +15,6 @@ jest.mock("react-hot-toast", () => ({
   default: {
     success: jest.fn(),
     error: jest.fn(),
-  },
-}));
-
-jest.mock("@shared/api/publicHttp", () => ({
-  __esModule: true,
-  default: {
-    post: jest.fn(),
   },
 }));
 
@@ -67,7 +60,7 @@ jest.mock("@features/quiz/components", () => {
   };
 });
 
-const mockPublicApiPost = publicApi.post as jest.Mock;
+const mockApiPost = api.post as jest.Mock;
 const mockToastError = toast.error as jest.Mock;
 const mockToastSuccess = toast.success as jest.Mock;
 
@@ -95,7 +88,7 @@ describe("QuizDisplayPage", () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("saved_quiz_view", JSON.stringify(storedQuiz));
-    mockPublicApiPost.mockReset();
+    mockApiPost.mockReset();
     mockToastError.mockReset();
     mockToastSuccess.mockReset();
   });
@@ -109,14 +102,14 @@ describe("QuizDisplayPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
 
-    expect(mockPublicApiPost).not.toHaveBeenCalled();
+    expect(mockApiPost).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(
       "Answer the quiz before submitting it for grading.",
     );
   });
 
   test("locks submitted answers after grading", async () => {
-    mockPublicApiPost.mockResolvedValue({
+    mockApiPost.mockResolvedValue({
       data: [
         {
           question: "What is the capital of France?",
