@@ -40,7 +40,8 @@ jest.mock("@features/live-quiz/api/liveQuizService", () => ({
 const statValue = (label: string) => {
   const terms = screen.getAllByRole("term").map((term) => term.textContent);
   const values = screen.getAllByRole("definition");
-  return values[terms.indexOf(label)]?.textContent;
+  // Labels may carry a short mobile variant first, e.g. "Open codesOpen access codes".
+  return values[terms.findIndex((term) => term?.endsWith(label))]?.textContent;
 };
 
 const mockedService = liveQuizService as jest.Mocked<typeof liveQuizService>;
@@ -171,11 +172,13 @@ describe("LiveQuizCreatorDashboard", () => {
   test("renders participant stats, progress and a link to submitted answers", async () => {
     render(<LiveQuizCreatorDashboard quizId="quiz-1" />);
 
-    await screen.findByText("Ada");
+    await screen.findAllByText("Ada");
     expect(statValue("Average score")).toBe("80.0%");
     expect(screen.getByText("On question 5 of 10")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "View answers" }));
+    // Rendered twice in jsdom: mobile card and desktop table.
+    const [viewAnswers] = screen.getAllByRole("button", { name: "View answers" });
+    fireEvent.click(viewAnswers);
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes/quiz-1/attempts/s-1");
   });
 

@@ -23,7 +23,6 @@ import {
   BTN_PRIMARY,
   CONTAINER,
   Kicker,
-  Microlabel,
 } from "@shared/ui/quizwerk";
 
 const formatDateTime = (isoString: string | null | undefined): string => {
@@ -63,6 +62,13 @@ const statusClass: Record<string, string> = {
 
 const FIELD =
   "mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+
+/** Slightly smaller buttons below 640px so action rows fit a 320px screen. */
+const BTN_COMPACT =
+  "max-sm:min-h-[40px] max-sm:px-[12px] max-sm:text-[13px]";
+
+const STAT_LABEL =
+  "whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.04em] text-ink/60 sm:text-[11px] sm:tracking-[0.1em]";
 
 const PANEL =
   "border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70";
@@ -188,32 +194,35 @@ export const MyLiveQuizzesPage: React.FC = () => {
         className={`${archivo.className} flex min-h-screen flex-col bg-paper text-ink`}
       >
         <NavBar />
-        <main className={`${CONTAINER} flex-1 py-[clamp(32px,5vw,56px)]`}>
-          <header className="border-b-2 border-divider pb-[28px]">
+        <main className={`${CONTAINER} flex-1 py-[clamp(24px,5vw,56px)]`}>
+          <header className="pb-[20px] sm:pb-[28px]">
             <Kicker>Live quizzes</Kicker>
-            <div className="flex flex-wrap items-end justify-between gap-[16px]">
-              <div>
-                <h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">
+            <div className="flex flex-col gap-[16px] sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-[clamp(26px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">
                   Your live sessions
                 </h1>
-                <p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">
-                  Generate access codes, watch participants join, and export
-                  results when a session ends.
+                <p className="mt-[8px] max-w-[58ch] text-[14px] leading-[22px] text-ink/[0.78] sm:mt-[12px] sm:text-[15.5px] sm:leading-[28px]">
+                  Generate access codes and watch participants join
+                  <span className="hidden sm:inline">
+                    , then export results when a session ends
+                  </span>
+                  .
                 </p>
               </div>
-              <div className="flex flex-wrap gap-[12px]">
+              <div className="grid grid-cols-2 gap-[10px] sm:flex sm:gap-[12px]">
                 <button
                   type="button"
                   onClick={() => void loadLiveQuizzes()}
                   disabled={isLoading}
-                  className={`${BTN_GHOST} disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`${BTN_GHOST} ${BTN_COMPACT} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   Refresh
                 </button>
                 <button
                   type="button"
                   onClick={() => router.push(ROUTES.GENERATE)}
-                  className={BTN_PRIMARY}
+                  className={`${BTN_PRIMARY} ${BTN_COMPACT}`}
                 >
                   Create quiz
                 </button>
@@ -222,17 +231,23 @@ export const MyLiveQuizzesPage: React.FC = () => {
           </header>
 
           {!isLoading && quizzes.length > 0 && (
-            <dl className="grid gap-[14px] pt-[28px] sm:grid-cols-3">
+            <dl className="grid grid-cols-3 gap-[10px] sm:gap-[14px]">
               {[
-                ["Live quizzes", quizzes.length],
-                ["Open access codes", openCodeCount],
-                ["Participants", participantTotal],
-              ].map(([label, value]) => (
-                <div key={label} className="border-t-2 border-divider pt-[14px]">
-                  <dt className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-ink/60">
-                    {label}
+                ["Quizzes", "Live quizzes", quizzes.length],
+                ["Open codes", "Open access codes", openCodeCount],
+                ["Joined", "Participants", participantTotal],
+              ].map(([short, label, value]) => (
+                <div
+                  key={label}
+                  className="min-w-0 border-t-2 border-divider pt-[10px] sm:pt-[14px]"
+                >
+                  <dt className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-ink/60 sm:text-[12px] sm:tracking-[0.08em]">
+                    <span aria-hidden="true" className="sm:hidden">
+                      {short}
+                    </span>
+                    <span className="max-sm:sr-only">{label}</span>
                   </dt>
-                  <dd className="mt-[4px] text-[30px] font-extrabold [font-variant-numeric:tabular-nums]">
+                  <dd className="mt-[2px] text-[22px] font-extrabold [font-variant-numeric:tabular-nums] sm:mt-[4px] sm:text-[30px]">
                     {value}
                   </dd>
                 </div>
@@ -240,13 +255,21 @@ export const MyLiveQuizzesPage: React.FC = () => {
             </dl>
           )}
 
-          <section aria-labelledby="sessions-heading" className="pt-[36px]">
-            <Kicker>All sessions</Kicker>
-            <h2 id="sessions-heading" className="text-[20px] font-extrabold">
+          <section
+            aria-labelledby="sessions-heading"
+            className="pt-[28px] sm:pt-[36px]"
+          >
+            <div className="hidden sm:block">
+              <Kicker>All sessions</Kicker>
+            </div>
+            <h2
+              id="sessions-heading"
+              className="text-[18px] font-extrabold sm:text-[20px]"
+            >
               Quizzes and access codes
             </h2>
 
-            <div className="mt-[20px]">
+            <div className="mt-[14px] sm:mt-[20px]">
               {isLoading ? (
                 <p className={PANEL}>Loading live quizzes...</p>
               ) : quizzes.length === 0 ? (
@@ -259,153 +282,152 @@ export const MyLiveQuizzesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => router.push(ROUTES.GENERATE)}
-                    className={`${BTN_PRIMARY} mt-[16px]`}
+                    className={`${BTN_PRIMARY} ${BTN_COMPACT} mt-[16px]`}
                   >
                     Create quiz
                   </button>
                 </div>
               ) : (
-                <ul className="grid gap-[12px]">
+                <ul className="grid gap-[10px] sm:gap-[12px]">
                   {quizzes.map((quiz) => {
                     const codeExpired = isExpired(quiz.access_code_expires_at);
                     const isMenuOpen = openActionsQuizId === quiz.quiz_id;
                     return (
                       <li
                         key={quiz.quiz_id}
-                        className="grid gap-[18px] border-2 border-divider bg-paper p-[16px] transition hover:border-ink/60 sm:p-[20px] lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] lg:items-center"
+                        className="border-2 border-divider bg-paper p-[14px] transition hover:border-ink/60 sm:p-[20px]"
                       >
-                        <div className="min-w-0">
-                          <span
-                            className={`${CHIP} ${
-                              statusClass[quiz.status] ||
-                              "border-ink/20 bg-ink/[0.06] text-ink/75"
-                            }`}
-                          >
-                            {quiz.status === "active" && (
-                              <span className="h-[6px] w-[6px] animate-live-pulse bg-paper" />
+                        <div className="flex flex-col gap-[14px] md:flex-row md:items-start md:justify-between md:gap-[24px]">
+                          <div className="min-w-0">
+                            <span
+                              className={`${CHIP} ${
+                                statusClass[quiz.status] ||
+                                "border-ink/20 bg-ink/[0.06] text-ink/75"
+                              }`}
+                            >
+                              {quiz.status === "active" && (
+                                <span className="h-[6px] w-[6px] animate-live-pulse bg-paper" />
+                              )}
+                              {statusLabel[quiz.status] || quiz.status}
+                            </span>
+                            <h3 className="mt-[8px] break-words text-[16px] font-extrabold leading-[1.3] sm:mt-[10px] sm:text-[18px]">
+                              {quiz.title}
+                            </h3>
+                            <p className="mt-[2px] text-[12px] text-ink/65 sm:mt-[3px] sm:text-[13px]">
+                              Created {formatDateTime(quiz.created_at)}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-[8px] md:shrink-0 md:flex-nowrap">
+                            {(!quiz.access_code || codeExpired) && (
+                              <button
+                                type="button"
+                                onClick={() => openGenerationDialog(quiz)}
+                                className={`${BTN_PRIMARY} ${BTN_COMPACT} basis-full sm:basis-auto`}
+                              >
+                                {quiz.access_code
+                                  ? "New access code"
+                                  : "Generate access code"}
+                              </button>
                             )}
-                            {statusLabel[quiz.status] || quiz.status}
-                          </span>
-                          <h3 className="mt-[10px] break-words text-[17px] font-extrabold leading-[1.3]">
-                            {quiz.title}
-                          </h3>
-                          <p className="mt-[3px] text-[13px] text-ink/65">
-                            Created {formatDateTime(quiz.created_at)}
-                          </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                router.push(ROUTES.myLiveQuiz(quiz.quiz_id))
+                              }
+                              className={`${BTN_GHOST} ${BTN_COMPACT} flex-1 sm:flex-none`}
+                            >
+                              View details
+                            </button>
+                            <div
+                              className="relative"
+                              ref={isMenuOpen ? actionsMenuRef : undefined}
+                            >
+                              <button
+                                type="button"
+                                aria-label={`More actions for ${quiz.title}`}
+                                aria-expanded={isMenuOpen}
+                                onClick={() =>
+                                  setOpenActionsQuizId((current) =>
+                                    current === quiz.quiz_id
+                                      ? null
+                                      : quiz.quiz_id,
+                                  )
+                                }
+                                disabled={exportingQuizId === quiz.quiz_id}
+                                className={`${BTN_GHOST} ${BTN_COMPACT} w-[44px] text-[20px] leading-none max-sm:w-[40px] max-sm:text-[18px] disabled:cursor-wait disabled:opacity-50`}
+                              >
+                                &#8942;
+                              </button>
+                              {isMenuOpen && (
+                                <div className="absolute right-0 z-20 mt-[6px] w-[180px] border-2 border-ink bg-paper py-[8px] text-left">
+                                  <p className="px-[14px] pb-[6px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
+                                    Export results
+                                  </p>
+                                  {(["csv", "pdf", "txt"] as const).map(
+                                    (format) => (
+                                      <button
+                                        key={format}
+                                        type="button"
+                                        onClick={() =>
+                                          exportResults(quiz, format)
+                                        }
+                                        className="block w-full px-[14px] py-[8px] text-left text-[14px] font-semibold hover:bg-ink/[0.07] focus-visible:bg-ink/[0.07] focus-visible:outline-none"
+                                      >
+                                        {format === "txt"
+                                          ? "Text"
+                                          : format.toUpperCase()}
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        <div>
-                          <Microlabel>Access code</Microlabel>
-                          {quiz.access_code ? (
-                            <>
-                              <p
-                                className={`font-mono text-[20px] font-extrabold tracking-[0.12em] ${
-                                  codeExpired ? "text-ink/40 line-through" : ""
-                                }`}
-                              >
-                                {quiz.access_code}
-                              </p>
-                              <p
-                                className={`mt-[2px] text-[12px] ${
-                                  codeExpired
-                                    ? "font-extrabold text-red-700"
-                                    : "text-ink/65"
-                                }`}
-                              >
-                                {codeExpired ? "Expired" : "Expires"}{" "}
-                                {formatDateTime(quiz.access_code_expires_at)}
-                              </p>
-                            </>
-                          ) : (
-                            <p className="text-[14px] text-ink/65">No code yet</p>
-                          )}
-                        </div>
-
-                        <dl className="grid grid-cols-3 gap-[12px]">
+                        <dl className="mt-[14px] grid grid-cols-3 gap-x-[10px] gap-y-[12px] border-t-2 border-divider pt-[12px] sm:mt-[18px] sm:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))] sm:gap-x-[24px] sm:pt-[16px]">
+                          <div className="col-span-3 min-w-0 sm:col-span-1">
+                            <dt className={STAT_LABEL}>Access code</dt>
+                            {quiz.access_code ? (
+                              <dd className="mt-[4px]">
+                                <span
+                                  className={`block font-mono text-[18px] font-extrabold tracking-[0.12em] sm:text-[20px] ${
+                                    codeExpired ? "text-ink/40 line-through" : ""
+                                  }`}
+                                >
+                                  {quiz.access_code}
+                                </span>
+                                <span
+                                  className={`mt-[2px] block text-[12px] ${
+                                    codeExpired
+                                      ? "font-extrabold text-red-700"
+                                      : "text-ink/65"
+                                  }`}
+                                >
+                                  {codeExpired ? "Expired" : "Expires"}{" "}
+                                  {formatDateTime(quiz.access_code_expires_at)}
+                                </span>
+                              </dd>
+                            ) : (
+                              <dd className="mt-[4px] text-[14px] text-ink/65">
+                                No code yet
+                              </dd>
+                            )}
+                          </div>
                           {[
                             ["Joined", quiz.participant_count],
                             ["Completed", quiz.completed_count],
-                            ["Avg score", quiz.average_score ?? "-"],
+                            ["Avg score", quiz.average_score ?? "—"],
                           ].map(([label, value]) => (
-                            <div key={label}>
-                              <dt className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
-                                {label}
-                              </dt>
-                              <dd className="mt-[2px] text-[18px] font-extrabold [font-variant-numeric:tabular-nums]">
+                            <div key={label} className="min-w-0">
+                              <dt className={STAT_LABEL}>{label}</dt>
+                              <dd className="mt-[4px] text-[17px] font-extrabold [font-variant-numeric:tabular-nums] sm:text-[20px]">
                                 {value}
                               </dd>
                             </div>
                           ))}
                         </dl>
-
-                        <div className="flex flex-wrap items-center gap-[8px] lg:justify-end">
-                          {(!quiz.access_code || codeExpired) && (
-                            <button
-                              type="button"
-                              onClick={() => openGenerationDialog(quiz)}
-                              className={BTN_PRIMARY}
-                            >
-                              {quiz.access_code
-                                ? "New access code"
-                                : "Generate access code"}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push(ROUTES.myLiveQuiz(quiz.quiz_id))
-                            }
-                            className={BTN_GHOST}
-                          >
-                            View details
-                          </button>
-                          <div
-                            className="relative"
-                            ref={isMenuOpen ? actionsMenuRef : undefined}
-                          >
-                            <button
-                              type="button"
-                              aria-label={`More actions for ${quiz.title}`}
-                              aria-expanded={isMenuOpen}
-                              onClick={() =>
-                                setOpenActionsQuizId((current) =>
-                                  current === quiz.quiz_id
-                                    ? null
-                                    : quiz.quiz_id,
-                                )
-                              }
-                              disabled={exportingQuizId === quiz.quiz_id}
-                              className={`${BTN_GHOST} w-[44px] text-[20px] leading-none disabled:cursor-wait disabled:opacity-50`}
-                            >
-                              &#8942;
-                            </button>
-                            {isMenuOpen && (
-                              <div
-                                className="absolute right-0 z-20 mt-[6px] w-[190px] border-2 border-ink bg-paper py-[8px] text-left"
-                              >
-                                <p className="px-[14px] pb-[6px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
-                                  Export results
-                                </p>
-                                {(["csv", "pdf", "txt"] as const).map(
-                                  (format) => (
-                                    <button
-                                      key={format}
-                                      type="button"
-                                      onClick={() =>
-                                        exportResults(quiz, format)
-                                      }
-                                      className="block w-full px-[14px] py-[8px] text-left text-[14px] font-semibold hover:bg-ink/[0.07] focus-visible:bg-ink/[0.07] focus-visible:outline-none"
-                                    >
-                                      {format === "txt"
-                                        ? "Text"
-                                        : format.toUpperCase()}
-                                    </button>
-                                  ),
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
                       </li>
                     );
                   })}
@@ -417,7 +439,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
 
         {quizToGenerateFor && (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 p-[20px]"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 p-[12px] sm:p-[20px]"
             role="presentation"
             onClick={() => !isGenerating && setQuizToGenerateFor(null)}
           >
@@ -427,12 +449,12 @@ export const MyLiveQuizzesPage: React.FC = () => {
               aria-labelledby="access-code-title"
               onSubmit={generateAccessCode}
               onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-[480px] border-2 border-ink bg-paper p-[24px] sm:p-[28px]"
+              className="w-full max-w-[480px] border-2 border-ink bg-paper p-[18px] sm:p-[28px]"
             >
               <Kicker>Access code</Kicker>
               <h2
                 id="access-code-title"
-                className="text-[24px] font-extrabold leading-[1.15]"
+                className="text-[20px] font-extrabold leading-[1.15] sm:text-[24px]"
               >
                 {quizToGenerateFor.access_code
                   ? "Generate a new access code"
@@ -466,7 +488,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                   />
                 </label>
               </div>
-              <div className="mt-[24px] flex flex-wrap justify-end gap-[12px]">
+              <div className="mt-[20px] grid grid-cols-2 gap-[10px] sm:mt-[24px] sm:flex sm:justify-end sm:gap-[12px]">
                 <button
                   type="button"
                   onClick={() => setQuizToGenerateFor(null)}

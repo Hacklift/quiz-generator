@@ -49,6 +49,13 @@ const statusLabel: Record<string, string> = {
 
 const reconnectDelays = [1000, 2000, 5000, 10000];
 
+/** Slightly smaller buttons below 640px so action rows fit a 320px screen. */
+const BTN_COMPACT =
+  "max-sm:min-h-[40px] max-sm:px-[12px] max-sm:text-[13px]";
+
+const STAT_LABEL =
+  "whitespace-nowrap text-[10px] font-extrabold uppercase tracking-[0.04em] text-ink/60 sm:text-[11px] sm:tracking-[0.1em]";
+
 const PANEL =
   "border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70";
 
@@ -83,7 +90,7 @@ function LiveQuizShell({ children }: { children: React.ReactNode }) {
       className={`${archivo.className} flex min-h-screen flex-col bg-paper text-ink`}
     >
       <NavBar />
-      <main className={`${CONTAINER} flex-1 py-[clamp(32px,5vw,56px)]`}>
+      <main className={`${CONTAINER} flex-1 py-[clamp(24px,5vw,56px)]`}>
         {children}
       </main>
       <Footer />
@@ -91,13 +98,13 @@ function LiveQuizShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function BackToLiveQuizzes() {
+function BackToLiveQuizzes({ className = "" }: { className?: string }) {
   const router = useRouter();
   return (
     <button
       type="button"
       onClick={() => router.push(ROUTES.MY_LIVE_QUIZZES)}
-      className={BTN_GHOST}
+      className={`${BTN_GHOST} ${BTN_COMPACT} ${className}`}
     >
       All live quizzes
     </button>
@@ -312,14 +319,14 @@ export const LiveQuizCreatorDashboard: React.FC<
 
   return (
     <LiveQuizShell>
-      <header className="border-b-2 border-divider pb-[28px]">
+      <header className="pb-[20px] sm:pb-[28px]">
         <Kicker>Live session</Kicker>
-        <div className="flex flex-wrap items-end justify-between gap-[16px]">
+        <div className="flex flex-col gap-[16px] lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">
+            <h1 className="text-[clamp(26px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">
               Live quiz dashboard
             </h1>
-            <p className="mt-[12px] flex flex-wrap items-center gap-x-[14px] gap-y-[4px] text-[14px] text-ink/70">
+            <p className="mt-[8px] flex flex-wrap items-center gap-x-[14px] gap-y-[4px] text-[13px] text-ink/70 sm:mt-[12px] sm:text-[14px]">
               <span
                 className={`inline-flex items-center gap-[8px] font-extrabold ${
                   realtimeConnected ? "text-brand" : "text-amber-700"
@@ -335,14 +342,14 @@ export const LiveQuizCreatorDashboard: React.FC<
                 />
                 {realtimeConnected ? "Real time" : "Connecting"}
               </span>
-              <span className="min-w-0 break-all">
+              <span className="hidden min-w-0 break-all sm:inline">
                 Quiz ID <span className="font-mono">{quizId}</span>
               </span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-[12px]">
+          <div className="grid grid-cols-2 gap-[10px] sm:flex sm:flex-wrap sm:items-center sm:gap-[12px]">
             {userType === "teacher" || userType === "lecturer" ? (
-              <div className="flex items-stretch">
+              <div className="col-span-2 flex items-stretch">
                 <label htmlFor="results-export-format" className="sr-only">
                   Export format
                 </label>
@@ -354,7 +361,7 @@ export const LiveQuizCreatorDashboard: React.FC<
                       event.target.value as LiveResultsExportFormat,
                     )
                   }
-                  className="min-h-[44px] border-2 border-r-0 border-ink bg-paper px-[10px] text-[14px] font-extrabold"
+                  className="min-h-[40px] border-2 border-r-0 border-ink bg-paper px-[10px] text-[13px] font-extrabold sm:min-h-[44px] sm:text-[14px]"
                 >
                   <option value="csv">CSV</option>
                   <option value="pdf">PDF</option>
@@ -364,7 +371,7 @@ export const LiveQuizCreatorDashboard: React.FC<
                   type="button"
                   onClick={handleExport}
                   disabled={isExporting}
-                  className={`${BTN_PRIMARY} disabled:cursor-wait disabled:opacity-50`}
+                  className={`${BTN_PRIMARY} ${BTN_COMPACT} flex-1 sm:flex-none disabled:cursor-wait disabled:opacity-50`}
                 >
                   {isExporting ? "Exporting…" : "Export results"}
                 </button>
@@ -373,7 +380,7 @@ export const LiveQuizCreatorDashboard: React.FC<
             <button
               type="button"
               onClick={handleRefreshClick}
-              className={BTN_GHOST}
+              className={`${BTN_GHOST} ${BTN_COMPACT}`}
             >
               Refresh
             </button>
@@ -382,155 +389,263 @@ export const LiveQuizCreatorDashboard: React.FC<
         </div>
       </header>
 
-      <dl className="grid grid-cols-2 gap-[14px] pt-[28px] lg:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-[10px] gap-y-[14px] sm:gap-[14px] lg:grid-cols-4">
         {stats.map(([label, value]) => (
-          <div key={label} className="border-t-2 border-divider pt-[14px]">
-            <dt className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-ink/60">
-              {label}
-            </dt>
-            <dd className="mt-[4px] text-[30px] font-extrabold [font-variant-numeric:tabular-nums]">
+          <div
+            key={label}
+            className="min-w-0 border-t-2 border-divider pt-[10px] sm:pt-[14px]"
+          >
+            <dt className={STAT_LABEL}>{label}</dt>
+            <dd className="mt-[2px] text-[22px] font-extrabold [font-variant-numeric:tabular-nums] sm:mt-[4px] sm:text-[30px]">
               {value}
             </dd>
           </div>
         ))}
       </dl>
 
-      <section aria-labelledby="participants-heading" className="pt-[36px]">
-        <Kicker>Participants</Kicker>
-        <h2 id="participants-heading" className="text-[20px] font-extrabold">
+      <section
+        aria-labelledby="participants-heading"
+        className="pt-[28px] sm:pt-[36px]"
+      >
+        <div className="hidden sm:block">
+          <Kicker>Participants</Kicker>
+        </div>
+        <h2
+          id="participants-heading"
+          className="text-[18px] font-extrabold sm:text-[20px]"
+        >
           Who has joined
         </h2>
 
         {participants.length === 0 ? (
-          <div className={`${PANEL} mt-[20px]`}>
+          <div className={`${PANEL} mt-[14px] sm:mt-[20px]`}>
             <p className="font-extrabold text-ink">No participants yet.</p>
             <p className="mt-[4px]">
               Participants will appear here once they join the quiz.
             </p>
           </div>
         ) : (
-          <div className="mt-[20px] overflow-x-auto border-2 border-divider">
-            <table className="min-w-full divide-y-2 divide-divider text-left text-[13px]">
-              <thead className="bg-ink text-paper">
-                <tr>
-                  {[
-                    "Participant",
-                    "Status",
-                    "Score",
-                    "Progress",
-                    "Joined",
-                    "Submitted",
-                    "Duration",
-                    "Results",
-                  ].map((heading) => (
-                    <th
-                      key={heading}
-                      scope="col"
-                      className="whitespace-nowrap px-[14px] py-[12px] text-[12px] font-extrabold uppercase tracking-[0.06em]"
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-divider">
-                {participants.map((p) => {
-                  const progress = progressPercent(p);
-                  return (
-                    <tr key={p.session_id} className="hover:bg-ink/[0.04]">
-                      <td className="px-[14px] py-[12px]">
-                        <span className="block whitespace-nowrap font-extrabold">
+          <>
+            {/* Below md: one card per participant instead of a wide table. */}
+            <ul className="mt-[14px] grid gap-[10px] md:hidden">
+              {participants.map((p) => {
+                const progress = progressPercent(p);
+                return (
+                  <li
+                    key={p.session_id}
+                    className="border-2 border-divider bg-paper p-[14px]"
+                  >
+                    <div className="flex items-start justify-between gap-[10px]">
+                      <div className="min-w-0">
+                        <p className="break-words font-extrabold leading-[1.3]">
                           {p.participant_name}
-                        </span>
-                        <span className="block whitespace-nowrap text-[12px] text-ink/65">
-                          {p.participant_email || "—"}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px]">
-                        <span
-                          className={`${CHIP} ${
-                            statusBadgeColor[p.status] ||
-                            "border-ink/20 bg-ink/[0.06] text-ink/75"
-                          }`}
+                        </p>
+                        {p.participant_email && (
+                          <p className="mt-[2px] break-all text-[12px] text-ink/65">
+                            {p.participant_email}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        className={`${CHIP} shrink-0 ${
+                          statusBadgeColor[p.status] ||
+                          "border-ink/20 bg-ink/[0.06] text-ink/75"
+                        }`}
+                      >
+                        {statusLabel[p.status] || p.status}
+                      </span>
+                    </div>
+
+                    <dl className="mt-[12px] grid grid-cols-3 gap-[10px] border-t-2 border-divider pt-[10px] [font-variant-numeric:tabular-nums]">
+                      <div className="min-w-0">
+                        <dt className={STAT_LABEL}>Score</dt>
+                        <dd className="mt-[2px] text-[15px] font-extrabold">
+                          {p.score != null
+                            ? `${p.score}/${p.total_questions}`
+                            : "—"}
+                        </dd>
+                        {p.percentage != null && (
+                          <dd className="text-[11px] text-ink/65">
+                            {p.percentage.toFixed(1)}%
+                          </dd>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <dt className={STAT_LABEL}>Progress</dt>
+                        <dd className="mt-[2px] text-[15px] font-extrabold">
+                          {p.progress != null
+                            ? `${p.progress}/${p.total_questions}`
+                            : "—"}
+                        </dd>
+                        {p.progress != null && (
+                          <dd className="mt-[4px] h-[4px] bg-[#e4e3e2]">
+                            <span
+                              className="block h-full bg-brand"
+                              style={{
+                                width: `${Math.min(100, progress ?? 0)}%`,
+                              }}
+                            />
+                          </dd>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <dt className={STAT_LABEL}>Time</dt>
+                        <dd className="mt-[2px] text-[15px] font-extrabold">
+                          {formatDuration(p.duration_seconds)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mt-[10px] flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[6px] text-[12px] text-ink/65">
+                      <span>
+                        {p.submitted_at
+                          ? `Submitted ${formatDateTime(p.submitted_at)}`
+                          : p.current_question_number
+                            ? `On Q${p.current_question_number} of ${p.total_questions}`
+                            : `Joined ${formatDateTime(p.joined_at || p.started_at)}`}
+                      </span>
+                      {p.submitted_at && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              ROUTES.myLiveQuizAttempt(quizId, p.session_id),
+                            )
+                          }
+                          className="text-[13px] font-extrabold text-brand underline underline-offset-2"
                         >
-                          {statusLabel[p.status] || p.status}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px] [font-variant-numeric:tabular-nums]">
-                        {p.score != null ? (
-                          <>
-                            <span className="block font-extrabold">
-                              {p.score} / {p.total_questions}
-                            </span>
-                            {p.percentage != null && (
-                              <span className="block text-[12px] text-ink/65">
-                                {p.percentage.toFixed(1)}%
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px] [font-variant-numeric:tabular-nums]">
-                        {p.progress != null ? (
-                          <>
-                            <div className="flex items-center gap-[8px]">
-                              <div className="h-[6px] w-[72px] bg-[#e4e3e2]">
-                                <div
-                                  className="h-full bg-brand"
-                                  style={{
-                                    width: `${Math.min(100, progress ?? 0)}%`,
-                                  }}
-                                />
-                              </div>
-                              <span className="font-semibold">
-                                {p.progress} / {p.total_questions}
-                              </span>
-                            </div>
-                            {p.current_question_number ? (
-                              <span className="mt-[2px] block text-[12px] text-ink/65">
-                                On question {p.current_question_number} of{" "}
-                                {p.total_questions}
-                              </span>
-                            ) : null}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70">
-                        {formatDateTime(p.joined_at || p.started_at)}
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70">
-                        {formatDateTime(p.submitted_at)}
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70 [font-variant-numeric:tabular-nums]">
-                        {formatDuration(p.duration_seconds)}
-                      </td>
-                      <td className="whitespace-nowrap px-[14px] py-[12px]">
-                        {p.submitted_at ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push(
-                                ROUTES.myLiveQuizAttempt(quizId, p.session_id),
-                              )
-                            }
-                            className="font-extrabold text-brand underline underline-offset-2 hover:text-brand-600"
+                          View answers
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-[20px] hidden overflow-x-auto border-2 border-divider md:block">
+              <table className="min-w-full divide-y-2 divide-divider text-left text-[13px]">
+                <thead className="bg-ink text-paper">
+                  <tr>
+                    {[
+                      "Participant",
+                      "Status",
+                      "Score",
+                      "Progress",
+                      "Joined",
+                      "Submitted",
+                      "Duration",
+                      "Results",
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        scope="col"
+                        className="whitespace-nowrap px-[14px] py-[12px] text-[12px] font-extrabold uppercase tracking-[0.06em]"
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-divider">
+                  {participants.map((p) => {
+                    const progress = progressPercent(p);
+                    return (
+                      <tr key={p.session_id} className="hover:bg-ink/[0.04]">
+                        <td className="px-[14px] py-[12px]">
+                          <span className="block whitespace-nowrap font-extrabold">
+                            {p.participant_name}
+                          </span>
+                          <span className="block whitespace-nowrap text-[12px] text-ink/65">
+                            {p.participant_email || "—"}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px]">
+                          <span
+                            className={`${CHIP} ${
+                              statusBadgeColor[p.status] ||
+                              "border-ink/20 bg-ink/[0.06] text-ink/75"
+                            }`}
                           >
-                            View answers
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            {statusLabel[p.status] || p.status}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px] [font-variant-numeric:tabular-nums]">
+                          {p.score != null ? (
+                            <>
+                              <span className="block font-extrabold">
+                                {p.score} / {p.total_questions}
+                              </span>
+                              {p.percentage != null && (
+                                <span className="block text-[12px] text-ink/65">
+                                  {p.percentage.toFixed(1)}%
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px] [font-variant-numeric:tabular-nums]">
+                          {p.progress != null ? (
+                            <>
+                              <div className="flex items-center gap-[8px]">
+                                <div className="h-[6px] w-[72px] bg-[#e4e3e2]">
+                                  <div
+                                    className="h-full bg-brand"
+                                    style={{
+                                      width: `${Math.min(100, progress ?? 0)}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span className="font-semibold">
+                                  {p.progress} / {p.total_questions}
+                                </span>
+                              </div>
+                              {p.current_question_number ? (
+                                <span className="mt-[2px] block text-[12px] text-ink/65">
+                                  On question {p.current_question_number} of{" "}
+                                  {p.total_questions}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70">
+                          {formatDateTime(p.joined_at || p.started_at)}
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70">
+                          {formatDateTime(p.submitted_at)}
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px] text-ink/70 [font-variant-numeric:tabular-nums]">
+                          {formatDuration(p.duration_seconds)}
+                        </td>
+                        <td className="whitespace-nowrap px-[14px] py-[12px]">
+                          {p.submitted_at ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                router.push(
+                                  ROUTES.myLiveQuizAttempt(quizId, p.session_id),
+                                )
+                              }
+                              className="font-extrabold text-brand underline underline-offset-2 hover:text-brand-600"
+                            >
+                              View answers
+                            </button>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </LiveQuizShell>
