@@ -63,10 +63,14 @@ def _notification_document(
     action_url: str,
     dedupe_key: str,
     now: datetime,
+    organization_id: str | None = None,
+    created_by_user_id: str | None = None,
 ) -> dict:
     document = build_notification_document(
         NotificationCreate(
             user_id=user_id,
+            organization_id=organization_id,
+            created_by_user_id=created_by_user_id,
             title=title,
             message=message,
             type=NotificationType.TRAINING,
@@ -166,6 +170,8 @@ def _finalize_expired_session(
                     action_url="/assigned-training",
                     dedupe_key=f"training-assignment:{assignment['_id']}:completed",
                     now=now,
+                    organization_id=run.get("organization_id"),
+                    created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
                 ),
             )
 
@@ -188,6 +194,8 @@ def _finalize_expired_session(
                 f"training-run:{run['_id']}:session:{updated['_id']}:owner-completed"
             ),
             now=now,
+            organization_id=run.get("organization_id"),
+            created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
         ),
     )
 

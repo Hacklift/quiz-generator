@@ -33,6 +33,8 @@ from server.app.db.core.connection import (
     get_users_collection,
 )
 from server.app.users.models import UserOut
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.models import OrganizationContext
 
 
 router = APIRouter()
@@ -80,9 +82,14 @@ def get_training_run_service(
 @router.get("/training-runs/owned-quizzes")
 async def list_owned_training_quizzes(
     current_user: UserOut = Depends(get_training_manager_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.list_owned_quizzes(str(current_user.id))
+    return await service.list_owned_quizzes(
+        str(current_user.id),
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.post("/training-runs", response_model=TrainingRunSummary)
@@ -93,6 +100,7 @@ async def create_training_run(
     response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: UserOut = Depends(get_training_manager_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
     normalized_key = idempotency_key.strip() if idempotency_key else ""
@@ -105,25 +113,39 @@ async def create_training_run(
             detail="A valid Idempotency-Key header is required to create a training run",
         )
     return await service.create_run(
-        payload, str(current_user.id), normalized_key
+        payload,
+        str(current_user.id),
+        normalized_key,
+        organization_id=organization.organization_id,
     )
 
 
 @router.get("/training-runs", response_model=List[TrainingRunSummary])
 async def list_training_runs(
     current_user: UserOut = Depends(get_training_manager_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.list_owner_runs(str(current_user.id))
+    return await service.list_owner_runs(
+        str(current_user.id),
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.get("/training-runs/{run_id}", response_model=TrainingRunDetail)
 async def get_training_run(
     run_id: str,
     current_user: UserOut = Depends(get_training_manager_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.get_owner_run(run_id, str(current_user.id))
+    return await service.get_owner_run(
+        run_id,
+        str(current_user.id),
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.post("/training-runs/{run_id}/close", response_model=TrainingRunSummary)
@@ -131,26 +153,44 @@ async def close_training_run(
     run_id: str,
     payload: CloseTrainingRunRequest,
     current_user: UserOut = Depends(get_training_manager_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.close_owner_run(run_id, str(current_user.id))
+    return await service.close_owner_run(
+        run_id,
+        str(current_user.id),
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.get("/training-assignments/mine", response_model=List[TrainingAssignmentSummary])
 async def list_my_training_assignments(
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.list_my_assignments(str(current_user.id), str(current_user.email))
+    return await service.list_my_assignments(
+        str(current_user.id),
+        str(current_user.email),
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.post("/training-assignments/{assignment_id}/start", response_model=StartLiveQuizSessionResponse)
 async def start_training_assignment(
     assignment_id: str,
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.start_assignment(assignment_id, current_user)
+    return await service.start_assignment(
+        assignment_id,
+        current_user,
+        organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
+    )
 
 
 @router.get("/training-runs/access/{access_code}", response_model=TrainingRunAccessPreview)

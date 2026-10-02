@@ -333,6 +333,7 @@ class ReferenceV2Repository:
         quiz_id: Optional[str] = None,
         saved_quiz_id: Optional[str] = None,
         added_by: Optional[str] = None,
+        organization_id: Optional[str] = None,
         position: Optional[int] = None,
         display_title: Optional[str] = None,
     ) -> FolderItemDocumentV2 | None:
@@ -343,6 +344,7 @@ class ReferenceV2Repository:
                 "quiz_id": quiz_id,
                 "saved_quiz_id": saved_quiz_id,
                 "added_by": added_by,
+                "organization_id": organization_id,
                 "position": position,
                 "display_title": display_title,
             }.items()
