@@ -40,8 +40,53 @@ const tomorrowLocalValue = () => {
   return date.toISOString().slice(0, 16);
 };
 
+// Mirrors the server's join check: a code without an expiry is rejected
+// ("Access code has expired"), so it is treated as unusable here too.
 const isExpired = (expiresAt: string | null | undefined) =>
   !expiresAt || new Date(expiresAt).getTime() <= Date.now();
+
+const MAX_DURATION_MINUTES = 1440;
+
+type AccessCodeFormError = {
+  field: "duration" | "expiresAt";
+  message: string;
+};
+
+/** Returns the first invalid field and a user-facing message, if any. */
+const validateAccessCodeForm = (
+  durationInput: string,
+  expiresAtInput: string,
+): AccessCodeFormError | null => {
+  const minutes = Number(durationInput);
+  if (
+    durationInput.trim() === "" ||
+    !Number.isInteger(minutes) ||
+    minutes < 1 ||
+    minutes > MAX_DURATION_MINUTES
+  ) {
+    return {
+      field: "duration",
+      message: `Enter a duration between 1 and ${MAX_DURATION_MINUTES} whole minutes.`,
+    };
+  }
+  const expiry = new Date(expiresAtInput).getTime();
+  if (!expiresAtInput || Number.isNaN(expiry)) {
+    return {
+      field: "expiresAt",
+      message: "Choose when the access code expires.",
+    };
+  }
+  if (expiry <= Date.now()) {
+    return {
+      field: "expiresAt",
+      message: "Choose an expiry time in the future.",
+    };
+  }
+  return null;
+};
+
+const FOCUSABLE =
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
 const statusLabel: Record<string, string> = {
   active: "Active",
@@ -79,7 +124,10 @@ export const MyLiveQuizzesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [quizToGenerateFor, setQuizToGenerateFor] =
     useState<LiveQuizSummary | null>(null);
-  const [duration, setDuration] = useState(20);
+  const [duration, setDuration] = useState("20");
+  const [formError, setFormError] = useState<AccessCodeFormError | null>(
+    null,
+  );
   const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportingQuizId, setExportingQuizId] = useState<string | null>(null);
@@ -87,6 +135,9 @@ export const MyLiveQuizzesPage: React.FC = () => {
     null,
   );
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLFormElement | null>(null);
+  const durationInputRef = useRef<HTMLInputElement | null>(null);
+  const dialogTriggerRef = useRef<HTMLElement | null>(null);
 
   const loadLiveQuizzes = useCallback(async () => {
     try {
@@ -115,7 +166,11 @@ export const MyLiveQuizzesPage: React.FC = () => {
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenActionsQuizId(null);
+      if (event.key !== "Escape") return;
+      actionsMenuRef.current
+        ?.querySelector<HTMLButtonElement>("button[aria-expanded]")
+        ?.focus();
+      setOpenActionsQuizId(null);
     };
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -126,26 +181,77 @@ export const MyLiveQuizzesPage: React.FC = () => {
   }, [openActionsQuizId]);
 
   const openGenerationDialog = (quiz: LiveQuizSummary) => {
+    dialogTriggerRef.current = document.activeElement as HTMLElement | null;
     setQuizToGenerateFor(quiz);
-    setDuration(quiz.time_limit_minutes || 20);
+    setDuration(String(quiz.time_limit_minutes || 20));
     setExpiresAt(tomorrowLocalValue());
+    setFormError(null);
+  };
+
+  const closeGenerationDialog = useCallback(() => {
+    if (isGenerating) return;
+    setQuizToGenerateFor(null);
+    setFormError(null);
+    dialogTriggerRef.current?.focus();
+  }, [isGenerating]);
+
+  const isDialogOpen = quizToGenerateFor !== null;
+
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    durationInputRef.current?.focus();
+  }, [isDialogOpen]);
+
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeGenerationDialog();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isDialogOpen, closeGenerationDialog]);
+
+  // Keep Tab / Shift+Tab inside the dialog while it is open.
+  const trapDialogFocus = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Tab" || !dialogRef.current) return;
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+    );
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const generateAccessCode = async (event: FormEvent) => {
     event.preventDefault();
     if (!quizToGenerateFor) return;
 
+    const validationError = validateAccessCodeForm(duration, expiresAt);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+    setFormError(null);
+
     try {
       setIsGenerating(true);
       const response = await liveQuizService.createAccessCode({
         quizId: quizToGenerateFor.quiz_id,
-        time_limit_minutes: duration,
+        time_limit_minutes: Number(duration),
         access_code_expires_at: new Date(expiresAt).toISOString(),
         participant_access_mode:
           quizToGenerateFor.participant_access_mode || "public",
         invited_emails: quizToGenerateFor.invited_emails || [],
       });
       setQuizToGenerateFor(null);
+      dialogTriggerRef.current = null;
       await loadLiveQuizzes();
       toast.success(`Access code ${response.access_code} generated.`);
     } catch (error: any) {
@@ -163,15 +269,16 @@ export const MyLiveQuizzesPage: React.FC = () => {
   ) => {
     setOpenActionsQuizId(null);
     setExportingQuizId(quiz.quiz_id);
+    const toastId = toast.loading("Preparing results export...");
     try {
       await downloadLiveResults(
         quiz.quiz_id,
         format,
         `${quiz.title || "live-quiz"}-results`,
       );
-      toast.success("Session results downloaded.");
+      toast.success("Session results downloaded.", { id: toastId });
     } catch {
-      toast.error("Could not export session results.");
+      toast.error("Could not export session results.", { id: toastId });
     } finally {
       setExportingQuizId(null);
     }
@@ -405,8 +512,9 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                       : "text-ink/65"
                                   }`}
                                 >
-                                  {codeExpired ? "Expired" : "Expires"}{" "}
-                                  {formatDateTime(quiz.access_code_expires_at)}
+                                  {!quiz.access_code_expires_at
+                                    ? "No expiry set"
+                                    : `${codeExpired ? "Expired" : "Expires"} ${formatDateTime(quiz.access_code_expires_at)}`}
                                 </span>
                               </dd>
                             ) : (
@@ -441,13 +549,16 @@ export const MyLiveQuizzesPage: React.FC = () => {
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 p-[12px] sm:p-[20px]"
             role="presentation"
-            onClick={() => !isGenerating && setQuizToGenerateFor(null)}
+            onClick={closeGenerationDialog}
           >
             <form
               role="dialog"
               aria-modal="true"
               aria-labelledby="access-code-title"
+              ref={dialogRef}
+              noValidate
               onSubmit={generateAccessCode}
+              onKeyDown={trapDialogFocus}
               onClick={(event) => event.stopPropagation()}
               className="w-full max-w-[480px] border-2 border-ink bg-paper p-[18px] sm:p-[28px]"
             >
@@ -468,13 +579,23 @@ export const MyLiveQuizzesPage: React.FC = () => {
                 <label className="block text-[13px] font-extrabold">
                   Duration minutes
                   <input
+                    ref={durationInputRef}
                     type="number"
+                    inputMode="numeric"
                     min={1}
-                    max={1440}
+                    max={MAX_DURATION_MINUTES}
+                    step={1}
                     value={duration}
-                    onChange={(event) =>
-                      setDuration(Number(event.target.value))
+                    aria-invalid={formError?.field === "duration" || undefined}
+                    aria-describedby={
+                      formError?.field === "duration"
+                        ? "access-code-error"
+                        : undefined
                     }
+                    onChange={(event) => {
+                      setDuration(event.target.value);
+                      setFormError(null);
+                    }}
                     className={FIELD}
                   />
                 </label>
@@ -483,15 +604,33 @@ export const MyLiveQuizzesPage: React.FC = () => {
                   <input
                     type="datetime-local"
                     value={expiresAt}
-                    onChange={(event) => setExpiresAt(event.target.value)}
+                    aria-invalid={formError?.field === "expiresAt" || undefined}
+                    aria-describedby={
+                      formError?.field === "expiresAt"
+                        ? "access-code-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setExpiresAt(event.target.value);
+                      setFormError(null);
+                    }}
                     className={FIELD}
                   />
                 </label>
               </div>
+              {formError && (
+                <p
+                  id="access-code-error"
+                  role="alert"
+                  className="mt-[14px] border-l-4 border-red-700 pl-[10px] text-[13px] font-extrabold leading-[20px] text-red-700"
+                >
+                  {formError.message}
+                </p>
+              )}
               <div className="mt-[20px] grid grid-cols-2 gap-[10px] sm:mt-[24px] sm:flex sm:justify-end sm:gap-[12px]">
                 <button
                   type="button"
-                  onClick={() => setQuizToGenerateFor(null)}
+                  onClick={closeGenerationDialog}
                   disabled={isGenerating}
                   className={`${BTN_GHOST} disabled:cursor-not-allowed disabled:opacity-50`}
                 >

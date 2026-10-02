@@ -129,6 +129,65 @@ describe("MyLiveQuizzesPage", () => {
     expect(screen.queryByRole("button", { name: "CSV" })).not.toBeInTheDocument();
   });
 
+  test("access code dialog focuses the duration field and closes on Escape", async () => {
+    render(<MyLiveQuizzesPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New access code" }));
+
+    expect(screen.getByLabelText("Duration minutes")).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("rejects an empty duration without calling the API", async () => {
+    render(<MyLiveQuizzesPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New access code" }));
+
+    const durationInput = screen.getByLabelText("Duration minutes");
+    fireEvent.change(durationInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Enter a duration between 1 and 1440 whole minutes.",
+    );
+    expect(durationInput).toHaveAttribute("aria-invalid", "true");
+    expect(mockedService.createAccessCode).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  test("rejects an expiry time in the past without calling the API", async () => {
+    render(<MyLiveQuizzesPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New access code" }));
+
+    fireEvent.change(screen.getByLabelText("Access code expires"), {
+      target: { value: "2000-01-01T10:00" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Choose an expiry time in the future.",
+    );
+    expect(mockedService.createAccessCode).not.toHaveBeenCalled();
+  });
+
+  test("treats a code without an expiry as unusable", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      {
+        quiz_id: "quiz-no-expiry",
+        title: "Physics Session",
+        status: "active",
+        access_code: "PHY777",
+        access_code_expires_at: null,
+        participant_count: 0,
+        completed_count: 0,
+      },
+    ]);
+    render(<MyLiveQuizzesPage />);
+
+    expect(await screen.findByText("No expiry set")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New access code" })).toBeInTheDocument();
+  });
+
   test("shows an empty state when there are no live quizzes", async () => {
     mockedService.listLiveQuizzes.mockResolvedValue([]);
     render(<MyLiveQuizzesPage />);

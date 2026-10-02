@@ -159,7 +159,11 @@ export const LiveQuizCreatorDashboard: React.FC<
           setError("Quiz not found.");
           return;
         }
-        if (mountedRef.current && !showLoading) {
+        if (!mountedRef.current) return;
+        if (showLoading) {
+          // Keep the current list visible; just report the failed refresh.
+          toast.error("Could not refresh participants. Try again.");
+        } else {
           setError("Could not load participants.");
         }
       } finally {
@@ -260,11 +264,12 @@ export const LiveQuizCreatorDashboard: React.FC<
 
   const handleExport = async () => {
     setIsExporting(true);
+    const toastId = toast.loading("Preparing results export...");
     try {
       await downloadLiveResults(quizId, exportFormat, "live-quiz-results");
-      toast.success("Session results downloaded.");
+      toast.success("Session results downloaded.", { id: toastId });
     } catch {
-      toast.error("Could not export session results.");
+      toast.error("Could not export session results.", { id: toastId });
     } finally {
       setIsExporting(false);
     }
