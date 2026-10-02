@@ -183,7 +183,13 @@ async def get_optional_active_organization_context(
     organizations_collection=Depends(get_organizations_collection),
     memberships_collection=Depends(get_organization_memberships_collection),
 ) -> OrganizationContext | None:
-    """Resolve tenant scope for authenticated optional-auth endpoints only."""
+    """Resolve tenant scope when optional authentication produced a user.
+
+    Anonymous callers receive ``None`` from ``get_current_user_optional``.
+    Once that dependency has resolved a valid user and session, however, a
+    missing or changing organization scope is a real authenticated-state
+    failure, not permission to silently perform the request as a guest.
+    """
     if current_user is None:
         return None
     session_id = current_user.session_id
@@ -197,22 +203,10 @@ async def get_optional_active_organization_context(
         session_id=session_id,
         platform_role=current_user.role or "user",
     )
-    try:
-        return await resolve_active_organization_context(
-            current_user=current_user,
-            principal=principal,
-            sessions_collection=sessions_collection,
-            organizations_collection=organizations_collection,
-            memberships_collection=memberships_collection,
-        )
-    except HTTPException as exc:
-        # Optional routes retain guest behavior when an authenticated identity
-        # cannot prove a usable tenant. Callers must not persist tenant-owned
-        # data unless this dependency returns an organization context.
-        if exc.status_code in {
-            status.HTTP_401_UNAUTHORIZED,
-            status.HTTP_403_FORBIDDEN,
-            status.HTTP_409_CONFLICT,
-        }:
-            return None
-        raise
+    return await resolve_active_organization_context(
+        current_user=current_user,
+        principal=principal,
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
+    )

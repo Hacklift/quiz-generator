@@ -87,6 +87,16 @@ async def generate_document_quiz(
             detail="An active organization is required to generate a live quiz access code",
         )
 
+    if current_user is not None and organization is None:
+        # Optional authentication means a missing Authorization header is
+        # allowed. It does not mean a verified authenticated identity may be
+        # silently downgraded to a guest when its server-side tenant context
+        # is changing or unavailable, which would discard its saved quiz.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization context is unavailable; retry shortly",
+        )
+
     if live_quiz_enabled and (not time_limit_minutes or not access_code_expires_at):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -144,10 +154,9 @@ async def generate_document_quiz(
             detail="The provided material is too short to generate a quiz from.",
         )
 
-    # Optional authentication degrades to guest generation when the identity
-    # cannot prove a current tenant. This prevents an unscoped canonical quiz
-    # from being written for a logged-in user during membership reconciliation.
-    user_id = str(current_user.id) if current_user and organization else None
+    # Guest document generation is intentionally ephemeral. Authenticated
+    # generation always has a proven tenant due to the guard above.
+    user_id = str(current_user.id) if current_user else None
     try:
         rag_result = await generate_document_quiz_with_rag(
             document=document,

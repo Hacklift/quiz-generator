@@ -74,52 +74,28 @@ async def test_guest_document_generation_does_not_persist_a_canonical_quiz(monke
 
 
 @pytest.mark.asyncio
-async def test_unscoped_authenticated_document_generation_degrades_to_ephemeral_guest(monkeypatch):
-    """An optional-auth tenant failure must never create an unscoped quiz."""
+async def test_unscoped_authenticated_document_generation_fails_before_generation():
+    """A valid identity without tenant scope must not silently lose persistence."""
 
-    async def generate_document_quiz_with_rag(**kwargs):
-        assert kwargs["user_id"] is None
-        return SimpleNamespace(
-            title="Unscoped material quiz",
-            description="Generated from pasted text",
-            retrieval_query="guest material",
-            retrieved_chunks=[SimpleNamespace()],
-            questions=[
-                {
-                    "question": "Question?",
-                    "options": ["A", "B"],
-                    "answer": "A",
-                    "question_type": "multichoice",
-                }
-            ],
-            rag_strategy="embedding_mmr",
-            embedding_cache_hit=False,
+    with pytest.raises(document_quiz.HTTPException) as exc_info:
+        await document_quiz.generate_document_quiz.__wrapped__(
+            request=None,
+            response=None,
+            question_type="multichoice",
+            num_questions=1,
+            difficulty_level="easy",
+            audience_type="students",
+            custom_instruction=None,
+            token=None,
+            document_title=None,
+            document_text="This material contains enough text to create a guest quiz.",
+            focus_topic=None,
+            live_quiz_enabled=False,
+            time_limit_minutes=None,
+            access_code_expires_at=None,
+            document_file=None,
+            current_user=SimpleNamespace(id="user-without-an-active-organization"),
+            organization=None,
         )
 
-    async def fail_if_persisted(_payload):
-        raise AssertionError("an unscoped authenticated request must remain ephemeral")
-
-    monkeypatch.setattr(document_quiz, "generate_document_quiz_with_rag", generate_document_quiz_with_rag)
-    monkeypatch.setattr(document_quiz, "save_ai_generated_quiz", fail_if_persisted)
-
-    response = await document_quiz.generate_document_quiz.__wrapped__(
-        request=None,
-        response=None,
-        question_type="multichoice",
-        num_questions=1,
-        difficulty_level="easy",
-        audience_type="students",
-        custom_instruction=None,
-        token=None,
-        document_title=None,
-        document_text="This material contains enough text to create a guest quiz.",
-        focus_topic=None,
-        live_quiz_enabled=False,
-        time_limit_minutes=None,
-        access_code_expires_at=None,
-        document_file=None,
-        current_user=SimpleNamespace(id="user-without-an-active-organization"),
-        organization=None,
-    )
-
-    assert response.quiz_id is None
+    assert exc_info.value.status_code == 409

@@ -27,6 +27,7 @@ export default function OrganizationManagementPage() {
   const [isLoadingMoreMembers, setIsLoadingMoreMembers] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
+  const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
   const canManage = activeOrganization?.role === "owner" || activeOrganization?.role === "admin";
   const canCreateOrganization = Boolean(activeOrganization);
   const canInvite = canManage && activeOrganization?.organization_kind !== "personal";
@@ -113,11 +114,35 @@ export default function OrganizationManagementPage() {
       const invitation = await organizationsApi.invite({ email: email.trim(), role });
       setInvitations((current) => [invitation, ...current.filter((item) => item.id !== invitation.id)]);
       setEmail("");
-      toast.success("Invitation sent.");
+      if (invitation.email_delivery_status === "failed") {
+        toast.error("Invitation was created, but email delivery failed. Please resend it.");
+      } else {
+        toast.success("Invitation sent.");
+      }
     } catch {
       toast.error("Unable to create this invitation.");
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const resendInvitation = async (invitation: OrganizationInvitation) => {
+    setResendingInvitationId(invitation.id);
+    try {
+      const resent = await organizationsApi.invite({
+        email: invitation.email,
+        role: invitation.role,
+      });
+      setInvitations((current) => [resent, ...current.filter((item) => item.id !== resent.id)]);
+      if (resent.email_delivery_status === "failed") {
+        toast.error("Invitation was renewed, but email delivery failed again.");
+      } else {
+        toast.success("Invitation resent.");
+      }
+    } catch {
+      toast.error("Unable to resend this invitation.");
+    } finally {
+      setResendingInvitationId(null);
     }
   };
 
@@ -197,8 +222,14 @@ export default function OrganizationManagementPage() {
               <div className="mt-6 space-y-3">
                 {invitations.length ? invitations.map((invitation) => (
                   <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-divider pt-3 text-sm">
-                    <span><strong>{invitation.email}</strong> · {invitation.role} · {invitation.status}</span>
-                    {invitation.status === "invited" ? <button type="button" onClick={() => void revoke(invitation.id)} className="font-bold text-red-700 hover:underline">Revoke</button> : null}
+                    <span>
+                      <strong>{invitation.email}</strong> · {invitation.role} · {invitation.status}
+                      {invitation.email_delivery_status === "failed" ? " · delivery failed" : ""}
+                    </span>
+                    {invitation.status === "invited" ? <span className="flex gap-3">
+                      <button type="button" disabled={resendingInvitationId === invitation.id} onClick={() => void resendInvitation(invitation)} className="font-bold text-brand hover:underline disabled:opacity-60">{resendingInvitationId === invitation.id ? "Resending..." : "Resend"}</button>
+                      <button type="button" onClick={() => void revoke(invitation.id)} className="font-bold text-red-700 hover:underline">Revoke</button>
+                    </span> : null}
                   </div>
                 )) : <p className="text-sm text-ink/65">No invitations have been sent from this organization.</p>}
                 {nextInvitationCursor ? <button type="button" disabled={isLoadingMoreInvitations} onClick={() => void loadMoreInvitations()} className="pt-2 text-sm font-bold text-brand hover:underline disabled:opacity-60">{isLoadingMoreInvitations ? "Loading invitations..." : "Load more invitations"}</button> : null}

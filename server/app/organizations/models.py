@@ -27,6 +27,7 @@ InvitationStatus = Literal[
     "revoked",
     "expired",
 ]
+InvitationDeliveryStatus = Literal["pending", "sent", "failed"]
 
 
 def utcnow() -> datetime:
@@ -122,6 +123,11 @@ class OrganizationInvitationDocument(BaseModel):
     accepted_at: datetime | None = None
     declined_at: datetime | None = None
     revoked_at: datetime | None = None
+    # This records dispatch to the configured provider, not final mailbox
+    # delivery. It lets an inviter retry a failed dispatch without exposing
+    # provider error details to other organization members.
+    email_delivery_status: InvitationDeliveryStatus = "pending"
+    email_delivery_attempted_at: datetime | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

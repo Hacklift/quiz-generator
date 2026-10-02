@@ -514,6 +514,34 @@ class OrganizationInvitationRepository:
             return_document=ReturnDocument.AFTER,
         )
 
+    async def mark_email_delivery(
+        self,
+        *,
+        invitation_id: ObjectId,
+        token_hash: str,
+        delivery_status: str,
+    ) -> dict[str, Any] | None:
+        """Record dispatch for this exact token without racing a replacement.
+
+        Re-inviting an address rotates the token on the same invitation row.
+        Matching the token hash prevents a delayed first dispatch from
+        overwriting the delivery state of the newer invitation.
+        """
+        if delivery_status not in {"sent", "failed"}:
+            raise ValueError("Unsupported invitation delivery status")
+        now = utcnow()
+        return await self.collection.find_one_and_update(
+            {"_id": invitation_id, "token_hash": token_hash},
+            {
+                "$set": {
+                    "email_delivery_status": delivery_status,
+                    "email_delivery_attempted_at": now,
+                    "updated_at": now,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
     async def list_for_organization(
         self,
         organization_id: str,

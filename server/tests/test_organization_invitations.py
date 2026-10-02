@@ -215,6 +215,23 @@ async def test_replacing_an_invitation_does_not_target_created_at_twice():
     assert collection.update["$setOnInsert"]["created_at"] == now
 
 
+@pytest.mark.asyncio
+async def test_delivery_status_update_is_bound_to_the_exact_invitation_token():
+    collection = RecordingCollection()
+    repository = OrganizationInvitationRepository(collection)
+    invitation_id = ObjectId()
+
+    await repository.mark_email_delivery(
+        invitation_id=invitation_id,
+        token_hash="a" * 64,
+        delivery_status="failed",
+    )
+
+    assert collection.query == {"_id": invitation_id, "token_hash": "a" * 64}
+    assert collection.update["$set"]["email_delivery_status"] == "failed"
+    assert collection.update["$set"]["email_delivery_attempted_at"] is not None
+
+
 def test_invitation_model_rejects_owner_role_even_outside_http_validation():
     with pytest.raises(ValidationError, match="owner role"):
         OrganizationInvitationDocument(
@@ -464,8 +481,15 @@ async def test_invitation_remains_usable_when_pending_membership_preparation_fai
             return {"_id": "user-1"}
 
     class InvitationsCollection:
+        def __init__(self):
+            self.document = None
+
         async def find_one_and_update(self, _query, update, **_kwargs):
-            return {"_id": ObjectId(), **update["$setOnInsert"], **update["$set"]}
+            if self.document is None:
+                self.document = {"_id": ObjectId(), **update["$setOnInsert"], **update["$set"]}
+            else:
+                self.document.update(update["$set"])
+            return self.document
 
     class EmailService:
         def __init__(self):
@@ -493,6 +517,111 @@ async def test_invitation_remains_usable_when_pending_membership_preparation_fai
 
     assert invitation["organization_id"] == organization_id
     assert len(email_service.sent) == 1
+    assert invitation["email_delivery_status"] == "sent"
+
+
+@pytest.mark.asyncio
+async def test_invitation_dispatch_failure_is_persisted_and_exposed_for_resend():
+    organization_id = str(ObjectId())
+
+    class OrganizationsCollection:
+        async def find_one(self, _query):
+            return {"_id": ObjectId(organization_id), "status": "active", "kind": "corporate", "name": "Acme"}
+
+    class MembershipsCollection:
+        async def find_one(self, _query):
+            return None
+
+    class UsersCollection:
+        async def find_one(self, _query, projection=None):
+            return None
+
+    class InvitationsCollection:
+        def __init__(self):
+            self.document = None
+
+        async def find_one_and_update(self, _query, update, **_kwargs):
+            if self.document is None:
+                self.document = {"_id": ObjectId(), **update["$setOnInsert"], **update["$set"]}
+            else:
+                self.document.update(update["$set"])
+            return self.document
+
+    class FailingEmailService:
+        async def send_email(self, **_kwargs):
+            raise RuntimeError("provider unavailable")
+
+    invitations = InvitationsCollection()
+    service = OrganizationInvitationService(
+        organizations_collection=OrganizationsCollection(),
+        memberships_collection=MembershipsCollection(),
+        invitations_collection=invitations,
+        users_collection=UsersCollection(),
+    )
+
+    invitation = await service.invite(
+        organization_id=organization_id,
+        inviter_user_id="owner-1",
+        email="member@example.com",
+        role="learner",
+        expires_in_days=7,
+        email_service=FailingEmailService(),
+    )
+
+    assert invitation["email_delivery_status"] == "failed"
+    assert invitations.document["email_delivery_status"] == "failed"
+    assert invitations.document["email_delivery_attempted_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_acceptance_restores_a_claim_when_membership_is_suspended_after_invitation():
+    invitation_id = ObjectId()
+    organization_id = str(ObjectId())
+
+    class OrganizationsCollection:
+        async def find_one(self, _query):
+            return {"_id": ObjectId(organization_id), "status": "active", "kind": "corporate", "name": "Acme"}
+
+    class MembershipsCollection:
+        async def find_one_and_update(self, _query, _update, **_kwargs):
+            # The membership was suspended after the invite was issued.
+            return None
+
+        async def find_one(self, _query):
+            return {"organization_id": organization_id, "user_id": "user-1", "status": "suspended"}
+
+    class InvitationsCollection:
+        def __init__(self):
+            self.restore_query = None
+
+        async def find_one_and_update(self, query, _update, **_kwargs):
+            if query.get("status") == "invited":
+                return {
+                    "_id": invitation_id,
+                    "organization_id": organization_id,
+                    "role": "learner",
+                    "invited_by_user_id": "owner-1",
+                }
+            raise AssertionError("a suspended membership must not finalize acceptance")
+
+        async def update_one(self, query, _update):
+            self.restore_query = query
+            return type("Result", (), {"matched_count": 1})()
+
+    invitations = InvitationsCollection()
+    service = OrganizationInvitationService(
+        organizations_collection=OrganizationsCollection(),
+        memberships_collection=MembershipsCollection(),
+        invitations_collection=invitations,
+        users_collection=object(),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.accept(token="token", user_id="user-1", user_email="member@example.com")
+
+    assert exc_info.value.status_code == 409
+    assert invitations.restore_query["_id"] == invitation_id
+    assert invitations.restore_query["status"] == "accepting"
 
 
 @pytest.mark.asyncio

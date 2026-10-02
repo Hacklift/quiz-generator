@@ -58,6 +58,7 @@ def _invitation_response(invitation: dict) -> OrganizationInvitationResponse:
         email=invitation["email"],
         role=invitation["role"],
         status=invitation["status"],
+        email_delivery_status=invitation.get("email_delivery_status"),
         expires_at=invitation["expires_at"],
         created_at=invitation["created_at"],
     )

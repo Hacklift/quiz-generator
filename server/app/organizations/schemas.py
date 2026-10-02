@@ -4,7 +4,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from server.app.organizations.models import MembershipRole, MembershipStatus, OrganizationKind
+from server.app.organizations.models import (
+    InvitationDeliveryStatus,
+    MembershipRole,
+    MembershipStatus,
+    OrganizationKind,
+)
 
 
 class CreateOrganizationRequest(BaseModel):
@@ -97,6 +102,7 @@ class OrganizationInvitationResponse(BaseModel):
     email: EmailStr
     role: MembershipRole
     status: str
+    email_delivery_status: InvitationDeliveryStatus | None = None
     expires_at: datetime
     created_at: datetime
 

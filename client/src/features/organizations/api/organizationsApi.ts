@@ -21,6 +21,7 @@ export type OrganizationInvitation = {
   email: string;
   role: "admin" | "author" | "facilitator" | "learner" | "guardian" | "auditor";
   status: "invited" | "accepting" | "accepted" | "declined" | "revoked" | "expired";
+  email_delivery_status: "pending" | "sent" | "failed" | null;
   expires_at: string;
   created_at: string;
 };

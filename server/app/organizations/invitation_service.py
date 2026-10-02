@@ -164,15 +164,36 @@ class OrganizationInvitationService:
                 },
                 purpose="organization_invitation",
             )
+            delivery_status = "sent"
         except Exception:
-            # Delivery is retriable separately from the durable invitation;
-            # never discard authority state after generating a valid link.
+            # Keep the invitation valid so the manager can explicitly resend
+            # it, but make the dispatch failure visible in the API and UI.
             logger.exception(
                 "Organization invitation email dispatch failed",
                 extra={"organization_id": organization_id, "invitation_id": str(stored["_id"])},
             )
+            delivery_status = "failed"
 
-        return stored
+        try:
+            delivery_invitation = await self.invitations.mark_email_delivery(
+                invitation_id=stored["_id"],
+                token_hash=invitation["token_hash"],
+                delivery_status=delivery_status,
+            )
+        except Exception:
+            # Do not turn a successfully-created invitation into a failed
+            # request solely because observability metadata could not be
+            # written. The response still tells the manager the actual
+            # provider-dispatch result for this attempt.
+            logger.exception(
+                "Unable to record organization invitation email delivery",
+                extra={"organization_id": organization_id, "invitation_id": str(stored["_id"])},
+            )
+            delivery_invitation = None
+
+        result = dict(delivery_invitation or stored)
+        result["email_delivery_status"] = delivery_status
+        return result
 
     async def accept(self, *, token: str, user_id: str, user_email: str) -> dict[str, Any]:
         now = utcnow()
