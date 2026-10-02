@@ -35,6 +35,15 @@ async def backfill_db(test_db):
         test_db["saved_quizzes_v2"],
         test_db["quiz_history_v2"],
     )
+    # Stage 3 migrates only legacy rows with recorded ownership evidence. In
+    # production that evidence resolves through each user's personal default.
+    for user_id in ("user-1", "user-entropy", "user-russia"):
+        await test_db["users"].insert_one(
+            {
+                "_id": user_id,
+                "default_organization_id": f"organization-{user_id}",
+            }
+        )
     return test_db
 
 

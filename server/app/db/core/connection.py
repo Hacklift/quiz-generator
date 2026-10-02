@@ -123,30 +123,38 @@ async def ensure_live_quiz_session_indexes(
     live_quiz_sessions_collection: AsyncIOMotorCollection,
 ):
     """Indexes for participant live quiz sessions."""
-    await live_quiz_sessions_collection.create_index("quiz_id")
+    await live_quiz_sessions_collection.create_index(
+        [("organization_id", 1), ("quiz_id", 1), ("created_at", -1)],
+        name="organization_live_quiz_session_created",
+    )
     await live_quiz_sessions_collection.create_index("guest_id")
     await live_quiz_sessions_collection.create_index("status")
     await live_quiz_sessions_collection.create_index("expires_at")
     await live_quiz_sessions_collection.create_index("training_run_id")
     await live_quiz_sessions_collection.create_index(
-        [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
-        name="creator_quiz_submitted_at",
+        [("organization_id", 1), ("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
+        name="organization_creator_quiz_submitted_at",
     )
 
 
 async def ensure_document_rag_cache_indexes(
     document_rag_cache_collection: AsyncIOMotorCollection,
 ):
+    cache_key = [
+        ("organization_id", 1),
+        ("document_fingerprint", 1),
+        ("embedding_model", 1),
+        ("chunk_size_chars", 1),
+        ("chunk_overlap_chars", 1),
+        ("chunk_limit", 1),
+    ]
+    existing = (await document_rag_cache_collection.index_information()).get(
+        "document_rag_cache_key"
+    )
+    if existing and existing.get("key") != cache_key:
+        await document_rag_cache_collection.drop_index("document_rag_cache_key")
     await document_rag_cache_collection.create_index(
-        [
-            ("document_fingerprint", 1),
-            ("embedding_model", 1),
-            ("chunk_size_chars", 1),
-            ("chunk_overlap_chars", 1),
-            ("chunk_limit", 1),
-        ],
-        unique=True,
-        name="document_rag_cache_key",
+        cache_key, unique=True, name="document_rag_cache_key"
     )
     await document_rag_cache_collection.create_index(
         [("last_accessed_at", -1)],
@@ -169,12 +177,16 @@ async def ensure_live_quiz_invitation_indexes(
     live_quiz_invitations_collection: AsyncIOMotorCollection,
 ):
     """Indexes for live quiz invitations."""
-    await live_quiz_invitations_collection.create_index("quiz_id")
+    await live_quiz_invitations_collection.create_index(
+        [("organization_id", 1), ("quiz_id", 1), ("created_at", 1)],
+        name="organization_live_quiz_invitation_created",
+    )
     await live_quiz_invitations_collection.create_index("creator_user_id")
     await live_quiz_invitations_collection.create_index("status")
     await live_quiz_invitations_collection.create_index(
-        [("quiz_id", 1), ("email", 1)],
+        [("organization_id", 1), ("quiz_id", 1), ("email", 1)],
         unique=True,
+        name="organization_quiz_invitation_email_unique",
     )
 
 

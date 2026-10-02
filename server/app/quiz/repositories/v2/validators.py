@@ -19,6 +19,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "visibility",
                     "status",
                     "source",
+                    "organization_id",
                     "schema_version",
                     "created_at",
                     "updated_at",
@@ -27,7 +28,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "title": {"bsonType": "string", "minLength": 1},
                     "description": {"bsonType": ["string", "null"]},
                     "owner_user_id": {"bsonType": ["string", "null"]},
-                    "organization_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
                     "quiz_type": {"enum": ["multichoice", "true-false", "open-ended", "short-answer"]},
                     "visibility": {"enum": ["private", "public", "unlisted"]},
@@ -81,10 +82,10 @@ def get_v2_collection_validators() -> dict[str, dict]:
         FOLDERS_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "name", "created_at", "updated_at"],
+                "required": ["user_id", "organization_id", "name", "created_at", "updated_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
-                    "organization_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
                     "name": {"bsonType": "string", "minLength": 1},
                     "description": {"bsonType": ["string", "null"]},
@@ -98,13 +99,13 @@ def get_v2_collection_validators() -> dict[str, dict]:
         FOLDER_ITEMS_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["folder_id", "quiz_id", "created_at"],
+                "required": ["folder_id", "quiz_id", "organization_id", "created_at"],
                 "properties": {
                     "folder_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
                     "saved_quiz_id": {"bsonType": ["string", "null"]},
                     "added_by": {"bsonType": ["string", "null"]},
-                    "organization_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
                     "position": {"bsonType": ["int", "null"]},
                     "display_title": {"bsonType": ["string", "null"]},
@@ -117,11 +118,11 @@ def get_v2_collection_validators() -> dict[str, dict]:
         SAVED_QUIZZES_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "quiz_id", "saved_at"],
+                "required": ["user_id", "quiz_id", "organization_id", "saved_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
-                    "organization_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
                     "display_title": {"bsonType": ["string", "null"]},
                     "legacy_saved_quiz_id": {"bsonType": ["string", "null"]},
@@ -133,13 +134,13 @@ def get_v2_collection_validators() -> dict[str, dict]:
         QUIZ_HISTORY_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "quiz_id", "action", "created_at"],
+                "required": ["user_id", "quiz_id", "action", "organization_id", "created_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
                     "action": {"bsonType": "string", "minLength": 1},
                     "metadata": {"bsonType": ["object", "null"]},
-                    "organization_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
                     "legacy_history_id": {"bsonType": ["string", "null"]},
                     "created_at": {"bsonType": "date"},

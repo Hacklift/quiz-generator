@@ -73,11 +73,16 @@ class SharedQuizReadService:
         }
 
     async def resolve_shared_quiz(self, quiz_id: str) -> Optional[dict[str, Any]]:
-        quiz_doc = await self.quiz_repository.find_by_id(quiz_id)
+        # Anonymous links are an explicit public capability. A guessed ID for
+        # a private tenant resource must never become a read grant.
+        quiz_doc = await self.quiz_repository.find_public_shareable_by_id(quiz_id)
         if not quiz_doc:
             saved_reference = await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
             if saved_reference:
-                quiz_doc = await self.quiz_repository.find_by_id(saved_reference.quiz_id)
+                candidate = await self.quiz_repository.find_public_shareable_by_id(
+                    saved_reference.quiz_id
+                )
+                quiz_doc = candidate
 
         payload = self._normalize_v2_quiz(quiz_doc) if quiz_doc else None
         self._log("quiz_read_v2_served", operation="shared_quiz_detail", read_mode="v2_only", quiz_id=quiz_id)

@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from server.app.core.dependencies import get_current_user
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
+from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.core.rate_limiter import limiter
 from server.app.db.core.connection import get_quizzes_v2_collection
 from server.app.quiz.schemas.quiz_schemas import QuizSchema
@@ -66,9 +73,31 @@ async def get_random_quiz_id(
         raise HTTPException(detail="Unable to fetch from database!", status_code=404)
 
 
+async def _require_share_permission(
+    quiz_id: str,
+    organization: OrganizationContext,
+) -> None:
+    quiz = await QuizV2Repository(get_quizzes_v2_collection()).find_by_id_for_organization(
+        quiz_id,
+        organization.organization_id,
+    )
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.CONTENT_SHARE,
+        resource=quiz.model_dump(by_alias=True),
+    )
+
+
 @router.get("/share-quiz/{quiz_id}", response_model=ShareQuizResponse)
-async def get_share_link(quiz_id: str):
+async def get_share_link(
+    quiz_id: str,
+    current_user=Depends(get_current_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
+):
     try:
+        await _require_share_permission(quiz_id, organization)
         shareable_link = f"{share_url}/share/{quiz_id}"
         logger.info("shareable link generated successfully")
         return {"link": shareable_link}
@@ -102,8 +131,10 @@ async def share_quiz_via_email(
     query: ShareEmailRequest,
     email_svc: EmailService = Depends(get_email_service),
     current_user=Depends(get_current_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     try:
+        await _require_share_permission(query.quiz_id, organization)
         shared_quiz = await shared_quiz_read_service.resolve_shared_quiz(query.quiz_id)
         if not shared_quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")

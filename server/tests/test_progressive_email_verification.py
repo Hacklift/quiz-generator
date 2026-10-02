@@ -18,6 +18,7 @@ from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
 from server.app.users.schemas import NewUserSchema, UserRegisterSchema
 from server.app.core.dependencies import get_current_user, get_verified_user
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.routes.generation import get_quiz
 from server.app.quiz.routes.downloads import download_quiz_handler, limiter
@@ -42,6 +43,20 @@ def _user(is_verified: bool) -> UserOut:
         is_verified=is_verified,
         is_active=True,
         role="user",
+    )
+
+
+def _organization_context(user: UserOut) -> OrganizationContext:
+    return OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="personal",
+        membership_role="owner",
+        principal=OrganizationPrincipal(
+            user_id=user.id,
+            session_id="session-1",
+            platform_role=user.role,
+        ),
+        membership={"organization_id": "organization-1", "user_id": user.id},
     )
 
 
@@ -416,13 +431,19 @@ async def test_unverified_user_can_generate_quiz():
         new=AsyncMock(return_value={"source": "mock", "questions": []}),
     ) as get_questions_mock:
         result = await get_quiz(
-            MagicMock(), Response(), request, current_user=current_user
+            MagicMock(),
+            Response(),
+            request,
+            current_user=current_user,
+            organization=_organization_context(current_user),
         )
 
     assert result == {"source": "mock", "questions": []}
     get_questions_mock.assert_awaited_once_with(
         request,
         user_id=current_user.id,
+        organization_id="organization-1",
+        organization_context=_organization_context(current_user),
         invitation_repository=ANY,
         email_service=ANY,
     )
@@ -610,10 +631,19 @@ async def test_verified_user_can_download_authenticated_quiz():
     quiz_id = str(ObjectId())
     current_user = _user(is_verified=True)
 
+    quiz = MagicMock()
+    quiz.model_dump.return_value = {
+        "_id": ObjectId(quiz_id),
+        "organization_id": "organization-1",
+        "created_by_user_id": current_user.id,
+    }
     with patch(
         "server.app.quiz.routes.downloads.download_quiz_by_id",
         new=AsyncMock(return_value="streaming-response"),
-    ) as download_mock:
+    ) as download_mock, patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=quiz),
+    ):
         result = await download_quiz_handler(
             request=MagicMock(),
             response=Response(),
@@ -624,11 +654,12 @@ async def test_verified_user_can_download_authenticated_quiz():
                 num_question=1,
             ),
             current_user=current_user,
+            organization=_organization_context(current_user),
         )
 
     assert result == "streaming-response"
     download_mock.assert_awaited_once_with(
         quiz_id=quiz_id,
         file_format="txt",
-        user_id=current_user.id,
+        organization_id="organization-1",
     )

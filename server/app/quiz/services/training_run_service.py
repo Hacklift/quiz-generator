@@ -63,12 +63,26 @@ class TrainingRunService:
             for quiz in quizzes
         ]
 
+    async def list_organization_quizzes(self, organization_id: str) -> list[dict]:
+        quizzes = await self.repository.list_quizzes_for_organization(organization_id)
+        return [
+            {
+                "id": str(quiz["_id"]),
+                "title": quiz.get("title", "Untitled quiz"),
+                "quiz_type": str(quiz.get("quiz_type", "multichoice")),
+                "created_at": quiz.get("created_at"),
+            }
+            for quiz in quizzes
+        ]
+
     async def create_run(
         self,
         payload,
         owner_user_id: str,
         idempotency_key: str,
         organization_id: str | None = None,
+        *,
+        authorized_quiz: dict | None = None,
     ) -> dict:
         now = _utc_now()
         closes_at = _as_utc(payload.closes_at)
@@ -100,7 +114,9 @@ class TrainingRunService:
                 )
             return await self._resume_or_return_run(existing, now)
 
-        if organization_id is None:
+        if authorized_quiz is not None:
+            quiz = authorized_quiz
+        elif organization_id is None:
             quiz = await self.repository.get_owned_quiz(payload.quiz_id, owner_user_id)
         else:
             quiz = await self.repository.get_owned_quiz(
@@ -328,6 +344,15 @@ class TrainingRunService:
             summaries.append(self._run_summary(run, assignments, sessions))
         return summaries
 
+    async def list_organization_runs(self, organization_id: str) -> list[dict]:
+        runs = await self.repository.list_runs_for_organization(organization_id)
+        summaries = []
+        for run in runs:
+            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
+            summaries.append(self._run_summary(run, assignments, sessions))
+        return summaries
+
     async def get_owner_run(
         self,
         run_id: str,
@@ -351,6 +376,23 @@ class TrainingRunService:
             or run.get("owner_user_id") != owner_user_id
             or run.get("status") not in {"open", "closed"}
         ):
+            raise HTTPException(status_code=404, detail="Training run not found")
+        assignments = await self.repository.list_assignments_for_run(run_id)
+        sessions = await self.repository.list_sessions_for_run(run_id)
+        summary = self._run_summary(run, assignments, sessions)
+        summary["completion_register"] = [
+            *[self._completion_row(assignment) for assignment in assignments],
+            *[
+                self._shared_session_row(session)
+                for session in sessions
+                if not session.get("training_assignment_id")
+            ],
+        ]
+        return summary
+
+    async def get_organization_run(self, run_id: str, organization_id: str) -> dict:
+        run = await self.repository.get_run_for_organization(run_id, organization_id)
+        if not run:
             raise HTTPException(status_code=404, detail="Training run not found")
         assignments = await self.repository.list_assignments_for_run(run_id)
         sessions = await self.repository.list_sessions_for_run(run_id)
@@ -390,6 +432,32 @@ class TrainingRunService:
         ):
             raise HTTPException(status_code=404, detail="Training run not found")
         closed = await self._close_run(run, owner_user_id)
+        if not closed:
+            current = await self.repository.get_run(run_id)
+            detail = (
+                "Training run is being finalized"
+                if current and current.get("closure_in_progress")
+                else "Training run is already closed"
+            )
+            raise HTTPException(status_code=409, detail=detail)
+        assignments = await self.repository.list_assignments_for_run(run_id)
+        sessions = await self.repository.list_sessions_for_run(run_id)
+        return self._run_summary(closed, assignments, sessions)
+
+    async def close_organization_run(
+        self,
+        run_id: str,
+        organization_id: str,
+        actor_user_id: str,
+    ) -> dict:
+        run = await self.repository.get_run_for_organization(run_id, organization_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Training run not found")
+        closed = await self._close_run(
+            run,
+            actor_user_id,
+            require_owner=False,
+        )
         if not closed:
             current = await self.repository.get_run(run_id)
             detail = (
@@ -571,10 +639,25 @@ class TrainingRunService:
             raise HTTPException(status_code=404, detail="Quiz for training run not found")
         return run, quiz
 
-    async def _close_run(self, run: dict, owner_user_id: Optional[str]) -> Optional[dict]:
+    async def _close_run(
+        self,
+        run: dict,
+        owner_user_id: Optional[str],
+        *,
+        require_owner: bool = True,
+    ) -> Optional[dict]:
         closed_at = _utc_now()
-        claimed = await self.repository.claim_run_closure(
-            str(run["_id"]), owner_user_id, closed_at
+        claimed = (
+            await self.repository.claim_run_closure(
+                str(run["_id"]), owner_user_id, closed_at
+            )
+            if require_owner
+            else await self.repository.claim_run_closure(
+                str(run["_id"]),
+                owner_user_id,
+                closed_at,
+                require_owner=False,
+            )
         )
         if not claimed:
             return None
@@ -619,8 +702,17 @@ class TrainingRunService:
                     },
                 }
             )
-            closed = await self.repository.finalize_run_closure(
-                str(claimed["_id"]), owner_user_id, closed_at
+            closed = (
+                await self.repository.finalize_run_closure(
+                    str(claimed["_id"]), owner_user_id, closed_at
+                )
+                if require_owner
+                else await self.repository.finalize_run_closure(
+                    str(claimed["_id"]),
+                    owner_user_id,
+                    closed_at,
+                    require_owner=False,
+                )
             )
             if not closed:
                 raise RuntimeError("Training run closure could not be finalized")

@@ -1,18 +1,32 @@
 from server.app.db.core.connection import get_quizzes_v2_collection
 from server.app.mcp.auth import get_mcp_request_context
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.mcp.tools.share_tools import share_get_quiz
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 
 
 async def quiz_resource(quiz_id: str) -> dict | None:
-    quiz = await QuizV2Repository(get_quizzes_v2_collection()).find_by_id(quiz_id)
-    if quiz is None:
-        return None
-    visibility = quiz.visibility.value if hasattr(quiz.visibility, "value") else str(quiz.visibility)
-    if visibility not in {"public", "unlisted"}:
-        context = await get_mcp_request_context()
-        if not context.is_authenticated or quiz.owner_user_id != context.user_id:
-            raise PermissionError("Authentication or quiz ownership is required to read this quiz.")
+    context = await get_mcp_request_context()
+    repository = QuizV2Repository(get_quizzes_v2_collection())
+    if context.organization_context is not None:
+        quiz = await repository.find_by_id_for_organization(
+            quiz_id,
+            context.organization_context.organization_id,
+        )
+        if quiz is None:
+            return None
+        require_organization_permission(
+            context=context.organization_context,
+            action=OrganizationAction.CONTENT_READ,
+            resource=quiz.model_dump(by_alias=True),
+        )
+    else:
+        quiz = await repository.find_public_shareable_by_id(quiz_id)
+        if quiz is None:
+            return None
     return quiz.model_dump(mode="json", by_alias=True)
 
 

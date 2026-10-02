@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from server.app.core.dependencies import get_training_manager_user, get_verified_user
+from server.app.core.dependencies import get_verified_user
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
@@ -35,6 +35,10 @@ from server.app.db.core.connection import (
 from server.app.users.models import UserOut
 from server.app.organizations.dependencies import get_active_organization_context
 from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 
 
 router = APIRouter()
@@ -81,14 +85,19 @@ def get_training_run_service(
 
 @router.get("/training-runs/owned-quizzes")
 async def list_owned_training_quizzes(
-    current_user: UserOut = Depends(get_training_manager_user),
+    current_user: UserOut = Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.CONTENT_CREATE,
+        resource=None,
+    )
+    if organization.membership_role in {"owner", "admin"}:
+        return await service.list_organization_quizzes(organization.organization_id)
     return await service.list_owned_quizzes(
-        str(current_user.id),
-        organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        str(current_user.id), organization.organization_id
     )
 
 
@@ -99,7 +108,7 @@ async def create_training_run(
     request: Request,
     response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    current_user: UserOut = Depends(get_training_manager_user),
+    current_user: UserOut = Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
@@ -112,55 +121,78 @@ async def create_training_run(
             status_code=400,
             detail="A valid Idempotency-Key header is required to create a training run",
         )
+    quiz = await service.repository.get_quiz_for_organization(
+        payload.quiz_id,
+        organization.organization_id,
+    )
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.DELIVERY_RUN,
+        resource=quiz,
+    )
     return await service.create_run(
         payload,
         str(current_user.id),
         normalized_key,
         organization_id=organization.organization_id,
+        authorized_quiz=quiz,
     )
 
 
 @router.get("/training-runs", response_model=List[TrainingRunSummary])
 async def list_training_runs(
-    current_user: UserOut = Depends(get_training_manager_user),
+    current_user: UserOut = Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.list_owner_runs(
-        str(current_user.id),
-        organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.DELIVERY_READ,
+        resource=None,
     )
+    return await service.list_organization_runs(organization.organization_id)
 
 
 @router.get("/training-runs/{run_id}", response_model=TrainingRunDetail)
 async def get_training_run(
     run_id: str,
-    current_user: UserOut = Depends(get_training_manager_user),
+    current_user: UserOut = Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.get_owner_run(
-        run_id,
-        str(current_user.id),
-        organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+    run = await service.repository.get_run_for_organization(run_id, organization.organization_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.REPORT_READ,
+        resource=run,
     )
+    return await service.get_organization_run(run_id, organization.organization_id)
 
 
 @router.post("/training-runs/{run_id}/close", response_model=TrainingRunSummary)
 async def close_training_run(
     run_id: str,
     payload: CloseTrainingRunRequest,
-    current_user: UserOut = Depends(get_training_manager_user),
+    current_user: UserOut = Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
     service: TrainingRunService = Depends(get_training_run_service),
 ):
-    return await service.close_owner_run(
+    run = await service.repository.get_run_for_organization(run_id, organization.organization_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.DELIVERY_RUN,
+        resource=run,
+    )
+    return await service.close_organization_run(
         run_id,
-        str(current_user.id),
         organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        str(current_user.id),
     )
 
 
@@ -174,7 +206,7 @@ async def list_my_training_assignments(
         str(current_user.id),
         str(current_user.email),
         organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -189,7 +221,7 @@ async def start_training_assignment(
         assignment_id,
         current_user,
         organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 

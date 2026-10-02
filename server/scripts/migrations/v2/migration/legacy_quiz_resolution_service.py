@@ -283,6 +283,8 @@ class LegacyQuizResolutionService:
         match: LegacySourceQuizMatch,
         *,
         allow_create: bool,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
     ):
         existing = await self.canonical_service.repository.find_by_legacy_mapping(
             match.source_collection,
@@ -300,7 +302,10 @@ class LegacyQuizResolutionService:
             title=self._candidate_display_title(match.document),
             description=match.document.get("custom_instruction") or match.document.get("description"),
             quiz_type=match.document.get("question_type") or match.document.get("quiz_type") or "multichoice",
-            owner_user_id=match.document.get("user_id") or match.document.get("owner_id"),
+            owner_user_id=owner_user_id
+            or match.document.get("user_id")
+            or match.document.get("owner_id"),
+            organization_id=organization_id or match.document.get("organization_id"),
             source="ai" if match.source_collection == "ai_generated_quizzes" else "legacy",
             questions=match.document.get("questions", []),
             legacy_source_collection=match.source_collection,
@@ -317,6 +322,8 @@ class LegacyQuizResolutionService:
         quiz_type: str,
         questions: list[Any],
         allow_create: bool,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
     ):
         match = await self.find_legacy_source_match_by_structure(
             title=title,
@@ -328,6 +335,8 @@ class LegacyQuizResolutionService:
         return await self.resolve_or_build_from_legacy_source_match(
             match,
             allow_create=allow_create,
+            organization_id=organization_id,
+            owner_user_id=owner_user_id,
         )
 
     async def resolve_existing_v2_from_question_structure(

@@ -63,6 +63,7 @@ async def get_mcp_request_context(
         scopes=required_scopes or set(),
         tenant_id=organization_context.organization_id,
         tenant_kind=organization_context.organization_kind,
+        organization_context=organization_context,
     )
 
     if require_verified and not context.is_verified:

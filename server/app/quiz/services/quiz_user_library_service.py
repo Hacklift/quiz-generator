@@ -125,32 +125,80 @@ class QuizUserLibraryService:
         *,
         user_id: str,
         quiz_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> QuizDocumentV2 | None:
-        quiz = await self.quiz_repository.find_by_id(quiz_id)
+        quiz = (
+            await self.quiz_repository.find_by_id(quiz_id)
+            if organization_id is None
+            else await self.quiz_repository.find_by_id_for_organization(
+                quiz_id,
+                organization_id,
+            )
+        )
         if quiz is None:
             return None
 
-        if quiz.owner_user_id == user_id:
+        if self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ) and quiz.owner_user_id == user_id:
             return quiz
 
         saved_references = await self.reference_repository.list_saved_quizzes_for_user(
             user_id,
             limit=1000,
         )
-        if any(reference.quiz_id == quiz_id for reference in saved_references):
+        if any(
+            reference.quiz_id == quiz_id
+            and self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+            for reference in saved_references
+        ):
             return quiz
 
         history_references = await self.reference_repository.list_quiz_history_for_user(
             user_id,
             limit=1000,
         )
-        if any(reference.quiz_id == quiz_id for reference in history_references):
+        if any(
+            reference.quiz_id == quiz_id
+            and self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+            for reference in history_references
+        ):
             return quiz
 
         folders = await self.reference_repository.list_folders_for_user(user_id)
         for folder in folders:
+            if not self._is_in_organization_scope(
+                folder,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            ):
+                continue
             items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
-            if any(item.quiz_id == quiz_id for item in items):
+            if any(
+                item.quiz_id == quiz_id
+                and self._is_in_organization_scope(
+                    item,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                )
+                for item in items
+            ):
                 return quiz
 
         return None

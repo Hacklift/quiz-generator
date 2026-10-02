@@ -60,6 +60,7 @@ async def test_v2_validators_accept_uncategorized_quiz_documents(test_db):
             "visibility": "private",
             "status": "active",
             "source": "manual",
+            "organization_id": "organization-1",
             "tags": [],
             "category": None,
             "category_slug": None,

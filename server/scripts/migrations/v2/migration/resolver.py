@@ -58,6 +58,8 @@ class LegacyQuizResolver:
         questions: list[Any],
         description: str | None = None,
         allow_create: bool = False,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
     ):
         normalized_questions = self.canonical_service.normalize_questions(questions)
         has_complete_answers = all(question.get("correct_answer") for question in normalized_questions)
@@ -67,6 +69,8 @@ class LegacyQuizResolver:
                 quiz_type=quiz_type,
                 questions=questions,
                 allow_create=allow_create,
+                organization_id=organization_id,
+                owner_user_id=owner_user_id,
             )
             if canonical_quiz:
                 return canonical_quiz
@@ -84,11 +88,15 @@ class LegacyQuizResolver:
             )
             return await self.canonical_service.repository.find_by_structure_fingerprint(structure_fingerprint)
 
+        if not organization_id:
+            return None
         quiz_document = self.canonical_service.build_quiz_document(
             title=title,
             description=description,
             quiz_type=quiz_type,
             questions=questions,
+            organization_id=organization_id,
+            owner_user_id=owner_user_id,
             source="legacy",
         )
         existing = await self.canonical_service.repository.find_by_content_fingerprint(
@@ -112,7 +120,13 @@ class LegacyQuizResolver:
             return await self.canonical_service.find_or_create_quiz_v2_by_fingerprint(quiz_document)
         return None
 
-    async def resolve_saved_quiz(self, legacy_saved_doc: dict, *, allow_create: bool = False):
+    async def resolve_saved_quiz(
+        self,
+        legacy_saved_doc: dict,
+        *,
+        allow_create: bool = False,
+        organization_id: str | None = None,
+    ):
         canonical_quiz = await self.resolve_from_canonical_backref(
             legacy_saved_doc.get("canonical_quiz_id")
         )
@@ -126,6 +140,8 @@ class LegacyQuizResolver:
             quiz_type=legacy_saved_doc["question_type"],
             questions=legacy_saved_doc["questions"],
             allow_create=allow_create,
+            organization_id=organization_id,
+            owner_user_id=legacy_saved_doc.get("user_id"),
         )
         if canonical_quiz:
             return canonical_quiz
@@ -134,9 +150,17 @@ class LegacyQuizResolver:
             quiz_type=legacy_saved_doc["question_type"],
             questions=legacy_saved_doc["questions"],
             allow_create=False,
+            organization_id=organization_id,
+            owner_user_id=legacy_saved_doc.get("user_id"),
         )
 
-    async def resolve_quiz_history(self, legacy_history_doc: dict, *, allow_create: bool = True):
+    async def resolve_quiz_history(
+        self,
+        legacy_history_doc: dict,
+        *,
+        allow_create: bool = True,
+        organization_id: str | None = None,
+    ):
         canonical_quiz = await self.resolve_from_canonical_backref(
             legacy_history_doc.get("canonical_quiz_id")
         )
@@ -156,9 +180,18 @@ class LegacyQuizResolver:
             quiz_type=legacy_history_doc["question_type"],
             questions=legacy_history_doc["questions"],
             allow_create=allow_create,
+            organization_id=organization_id,
+            owner_user_id=legacy_history_doc.get("user_id"),
         )
 
-    async def resolve_folder_item(self, legacy_folder_item: dict, *, allow_create: bool = False):
+    async def resolve_folder_item(
+        self,
+        legacy_folder_item: dict,
+        *,
+        allow_create: bool = False,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
+    ):
         canonical_quiz = await self.resolve_from_canonical_backref(
             legacy_folder_item.get("canonical_quiz_id")
         )
@@ -183,7 +216,11 @@ class LegacyQuizResolver:
             except Exception:
                 saved_doc = None
             if saved_doc:
-                canonical_quiz = await self.resolve_saved_quiz(saved_doc, allow_create=allow_create)
+                canonical_quiz = await self.resolve_saved_quiz(
+                    saved_doc,
+                    allow_create=allow_create,
+                    organization_id=organization_id,
+                )
                 if canonical_quiz:
                     return canonical_quiz
 
@@ -196,4 +233,6 @@ class LegacyQuizResolver:
             questions=legacy_folder_item.get("questions")
             or quiz_payload.get("questions", []),
             allow_create=allow_create,
+            organization_id=organization_id,
+            owner_user_id=owner_user_id,
         )

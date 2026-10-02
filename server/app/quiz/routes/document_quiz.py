@@ -9,6 +9,10 @@ from server.app.core.config import settings
 from server.app.core.dependencies import get_current_user_optional
 from server.app.organizations.dependencies import get_optional_active_organization_context
 from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.models.document_quiz_models import DocumentQuizResponse
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
@@ -96,6 +100,12 @@ async def generate_document_quiz(
             status_code=status.HTTP_409_CONFLICT,
             detail="Organization context is unavailable; retry shortly",
         )
+    if current_user is not None and isinstance(organization, OrganizationContext):
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_CREATE,
+            resource=None,
+        )
 
     if live_quiz_enabled and (not time_limit_minutes or not access_code_expires_at):
         raise HTTPException(
@@ -169,6 +179,7 @@ async def generate_document_quiz(
             focus_topic=focus_topic,
             user_id=user_id,
             token=token,
+            organization_id=organization.organization_id if organization else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -244,11 +255,23 @@ async def generate_document_quiz(
                 get_live_quiz_sessions_collection(),
             )
         )
+        authorized_quiz = await live_service.repository.get_quiz_by_id_for_organization(
+            quiz_id,
+            organization.organization_id,
+        )
+        if authorized_quiz is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_SHARE,
+            resource=authorized_quiz,
+        )
         live_config = await live_service.generate_access_code(
             quiz_id=quiz_id,
             access_code_expires_at=access_code_expires_at,
             creator_id=user_id,
             time_limit_minutes=time_limit_minutes,
+            authorized_quiz=authorized_quiz,
         )
         live_access_code = live_config["access_code"]
         live_access_expires = _to_iso_datetime(

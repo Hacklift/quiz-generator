@@ -11,6 +11,13 @@ from server.app.notifications.repository import (
     list_user_notifications,
     mark_notification_read,
 )
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
+from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
+from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.repositories.v2.models.reference_models import (
     FolderDocumentV2,
     QuizHistoryDocumentV2,
@@ -138,6 +145,40 @@ async def test_training_repository_rejects_cross_organization_quiz_run_and_assig
         recipient_user_id,
         organization_id=organization_a,
     ) == []
+
+
+@pytest.mark.asyncio
+async def test_canonical_quiz_lookup_and_policy_reject_cross_organization_ids(test_db):
+    organization_a = str(ObjectId())
+    organization_b = str(ObjectId())
+    quiz = await QuizV2Repository(test_db["quizzes_v2"]).insert_quiz(
+        QuizDocumentV2(
+            title="Organization B private quiz",
+            quiz_type="multichoice",
+            source="manual",
+            owner_user_id="user-1",
+            created_by_user_id="user-1",
+            organization_id=organization_b,
+            questions=[{"question": "Q", "correct_answer": "A"}],
+        )
+    )
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    assert await repository.find_by_id_for_organization(str(quiz.id), organization_a) is None
+
+    context = OrganizationContext(
+        organization_id=organization_a,
+        organization_kind="personal",
+        membership_role="owner",
+        principal=OrganizationPrincipal(user_id="user-1", session_id="session-a"),
+        membership={"organization_id": organization_a, "user_id": "user-1"},
+    )
+    with pytest.raises(Exception) as exc:
+        require_organization_permission(
+            context=context,
+            action=OrganizationAction.CONTENT_EXPORT,
+            resource=quiz.model_dump(by_alias=True),
+        )
+    assert getattr(exc.value, "status_code", None) == 404
 
 
 @pytest.mark.asyncio

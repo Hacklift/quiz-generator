@@ -2,6 +2,11 @@ import logging
 import random
 from fastapi import HTTPException
 from typing import Dict
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.utils.huggingface_utils import generate_quiz_with_huggingface
 from server.app.quiz.utils.mock_quiz_generator import get_mock_questions_by_type
@@ -22,9 +27,21 @@ async def get_questions(
     request: QuizRequest,
     user_id: str | None = None,
     organization_id: str | None = None,
+    organization_context: OrganizationContext | None = None,
     invitation_repository=None,
     email_service=None,
 ) -> Dict:
+
+    if user_id and not organization_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Organization context is required to persist a generated quiz",
+        )
+    if (
+        organization_context is not None
+        and organization_context.organization_id != organization_id
+    ):
+        raise ValueError("Organization context does not match the persistence scope")
 
     ai_down = False
     notification_message = None
@@ -183,6 +200,18 @@ async def get_questions(
                 get_live_quiz_sessions_collection(),
             )
         )
+        authorized_quiz = await live_service.repository.get_quiz_by_id_for_organization(
+            quiz_id,
+            organization_id or "",
+        )
+        if authorized_quiz is None:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        if organization_context is not None:
+            require_organization_permission(
+                context=organization_context,
+                action=OrganizationAction.CONTENT_SHARE,
+                resource=authorized_quiz,
+            )
         if invitation_repository is None:
             invitation_repository = LiveQuizInvitationRepository(
                 get_live_quiz_invitations_collection()
@@ -197,6 +226,7 @@ async def get_questions(
             send_email_invitations=request.send_email_invitations,
             invitation_repository=invitation_repository,
             email_service=email_service,
+            authorized_quiz=authorized_quiz,
         )
         live_access_code = live_config["access_code"]
         live_access_code_expires_at = live_config["access_code_expires_at"]

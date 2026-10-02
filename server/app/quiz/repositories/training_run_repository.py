@@ -96,6 +96,36 @@ class TrainingRunRepository:
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
+    async def get_quiz_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[dict]:
+        object_id = self._object_id(quiz_id)
+        if not object_id:
+            return None
+        return await self.quizzes_collection.find_one(
+            {
+                "_id": object_id,
+                "organization_id": organization_id,
+                "status": {"$ne": "deleted"},
+            }
+        )
+
+    async def list_quizzes_for_organization(
+        self,
+        organization_id: str,
+        limit: int = 100,
+    ) -> list[dict]:
+        cursor = self.quizzes_collection.find(
+            {
+                "organization_id": organization_id,
+                "status": {"$ne": "deleted"},
+            },
+            {"title": 1, "created_at": 1, "quiz_type": 1},
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
     async def access_code_exists_on_quiz(self, access_code: str) -> bool:
         return bool(await self.quizzes_collection.find_one({"access_code": access_code}, {"_id": 1}))
 
@@ -186,8 +216,42 @@ class TrainingRunRepository:
             )
         )
 
+    async def get_run_for_organization(
+        self,
+        run_id: str,
+        organization_id: str,
+    ) -> Optional[dict]:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return None
+        return await self.runs_collection.find_one(
+            {
+                "_id": object_id,
+                "organization_id": organization_id,
+                "status": {"$in": ["open", "closed"]},
+            }
+        )
+
+    async def list_runs_for_organization(
+        self,
+        organization_id: str,
+        limit: int = 100,
+    ) -> list[dict]:
+        cursor = self.runs_collection.find(
+            {
+                "organization_id": organization_id,
+                "status": {"$in": ["open", "closed"]},
+            }
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
     async def claim_run_closure(
-        self, run_id: str, owner_user_id: Optional[str], started_at: datetime
+        self,
+        run_id: str,
+        owner_user_id: Optional[str],
+        started_at: datetime,
+        *,
+        require_owner: bool = True,
     ) -> Optional[dict]:
         """Claim finalization before changing the visible run status."""
         object_id = self._object_id(run_id)
@@ -198,7 +262,7 @@ class TrainingRunRepository:
             "status": "open",
             "closure_in_progress": {"$ne": True},
         }
-        if owner_user_id:
+        if owner_user_id and require_owner:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(
             query,
@@ -215,7 +279,12 @@ class TrainingRunRepository:
         )
 
     async def finalize_run_closure(
-        self, run_id: str, owner_user_id: Optional[str], closed_at: datetime
+        self,
+        run_id: str,
+        owner_user_id: Optional[str],
+        closed_at: datetime,
+        *,
+        require_owner: bool = True,
     ) -> Optional[dict]:
         object_id = self._object_id(run_id)
         if not object_id:
@@ -225,7 +294,7 @@ class TrainingRunRepository:
             "status": "open",
             "closure_in_progress": True,
         }
-        if owner_user_id:
+        if owner_user_id and require_owner:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(
             query,

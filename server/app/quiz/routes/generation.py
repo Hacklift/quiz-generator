@@ -7,6 +7,10 @@ from server.app.quiz.utils.questions import get_questions
 from server.app.core.dependencies import get_current_user_optional
 from server.app.organizations.dependencies import get_optional_active_organization_context
 from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.core.config import settings
 from server.app.db.core.connection import get_live_quiz_invitations_collection
 from server.app.email_platform.deps import get_email_service
@@ -38,6 +42,18 @@ async def get_quiz(
             detail="Please log in to generate quizzes.",
         )
 
+    if current_user is not None:
+        if not isinstance(organization, OrganizationContext):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Organization context is unavailable; retry shortly",
+            )
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_CREATE,
+            resource=None,
+        )
+
     payload.num_questions = validate_generation_question_count(payload.num_questions)
 
     user_id = str(current_user.id) if current_user else None
@@ -52,4 +68,5 @@ async def get_quiz(
     }
     if isinstance(organization, OrganizationContext):
         generation_kwargs["organization_id"] = organization.organization_id
+        generation_kwargs["organization_context"] = organization
     return await get_questions(payload, **generation_kwargs)

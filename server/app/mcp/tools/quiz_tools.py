@@ -94,7 +94,7 @@ async def quiz_generate(
                 "organization_id": context.tenant_id,
                 "created_by_user_id": context.user_id,
             },
-            allow_legacy_personal=context.tenant_kind == "personal",
+            allow_legacy_personal=False,
         )
         history_id = str(history_reference.id)
         history_quiz_id = history_reference.quiz_id

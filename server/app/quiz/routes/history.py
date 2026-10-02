@@ -27,7 +27,7 @@ async def save_quiz(
     quiz_dict["created_by_user_id"] = str(current_user.id)
     history_reference = await quiz_user_library_service.create_quiz_history(
         quiz_dict,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     return {
         "message": "Quiz saved",
@@ -50,7 +50,7 @@ async def get_user_quiz_history(
     quizzes = await quiz_user_library_service.list_quiz_history_items(
         user_id=user_id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     return quizzes
 
@@ -65,7 +65,7 @@ async def get_quiz_history_details(
         user_id=str(current_user.id),
         history_id=history_id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz history item not found")
@@ -82,7 +82,7 @@ async def delete_quiz_history_entry(
         user_id=str(current_user.id),
         history_id=history_id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Quiz history item not found")

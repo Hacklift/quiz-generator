@@ -21,6 +21,7 @@ async def test_stage3_backfill_reuses_ai_origin_for_saved_history_and_folder(
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-1",
             "profession": "Geography",
             "question_type": "multichoice",
             "difficulty_level": "easy",
@@ -118,6 +119,7 @@ async def test_stage3_backfill_is_idempotent(backfill_db, backfill_context_facto
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-1",
             "profession": "Networks",
             "question_type": "multichoice",
             "questions": [
@@ -143,6 +145,7 @@ async def test_stage3_history_rerun_counts_noop_records_as_skipped(backfill_db, 
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-1",
             "profession": "Systems Design",
             "question_type": "multichoice",
             "questions": [
@@ -191,6 +194,7 @@ async def test_stage3_backfill_dry_run_does_not_write(backfill_db, backfill_cont
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ObjectId(),
+            "user_id": "user-1",
             "profession": "History",
             "question_type": "multichoice",
             "questions": [
@@ -212,7 +216,12 @@ async def test_stage3_backfill_dry_run_does_not_write(backfill_db, backfill_cont
 @pytest.mark.asyncio
 async def test_stage3_parity_reports_orphaned_references(backfill_db, backfill_context_factory):
     await backfill_db["saved_quizzes_v2"].insert_one(
-        {"user_id": "user-1", "quiz_id": "missing-quiz", "saved_at": __import__("datetime").datetime.utcnow()}
+        {
+            "user_id": "user-1",
+            "organization_id": "organization-user-1",
+            "quiz_id": "missing-quiz",
+            "saved_at": __import__("datetime").datetime.utcnow(),
+        }
     )
     context = backfill_context_factory(run_id="parity-1")
     report = await run_parity_checks(context)
@@ -225,6 +234,7 @@ async def test_stage3_run_backfill_returns_collection_reports(backfill_db, backf
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-1",
             "profession": "Biology",
             "question_type": "multichoice",
             "questions": [
@@ -255,6 +265,7 @@ async def test_stage3_folder_backfill_with_structure_only_payload_does_not_crash
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-1",
             "profession": "Geography",
             "question_type": "multichoice",
             "questions": [
@@ -321,6 +332,7 @@ async def test_stage3_folder_backfill_merges_duplicate_items_for_same_canonical_
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-russia",
             "profession": "Geography",
             "question_type": "multichoice",
             "questions": [
@@ -394,6 +406,7 @@ async def test_stage3_backfill_saved_quiz_without_answers_matches_legacy_ai_sour
     await backfill_db["ai_generated_quizzes"].insert_one(
         {
             "_id": ai_id,
+            "user_id": "user-entropy",
             "profession": "Entropy",
             "question_type": "multichoice",
             "questions": [
@@ -448,6 +461,7 @@ async def test_stage3_backfill_saved_quiz_reports_conflict_for_multiple_legacy_m
         [
             {
                 "_id": ObjectId(),
+                "user_id": "user-entropy",
                 "profession": "Entropy",
                 "question_type": "multichoice",
                 "questions": [
@@ -461,6 +475,7 @@ async def test_stage3_backfill_saved_quiz_reports_conflict_for_multiple_legacy_m
             },
             {
                 "_id": ObjectId(),
+                "user_id": "user-entropy",
                 "profession": "Entropy",
                 "question_type": "multichoice",
                 "questions": [
@@ -528,6 +543,7 @@ async def test_stage3_backfill_saved_quiz_reuses_existing_v2_question_only_match
             ],
             "description": "Geopolitical power",
             "owner_user_id": None,
+            "organization_id": "organization-user-russia",
             "visibility": "private",
             "status": "active",
             "source": "legacy",
@@ -635,6 +651,7 @@ async def test_stage3_saved_backfill_updates_existing_legacy_reference_in_place_
                 ],
                 "description": "Geopolitical power",
                 "owner_user_id": None,
+                "organization_id": "organization-user-russia",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -660,6 +677,7 @@ async def test_stage3_saved_backfill_updates_existing_legacy_reference_in_place_
                 ],
                 "description": "Geopolitical power",
                 "owner_user_id": None,
+                "organization_id": "organization-user-russia",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -694,6 +712,7 @@ async def test_stage3_saved_backfill_updates_existing_legacy_reference_in_place_
         {
             "_id": ObjectId(),
             "user_id": "user-russia",
+            "organization_id": "organization-user-russia",
             "quiz_id": str(old_quiz_id),
             "legacy_saved_quiz_id": str(saved_id),
             "saved_at": now,
@@ -735,6 +754,7 @@ async def test_stage3_saved_backfill_merges_existing_duplicate_saved_rows(
                 ],
                 "description": "Geopolitical power",
                 "owner_user_id": None,
+                "organization_id": "organization-user-russia",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -760,6 +780,7 @@ async def test_stage3_saved_backfill_merges_existing_duplicate_saved_rows(
                 ],
                 "description": "Geopolitical power",
                 "owner_user_id": None,
+                "organization_id": "organization-user-russia",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -794,6 +815,7 @@ async def test_stage3_saved_backfill_merges_existing_duplicate_saved_rows(
             {
                 "_id": ObjectId(),
                 "user_id": "user-russia",
+                "organization_id": "organization-user-russia",
                 "quiz_id": str(old_quiz_id),
                 "legacy_saved_quiz_id": str(saved_id),
                 "saved_at": now,
@@ -801,6 +823,7 @@ async def test_stage3_saved_backfill_merges_existing_duplicate_saved_rows(
             {
                 "_id": ObjectId(),
                 "user_id": "user-russia",
+                "organization_id": "organization-user-russia",
                 "quiz_id": str(new_quiz_id),
                 "legacy_saved_quiz_id": str(saved_id),
                 "saved_at": now,

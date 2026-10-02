@@ -236,6 +236,38 @@ class QuizV2Repository:
             return None
         return QuizDocumentV2(**document) if document else None
 
+    async def find_by_id_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[QuizDocumentV2]:
+        """Load a canonical quiz through its tenant boundary."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "organization_id": organization_id,
+                    "status": {"$ne": "deleted"},
+                }
+            )
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
+    async def find_public_shareable_by_id(self, quiz_id: str) -> Optional[QuizDocumentV2]:
+        """Resolve an anonymous share only through an explicit visibility grant."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "status": "active",
+                    "visibility": {"$in": ["public", "unlisted"]},
+                }
+            )
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
     async def find_many_by_ids(self, quiz_ids: list[str]) -> list[QuizDocumentV2]:
         object_ids: list[ObjectId] = []
         order: list[ObjectId] = []
@@ -281,10 +313,14 @@ class QuizV2Repository:
         access_code_expires_at: datetime,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[list[str]] = None,
+        organization_id: str | None = None,
     ) -> Optional[QuizDocumentV2]:
         try:
+            query = {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}}
+            if organization_id is not None:
+                query["organization_id"] = organization_id
             updated = await self.collection.find_one_and_update(
-                {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}},
+                query,
                 {
                     "$set": {
                         "live_quiz_enabled": True,

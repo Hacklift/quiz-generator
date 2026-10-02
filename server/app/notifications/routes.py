@@ -44,7 +44,7 @@ async def get_notifications(
         limit=limit,
         skip=skip,
         organization_id=organization_context.organization_id,
-        allow_legacy_personal=organization_context.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -88,7 +88,7 @@ async def mark_all_read(
         notifications_collection=notifications_collection,
         user=current_user,
         organization_id=organization_context.organization_id,
-        allow_legacy_personal=organization_context.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -104,7 +104,7 @@ async def mark_one_read(
         notification_id=notification_id,
         user=current_user,
         organization_id=organization_context.organization_id,
-        allow_legacy_personal=organization_context.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -120,5 +120,5 @@ async def delete_one_notification(
         notification_id=notification_id,
         user=current_user,
         organization_id=organization_context.organization_id,
-        allow_legacy_personal=organization_context.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
