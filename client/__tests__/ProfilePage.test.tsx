@@ -31,9 +31,11 @@ const mockUser = {
   subscription_status: "active",
 };
 
+let mockCurrentUser: typeof mockUser = mockUser;
+
 jest.mock("@features/auth/context/authContext", () => ({
   useAuth: () => ({
-    user: mockUser,
+    user: mockCurrentUser,
     isLoading: false,
     logout: mockLogout,
     refreshUser: mockRefreshUser,
@@ -77,18 +79,27 @@ jest.mock("@features/profile/api/billingApi", () => ({
   getSubscriptionSummary: jest.fn(),
 }));
 
-jest.mock("@features/quiz/components/NavBar", () => () => <header data-testid="mock-navbar" />);
-jest.mock("@features/quiz/components/Footer", () => () => <footer data-testid="mock-footer" />);
-jest.mock("@features/auth/components/RequireAuth", () => ({ children }: { children: React.ReactNode }) => (
-  <div>{children}</div>
-));
-jest.mock("@features/persona/components/PersonaPicker", () => () => (
-  <div data-testid="mock-persona-picker">Mock Persona Picker</div>
-));
+jest.mock("@features/quiz/components/NavBar", () => ({
+  __esModule: true,
+  default: () => <header data-testid="mock-navbar" />,
+}));
+jest.mock("@features/quiz/components/Footer", () => ({
+  __esModule: true,
+  default: () => <footer data-testid="mock-footer" />,
+}));
+jest.mock("@features/auth/components/RequireAuth", () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+jest.mock("@features/persona/components/PersonaPicker", () => ({
+  __esModule: true,
+  default: () => <div data-testid="mock-persona-picker">Mock Persona Picker</div>,
+}));
 
 describe("ProfilePage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCurrentUser = mockUser;
   });
 
   test("renders profile hero header with user details and verified badge", () => {
@@ -167,5 +178,48 @@ describe("ProfilePage", () => {
         }),
       );
     });
+  });
+
+  test("clears the save error once the user edits a field again", async () => {
+    mockUpdateProfile.mockRejectedValueOnce(new Error("Network down"));
+
+    render(<ProfilePage />);
+    fireEvent.click(screen.getByRole("button", { name: /edit profile/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(await screen.findByText("Network down")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. Dr. Alex Morgan"), {
+      target: { value: "Alex T." },
+    });
+
+    expect(screen.queryByText("Network down")).not.toBeInTheDocument();
+  });
+
+  test("keeps unsaved edits when the user object refreshes mid-edit", () => {
+    const { rerender } = render(<ProfilePage />);
+    fireEvent.click(screen.getByRole("button", { name: /edit profile/i }));
+
+    const fullNameInput = screen.getByPlaceholderText("e.g. Dr. Alex Morgan");
+    fireEvent.change(fullNameInput, { target: { value: "Unsaved Name" } });
+
+    mockCurrentUser = { ...mockUser, full_name: "Server Name" };
+    rerender(<ProfilePage />);
+
+    expect(fullNameInput).toHaveValue("Unsaved Name");
+  });
+
+  test("hero Cancel Edit button discards unsaved edits", () => {
+    render(<ProfilePage />);
+    fireEvent.click(screen.getByRole("button", { name: /edit profile/i }));
+
+    fireEvent.change(screen.getByPlaceholderText("e.g. Dr. Alex Morgan"), {
+      target: { value: "Discard Me" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /cancel edit/i }));
+
+    expect(screen.queryByText("Discard Me")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Alex Teacher" })).toBeInTheDocument();
   });
 });

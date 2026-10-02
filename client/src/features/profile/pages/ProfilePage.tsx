@@ -81,8 +81,10 @@ export default function ProfilePage() {
     avatar_color: "#143E6F",
   });
 
+  // Skip syncing while editing so a background refreshUser() doesn't
+  // overwrite unsaved changes.
   useEffect(() => {
-    if (user) {
+    if (user && !isEditing) {
       setFormData({
         full_name: user.full_name || "",
         bio: user.bio || "",
@@ -91,7 +93,7 @@ export default function ProfilePage() {
         avatar_color: user.avatar_color || "#143E6F",
       });
     }
-  }, [user]);
+  }, [user, isEditing]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -184,6 +186,7 @@ export default function ProfilePage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setSaveError("");
   };
 
   const handleLogout = async () => {
@@ -215,10 +218,10 @@ export default function ProfilePage() {
           website: formData.website,
           avatar_color: formData.avatar_color,
         });
+        await refreshUser();
         setSaveSuccess(true);
         setIsEditing(false);
         toast.success("Profile saved successfully.");
-        await refreshUser();
       }
       if (typeof window !== "undefined") {
         localStorage.setItem(
@@ -467,7 +470,11 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => {
                     setActiveTab("overview");
-                    setIsEditing(!isEditing);
+                    if (isEditing) {
+                      handleCancelEdit();
+                    } else {
+                      setIsEditing(true);
+                    }
                   }}
                   className={`w-full sm:w-auto justify-center min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2 ${
                     isEditing ? BTN_GHOST : BTN_PRIMARY
