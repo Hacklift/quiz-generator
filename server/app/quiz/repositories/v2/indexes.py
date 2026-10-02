@@ -30,7 +30,17 @@ async def _ensure_partial_unique_index(
     )
 
 
+async def _drop_owned_index_if_present(collection: AsyncIOMotorCollection, name: str) -> None:
+    """Remove a superseded index created by this repository's older schema."""
+    if name in await collection.index_information():
+        await collection.drop_index(name)
+
+
 async def ensure_quizzes_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("owner_user_id", 1), ("created_at", -1)],
+        name="organization_quiz_owner_created_v2",
+    )
     await collection.create_index([("owner_user_id", 1), ("created_at", -1)])
     await collection.create_index([("visibility", 1), ("created_at", -1)])
     await collection.create_index("status")
@@ -62,7 +72,10 @@ async def ensure_quizzes_v2_indexes(collection: AsyncIOMotorCollection):
             "legacy_quiz_id": {"$exists": True, "$type": "string"},
         },
     )
-    await collection.create_index("content_fingerprint")
+    await collection.create_index(
+        [("organization_id", 1), ("owner_user_id", 1), ("content_fingerprint", 1)],
+        name="organization_quiz_owner_fingerprint_v2",
+    )
     await collection.create_index("structure_fingerprint")
     await _ensure_partial_unique_index(
         collection,
@@ -75,10 +88,15 @@ async def ensure_quizzes_v2_indexes(collection: AsyncIOMotorCollection):
 
 
 async def ensure_folders_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("created_at", -1)],
+        name="organization_folder_user_created_v2",
+    )
+    await _drop_owned_index_if_present(collection, "user_id_1_name_1")
     await _ensure_partial_unique_index(
         collection,
-        keys=[("user_id", 1), ("name", 1)],
-        name="user_id_1_name_1",
+        keys=[("organization_id", 1), ("user_id", 1), ("name", 1)],
+        name="organization_user_folder_name_unique_v2",
         partial_filter_expression={"deleted_at": None},
     )
     await collection.create_index(
@@ -89,6 +107,10 @@ async def ensure_folders_v2_indexes(collection: AsyncIOMotorCollection):
 
 
 async def ensure_folder_items_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("folder_id", 1), ("created_at", -1)],
+        name="organization_folder_item_created_v2",
+    )
     await _ensure_partial_unique_index(
         collection,
         keys=[("folder_id", 1), ("quiz_id", 1)],
@@ -108,10 +130,15 @@ async def ensure_folder_items_v2_indexes(collection: AsyncIOMotorCollection):
 
 
 async def ensure_saved_quizzes_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("saved_at", -1)],
+        name="organization_saved_quiz_user_saved_v2",
+    )
+    await _drop_owned_index_if_present(collection, "user_id_1_quiz_id_1")
     await _ensure_partial_unique_index(
         collection,
-        keys=[("user_id", 1), ("quiz_id", 1)],
-        name="user_id_1_quiz_id_1",
+        keys=[("organization_id", 1), ("user_id", 1), ("quiz_id", 1)],
+        name="organization_user_saved_quiz_unique_v2",
         partial_filter_expression={"deleted_at": None},
     )
     await collection.create_index([("user_id", 1), ("saved_at", -1)])
@@ -122,6 +149,10 @@ async def ensure_saved_quizzes_v2_indexes(collection: AsyncIOMotorCollection):
 
 
 async def ensure_quiz_history_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("created_at", -1)],
+        name="organization_quiz_history_user_created_v2",
+    )
     await collection.create_index([("user_id", 1), ("created_at", -1)])
     await collection.create_index([("quiz_id", 1), ("created_at", -1)])
     await collection.create_index([("action", 1), ("created_at", -1)])

@@ -5,6 +5,10 @@ import { Toaster } from "react-hot-toast";
 import SplashScreen from "@app/components/SplashScreen";
 import { AuthProvider } from "@features/auth/context/authContext";
 import { PersonaProvider } from "@features/persona/context/personaContext";
+import {
+  OrganizationProvider,
+  OrganizationScopeBoundary,
+} from "@features/organizations/context/organizationContext";
 import PersonaOnboardingGate from "@features/persona/components/PersonaOnboardingGate";
 import SignInModal from "@features/auth/components/SignInModal";
 import AssistantLauncher from "@features/assistant/components/AssistantLauncher";
@@ -51,12 +55,15 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <AuthProvider>
+      <OrganizationProvider>
       <PersonaProvider>
         <SplashScreen />
         <EmailVerificationBanner />
         <PersonaOnboardingGate />
 
-        <Component {...pageProps} openLoginModal={openSignInModal} />
+        <OrganizationScopeBoundary>
+          <Component {...pageProps} openLoginModal={openSignInModal} />
+        </OrganizationScopeBoundary>
         <AssistantLauncher />
 
         <SignInModal
@@ -71,6 +78,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
         <Toaster position="top-right" />
       </PersonaProvider>
+      </OrganizationProvider>
     </AuthProvider>
   );
 }

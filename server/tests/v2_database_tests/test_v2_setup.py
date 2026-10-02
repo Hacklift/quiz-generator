@@ -28,9 +28,10 @@ async def test_v2_indexes_are_created(test_db):
     saved_indexes = await test_db["saved_quizzes_v2"].index_information()
 
     assert "owner_user_id_1_created_at_-1" in quizzes_indexes
+    assert "organization_quiz_owner_created_v2" in quizzes_indexes
     assert "category_browse_v2" in quizzes_indexes
     assert "tags_status_visibility_v2" in quizzes_indexes
-    assert "user_id_1_quiz_id_1" in saved_indexes
+    assert "organization_user_saved_quiz_unique_v2" in saved_indexes
 
 
 @pytest.mark.asyncio
@@ -59,6 +60,7 @@ async def test_v2_validators_accept_uncategorized_quiz_documents(test_db):
             "visibility": "private",
             "status": "active",
             "source": "manual",
+            "organization_id": "organization-1",
             "tags": [],
             "category": None,
             "category_slug": None,

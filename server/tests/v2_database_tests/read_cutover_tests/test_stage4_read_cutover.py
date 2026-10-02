@@ -26,6 +26,7 @@ async def test_stage4_history_reads_v2_payload(
             ],
             "description": "Infra topic",
             "owner_user_id": None,
+            "organization_id": "organization-user-1",
             "visibility": "private",
             "status": "active",
             "source": "legacy",
@@ -43,6 +44,7 @@ async def test_stage4_history_reads_v2_payload(
     await read_cutover_db["quiz_history_v2"].insert_one(
         {
             "user_id": "user-1",
+            "organization_id": "organization-user-1",
             "quiz_id": str(quiz_id),
             "action": "generated",
             "metadata": {"topic": "Caching", "difficulty_level": "easy"},
@@ -85,6 +87,7 @@ async def test_stage4_saved_reads_v2_payload(
             ],
             "description": None,
             "owner_user_id": None,
+            "organization_id": "organization-user-1",
             "visibility": "private",
             "status": "active",
             "source": "legacy",
@@ -102,6 +105,7 @@ async def test_stage4_saved_reads_v2_payload(
     await read_cutover_db["saved_quizzes_v2"].insert_one(
         {
             "user_id": "user-1",
+            "organization_id": "organization-user-1",
             "quiz_id": str(quiz_id),
             "legacy_saved_quiz_id": str(saved_id),
             "saved_at": created_at,
@@ -141,6 +145,7 @@ async def test_stage4_saved_detail_reads_v2_payload(
             ],
             "description": "Geopolitics",
             "owner_user_id": None,
+            "organization_id": "organization-user-2",
             "visibility": "private",
             "status": "active",
             "source": "legacy",
@@ -158,6 +163,7 @@ async def test_stage4_saved_detail_reads_v2_payload(
     await read_cutover_db["saved_quizzes_v2"].insert_one(
         {
             "user_id": "user-2",
+            "organization_id": "organization-user-2",
             "quiz_id": str(quiz_id),
             "display_title": "Russia",
             "legacy_saved_quiz_id": str(saved_id),
@@ -189,6 +195,7 @@ async def test_stage4_folder_reads_v2_payload_and_preserves_position(
         {
             "_id": folder_v2_id,
             "user_id": "user-folder",
+            "organization_id": "organization-user-folder",
             "name": "Research",
             "legacy_folder_id": "legacy-folder-1",
             "created_at": created_at,
@@ -204,6 +211,7 @@ async def test_stage4_folder_reads_v2_payload_and_preserves_position(
                 "questions": [{"question": "Q2", "options": ["A", "B"], "correct_answer": "A"}],
                 "description": None,
                 "owner_user_id": None,
+                "organization_id": "organization-user-folder",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -224,6 +232,7 @@ async def test_stage4_folder_reads_v2_payload_and_preserves_position(
                 "questions": [{"question": "Q1", "options": ["A", "B"], "correct_answer": "B"}],
                 "description": None,
                 "owner_user_id": None,
+                "organization_id": "organization-user-folder",
                 "visibility": "private",
                 "status": "active",
                 "source": "legacy",
@@ -244,6 +253,7 @@ async def test_stage4_folder_reads_v2_payload_and_preserves_position(
             {
                 "folder_id": str(folder_v2_id),
                 "quiz_id": str(quiz_one_id),
+                "organization_id": "organization-user-folder",
                 "added_by": "user-folder",
                 "position": 1,
                 "display_title": "USA Military",
@@ -253,6 +263,7 @@ async def test_stage4_folder_reads_v2_payload_and_preserves_position(
             {
                 "folder_id": str(folder_v2_id),
                 "quiz_id": str(quiz_two_id),
+                "organization_id": "organization-user-folder",
                 "added_by": "user-folder",
                 "position": 0,
                 "display_title": "Russia",
@@ -290,7 +301,8 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
             "questions": [{"question": "Q1", "options": ["A", "B"], "correct_answer": "B"}],
             "description": "Shared description",
             "owner_user_id": None,
-            "visibility": "private",
+            "organization_id": "platform-library",
+            "visibility": "public",
             "status": "active",
             "source": "legacy",
             "tags": [],
@@ -307,6 +319,7 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
     await read_cutover_db["saved_quizzes_v2"].insert_one(
         {
             "user_id": "user-1",
+            "organization_id": "organization-user-1",
             "quiz_id": str(quiz_id),
             "legacy_saved_quiz_id": str(saved_id),
             "saved_at": created_at,

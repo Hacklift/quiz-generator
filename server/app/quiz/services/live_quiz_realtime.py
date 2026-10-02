@@ -5,9 +5,19 @@ from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 
 
+def live_quiz_channel_key(organization_id: str, quiz_id: str) -> str:
+    """Return a tenant-qualified channel key for live event fan-out."""
+    return f"{organization_id}:{quiz_id}"
+
+
 class LiveQuizRealtimeBroadcaster:
     def __init__(self):
         self._connections: dict[str, set[WebSocket]] = defaultdict(set)
+
+    @staticmethod
+    def channel_key(organization_id: str, quiz_id: str) -> str:
+        """Keep in-process realtime fan-out tenant-qualified by construction."""
+        return live_quiz_channel_key(organization_id, quiz_id)
 
     async def connect(
         self,

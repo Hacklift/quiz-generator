@@ -3,6 +3,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from server.app.core.dependencies import get_current_user_optional
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.services.canonical_quiz_service import CanonicalQuizWriteService
 
 
@@ -53,6 +59,9 @@ def _quiz_to_display_payload(quiz) -> dict[str, Any]:
 async def get_canonical_quiz(
     quiz_id: str,
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(
+        get_optional_active_organization_context
+    ),
 ):
     quiz = await CanonicalQuizWriteService().get_quiz_v2_by_id(quiz_id)
     if quiz is None:
@@ -64,8 +73,14 @@ async def get_canonical_quiz(
 
     visibility = quiz.visibility.value if hasattr(quiz.visibility, "value") else str(quiz.visibility)
     if visibility not in {"public", "unlisted"}:
-        current_user_id = str(current_user.id) if current_user else None
-        if quiz.owner_user_id and quiz.owner_user_id != current_user_id:
-            raise HTTPException(status_code=403, detail="You do not have access to this quiz")
+        if current_user is None or organization is None:
+            # Do not disclose the existence of a private resource to an
+            # unauthenticated caller holding a guessed identifier.
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_READ,
+            resource=quiz.model_dump(by_alias=True),
+        )
 
     return _quiz_to_display_payload(quiz)

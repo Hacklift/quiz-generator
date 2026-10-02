@@ -18,6 +18,13 @@ from server.scripts.migrations.v2.migration.config import BackfillConfig
 from ....app.quiz.repositories.v2.setup import ensure_v2_collections_and_validators, ensure_v2_indexes
 
 
+class _NoopMigrationLock:
+    """Keeps transformation tests independent from the CLI lock lifecycle."""
+
+    async def renew_lock(self, **_kwargs):
+        return None
+
+
 @pytest_asyncio.fixture(scope="function")
 async def backfill_db(test_db):
     await ensure_v2_collections_and_validators(test_db)
@@ -28,6 +35,15 @@ async def backfill_db(test_db):
         test_db["saved_quizzes_v2"],
         test_db["quiz_history_v2"],
     )
+    # Stage 3 migrates only legacy rows with recorded ownership evidence. In
+    # production that evidence resolves through each user's personal default.
+    for user_id in ("user-1", "user-entropy", "user-russia"):
+        await test_db["users"].insert_one(
+            {
+                "_id": user_id,
+                "default_organization_id": f"organization-{user_id}",
+            }
+        )
     return test_db
 
 
@@ -40,10 +56,14 @@ def backfill_context_factory(backfill_db, tmp_path):
             run_id=run_id,
             batch_size=50,
         )
-        return build_migration_context(
+        context = build_migration_context(
             config=config,
             database=backfill_db,
             report_dir=Path(tmp_path),
         )
+        # Production runners acquire the lease before entering the engine.
+        # These tests exercise individual transformation stages directly.
+        context.lock_service = _NoopMigrationLock()
+        return context
 
     return factory

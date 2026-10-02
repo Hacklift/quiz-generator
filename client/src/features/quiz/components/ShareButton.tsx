@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import ShareModal from "./ShareModal";
-import publicApi from "@shared/api/publicHttp";
+import { api } from "@shared/api/http";
 
 const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
   const [quizId, setQuizId] = useState<string>("");
@@ -20,7 +20,7 @@ const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
       }
 
       setQuizId(id);
-      const linkResponse = await publicApi.get(`/share/share-quiz/${id}`);
+      const linkResponse = await api.get(`/share/share-quiz/${id}`);
       const newShareableLink = linkResponse.data.link;
       setShareableLink(newShareableLink);
 

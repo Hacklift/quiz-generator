@@ -115,10 +115,13 @@ class QuizAnswerKeyService:
         *,
         user_id: str,
         quiz_id: str,
+        organization_id: str | None = None,
     ) -> dict[str, Any]:
         quiz = await self.library_service.get_owned_or_library_quiz(
             user_id=user_id,
             quiz_id=quiz_id,
+            organization_id=organization_id,
+            allow_legacy_personal=False,
         )
         if quiz is None:
             raise ValueError("Quiz not found or not available in your library.")
