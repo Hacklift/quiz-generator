@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 from bson import ObjectId
+from fastapi import HTTPException
 
 from server.app.notifications.repository import (
     count_unread_notifications,
@@ -172,13 +173,13 @@ async def test_canonical_quiz_lookup_and_policy_reject_cross_organization_ids(te
         principal=OrganizationPrincipal(user_id="user-1", session_id="session-a"),
         membership={"organization_id": organization_a, "user_id": "user-1"},
     )
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(HTTPException) as exc:
         require_organization_permission(
             context=context,
             action=OrganizationAction.CONTENT_EXPORT,
             resource=quiz.model_dump(by_alias=True),
         )
-    assert getattr(exc.value, "status_code", None) == 404
+    assert exc.value.status_code == 404
 
 
 @pytest.mark.asyncio

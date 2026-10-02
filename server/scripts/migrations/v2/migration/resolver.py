@@ -44,11 +44,27 @@ class LegacyQuizResolver:
         }
         return self.canonical_service.build_content_fingerprint(structure_payload)
 
-    async def resolve_from_canonical_backref(self, canonical_quiz_id: str | None):
-        return await self.legacy_resolution_service.resolve_from_canonical_backref(canonical_quiz_id)
+    async def resolve_from_canonical_backref(
+        self,
+        canonical_quiz_id: str | None,
+        *,
+        organization_id: str | None = None,
+    ):
+        return await self.legacy_resolution_service.resolve_from_canonical_backref(
+            canonical_quiz_id,
+            organization_id=organization_id,
+        )
 
-    async def resolve_from_source_quiz_id(self, source_quiz_id: str | None):
-        return await self.legacy_resolution_service.resolve_from_source_quiz_id(source_quiz_id)
+    async def resolve_from_source_quiz_id(
+        self,
+        source_quiz_id: str | None,
+        *,
+        organization_id: str | None = None,
+    ):
+        return await self.legacy_resolution_service.resolve_from_source_quiz_id(
+            source_quiz_id,
+            organization_id=organization_id,
+        )
 
     async def resolve_from_payload(
         self,
@@ -78,6 +94,7 @@ class LegacyQuizResolver:
                 title=title,
                 quiz_type=quiz_type,
                 questions=questions,
+                organization_id=organization_id,
             )
             if canonical_quiz:
                 return canonical_quiz
@@ -86,7 +103,10 @@ class LegacyQuizResolver:
                 quiz_type=quiz_type,
                 questions=questions,
             )
-            return await self.canonical_service.repository.find_by_structure_fingerprint(structure_fingerprint)
+            return await self.canonical_service.repository.find_by_structure_fingerprint(
+                structure_fingerprint,
+                organization_id,
+            )
 
         if not organization_id:
             return None
@@ -100,7 +120,9 @@ class LegacyQuizResolver:
             source="legacy",
         )
         existing = await self.canonical_service.repository.find_by_content_fingerprint(
-            quiz_document.content_fingerprint
+            quiz_document.content_fingerprint,
+            owner_user_id,
+            organization_id,
         )
         if existing:
             return existing
@@ -108,11 +130,13 @@ class LegacyQuizResolver:
             title=title,
             quiz_type=quiz_type,
             questions=questions,
+            organization_id=organization_id,
         )
         if existing:
             return existing
         existing = await self.canonical_service.repository.find_by_structure_fingerprint(
-            quiz_document.structure_fingerprint
+            quiz_document.structure_fingerprint,
+            organization_id,
         )
         if existing:
             return existing
@@ -128,11 +152,15 @@ class LegacyQuizResolver:
         organization_id: str | None = None,
     ):
         canonical_quiz = await self.resolve_from_canonical_backref(
-            legacy_saved_doc.get("canonical_quiz_id")
+            legacy_saved_doc.get("canonical_quiz_id"),
+            organization_id=organization_id,
         )
         if canonical_quiz:
             return canonical_quiz
-        canonical_quiz = await self.resolve_from_source_quiz_id(legacy_saved_doc.get("quiz_id"))
+        canonical_quiz = await self.resolve_from_source_quiz_id(
+            legacy_saved_doc.get("quiz_id"),
+            organization_id=organization_id,
+        )
         if canonical_quiz:
             return canonical_quiz
         canonical_quiz = await self.legacy_resolution_service.resolve_from_legacy_structure(
@@ -162,11 +190,15 @@ class LegacyQuizResolver:
         organization_id: str | None = None,
     ):
         canonical_quiz = await self.resolve_from_canonical_backref(
-            legacy_history_doc.get("canonical_quiz_id")
+            legacy_history_doc.get("canonical_quiz_id"),
+            organization_id=organization_id,
         )
         if canonical_quiz:
             return canonical_quiz
-        canonical_quiz = await self.resolve_from_source_quiz_id(legacy_history_doc.get("quiz_id"))
+        canonical_quiz = await self.resolve_from_source_quiz_id(
+            legacy_history_doc.get("quiz_id"),
+            organization_id=organization_id,
+        )
         if canonical_quiz:
             return canonical_quiz
         return await self.resolve_from_payload(
@@ -193,7 +225,8 @@ class LegacyQuizResolver:
         owner_user_id: str | None = None,
     ):
         canonical_quiz = await self.resolve_from_canonical_backref(
-            legacy_folder_item.get("canonical_quiz_id")
+            legacy_folder_item.get("canonical_quiz_id"),
+            organization_id=organization_id,
         )
         if canonical_quiz:
             return canonical_quiz
@@ -202,7 +235,10 @@ class LegacyQuizResolver:
             legacy_folder_item.get("quiz_id"),
             legacy_folder_item.get("quiz_data", {}).get("quiz_id"),
         ):
-            canonical_quiz = await self.resolve_from_source_quiz_id(source_id)
+            canonical_quiz = await self.resolve_from_source_quiz_id(
+                source_id,
+                organization_id=organization_id,
+            )
             if canonical_quiz:
                 return canonical_quiz
 

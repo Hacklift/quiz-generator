@@ -54,8 +54,15 @@ class QuizV2Repository:
         document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
-    async def find_by_structure_fingerprint(self, structure_fingerprint: str) -> Optional[QuizDocumentV2]:
-        document = await self.collection.find_one({"structure_fingerprint": structure_fingerprint})
+    async def find_by_structure_fingerprint(
+        self,
+        structure_fingerprint: str,
+        organization_id: Optional[str] | object = _ORGANIZATION_SCOPE_UNSET,
+    ) -> Optional[QuizDocumentV2]:
+        query = {"structure_fingerprint": structure_fingerprint}
+        if organization_id is not _ORGANIZATION_SCOPE_UNSET:
+            query["organization_id"] = organization_id
+        document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
     async def find_by_access_code(self, access_code: str) -> Optional[QuizDocumentV2]:

@@ -590,6 +590,63 @@ async def test_stage3_backfill_saved_quiz_reuses_existing_v2_question_only_match
 
 
 @pytest.mark.asyncio
+async def test_stage3_backfill_does_not_link_question_only_match_from_another_organization(
+    backfill_db,
+    backfill_context_factory,
+):
+    saved_id = ObjectId()
+    await backfill_db["quizzes_v2"].insert_one(
+        {
+            "_id": ObjectId(),
+            "title": "Other organization quiz",
+            "quiz_type": "multichoice",
+            "questions": [
+                {
+                    "question": "What is the capital of Russia?",
+                    "correct_answer": "B) Moscow",
+                    "options": ["A) Kyiv", "B) Moscow", "C) St. Petersburg", "D) Minsk"],
+                }
+            ],
+            "owner_user_id": "user-other",
+            "organization_id": "organization-other",
+            "visibility": "private",
+            "status": "active",
+            "source": "legacy",
+            "tags": [],
+            "content_fingerprint": "other-content",
+            "structure_fingerprint": "other-structure",
+            "schema_version": 1,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+    )
+    await backfill_db["saved_quizzes"].insert_one(
+        {
+            "_id": saved_id,
+            "user_id": "user-russia",
+            "title": "Russia",
+            "question_type": "multichoice",
+            "questions": [
+                {
+                    "question": "What is the capital of Russia?",
+                    "options": ["A) Kyiv", "B) Moscow", "C) St. Petersburg", "D) Minsk"],
+                    "question_type": "multichoice",
+                }
+            ],
+        }
+    )
+
+    context = backfill_context_factory(collections=["saved"], run_id="saved-cross-org-match")
+    summary = await backfill_saved_quizzes(context)
+
+    assert summary.inserted == 0
+    assert summary.unresolved == 1
+    assert await backfill_db["saved_quizzes_v2"].find_one(
+        {"legacy_saved_quiz_id": str(saved_id)}
+    ) is None
+
+
+@pytest.mark.asyncio
 async def test_stage3_history_prefers_profession_over_generic_quiz_name_when_creating_canonical(
     backfill_db,
     backfill_context_factory,
