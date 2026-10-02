@@ -9,6 +9,7 @@ import {
   liveQuizService,
   type LiveQuizAttemptDetail,
 } from "@features/live-quiz/api/liveQuizService";
+import { ROUTES } from "@shared/config/patterns/routes";
 import { archivo, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 
 export default function LiveQuizAttemptDetailPage({
@@ -87,7 +88,7 @@ export default function LiveQuizAttemptDetailPage({
                   ))}
                 </ol>
               </section>
-              <Link href={`/my-live-quizzes/${quizId}`} className="mt-[24px] inline-block font-extrabold text-brand underline">Back to attempts</Link>
+              <Link href={ROUTES.myLiveQuiz(quizId)} className="mt-[24px] inline-block font-extrabold text-brand underline">Back to attempts</Link>
             </>
           )}
         </main>
