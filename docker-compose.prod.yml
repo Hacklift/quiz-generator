@@ -68,6 +68,29 @@ services:
       server:
         condition: service_started
 
+  # Runs the periodic tasks in celery_config.beat_schedule (closing expired
+  # training runs, retrying training invitation deliveries). Keep exactly one.
+  celery-beat:
+    build:
+      context: .
+      target: backend-service
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://mongodb:27017/quizApp_db
+      - PYTHONPATH=/
+    command: ["celery", "-A", "server.celery_config.celery_app", "beat",
+              "--loglevel=info",
+              "--schedule=/tmp/quizwerk-celerybeat-schedule",
+              "--pidfile=/tmp/quizwerk-celerybeat.pid"]
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   mongodb:
     image: mongo:7
     healthcheck:

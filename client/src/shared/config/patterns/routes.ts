@@ -11,6 +11,15 @@ export const ROUTES = {
   PROFILE: "/profile",
   NOTIFICATIONS: "/notifications",
   ADMIN_NOTIFICATIONS: "/admin/notifications",
+  CATEGORIES: "/categories",
+
+  TRAINING_RUNS: "/training-runs",
+  ASSIGNED_TRAINING: "/assigned-training",
+  TRAINING_ACCESS: "/training-access",
+
+  trainingRun: (runId: string) => `/training-runs/${encodeURIComponent(runId)}`,
+  trainingAccess: (accessCode: string) =>
+    `/training-access/${encodeURIComponent(accessCode)}`,
 
   NOT_FOUND: "/404",
 };

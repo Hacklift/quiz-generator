@@ -34,6 +34,9 @@ class QuizSourceV2(str, Enum):
     SEED = "seed"
     LEGACY = "legacy"
 
+class PersonaCategoryV2(str, Enum):
+    SCHOOL = "school"
+    CORPORATE = "corporate"
 
 class QuizClassificationMethodV2(str, Enum):
     SEED_PATH = "seed_path"
@@ -80,6 +83,7 @@ class QuizCreateV2(BaseModel):
     category_slug: Optional[str] = None
     subcategory: Optional[str] = None
     subcategory_slug: Optional[str] = None
+    persona_category: Optional[PersonaCategoryV2] = None
     classification: Optional[QuizClassificationV2] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -95,6 +99,7 @@ class QuizMetadataUpdateV2(BaseModel):
     category_slug: Optional[str] = None
     subcategory: Optional[str] = None
     subcategory_slug: Optional[str] = None
+    persona_category: Optional[PersonaCategoryV2] = None
     classification: Optional[QuizClassificationV2] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -125,6 +130,7 @@ class QuizDocumentV2(BaseModel):
     category_slug: Optional[str] = None
     subcategory: Optional[str] = None
     subcategory_slug: Optional[str] = None
+    persona_category: Optional[PersonaCategoryV2] = None
     classification: Optional[QuizClassificationV2] = None
     legacy_source_collection: Optional[str] = None
     legacy_quiz_id: Optional[str] = None

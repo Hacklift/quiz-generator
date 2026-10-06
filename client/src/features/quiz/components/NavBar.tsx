@@ -10,7 +10,6 @@ import SignUpModal from "@features/auth/components/SignUpModal";
 import SignInModal from "@features/auth/components/SignInModal";
 import NavGenerateQuizButton from "./NavGenerateQuizButton";
 import Sidebar from "./Sidebar";
-import BrowseModal from "./modals/BrowseModal";
 import { useAuth } from "@features/auth/context/authContext";
 import { usePersona } from "@features/persona/context/personaContext";
 import { useTerms } from "@features/persona/hooks/useTerms";
@@ -28,15 +27,18 @@ import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
  * The desktop and mobile menus render from this one list — they used to be
  * two hand-maintained copies that drifted.
  */
-type NavItem =
-  | { kind: "link"; label: string; href: string; authOnly?: boolean }
-  | { kind: "action"; label: string; action: "browse" };
+type NavItem = {
+  kind: "link";
+  label: string;
+  href: string;
+  authOnly?: boolean;
+};
 
 export function navigationItems(): NavItem[] {
   return [
     { kind: "link", label: "Home", href: "/" },
     { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "action", label: "Categories", action: "browse" },
+    { kind: "link", label: "Categories", href: ROUTES.CATEGORIES },
     { kind: "link", label: "Pricing", href: "/#pricing" },
   ];
 }
@@ -54,7 +56,6 @@ function mobileWorkspaceLinks(t: TerminologyResolver) {
 const NavBar: React.FC = () => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [isBrowseModalOpen, setIsBrowseModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { user, isAuthenticated, logout, isLoading } = useAuth();
@@ -106,7 +107,7 @@ const NavBar: React.FC = () => {
             }`}
             style={{ paddingTop: "64px" }}
           >
-            <Sidebar onBrowseClick={() => setIsBrowseModalOpen(true)} />
+            <Sidebar onBrowseClick={() => router.push(ROUTES.CATEGORIES)} />
           </div>
         </>
       )}
@@ -121,33 +122,19 @@ const NavBar: React.FC = () => {
           </Link>
 
           <div className="hidden items-center gap-[28px] md:flex">
-            {visibleItems.map((item) =>
-              item.kind === "link" ? (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`text-[15px] transition ${
-                    isActive(item.href)
-                      ? "font-extrabold text-brand"
-                      : "text-ink hover:text-brand"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ) : (
-                <button
-                  key={item.label}
-                  onClick={() => setIsBrowseModalOpen(true)}
-                  className={`text-[15px] transition ${
-                    isBrowseModalOpen
-                      ? "font-extrabold text-brand"
-                      : "text-ink hover:text-brand"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ),
-            )}
+            {visibleItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`text-[15px] transition ${
+                  isActive(item.href)
+                    ? "font-extrabold text-brand"
+                    : "text-ink hover:text-brand"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
 
           <div className="hidden items-center gap-[16px] md:flex">
@@ -197,33 +184,20 @@ const NavBar: React.FC = () => {
         }`}
       >
         <div className="flex flex-col px-4 py-4">
-          {visibleItems.map((item) =>
-            item.kind === "link" ? (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setIsMobileNavOpen(false)}
-                className={`min-h-[44px] content-center border-t-2 border-divider px-3 py-2 text-[16px] transition ${
-                  isActive(item.href)
-                    ? "font-extrabold text-brand"
-                    : "text-ink hover:bg-ink/[0.05]"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <button
-                key={item.label}
-                onClick={() => {
-                  setIsMobileNavOpen(false);
-                  setIsBrowseModalOpen(true);
-                }}
-                className="min-h-[44px] border-t-2 border-divider px-3 py-2 text-left text-[16px] text-ink transition hover:bg-ink/[0.05]"
-              >
-                {item.label}
-              </button>
-            ),
-          )}
+          {visibleItems.map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              onClick={() => setIsMobileNavOpen(false)}
+              className={`min-h-[44px] content-center border-t-2 border-divider px-3 py-2 text-[16px] transition ${
+                isActive(item.href)
+                  ? "font-extrabold text-brand"
+                  : "text-ink hover:bg-ink/[0.05]"
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
 
           {!isLoading && isAuthenticated && (
             <>
@@ -293,10 +267,6 @@ const NavBar: React.FC = () => {
         onClose={() => setIsLoginOpen(false)}
         redirectTo={ROUTES.DASHBOARD}
         switchToSignUp={switchToSignUp}
-      />
-      <BrowseModal
-        isOpen={isBrowseModalOpen}
-        onClose={() => setIsBrowseModalOpen(false)}
       />
     </div>
   );

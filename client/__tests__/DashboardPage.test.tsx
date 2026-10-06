@@ -77,7 +77,7 @@ describe("DashboardPage dispatch", () => {
     ["student", "Student dashboard"],
     ["parent", "Parent dashboard"],
     ["business", "Business dashboard"],
-    ["employee", "Employee dashboard"],
+    ["employee", "Assigned to you"],
     ["hr", "HR personnel dashboard"],
   ];
 
@@ -107,7 +107,7 @@ describe("DashboardPage dispatch", () => {
     expect(screen.getByText("Revision practice")).toBeInTheDocument();
   });
 
-  test("corporate dashboard uses training actions and employee-aware copy", () => {
+  test("employee dashboard exposes assigned training and self-paced practice", () => {
     mockPersona = { category: "corporate", userType: "employee" };
 
     render(<DashboardPage />);
@@ -115,11 +115,10 @@ describe("DashboardPage dispatch", () => {
     expect(
       screen.getByText(/Welcome back, Casey\. Keep your learning moving\./),
     ).toBeInTheDocument();
-    expect(screen.getByText("New training quiz")).toBeInTheDocument();
-    expect(screen.getByText("Run live training session")).toBeInTheDocument();
-    expect(screen.getByText("Assigned to me")).toBeInTheDocument();
+    expect(screen.getByText("Assigned training")).toBeInTheDocument();
+    expect(screen.getByText("Practice training quiz")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /assigned to me/i }),
-    ).toBeDisabled();
+      screen.getByRole("button", { name: /assigned training/i }),
+    ).toBeEnabled();
   });
 });

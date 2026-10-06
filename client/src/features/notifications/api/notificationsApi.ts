@@ -1,6 +1,6 @@
 import { api } from "@shared/api/http";
 
-export type NotificationType = "payment" | "security" | "system" | "admin";
+export type NotificationType = "payment" | "security" | "system" | "admin" | "training";
 
 export interface NotificationItem {
   id: string;
