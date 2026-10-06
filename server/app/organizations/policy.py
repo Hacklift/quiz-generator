@@ -105,6 +105,29 @@ class OrganizationPolicy:
     rather than route-local role checks.
     """
 
+    @staticmethod
+    def _resource_relates_to_principal(
+        resource: dict[str, Any] | None,
+        principal: OrganizationPrincipal,
+        *fields: str,
+    ) -> bool:
+        """Match persisted resource relationships without widening tenant access.
+
+        `created_by_user_id` is the canonical authorship field. `owner_user_id`
+        remains a compatibility fallback for legacy canonical quizzes that were
+        scoped before authorship was populated. Assignment-backed resources use
+        their existing recipient/user fields; a missing relationship never
+        grants access.
+        """
+        return bool(
+            resource
+            and any(
+                resource.get(field) is not None
+                and str(resource[field]) == principal.user_id
+                for field in fields
+            )
+        )
+
     def can(
         self,
         principal: OrganizationPrincipal,
@@ -129,27 +152,50 @@ class OrganizationPolicy:
             OrganizationAction.CONTENT_SHARE,
             OrganizationAction.CONTENT_EXPORT,
         }:
-            return bool(
-                resource
-                and str(resource.get("created_by_user_id")) == principal.user_id
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "created_by_user_id",
+                "owner_user_id",
             )
 
         if role == "facilitator" and action in {
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
         }:
-            return bool(
-                resource
-                and str(resource.get("facilitator_user_id")) == principal.user_id
+            # Explicit facilitator delegation is future-facing. Existing
+            # delivery records only persist a creator/owner relationship, so
+            # a facilitator may operate delivery they created, never every
+            # delivery in the organization merely by role membership.
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "facilitator_user_id",
+                "created_by_user_id",
+                "owner_user_id",
             )
 
-        if role == "learner" and action in {
-            OrganizationAction.CONTENT_READ,
-            OrganizationAction.ATTEMPT_COMPLETE,
-        }:
-            return bool(
-                resource
-                and str(resource.get("assigned_user_id")) == principal.user_id
+        if role == "learner" and action == OrganizationAction.CONTENT_READ:
+            # Learners may read self-authored practice content as well as
+            # resources explicitly assigned to them. Public/unlisted content
+            # is handled by its explicit capability path before this policy.
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "assigned_user_id",
+                "recipient_user_id",
+                "created_by_user_id",
+                "owner_user_id",
+                "user_id",
+            )
+
+        if role == "learner" and action == OrganizationAction.ATTEMPT_COMPLETE:
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "assigned_user_id",
+                "recipient_user_id",
+                "user_id",
             )
 
         return True

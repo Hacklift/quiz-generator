@@ -11,8 +11,11 @@ from server.scripts.migrations.organizations.backfill_resource_organizations imp
     auto_backfill_resource_organizations,
     backfill_resource_organizations,
     cleanup_unresolvable_resources,
+    RESOURCE_COLLECTIONS,
     ResourceBackfillBlockedError,
+    ResourceScopeVerificationError,
     validate_cleanup_authorization,
+    verify_resource_organization_scope,
 )
 from server.scripts.migrations.organizations.backfill_organizations import backfill_organizations
 
@@ -53,6 +56,30 @@ def test_production_deployment_paths_never_invoke_destructive_resource_cleanup()
         contents = (repository_root / relative_path).read_text(encoding="utf-8")
         assert "tenancy-resource-cleanup" not in contents
         assert "--purge-unresolvable" not in contents
+
+
+@pytest.mark.asyncio
+async def test_protocol_b_verification_requires_completed_clean_scope_backfill(test_db):
+    await backfill_organizations(
+        dry_run=False,
+        database_instance=test_db,
+        triggered_by="test-protocol-a",
+    )
+    await backfill_resource_organizations(
+        dry_run=False,
+        strict=True,
+        database_instance=test_db,
+        triggered_by="test-protocol-b",
+    )
+
+    assert await verify_resource_organization_scope(database_instance=test_db) == {
+        "collections_checked": len(RESOURCE_COLLECTIONS),
+        "unscoped_records": 0,
+    }
+
+    await test_db["notifications"].insert_one({"_id": ObjectId(), "user_id": "late-user"})
+    with pytest.raises(ResourceScopeVerificationError, match="notifications=1"):
+        await verify_resource_organization_scope(database_instance=test_db)
 
 
 @pytest.mark.asyncio

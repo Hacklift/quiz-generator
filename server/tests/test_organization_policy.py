@@ -5,6 +5,7 @@ from bson import ObjectId
 
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.organizations.policy import OrganizationAction, OrganizationPolicy
+from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 
 
 ALL_ACTIONS = tuple(OrganizationAction)
@@ -87,6 +88,102 @@ def test_author_cannot_edit_another_members_content():
         resource,
         context,
     )
+
+
+def test_author_can_manage_a_legacy_owned_quiz_without_created_by_user_id():
+    context = _context("author")
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.CONTENT_UPDATE,
+        {
+            "organization_id": context.organization_id,
+            "owner_user_id": context.principal.user_id,
+        },
+        context,
+    )
+
+
+def test_learner_can_read_self_authored_canonical_content():
+    context = _context("learner")
+    quiz = QuizDocumentV2(
+        title="My revision quiz",
+        quiz_type="multichoice",
+        source="manual",
+        organization_id=context.organization_id,
+        owner_user_id=context.principal.user_id,
+        created_by_user_id=context.principal.user_id,
+        questions=[{"question": "Question", "correct_answer": "Answer"}],
+    )
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.CONTENT_READ,
+        quiz.model_dump(by_alias=True),
+        context,
+    )
+
+
+def test_facilitator_can_operate_delivery_they_created():
+    context = _context("facilitator")
+    resource = {
+        "organization_id": context.organization_id,
+        "created_by_user_id": context.principal.user_id,
+    }
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.DELIVERY_RUN,
+        resource,
+        context,
+    )
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.REPORT_READ,
+        resource,
+        context,
+    )
+
+
+@pytest.mark.asyncio
+async def test_canonical_quiz_route_allows_learner_to_read_own_practice_quiz(monkeypatch):
+    # This policy module intentionally avoids importing the application at
+    # collection time. Configure the route's required settings only for this
+    # integration-style route assertion.
+    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("EMAIL_SENDER", "no-reply@example.test")
+    monkeypatch.setenv("EMAIL_PASSWORD", "test-password")
+    monkeypatch.setenv("EMAIL_HOST", "smtp.example.test")
+    monkeypatch.setenv("EMAIL_PORT", "587")
+    monkeypatch.setenv("SHARE_URL", "http://localhost:3000")
+    monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017/test")
+    from server.app.quiz.routes import canonical_quizzes
+
+    context = _context("learner")
+    quiz = QuizDocumentV2(
+        title="My revision quiz",
+        quiz_type="multichoice",
+        source="manual",
+        organization_id=context.organization_id,
+        owner_user_id=context.principal.user_id,
+        created_by_user_id=context.principal.user_id,
+        questions=[{"question": "Question", "correct_answer": "Answer"}],
+    )
+
+    class QuizService:
+        async def get_quiz_v2_by_id(self, quiz_id: str):
+            assert quiz_id == str(quiz.id)
+            return quiz
+
+    monkeypatch.setattr(canonical_quizzes, "CanonicalQuizWriteService", QuizService)
+
+    payload = await canonical_quizzes.get_canonical_quiz(
+        str(quiz.id),
+        current_user=object(),
+        organization=context,
+    )
+
+    assert payload["quiz_id"] == str(quiz.id)
 
 
 def test_learner_cannot_complete_another_members_assignment():
