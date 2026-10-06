@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class LiveQuizAnswer(BaseModel):
     question_index: int = Field(ge=0)
-    selected_answer: str
+    selected_answer: Any
     answered_at: datetime
 
 
@@ -31,6 +31,7 @@ class LiveQuizQuestion(BaseModel):
     question_index: int
     question: str
     options: Optional[List[Any]] = None
+    matching_prompts: Optional[List[str]] = None
     question_type: Optional[str] = None
     selected_answer: Optional[str] = None
 
@@ -60,7 +61,7 @@ class LiveQuizSessionState(BaseModel):
 
 class SaveLiveQuizAnswerRequest(BaseModel):
     question_index: int = Field(ge=0)
-    selected_answer: str
+    selected_answer: Any
     next_question_index: Optional[int] = Field(default=None, ge=0)
 
 
@@ -100,8 +101,8 @@ class LiveQuizAnalyticsRow(BaseModel):
 class LiveQuizGradedAnswer(BaseModel):
     question_index: int
     question: str
-    selected_answer: str
-    correct_answer: str
+    selected_answer: Any
+    correct_answer: Any
     question_type: str
     is_correct: bool
 

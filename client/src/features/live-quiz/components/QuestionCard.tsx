@@ -3,9 +3,9 @@ import { LiveQuizQuestion } from "@features/live-quiz/api/liveQuizService";
 
 interface QuestionCardProps {
   question: LiveQuizQuestion;
-  selectedAnswer: string;
+  selectedAnswer: string | Record<string, string>;
   disabled?: boolean;
-  onSelect: (answer: string) => void;
+  onSelect: (answer: string | Record<string, string>) => void;
 }
 
 const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -15,6 +15,27 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   onSelect,
 }) => {
   const options = question.options || [];
+  if (question.question_type === "matching") {
+    const matches = typeof selectedAnswer === "object" ? selectedAnswer : {};
+    return (
+      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900">{question.question}</h2>
+        <div className="mt-5 space-y-3">
+          {(question.matching_prompts || []).map((prompt) => (
+            <label key={prompt} className="grid items-center gap-2 sm:grid-cols-2">
+              <span>{prompt}</span>
+              <select value={matches[prompt] || ""} disabled={disabled}
+                onChange={(event) => onSelect({ ...matches, [prompt]: event.target.value })}
+                className="rounded-md border border-slate-300 px-3 py-2">
+                <option value="">Select a match</option>
+                {options.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -47,7 +68,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
         </div>
       ) : (
         <textarea
-          value={selectedAnswer}
+          value={typeof selectedAnswer === "string" ? selectedAnswer : ""}
           disabled={disabled}
           onChange={(event) => onSelect(event.target.value)}
           className="mt-5 min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"

@@ -84,18 +84,35 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
       <input
         type="text"
         onChange={handleInputChange}
-        value={value ?? ""}
+        value={typeof value === "string" || typeof value === "number" ? value : ""}
         disabled={disabled}
         placeholder="Type your short answer here"
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
+    );
+  } else if (questionType === "matching") {
+    const matches = typeof value === "object" && value ? value : {};
+    return (
+      <div className="space-y-3">
+        {Object.keys(matches).map((prompt) => (
+          <label key={prompt} className="grid items-center gap-2 sm:grid-cols-2">
+            <span>{prompt}</span>
+            <select value={matches[prompt] || ""} disabled={disabled}
+              onChange={(event) => onAnswerChange(index, { ...matches, [prompt]: event.target.value })}
+              className="rounded-md border border-gray-300 px-3 py-2">
+              <option value="">Select a match</option>
+              {options.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
     );
   } else if (questionType === "open-ended") {
     return (
       <textarea
         rows={4}
         onChange={handleInputChange}
-        value={value ?? ""}
+        value={typeof value === "string" || typeof value === "number" ? value : ""}
         disabled={disabled}
         placeholder="Write your detailed answer here"
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"

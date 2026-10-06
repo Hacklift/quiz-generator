@@ -57,6 +57,7 @@ const QUESTION_TYPES = new Set([
   "multichoice",
   "true-false",
   "short-answer",
+  "matching",
   "open-ended",
 ]);
 const PERSONA_GENERATION_PRESETS: Partial<

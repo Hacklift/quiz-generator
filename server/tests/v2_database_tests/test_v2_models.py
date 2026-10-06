@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizCreateV2, QuizMetadataUpdateV2, QuizQuestionV2
+from ...app.quiz.repositories.v2.models.attempt_models import QuizAttemptDocumentV2
 
 
 def test_quiz_create_v2_accepts_valid_payload():
@@ -80,3 +81,24 @@ def test_quiz_create_v2_rejects_invalid_quiz_type():
 def test_quiz_metadata_update_v2_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         QuizMetadataUpdateV2(title="Valid", unknown_field="nope")
+
+
+def test_matching_quiz_uses_structured_authoritative_answer():
+    quiz = QuizCreateV2(
+        title="Matching", quiz_type="matching", source="manual",
+        questions=[{"question": "Match", "options": ["Paris"], "correct_answer": {"France": "Paris"}}],
+    )
+    assert quiz.questions[0].correct_answer == {"France": "Paris"}
+
+
+def test_attempt_rejects_inconsistent_authoritative_aggregate():
+    with pytest.raises(ValidationError):
+        QuizAttemptDocumentV2(
+            user_id="learner", quiz_id="quiz", score=1, total_questions=2, percentage=100,
+            question_results=[
+                {"question_index": 0, "question": "Q1", "question_type": "multichoice",
+                 "user_answer": "A", "correct_answer": "A", "is_correct": True, "result": "Correct"},
+                {"question_index": 1, "question": "Q2", "question_type": "multichoice",
+                 "user_answer": "A", "correct_answer": "B", "is_correct": False, "result": "Incorrect"},
+            ],
+        )

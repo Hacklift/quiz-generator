@@ -5,6 +5,7 @@ from server.app.quiz.mock_data.true_false import mock_true_false_questions
 from server.app.quiz.mock_data.open_ended import mock_open_ended_questions
 
 from server.app.quiz.mock_data.short_answer import mock_short_answer_questions
+from server.app.quiz.mock_data.matching import mock_matching_questions
 
 
 from fastapi import HTTPException
@@ -33,7 +34,8 @@ def get_mock_questions_by_type(question_type: str, num_questions: int):
 
         "short answer": "short-answer",
 
-        "short-answer": "short-answer"
+        "short-answer": "short-answer",
+        "matching": "matching",
 
     }
 
@@ -47,6 +49,7 @@ def get_mock_questions_by_type(question_type: str, num_questions: int):
         "open-ended": mock_open_ended_questions,
 
         "short-answer": mock_short_answer_questions,
+        "matching": mock_matching_questions,
 
     }
 
@@ -85,4 +88,3 @@ def get_mock_questions_by_type(question_type: str, num_questions: int):
 
 
     return random.sample(questions, num_questions)
-

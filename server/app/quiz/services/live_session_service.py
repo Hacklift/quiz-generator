@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
 from server.app.core.config import settings
-from server.app.quiz.utils.grading import grade_answers
+from server.app.quiz.services.quiz_grading_service import QuizGradingService
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
@@ -363,7 +363,7 @@ class LiveQuizSessionService:
         session_id: str,
         participant_token: str,
         question_index: int,
-        selected_answer: str,
+        selected_answer: Any,
         next_question_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         session = await self._get_authorized_session(session_id, participant_token)
@@ -710,39 +710,42 @@ class LiveQuizSessionService:
             answer["question_index"]: answer.get("selected_answer", "")
             for answer in session.get("answers", [])
         }
-        grading_payload = []
+        canonical_questions = []
+        submitted_answers = []
         for index, question in enumerate(questions):
             correct_answer = question.get("correct_answer") or question.get("answer")
-            grading_payload.append(
+            question_type = question.get("question_type") or quiz.get("quiz_type") or "multichoice"
+            canonical_questions.append(
                 {
                     "question": question.get("question", ""),
-                    "user_answer": answer_by_index.get(index, ""),
                     "correct_answer": correct_answer,
-                    "question_type": question.get("question_type")
-                    or quiz.get("quiz_type")
-                    or "multichoice",
-                    "source": question.get("source", "live"),
+                    "question_type": question_type,
                 }
             )
+            submitted_answers.append(
+                {"question_index": index, "user_answer": answer_by_index.get(index, "")}
+            )
 
-        graded_answers = grade_answers(grading_payload, "mock")
+        grading = QuizGradingService.grade_canonical_questions(
+            canonical_questions,
+            submitted_answers,
+            quiz_type=quiz.get("quiz_type") or "multichoice",
+        )
+        graded_answers = grading["question_results"]
         indexed_answers = [
             {
-                "question_index": index,
+                "question_index": answer["question_index"],
                 "question": answer.get("question", ""),
-                "selected_answer": str(answer.get("user_answer", "")),
-                "correct_answer": str(answer.get("correct_answer", "")),
+                "selected_answer": answer.get("user_answer", ""),
+                "correct_answer": answer.get("correct_answer", ""),
                 "question_type": answer.get("question_type", ""),
                 "is_correct": bool(answer.get("is_correct", False)),
             }
-            for index, answer in enumerate(graded_answers)
+            for answer in graded_answers
         ]
-        score = sum(1 for answer in graded_answers if answer.get("is_correct"))
-        total = len(questions)
-        percentage = round((score / total) * 100, 2) if total else 0
         return {
-            "score": score,
-            "percentage": percentage,
+            "score": grading["score"],
+            "percentage": grading["percentage"],
             "graded_answers": indexed_answers,
         }
 
@@ -810,11 +813,24 @@ class LiveQuizSessionService:
             if answer.get("question_index") == index:
                 selected_answer = answer.get("selected_answer")
                 break
+        question_type = question.get("question_type") or quiz_type
+        correct_answer = question.get("correct_answer") or question.get("answer")
+        matching_prompts = (
+            list(correct_answer)
+            if question_type == "matching" and isinstance(correct_answer, dict)
+            else None
+        )
+        options = (
+            sorted(correct_answer.values(), key=str.casefold)
+            if matching_prompts
+            else question.get("options")
+        )
         return {
             "question_index": index,
             "question": question.get("question", ""),
-            "options": question.get("options"),
-            "question_type": question.get("question_type") or quiz_type,
+            "options": options,
+            "matching_prompts": matching_prompts,
+            "question_type": question_type,
             "selected_answer": selected_answer,
         }
 
