@@ -12,15 +12,39 @@ from server.app.db.core.connection import (
     get_saved_quizzes_v2_collection,
 )
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
-from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
-from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
-
+from server.app.quiz.repositories.v2.repositories.quiz_repository import (
+    QuizV2Repository,
+)
+from server.app.quiz.repositories.v2.repositories.reference_repository import (
+    ReferenceV2Repository,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def build_default_description(topic: str) -> str:
     return f"A quiz to test your knowledge on {topic}"
+
+
+def can_access_quiz(quiz: QuizDocumentV2, user_id: str | None) -> bool:
+    """Apply the canonical quiz read policy without revealing quiz existence."""
+    quiz_status = (
+        quiz.status.value if hasattr(quiz.status, "value") else str(quiz.status)
+    )
+    if quiz_status == "deleted":
+        return False
+
+    visibility = (
+        quiz.visibility.value
+        if hasattr(quiz.visibility, "value")
+        else str(quiz.visibility)
+    )
+    if visibility in {"public", "unlisted"}:
+        return True
+
+    # Preserve access to ownerless seed/legacy records as in the existing
+    # canonical read route; owned private quizzes remain owner-only.
+    return not quiz.owner_user_id or quiz.owner_user_id == user_id
 
 
 class SharedQuizReadService:
@@ -34,7 +58,9 @@ class SharedQuizReadService:
         reference_repository: Optional[ReferenceV2Repository] = None,
     ):
         self.quiz_repository = (
-            quiz_repository if quiz_repository is not None else QuizV2Repository(get_quizzes_v2_collection())
+            quiz_repository
+            if quiz_repository is not None
+            else QuizV2Repository(get_quizzes_v2_collection())
         )
         self.reference_repository = (
             reference_repository
@@ -75,10 +101,19 @@ class SharedQuizReadService:
     async def resolve_shared_quiz(self, quiz_id: str) -> Optional[dict[str, Any]]:
         quiz_doc = await self.quiz_repository.find_by_id(quiz_id)
         if not quiz_doc:
-            saved_reference = await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
+            saved_reference = (
+                await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
+            )
             if saved_reference:
-                quiz_doc = await self.quiz_repository.find_by_id(saved_reference.quiz_id)
+                quiz_doc = await self.quiz_repository.find_by_id(
+                    saved_reference.quiz_id
+                )
 
         payload = self._normalize_v2_quiz(quiz_doc) if quiz_doc else None
-        self._log("quiz_read_v2_served", operation="shared_quiz_detail", read_mode="v2_only", quiz_id=quiz_id)
+        self._log(
+            "quiz_read_v2_served",
+            operation="shared_quiz_detail",
+            read_mode="v2_only",
+            quiz_id=quiz_id,
+        )
         return payload

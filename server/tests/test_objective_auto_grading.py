@@ -2,9 +2,11 @@ from datetime import datetime
 
 import pytest
 from bson import ObjectId
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
+from server.app.quiz.routes import grading as grading_route
 from server.app.quiz.routes.grading import GradeQuizRequest
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.services.quiz_grading_service import (
@@ -173,17 +175,159 @@ class FakeAttemptRepository:
         return attempt
 
 
-def make_quiz():
+def make_quiz(
+    *,
+    owner_user_id=None,
+    visibility="private",
+    status="active",
+):
     return QuizDocumentV2(
         _id=ObjectId(),
         title="Objective quiz",
         quiz_type="multichoice",
         source="manual",
+        owner_user_id=owner_user_id,
+        visibility=visibility,
+        status=status,
         questions=[
             {"question": "Q1", "correct_answer": "A", "options": ["A", "B"]},
             {"question": "Q2", "correct_answer": "B", "options": ["A", "B"]},
         ],
     )
+
+
+def complete_answers():
+    return [
+        {"question_index": 0, "user_answer": "A"},
+        {"question_index": 1, "user_answer": "B"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_private_quiz_owner_can_grade_and_persist_attempt():
+    quiz, attempts = make_quiz(owner_user_id="user-a"), FakeAttemptRepository()
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository(quiz),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=attempts,
+    )
+
+    response = await service.grade_submission(
+        str(quiz.id), complete_answers(), user_id="user-a"
+    )
+
+    assert response is not None
+    assert response["score"] == 2
+    assert len(attempts.attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_private_quiz_non_owner_gets_no_result_or_correct_answers_and_no_attempt():
+    quiz, attempts = make_quiz(owner_user_id="user-a"), FakeAttemptRepository()
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository(quiz),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=attempts,
+    )
+
+    response = await service.grade_submission(
+        str(quiz.id), complete_answers(), user_id="user-b"
+    )
+
+    assert response is None
+    assert attempts.attempts == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("visibility", ["public", "unlisted"])
+async def test_non_owner_can_grade_shareable_quiz(visibility):
+    quiz, attempts = (
+        make_quiz(owner_user_id="user-a", visibility=visibility),
+        FakeAttemptRepository(),
+    )
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository(quiz),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=attempts,
+    )
+
+    response = await service.grade_submission(
+        str(quiz.id), complete_answers(), user_id="user-b"
+    )
+
+    assert response is not None
+    assert response["question_results"][0]["correct_answer"] == "A"
+    assert len(attempts.attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_deleted_quiz_cannot_be_graded_even_by_owner():
+    quiz, attempts = (
+        make_quiz(owner_user_id="user-a", status="deleted"),
+        FakeAttemptRepository(),
+    )
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository(quiz),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=attempts,
+    )
+
+    assert (
+        await service.grade_submission(
+            str(quiz.id), complete_answers(), user_id="user-a"
+        )
+        is None
+    )
+    assert attempts.attempts == []
+
+
+@pytest.mark.asyncio
+async def test_grading_route_maps_hidden_quiz_to_404(monkeypatch):
+    class HiddenQuizService:
+        async def grade_submission(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr(grading_route, "QuizGradingService", HiddenQuizService)
+    payload = GradeQuizRequest.model_validate({"answers": complete_answers()})
+    current_user = type("CurrentUser", (), {"id": "user-b"})()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await grading_route.grade_quiz_submission.__wrapped__(
+            request=None,
+            response=None,
+            quiz_id="private-quiz-id",
+            payload=payload,
+            source="mock",
+            current_user=current_user,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Quiz not found"
+
+
+@pytest.mark.asyncio
+async def test_grading_route_does_not_expose_internal_exception_text(monkeypatch):
+    class FailingService:
+        async def grade_submission(self, *args, **kwargs):
+            raise RuntimeError("internal database credentials")
+
+    monkeypatch.setattr(grading_route, "QuizGradingService", FailingService)
+    payload = GradeQuizRequest.model_validate({"answers": complete_answers()})
+    current_user = type("CurrentUser", (), {"id": "user-a"})()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await grading_route.grade_quiz_submission.__wrapped__(
+            request=None,
+            response=None,
+            quiz_id="quiz-id",
+            payload=payload,
+            source="mock",
+            current_user=current_user,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Could not grade quiz"
+    assert "credentials" not in exc_info.value.detail
 
 
 @pytest.mark.asyncio

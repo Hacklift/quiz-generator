@@ -25,6 +25,7 @@ from server.app.quiz.repositories.v2.repositories.reference_repository import (
     ReferenceV2Repository,
 )
 from server.app.quiz.utils.grading import grade_answers
+from server.app.share.services import can_access_quiz
 
 OBJECTIVE_TYPES = {"multichoice", "true-false", "short-answer", "matching"}
 GRADING_POLICY_VERSION = "objective-v1"
@@ -219,7 +220,7 @@ class QuizGradingService:
         source: str = "mock",
     ) -> dict[str, Any] | None:
         quiz_doc = await self._resolve_quiz(quiz_id)
-        if quiz_doc is None:
+        if quiz_doc is None or not can_access_quiz(quiz_doc, user_id):
             return None
         questions = [
             {

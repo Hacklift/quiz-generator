@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from server.app.core.dependencies import get_current_user
@@ -8,6 +10,7 @@ from server.app.quiz.services.quiz_grading_service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class SubmittedAnswer(BaseModel):
@@ -51,9 +54,8 @@ async def grade_quiz_submission(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Error grading answers: {exc!s}"
-        ) from exc
+        logger.exception("Failed to grade quiz submission", extra={"quiz_id": quiz_id})
+        raise HTTPException(status_code=500, detail="Could not grade quiz") from exc
 
     if graded is None:
         raise HTTPException(status_code=404, detail="Quiz not found")
