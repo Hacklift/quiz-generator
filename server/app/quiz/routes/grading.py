@@ -1,25 +1,29 @@
-from typing import List, Union
+import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
-from pydantic import BaseModel
-
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
+from server.app.core.dependencies import get_current_user
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.services.quiz_grading_service import (
     QuizGradingService,
     SubmissionMismatchError,
 )
 
-
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class SubmittedAnswer(BaseModel):
-    question: str
-    user_answer: Union[str, int]
+    question_index: int = Field(ge=0)
+    user_answer: str | int | bool | dict[str, str]
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class GradeQuizRequest(BaseModel):
-    answers: List[SubmittedAnswer]
+    answers: list[SubmittedAnswer]
+
+    model_config = ConfigDict(extra="forbid")
 
 
 @router.post("/quizzes/{quiz_id}/grade")
@@ -30,6 +34,7 @@ async def grade_quiz_submission(
     quiz_id: str,
     payload: GradeQuizRequest,
     source: str = Query("mock", enum=["mock", "ai"]),
+    current_user=Depends(get_current_user),
 ):
     """Grade a submission against the stored quiz.
 
@@ -42,13 +47,15 @@ async def grade_quiz_submission(
             quiz_id,
             [answer.model_dump() for answer in payload.answers],
             source=source,
+            user_id=str(current_user.id),
         )
     except SubmissionMismatchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error grading answers: {str(exc)}") from exc
+        logger.exception("Failed to grade quiz submission", extra={"quiz_id": quiz_id})
+        raise HTTPException(status_code=500, detail="Could not grade quiz") from exc
 
     if graded is None:
         raise HTTPException(status_code=404, detail="Quiz not found")

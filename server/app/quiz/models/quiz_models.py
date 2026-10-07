@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from typing import Literal, Optional, List
+from typing import Any, Literal, Optional, List
 
 
 class QuizRequest(BaseModel):
@@ -40,7 +40,7 @@ class QuizQuestion(BaseModel):
 
     question_type: str
 
-    answer: str
+    answer: Any
     explanation: Optional[str] = None
 
 

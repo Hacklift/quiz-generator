@@ -1,8 +1,10 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DisplayQuiz from "@features/quiz/pages/QuizDisplayPage";
-import publicApi from "@shared/api/publicHttp";
+import { api } from "@shared/api/http";
 import toast from "react-hot-toast";
+
+let mockIsAuthenticated = true;
 
 jest.mock("next/navigation", () => ({
   useSearchParams: () => ({
@@ -38,6 +40,28 @@ jest.mock("@shared/auth/tokenService", () => ({
   },
 }));
 
+jest.mock("@features/auth/context/authContext", () => ({
+  useAuth: () => ({ isAuthenticated: mockIsAuthenticated }),
+}));
+
+jest.mock("@features/auth/components/SignInModal", () => ({
+  __esModule: true,
+  default: ({
+    isOpen,
+    onSuccess,
+  }: {
+    isOpen: boolean;
+    onSuccess?: () => void | Promise<void>;
+  }) =>
+    isOpen ? (
+      <div role="dialog" aria-label="Sign in required">
+        <button type="button" onClick={() => void onSuccess?.()}>
+          Complete sign in
+        </button>
+      </div>
+    ) : null,
+}));
+
 jest.mock("@features/quiz-history/api/saveQuizToHistoryApi", () => ({
   saveQuizToHistory: jest.fn(),
 }));
@@ -67,7 +91,7 @@ jest.mock("@features/quiz/components", () => {
   };
 });
 
-const mockPublicApiPost = publicApi.post as jest.Mock;
+const mockApiPost = api.post as jest.Mock;
 const mockToastError = toast.error as jest.Mock;
 const mockToastSuccess = toast.success as jest.Mock;
 
@@ -93,11 +117,59 @@ const storedQuiz = {
 
 describe("QuizDisplayPage", () => {
   beforeEach(() => {
+    mockIsAuthenticated = true;
     localStorage.clear();
     localStorage.setItem("saved_quiz_view", JSON.stringify(storedQuiz));
-    mockPublicApiPost.mockReset();
+    mockApiPost.mockReset();
     mockToastError.mockReset();
     mockToastSuccess.mockReset();
+  });
+
+  test("requires sign-in before grading and preserves answers through sign-in", async () => {
+    mockIsAuthenticated = false;
+    mockApiPost.mockResolvedValue({
+      data: {
+        question_results: storedQuiz.questions.map((question, question_index) => ({
+          question_index,
+          question: question.question,
+          user_answer: question.answer,
+          correct_answer: question.answer,
+          result: "Correct",
+          is_correct: true,
+          question_type: "multichoice",
+        })),
+      },
+    });
+    render(<DisplayQuiz />);
+
+    const radioButtons = await screen.findAllByRole("radio");
+    fireEvent.click(radioButtons[0]);
+    fireEvent.click(radioButtons[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
+
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(
+      "Sign in to submit this quiz and receive or save your result.",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Sign in required" }),
+    ).toBeInTheDocument();
+    expect(radioButtons[0]).toBeChecked();
+    expect(radioButtons[2]).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete sign in" }));
+
+    await waitFor(() => expect(mockApiPost).toHaveBeenCalledTimes(1));
+    expect(mockApiPost).toHaveBeenCalledWith(
+      "/api/quizzes/quiz-123/grade",
+      {
+        answers: [
+          { question_index: 0, user_answer: "A) Paris" },
+          { question_index: 1, user_answer: "A) Madrid" },
+        ],
+      },
+    );
+    expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
   });
 
   test("prompts the user instead of grading when questions are unanswered", async () => {
@@ -109,14 +181,14 @@ describe("QuizDisplayPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
 
-    expect(mockPublicApiPost).not.toHaveBeenCalled();
+    expect(mockApiPost).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(
       "Answer the quiz before submitting it for grading.",
     );
   });
 
   test("locks submitted answers after grading", async () => {
-    mockPublicApiPost.mockResolvedValue({
+    mockApiPost.mockResolvedValue({
       data: [
         {
           question: "What is the capital of France?",

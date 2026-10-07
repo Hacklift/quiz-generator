@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from datetime import datetime
 
@@ -18,7 +18,7 @@ class AIQuestion(BaseModel):
 
     options: Optional[List[str]] = None
 
-    answer: str
+    answer: Any
 
     question_type: str
 

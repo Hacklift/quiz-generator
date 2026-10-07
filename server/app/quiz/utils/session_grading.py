@@ -1,6 +1,6 @@
 from typing import Any
 
-from server.app.quiz.utils.grading import grade_answers
+from server.app.quiz.services.quiz_grading_service import QuizGradingService
 
 
 def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[str, Any]:
@@ -10,36 +10,41 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
         answer["question_index"]: answer.get("selected_answer", "")
         for answer in session.get("answers", [])
     }
-    grading_payload = []
+    canonical_questions = []
+    submitted_answers = []
     for index, question in enumerate(questions):
-        grading_payload.append(
+        canonical_questions.append(
             {
                 "question": question.get("question", ""),
-                "user_answer": answer_by_index.get(index, ""),
                 "correct_answer": question.get("correct_answer") or question.get("answer"),
                 "question_type": question.get("question_type")
                 or quiz.get("quiz_type")
                 or "multichoice",
-                "source": question.get("source", "live"),
             }
         )
+        submitted_answers.append(
+            {"question_index": index, "user_answer": answer_by_index.get(index, "")}
+        )
 
-    graded_answers = grade_answers(grading_payload, "mock")
+    grading = QuizGradingService.grade_canonical_questions(
+        canonical_questions,
+        submitted_answers,
+        quiz_type=quiz.get("quiz_type") or "multichoice",
+    )
+    graded_answers = grading["question_results"]
     indexed_answers = [
         {
-            "question_index": index,
+            "question_index": answer["question_index"],
             "question": answer.get("question", ""),
-            "selected_answer": str(answer.get("user_answer", "")),
-            "correct_answer": str(answer.get("correct_answer", "")),
+            "selected_answer": answer.get("user_answer", ""),
+            "correct_answer": answer.get("correct_answer", ""),
             "question_type": answer.get("question_type", ""),
             "is_correct": bool(answer.get("is_correct", False)),
         }
-        for index, answer in enumerate(graded_answers)
+        for answer in graded_answers
     ]
-    score = sum(1 for answer in graded_answers if answer.get("is_correct"))
-    total = len(questions)
     return {
-        "score": score,
-        "percentage": round((score / total) * 100, 2) if total else 0,
+        "score": grading["score"],
+        "percentage": grading["percentage"],
         "graded_answers": indexed_answers,
     }

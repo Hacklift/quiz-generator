@@ -240,6 +240,34 @@ def parse_short_answer(response: str) -> List[Dict[str, Any]]:
     ]
 
 
+def parse_matching(response: str) -> List[Dict[str, Any]]:
+    """Parse matching blocks whose answer lists ``left -> right`` pairs."""
+    questions = []
+    answer_pattern = re.compile(r"(?:\*\*)?\s*Answer\s*:\s*(?:\*\*)?\s*(.+)$", re.IGNORECASE)
+    for block in split_question_blocks(response):
+        match = answer_pattern.search(block)
+        if not match:
+            continue
+        lines = [line.strip() for line in match.group(1).split(";") if line.strip()]
+        pairs = {}
+        for line in lines:
+            if "->" not in line:
+                continue
+            left, right = line.split("->", 1)
+            if left.strip() and right.strip():
+                pairs[left.strip()] = right.strip().strip("*")
+        question_line = block[:match.start()].strip().splitlines()[0]
+        question = re.sub(r"^(?:\*\*)?\d+\.\s*", "", question_line).strip().strip("*")
+        if question and pairs:
+            questions.append({
+                "question": question,
+                "options": list(pairs.values()),
+                "answer": pairs,
+                "question_type": "matching",
+            })
+    return questions
+
+
 def build_prompt(
 
     profession: str,
@@ -301,6 +329,15 @@ Format Example:
 **1. What is the chemical symbol for water?**
 
 **Answer:** H2O
+""",
+
+        "matching": """
+Each question should ask learners to match 3–5 left-hand prompts to right-hand values.
+Put the complete mapping on one answer line, separated by semicolons.
+Format Example:
+**1. Match each country to its capital.**
+
+**Answer:** France -> Paris; Italy -> Rome; Spain -> Madrid
 """
 
     }
@@ -424,6 +461,10 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
     elif qtype == "short-answer":
 
         questions = parse_short_answer(response_text)
+
+    elif qtype == "matching":
+
+        questions = parse_matching(response_text)
 
     else:
 

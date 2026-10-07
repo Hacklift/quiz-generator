@@ -139,7 +139,7 @@ class LiveQuizSessionRepository:
         self,
         session_id: str,
         question_index: int,
-        selected_answer: str,
+        selected_answer: Any,
         next_question_index: int,
     ) -> Optional[Dict[str, Any]]:
         session = await self.get_session(session_id)

@@ -1,4 +1,4 @@
-from server.app.quiz.utils.huggingface_utils import parse_multichoice
+from server.app.quiz.utils.huggingface_utils import parse_matching, parse_multichoice
 
 
 def test_parse_multichoice_preserves_wrapped_option_lines():
@@ -22,3 +22,19 @@ D) Final option
     assert questions[0]["answer"] == (
         "A) The option begins here and continues onto a second line for extra detail"
     )
+
+
+def test_parse_matching_returns_structured_mapping():
+    response = """**1. Match each country to its capital.**
+
+**Answer:** France -> Paris; Italy -> Rome; Spain -> Madrid
+"""
+    questions = parse_matching(response)
+    assert questions == [
+        {
+            "question": "Match each country to its capital.",
+            "options": ["Paris", "Rome", "Madrid"],
+            "answer": {"France": "Paris", "Italy": "Rome", "Spain": "Madrid"},
+            "question_type": "matching",
+        }
+    ]

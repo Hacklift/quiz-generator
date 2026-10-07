@@ -14,8 +14,9 @@ import {
   SaveQuizButton,
 } from "@features/quiz/components";
 import { api } from "@shared/api/http";
-import publicApi from "@shared/api/publicHttp";
 import { TokenService } from "@shared/auth/tokenService";
+import { useAuth } from "@features/auth/context/authContext";
+import SignInModal from "@features/auth/components/SignInModal";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
@@ -29,15 +30,19 @@ type DocumentContext = {
   embeddingCacheHit: boolean;
 };
 
-const isAnswerProvided = (answer: string | number | undefined) => {
+type LearnerAnswer = string | number | Record<string, string>;
+
+const isAnswerProvided = (answer: LearnerAnswer | undefined) => {
   if (typeof answer === "number") {
     return true;
   }
 
-  return typeof answer === "string" && answer.trim().length > 0;
+  if (typeof answer === "string") return answer.trim().length > 0;
+  return !!answer && Object.keys(answer).length > 0 && Object.values(answer).every(Boolean);
 };
 
 const QuizDisplayPage: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const searchParams = useSearchParams();
   const isDocumentGenerated = searchParams?.get("generated") === "document";
   const generatedQuizKey = searchParams?.get("generatedQuizKey") || "";
@@ -49,7 +54,7 @@ const QuizDisplayPage: React.FC = () => {
   const customInstruction = searchParams?.get("customInstruction") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
-  const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
+  const [userAnswers, setUserAnswers] = useState<LearnerAnswer[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
   const [quizId, setQuizId] = useState(canonicalQuizId);
@@ -61,6 +66,7 @@ const QuizDisplayPage: React.FC = () => {
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -113,7 +119,13 @@ const QuizDisplayPage: React.FC = () => {
         setQuizDescription(quizData?.description || "");
         setActiveQuestionType(resolvedQuestionType);
         setQuizQuestions(normalizedQuestions);
-        setUserAnswers(Array(normalizedQuestions.length).fill(""));
+        setUserAnswers(
+          normalizedQuestions.map((question: any) =>
+            question.question_type === "matching" && question.answer && typeof question.answer === "object"
+              ? Object.fromEntries(Object.keys(question.answer).map((key) => [key, ""]))
+              : "",
+          ),
+        );
         setQuizId(resolvedQuizId);
 
         if (quizData?.source_document_name) {
@@ -280,7 +292,7 @@ const QuizDisplayPage: React.FC = () => {
     customInstruction,
   ]);
 
-  const handleAnswerChange = (index: number, answer: string | number) => {
+  const handleAnswerChange = (index: number, answer: LearnerAnswer) => {
     if (isQuizChecked) {
       return;
     }
@@ -288,6 +300,28 @@ const QuizDisplayPage: React.FC = () => {
     const updated = [...userAnswers];
     updated[index] = answer;
     setUserAnswers(updated);
+  };
+
+  const submitAnswers = async () => {
+    try {
+      const payload = {
+        answers: quizQuestions.map((q, i) => ({
+          question_index: i,
+          user_answer: userAnswers[i],
+        })),
+      };
+
+      const { data } = await api.post(
+        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
+        payload,
+      );
+
+      setQuizReport(Array.isArray(data) ? data : data.question_results);
+      setIsQuizChecked(true);
+    } catch (err) {
+      console.error("Error checking answers:", err);
+      toast.error("Failed to grade your quiz. Please try again.");
+    }
   };
 
   const checkAnswers = async () => {
@@ -311,27 +345,15 @@ const QuizDisplayPage: React.FC = () => {
       return;
     }
 
-    try {
-      // Grading is authoritative on the server: only the user's answers are
-      // sent, and correct answers come back in the grading response.
-      const payload = {
-        answers: quizQuestions.map((q, i) => ({
-          question: q.question,
-          user_answer: userAnswers[i],
-        })),
-      };
-
-      const { data: report } = await publicApi.post(
-        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
-        payload,
-      );
-
-      setQuizReport(report);
-      setIsQuizChecked(true);
-    } catch (err) {
-      console.error("Error checking answers:", err);
-      toast.error("Failed to grade your quiz. Please try again.");
+    if (!isAuthenticated) {
+      toast.error("Sign in to submit this quiz and receive or save your result.");
+      setIsSignInOpen(true);
+      return;
     }
+
+    // Grading is authoritative on the server: only the user's answers are
+    // sent, and correct answers come back in the grading response.
+    await submitAnswers();
   };
 
   if (isLoading) {
@@ -492,10 +514,12 @@ const QuizDisplayPage: React.FC = () => {
                       <strong>Question:</strong> {r.question}
                     </p>
                     <p>
-                      <strong>Your Answer:</strong> {r.user_answer}
+                      <strong>Your Answer:</strong>{" "}
+                      {typeof r.user_answer === "object" ? JSON.stringify(r.user_answer) : r.user_answer}
                     </p>
                     <p>
-                      <strong>Correct:</strong> {r.correct_answer}
+                      <strong>Correct:</strong>{" "}
+                      {typeof r.correct_answer === "object" ? JSON.stringify(r.correct_answer) : r.correct_answer}
                     </p>
                     {r.accuracy_percentage && (
                       <p>
@@ -522,6 +546,15 @@ const QuizDisplayPage: React.FC = () => {
       </main>
 
       <Footer />
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        switchToSignUp={() => setIsSignInOpen(false)}
+        onSuccess={async () => {
+          setIsSignInOpen(false);
+          await submitAnswers();
+        }}
+      />
     </div>
   );
 };

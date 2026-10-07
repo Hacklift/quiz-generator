@@ -1,12 +1,15 @@
 from datetime import datetime
-from typing import Any, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field
 
 
+LiveQuizAnswerValue = Union[str, int, bool, Dict[str, str]]
+
+
 class LiveQuizAnswer(BaseModel):
     question_index: int = Field(ge=0)
-    selected_answer: str
+    selected_answer: LiveQuizAnswerValue
     answered_at: datetime
 
 
@@ -31,8 +34,9 @@ class LiveQuizQuestion(BaseModel):
     question_index: int
     question: str
     options: Optional[List[Any]] = None
+    matching_prompts: Optional[List[str]] = None
     question_type: Optional[str] = None
-    selected_answer: Optional[str] = None
+    selected_answer: Optional[LiveQuizAnswerValue] = None
 
 
 class LiveQuizSessionState(BaseModel):
@@ -60,7 +64,7 @@ class LiveQuizSessionState(BaseModel):
 
 class SaveLiveQuizAnswerRequest(BaseModel):
     question_index: int = Field(ge=0)
-    selected_answer: str
+    selected_answer: LiveQuizAnswerValue
     next_question_index: Optional[int] = Field(default=None, ge=0)
 
 
@@ -100,8 +104,8 @@ class LiveQuizAnalyticsRow(BaseModel):
 class LiveQuizGradedAnswer(BaseModel):
     question_index: int
     question: str
-    selected_answer: str
-    correct_answer: str
+    selected_answer: LiveQuizAnswerValue
+    correct_answer: LiveQuizAnswerValue
     question_type: str
     is_correct: bool
 

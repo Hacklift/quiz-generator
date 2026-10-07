@@ -243,7 +243,11 @@ def _build_generation_prompt(
     options_rule = (
         "Each question must have exactly four options and one correct answer."
         if question_type == "multichoice"
-        else "Use options only when the question type needs them."
+        else (
+            'For matching, answer must be a JSON object mapping each left prompt to its right value.'
+            if question_type == "matching"
+            else "Use options only when the question type needs them."
+        )
     )
     custom_part = (
         f"Additional instructor guidance: {custom_instruction.strip()}"
@@ -274,7 +278,7 @@ JSON format:
     {{
       "question": "string",
       "options": ["string", "string", "string", "string"] or null,
-      "answer": "string",
+      "answer": "string or, for matching only, an object of left-to-right string pairs",
       "explanation": "string",
       "question_type": "{question_type}"
     }}
@@ -379,14 +383,34 @@ def _normalize_generated_questions(
             continue
 
         question = str(raw_question.get("question", "")).strip()
-        answer = str(raw_question.get("answer", "")).strip()
+        raw_answer = raw_question.get("answer", "")
+        answer = str(raw_answer).strip() if not isinstance(raw_answer, dict) else raw_answer
         explanation = str(raw_question.get("explanation", "")).strip() or None
         options = raw_question.get("options")
 
         if not question or not answer:
             continue
 
-        if normalized_type == "multichoice":
+        if normalized_type == "matching":
+            if not isinstance(answer, dict) or not answer:
+                continue
+            normalized_pairs = {
+                str(left).strip(): str(right).strip()
+                for left, right in answer.items()
+                if str(left).strip() and str(right).strip()
+            }
+            if len(normalized_pairs) != len(answer):
+                continue
+            normalized_questions.append(
+                {
+                    "question": question,
+                    "options": list(normalized_pairs.values()),
+                    "answer": normalized_pairs,
+                    "explanation": explanation,
+                    "question_type": normalized_type,
+                }
+            )
+        elif normalized_type == "multichoice":
             if not isinstance(options, list) or len(options) != 4:
                 continue
             normalized_options = [str(option).strip() for option in options]

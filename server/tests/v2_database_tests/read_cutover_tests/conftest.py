@@ -28,6 +28,7 @@ async def read_cutover_db(test_db):
         test_db["folder_items_v2"],
         test_db["saved_quizzes_v2"],
         test_db["quiz_history_v2"],
+        test_db["quiz_attempts_v2"],
     )
     return test_db
 

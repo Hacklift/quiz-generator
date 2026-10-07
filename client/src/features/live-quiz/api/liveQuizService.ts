@@ -29,8 +29,9 @@ export interface LiveQuizQuestion {
   question_index: number;
   question: string;
   options?: string[];
+  matching_prompts?: string[];
   question_type?: string;
-  selected_answer?: string | null;
+  selected_answer?: string | Record<string, string> | null;
 }
 
 export interface LiveQuizSessionState {
@@ -52,7 +53,7 @@ export interface LiveQuizSessionState {
   question?: LiveQuizQuestion | null;
   answers: Array<{
     question_index: number;
-    selected_answer: string;
+    selected_answer: string | Record<string, string>;
     answered_at: string;
   }>;
   score?: number | null;
@@ -121,8 +122,8 @@ export interface LiveQuizSummary {
 export interface GradedAnswer {
   question_index: number;
   question: string;
-  selected_answer: string;
-  correct_answer: string;
+  selected_answer: string | Record<string, string>;
+  correct_answer: string | Record<string, string>;
   question_type: string;
   is_correct: boolean;
 }
@@ -226,7 +227,7 @@ export const liveQuizService = {
   async saveAnswer(
     sessionId: string,
     questionIndex: number,
-    selectedAnswer: string,
+    selectedAnswer: string | Record<string, string>,
     nextQuestionIndex?: number,
   ) {
     const { data } = await publicApi.post(

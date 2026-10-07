@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 import server.app.quiz.services.live_session_service as live_quiz_session_service
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
+from server.app.quiz.schemas.live_session_schemas import LiveQuizSessionState
 
 
 class FakeLiveQuizRepository:
@@ -42,6 +43,70 @@ class FakeLiveQuizRepository:
     async def update_session(self, session_id, updates):
         self.session = {**self.session, **updates}
         return self.session
+
+    async def save_answer(
+        self,
+        session_id,
+        question_index,
+        selected_answer,
+        next_question_index,
+    ):
+        answers = [
+            answer
+            for answer in self.session.get("answers", [])
+            if answer["question_index"] != question_index
+        ]
+        answers.append(
+            {
+                "question_index": question_index,
+                "selected_answer": selected_answer,
+                "answered_at": datetime.now(timezone.utc),
+            }
+        )
+        self.session = {
+            **self.session,
+            "answers": answers,
+            "current_question_index": next_question_index,
+            "status": "active",
+        }
+        return self.session
+
+
+@pytest.mark.asyncio
+async def test_matching_answer_survives_save_reload_and_response_validation(
+    monkeypatch,
+):
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = FakeLiveQuizRepository(time_limit_minutes=20)
+    repository.quiz["quiz_type"] = "matching"
+    repository.quiz["questions"] = [
+        {
+            "question": "Match each country to its capital.",
+            "answer": {"France": "Paris", "Italy": "Rome"},
+            "question_type": "matching",
+        }
+    ]
+    service = LiveQuizSessionService(repository)
+    started = await service.start_session(
+        code="ABC123",
+        participant_name="Ada",
+        participant_email=None,
+    )
+    selected_answer = {"France": "Paris", "Italy": "Rome"}
+
+    await service.save_answer(
+        "session-1",
+        started["participant_token"],
+        question_index=0,
+        selected_answer=selected_answer,
+    )
+    state = await service.get_session_state("session-1", started["participant_token"])
+    response = LiveQuizSessionState.model_validate(state)
+
+    assert response.question is not None
+    assert response.question.selected_answer == selected_answer
+    assert response.answers[0].selected_answer == selected_answer
 
 
 @pytest.mark.asyncio

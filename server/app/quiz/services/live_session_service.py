@@ -83,6 +83,7 @@ class LiveQuizSessionService:
                 if email
             ]
             return {
+                "_access_code_created": False,
                 "quiz_id": str(quiz["_id"]),
                 "access_code": existing_access_code,
                 "live_quiz_enabled": True,
@@ -194,6 +195,7 @@ class LiveQuizSessionService:
             )
 
         return {
+            "_access_code_created": True,
             "quiz_id": str(updated_quiz["_id"]),
             "access_code": code,
             "live_quiz_enabled": True,
@@ -414,7 +416,7 @@ class LiveQuizSessionService:
         session_id: str,
         participant_token: str,
         question_index: int,
-        selected_answer: str,
+        selected_answer: Any,
         next_question_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         session = await self._get_authorized_session(session_id, participant_token)
@@ -958,11 +960,24 @@ class LiveQuizSessionService:
             if answer.get("question_index") == index:
                 selected_answer = answer.get("selected_answer")
                 break
+        question_type = question.get("question_type") or quiz_type
+        correct_answer = question.get("correct_answer") or question.get("answer")
+        matching_prompts = (
+            list(correct_answer)
+            if question_type == "matching" and isinstance(correct_answer, dict)
+            else None
+        )
+        options = (
+            sorted(correct_answer.values(), key=str.casefold)
+            if matching_prompts
+            else question.get("options")
+        )
         return {
             "question_index": index,
             "question": question.get("question", ""),
-            "options": question.get("options"),
-            "question_type": question.get("question_type") or quiz_type,
+            "options": options,
+            "matching_prompts": matching_prompts,
+            "question_type": question_type,
             "selected_answer": selected_answer,
         }
 

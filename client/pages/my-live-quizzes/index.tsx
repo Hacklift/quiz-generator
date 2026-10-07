@@ -1,6 +1,12 @@
 "use client";
 
-import React, { FormEvent, useCallback, useEffect, useState } from "react";
+import React, {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import RequireAuth from "@features/auth/components/RequireAuth";
@@ -55,6 +61,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportingQuizId, setExportingQuizId] = useState<string | null>(null);
   const [openActionsQuizId, setOpenActionsQuizId] = useState<string | null>(null);
+  const openActionsRef = useRef<HTMLDivElement | null>(null);
 
   const loadLiveQuizzes = useCallback(async () => {
     try {
@@ -73,6 +80,31 @@ export const MyLiveQuizzesPage: React.FC = () => {
   useEffect(() => {
     void loadLiveQuizzes();
   }, [loadLiveQuizzes]);
+
+  useEffect(() => {
+    if (!openActionsQuizId) return;
+
+    const dismissOnOutsideClick = (event: MouseEvent) => {
+      if (
+        openActionsRef.current &&
+        !openActionsRef.current.contains(event.target as Node)
+      ) {
+        setOpenActionsQuizId(null);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenActionsQuizId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", dismissOnOutsideClick);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", dismissOnOutsideClick);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [openActionsQuizId]);
 
   const openGenerationDialog = (quiz: LiveQuizSummary) => {
     setQuizToGenerateFor(quiz);
@@ -271,10 +303,18 @@ export const MyLiveQuizzesPage: React.FC = () => {
                             >
                               View Details
                             </button>
-                            <div className="relative">
+                            <div
+                              className="relative"
+                              ref={
+                                openActionsQuizId === quiz.quiz_id
+                                  ? openActionsRef
+                                  : undefined
+                              }
+                            >
                               <button
                                 type="button"
                                 aria-label={`More actions for ${quiz.title}`}
+                                aria-haspopup="menu"
                                 aria-expanded={openActionsQuizId === quiz.quiz_id}
                                 onClick={() =>
                                   setOpenActionsQuizId((current) =>
@@ -287,7 +327,11 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                 &#8942;
                               </button>
                               {openActionsQuizId === quiz.quiz_id && (
-                                <div className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
+                                <div
+                                  role="menu"
+                                  aria-label={`Export results for ${quiz.title}`}
+                                  className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg"
+                                >
                                   <p className="px-3 py-1.5 text-xs font-semibold uppercase text-slate-500">
                                     Export Results
                                   </p>
@@ -295,6 +339,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                     <button
                                       key={format}
                                       type="button"
+                                      role="menuitem"
                                       onClick={() => exportResults(quiz, format)}
                                       className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                                     >
