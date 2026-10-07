@@ -15,6 +15,8 @@ import {
 } from "@features/quiz/components";
 import { api } from "@shared/api/http";
 import { TokenService } from "@shared/auth/tokenService";
+import { useAuth } from "@features/auth/context/authContext";
+import SignInModal from "@features/auth/components/SignInModal";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
@@ -40,6 +42,7 @@ const isAnswerProvided = (answer: LearnerAnswer | undefined) => {
 };
 
 const QuizDisplayPage: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const searchParams = useSearchParams();
   const isDocumentGenerated = searchParams?.get("generated") === "document";
   const generatedQuizKey = searchParams?.get("generatedQuizKey") || "";
@@ -63,6 +66,7 @@ const QuizDisplayPage: React.FC = () => {
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -298,6 +302,28 @@ const QuizDisplayPage: React.FC = () => {
     setUserAnswers(updated);
   };
 
+  const submitAnswers = async () => {
+    try {
+      const payload = {
+        answers: quizQuestions.map((q, i) => ({
+          question_index: i,
+          user_answer: userAnswers[i],
+        })),
+      };
+
+      const { data } = await api.post(
+        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
+        payload,
+      );
+
+      setQuizReport(Array.isArray(data) ? data : data.question_results);
+      setIsQuizChecked(true);
+    } catch (err) {
+      console.error("Error checking answers:", err);
+      toast.error("Failed to grade your quiz. Please try again.");
+    }
+  };
+
   const checkAnswers = async () => {
     const unansweredQuestions = quizQuestions
       .map((_, index) => index)
@@ -319,27 +345,15 @@ const QuizDisplayPage: React.FC = () => {
       return;
     }
 
-    try {
-      // Grading is authoritative on the server: only the user's answers are
-      // sent, and correct answers come back in the grading response.
-      const payload = {
-        answers: quizQuestions.map((q, i) => ({
-          question_index: i,
-          user_answer: userAnswers[i],
-        })),
-      };
-
-      const { data } = await api.post(
-        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
-        payload,
-      );
-
-      setQuizReport(Array.isArray(data) ? data : data.question_results);
-      setIsQuizChecked(true);
-    } catch (err) {
-      console.error("Error checking answers:", err);
-      toast.error("Failed to grade your quiz. Please try again.");
+    if (!isAuthenticated) {
+      toast.error("Sign in to submit this quiz and receive or save your result.");
+      setIsSignInOpen(true);
+      return;
     }
+
+    // Grading is authoritative on the server: only the user's answers are
+    // sent, and correct answers come back in the grading response.
+    await submitAnswers();
   };
 
   if (isLoading) {
@@ -532,6 +546,15 @@ const QuizDisplayPage: React.FC = () => {
       </main>
 
       <Footer />
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        switchToSignUp={() => setIsSignInOpen(false)}
+        onSuccess={async () => {
+          setIsSignInOpen(false);
+          await submitAnswers();
+        }}
+      />
     </div>
   );
 };
