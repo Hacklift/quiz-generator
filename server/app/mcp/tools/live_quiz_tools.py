@@ -10,6 +10,10 @@ from server.app.core.config import settings
 from server.app.db.core.connection import get_live_quiz_sessions_collection, get_quizzes_v2_collection
 from server.app.email_platform.service import build_email_service
 from server.app.mcp.auth import get_mcp_request_context
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
 from server.app.quiz.services.quiz_user_library_service import QuizUserLibraryService
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
@@ -67,23 +71,34 @@ def _live_quiz_repository() -> LiveQuizSessionRepository:
     )
 
 
-async def _owned_quiz_for_context(quiz_id: str) -> tuple[dict[str, Any], str]:
+async def _owned_quiz_for_context(quiz_id: str) -> tuple[dict[str, Any], Any]:
     context = await get_mcp_request_context(require_auth=True, require_verified=True)
+    if context.organization_context is None:
+        raise PermissionError("Organization context is required to manage live quizzes.")
     repository = _live_quiz_repository()
-    quiz = await repository.get_quiz_by_id(quiz_id)
+    quiz = await repository.get_quiz_by_id_for_organization(
+        quiz_id,
+        context.organization_context.organization_id,
+    )
     if not quiz:
         saved_quiz = await QuizUserLibraryService().get_saved_quiz(
             user_id=context.user_id,
             saved_quiz_id=quiz_id,
+            organization_id=context.organization_context.organization_id,
         )
         if saved_quiz and saved_quiz.get("quiz_id"):
-            quiz = await repository.get_quiz_by_id(str(saved_quiz["quiz_id"]))
+            quiz = await repository.get_quiz_by_id_for_organization(
+                str(saved_quiz["quiz_id"]),
+                context.organization_context.organization_id,
+            )
     if not quiz:
         raise ValueError("Quiz not found")
-    owner_id = _quiz_owner_id(quiz)
-    if owner_id and owner_id != context.user_id:
-        raise PermissionError("Quiz ownership is required to manage live quiz links.")
-    return quiz, context.user_id or ""
+    require_organization_permission(
+        context=context.organization_context,
+        action=OrganizationAction.CONTENT_SHARE,
+        resource=quiz,
+    )
+    return quiz, context
 
 
 def _parse_expiration(access_code_expires_at: str | None, expires_in_hours: int | None) -> datetime:
@@ -118,7 +133,7 @@ def _validate_recipients(recipient_emails: list[str]) -> list[str]:
 
 
 async def live_quiz_get_access_link(quiz_id: str) -> dict[str, Any]:
-    quiz, _user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, _context = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if not existing:
         return {
@@ -139,7 +154,7 @@ async def live_quiz_create_access_link(
 ) -> dict[str, Any]:
     if int(duration) <= 0:
         raise ValueError("duration must be positive.")
-    quiz, user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, context = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if existing and not regenerate:
         return {"found": True, **existing}
@@ -149,8 +164,9 @@ async def live_quiz_create_access_link(
     response = await service.generate_access_code(
         quiz_id=quiz_id,
         access_code_expires_at=expires_at,
-        creator_id=user_id,
+        creator_id=context.user_id or "",
         time_limit_minutes=int(duration),
+        authorized_quiz=quiz,
     )
     return {
         "found": True,
@@ -172,7 +188,7 @@ async def live_quiz_ensure_access_link(
     expires_in_hours: int | None = 24,
     regenerate: bool = False,
 ) -> dict[str, Any]:
-    quiz, user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, context = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if existing and not regenerate:
         return {"found": True, "requires_duration": False, **existing}
@@ -194,8 +210,9 @@ async def live_quiz_ensure_access_link(
     response = await service.generate_access_code(
         quiz_id=str(quiz["_id"]),
         access_code_expires_at=expires_at,
-        creator_id=user_id,
+        creator_id=context.user_id or "",
         time_limit_minutes=int(duration),
+        authorized_quiz=quiz,
     )
     return {
         "found": True,
@@ -217,7 +234,7 @@ async def live_quiz_send_invites(
     live_quiz_link: str | None = None,
     message: str | None = None,
 ) -> dict[str, Any]:
-    quiz, _user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, _context = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if not existing:
         raise ValueError("Create a live quiz link before sending invites.")

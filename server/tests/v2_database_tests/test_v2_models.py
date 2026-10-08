@@ -10,6 +10,7 @@ def test_quiz_create_v2_accepts_valid_payload():
         description="Core backend quiz",
         quiz_type="multichoice",
         source="manual",
+        organization_id="organization-1",
         questions=[
             {
                 "question": "What does HTTP stand for?",
@@ -29,6 +30,7 @@ def test_quiz_create_v2_accepts_optional_category_metadata():
         quiz_type="short-answer",
         source="seed",
         visibility="public",
+        organization_id="platform-library",
         category="Science",
         category_slug="science",
         subcategory="Biology",
@@ -68,6 +70,7 @@ def test_quiz_create_v2_rejects_invalid_quiz_type():
         QuizCreateV2(
             title="Invalid",
             quiz_type="multiple_choice",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Bad type",

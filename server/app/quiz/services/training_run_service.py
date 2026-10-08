@@ -41,8 +41,30 @@ class TrainingRunService:
         self.live_quiz_service = live_quiz_service
         self.notification_service = notification_service
 
-    async def list_owned_quizzes(self, owner_user_id: str) -> list[dict]:
-        quizzes = await self.repository.list_owned_quizzes(owner_user_id)
+    async def list_owned_quizzes(
+        self,
+        owner_user_id: str,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
+        quizzes = await self.repository.list_owned_quizzes(
+            owner_user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        return [
+            {
+                "id": str(quiz["_id"]),
+                "title": quiz.get("title", "Untitled quiz"),
+                "quiz_type": str(quiz.get("quiz_type", "multichoice")),
+                "created_at": quiz.get("created_at"),
+            }
+            for quiz in quizzes
+        ]
+
+    async def list_organization_quizzes(self, organization_id: str) -> list[dict]:
+        quizzes = await self.repository.list_quizzes_for_organization(organization_id)
         return [
             {
                 "id": str(quiz["_id"]),
@@ -54,7 +76,13 @@ class TrainingRunService:
         ]
 
     async def create_run(
-        self, payload, owner_user_id: str, idempotency_key: str
+        self,
+        payload,
+        owner_user_id: str,
+        idempotency_key: str,
+        organization_id: str | None = None,
+        *,
+        authorized_quiz: dict | None = None,
     ) -> dict:
         now = _utc_now()
         closes_at = _as_utc(payload.closes_at)
@@ -67,10 +95,17 @@ class TrainingRunService:
                 detail="Run close time must allow one full training duration",
             )
 
-        request_fingerprint = self._request_fingerprint(payload)
-        existing = await self.repository.get_run_by_idempotency_key(
-            owner_user_id, idempotency_key
-        )
+        request_fingerprint = self._request_fingerprint(payload, organization_id)
+        if organization_id is None:
+            existing = await self.repository.get_run_by_idempotency_key(
+                owner_user_id, idempotency_key
+            )
+        else:
+            existing = await self.repository.get_run_by_idempotency_key(
+                owner_user_id,
+                idempotency_key,
+                organization_id=organization_id,
+            )
         if existing:
             if existing.get("request_fingerprint") != request_fingerprint:
                 raise HTTPException(
@@ -79,7 +114,16 @@ class TrainingRunService:
                 )
             return await self._resume_or_return_run(existing, now)
 
-        quiz = await self.repository.get_owned_quiz(payload.quiz_id, owner_user_id)
+        if authorized_quiz is not None:
+            quiz = authorized_quiz
+        elif organization_id is None:
+            quiz = await self.repository.get_owned_quiz(payload.quiz_id, owner_user_id)
+        else:
+            quiz = await self.repository.get_owned_quiz(
+                payload.quiz_id,
+                owner_user_id,
+                organization_id=organization_id,
+            )
         if not quiz:
             raise HTTPException(status_code=404, detail="Owned quiz not found")
         if not quiz.get("questions"):
@@ -117,6 +161,8 @@ class TrainingRunService:
         run_document = {
             "quiz_id": str(quiz["_id"]),
             "owner_user_id": owner_user_id,
+            "organization_id": organization_id or quiz.get("organization_id"),
+            "created_by_user_id": owner_user_id,
             "idempotency_key": idempotency_key,
             "request_fingerprint": request_fingerprint,
             "title": title,
@@ -151,9 +197,16 @@ class TrainingRunService:
         except DuplicateKeyError:
             # Concurrent retries of the same request converge on one durable
             # provisioning record and continue from its missing steps.
-            run = await self.repository.get_run_by_idempotency_key(
-                owner_user_id, idempotency_key
-            )
+            if organization_id is None:
+                run = await self.repository.get_run_by_idempotency_key(
+                    owner_user_id, idempotency_key
+                )
+            else:
+                run = await self.repository.get_run_by_idempotency_key(
+                    owner_user_id,
+                    idempotency_key,
+                    organization_id=organization_id,
+                )
             if not run:
                 raise
             if run.get("request_fingerprint") != request_fingerprint:
@@ -188,6 +241,8 @@ class TrainingRunService:
                 "training_run_id": run_id,
                 "event_type": "run_created",
                 "actor_user_id": run["owner_user_id"],
+                "organization_id": run.get("organization_id"),
+                "created_by_user_id": run.get("created_by_user_id") or run["owner_user_id"],
                 "occurred_at": now,
                 "payload": {
                     "kind": run["kind"],
@@ -221,8 +276,9 @@ class TrainingRunService:
         return self._run_summary(ready, assignments, [])
 
     @staticmethod
-    def _request_fingerprint(payload) -> str:
+    def _request_fingerprint(payload, organization_id: str | None = None) -> str:
         canonical = {
+            "organization_id": organization_id,
             "quiz_id": payload.quiz_id,
             "kind": payload.kind,
             "purpose": payload.purpose,
@@ -249,6 +305,8 @@ class TrainingRunService:
                 "training_run_id": str(run["_id"]),
                 "quiz_id": run["quiz_id"],
                 "owner_user_id": run["owner_user_id"],
+                "organization_id": run.get("organization_id"),
+                "created_by_user_id": run.get("created_by_user_id") or run["owner_user_id"],
                 "recipient_email": email,
                 "recipient_user_id": recipient_user_ids.get(email),
                 "status": "assigned",
@@ -267,8 +325,18 @@ class TrainingRunService:
             for email in run.get("recipient_emails", [])
         ]
 
-    async def list_owner_runs(self, owner_user_id: str) -> list[dict]:
-        runs = await self.repository.list_runs_for_owner(owner_user_id)
+    async def list_owner_runs(
+        self,
+        owner_user_id: str,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
+        runs = await self.repository.list_runs_for_owner(
+            owner_user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         summaries = []
         for run in runs:
             assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
@@ -276,8 +344,33 @@ class TrainingRunService:
             summaries.append(self._run_summary(run, assignments, sessions))
         return summaries
 
-    async def get_owner_run(self, run_id: str, owner_user_id: str) -> dict:
-        run = await self.repository.get_run(run_id)
+    async def list_organization_runs(self, organization_id: str) -> list[dict]:
+        runs = await self.repository.list_runs_for_organization(organization_id)
+        summaries = []
+        for run in runs:
+            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
+            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
+            summaries.append(self._run_summary(run, assignments, sessions))
+        return summaries
+
+    async def get_owner_run(
+        self,
+        run_id: str,
+        owner_user_id: str,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> dict:
+        run = (
+            await self.repository.get_run(run_id)
+            if organization_id is None
+            else await self.repository.get_run_for_owner(
+                run_id,
+                owner_user_id,
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
         if (
             not run
             or run.get("owner_user_id") != owner_user_id
@@ -297,8 +390,41 @@ class TrainingRunService:
         ]
         return summary
 
-    async def close_owner_run(self, run_id: str, owner_user_id: str) -> dict:
-        run = await self.repository.get_run(run_id)
+    async def get_organization_run(self, run_id: str, organization_id: str) -> dict:
+        run = await self.repository.get_run_for_organization(run_id, organization_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Training run not found")
+        assignments = await self.repository.list_assignments_for_run(run_id)
+        sessions = await self.repository.list_sessions_for_run(run_id)
+        summary = self._run_summary(run, assignments, sessions)
+        summary["completion_register"] = [
+            *[self._completion_row(assignment) for assignment in assignments],
+            *[
+                self._shared_session_row(session)
+                for session in sessions
+                if not session.get("training_assignment_id")
+            ],
+        ]
+        return summary
+
+    async def close_owner_run(
+        self,
+        run_id: str,
+        owner_user_id: str,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> dict:
+        run = (
+            await self.repository.get_run(run_id)
+            if organization_id is None
+            else await self.repository.get_run_for_owner(
+                run_id,
+                owner_user_id,
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
         if (
             not run
             or run.get("owner_user_id") != owner_user_id
@@ -318,14 +444,65 @@ class TrainingRunService:
         sessions = await self.repository.list_sessions_for_run(run_id)
         return self._run_summary(closed, assignments, sessions)
 
-    async def list_my_assignments(self, user_id: str, email: str) -> list[dict]:
+    async def close_organization_run(
+        self,
+        run_id: str,
+        organization_id: str,
+        actor_user_id: str,
+    ) -> dict:
+        run = await self.repository.get_run_for_organization(run_id, organization_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Training run not found")
+        closed = await self._close_run(
+            run,
+            actor_user_id,
+            require_owner=False,
+        )
+        if not closed:
+            current = await self.repository.get_run(run_id)
+            detail = (
+                "Training run is being finalized"
+                if current and current.get("closure_in_progress")
+                else "Training run is already closed"
+            )
+            raise HTTPException(status_code=409, detail=detail)
+        assignments = await self.repository.list_assignments_for_run(run_id)
+        sessions = await self.repository.list_sessions_for_run(run_id)
+        return self._run_summary(closed, assignments, sessions)
+
+    async def list_my_assignments(
+        self,
+        user_id: str,
+        email: str,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
         normalized_email = normalize_email(email)
-        newly_bound = await self.repository.bind_assignments_to_user(normalized_email, user_id)
+        newly_bound = (
+            await self.repository.bind_assignments_to_user(normalized_email, user_id)
+            if organization_id is None
+            else await self.repository.bind_assignments_to_user(
+                normalized_email,
+                user_id,
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
         for assignment in newly_bound:
             run = await self.repository.get_run(assignment["training_run_id"])
             if run:
                 await self._notify_assignment_safely(assignment, run, user_id)
-        assignments = await self.repository.list_assignments_for_recipient(normalized_email, user_id)
+        assignments = (
+            await self.repository.list_assignments_for_recipient(normalized_email, user_id)
+            if organization_id is None
+            else await self.repository.list_assignments_for_recipient(
+                normalized_email,
+                user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        )
         result = []
         for assignment in assignments:
             run = await self.repository.get_run(assignment["training_run_id"])
@@ -334,21 +511,48 @@ class TrainingRunService:
             result.append(self._assignment_summary(assignment, run))
         return result
 
-    async def start_assignment(self, assignment_id: str, user) -> dict:
+    async def start_assignment(
+        self,
+        assignment_id: str,
+        user,
+        organization_id: str | None = None,
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> dict:
         normalized_email = normalize_email(str(user.email))
         user_id = str(user.id)
-        newly_bound = await self.repository.bind_assignments_to_user(normalized_email, user_id)
+        newly_bound = (
+            await self.repository.bind_assignments_to_user(normalized_email, user_id)
+            if organization_id is None
+            else await self.repository.bind_assignments_to_user(
+                normalized_email,
+                user_id,
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
         for newly_bound_assignment in newly_bound:
             bound_run = await self.repository.get_run(newly_bound_assignment["training_run_id"])
             if bound_run:
                 await self._notify_assignment_safely(
                     newly_bound_assignment, bound_run, user_id
                 )
-        assignment = await self.repository.get_assignment(assignment_id)
+        assignment = (
+            await self.repository.get_assignment(assignment_id)
+            if organization_id is None
+            else await self.repository.get_assignment_for_recipient(
+                assignment_id,
+                user_id,
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
         if not assignment or assignment.get("recipient_user_id") != user_id:
             raise HTTPException(status_code=404, detail="Training assignment not found")
         run = await self.repository.get_run(assignment["training_run_id"])
-        if not run:
+        if not run or not self._belongs_to_organization(
+            run, organization_id, allow_legacy_personal
+        ):
             raise HTTPException(status_code=404, detail="Training run not found")
         if run.get("status") != "open" or run.get("closure_in_progress"):
             raise HTTPException(status_code=409, detail="Training run is closed")
@@ -435,10 +639,25 @@ class TrainingRunService:
             raise HTTPException(status_code=404, detail="Quiz for training run not found")
         return run, quiz
 
-    async def _close_run(self, run: dict, owner_user_id: Optional[str]) -> Optional[dict]:
+    async def _close_run(
+        self,
+        run: dict,
+        owner_user_id: Optional[str],
+        *,
+        require_owner: bool = True,
+    ) -> Optional[dict]:
         closed_at = _utc_now()
-        claimed = await self.repository.claim_run_closure(
-            str(run["_id"]), owner_user_id, closed_at
+        claimed = (
+            await self.repository.claim_run_closure(
+                str(run["_id"]), owner_user_id, closed_at
+            )
+            if require_owner
+            else await self.repository.claim_run_closure(
+                str(run["_id"]),
+                owner_user_id,
+                closed_at,
+                require_owner=False,
+            )
         )
         if not claimed:
             return None
@@ -458,6 +677,8 @@ class TrainingRunService:
                     "training_run_id": str(claimed["_id"]),
                     "event_type": "run_closed",
                     "actor_user_id": owner_user_id,
+                    "organization_id": claimed.get("organization_id"),
+                    "created_by_user_id": claimed.get("created_by_user_id") or claimed.get("owner_user_id") or owner_user_id,
                     "occurred_at": closed_at,
                     # No update/delete operation is exposed for a final audit snapshot.
                     "payload": {
@@ -481,8 +702,17 @@ class TrainingRunService:
                     },
                 }
             )
-            closed = await self.repository.finalize_run_closure(
-                str(claimed["_id"]), owner_user_id, closed_at
+            closed = (
+                await self.repository.finalize_run_closure(
+                    str(claimed["_id"]), owner_user_id, closed_at
+                )
+                if require_owner
+                else await self.repository.finalize_run_closure(
+                    str(claimed["_id"]),
+                    owner_user_id,
+                    closed_at,
+                    require_owner=False,
+                )
             )
             if not closed:
                 raise RuntimeError("Training run closure could not be finalized")
@@ -512,6 +742,21 @@ class TrainingRunService:
                 "owner_user_id": run["owner_user_id"],
             }
         return await self.repository.get_owned_quiz(run["quiz_id"], run["owner_user_id"])
+
+    @staticmethod
+    def _belongs_to_organization(
+        resource: dict,
+        organization_id: str | None,
+        allow_legacy_personal: bool,
+    ) -> bool:
+        if organization_id is None:
+            return True
+        resource_organization_id = resource.get("organization_id")
+        return (
+            str(resource_organization_id) == organization_id
+            if resource_organization_id is not None
+            else allow_legacy_personal
+        )
 
     async def _notify_assignment_safely(
         self, assignment: dict, run: dict, user_id: str
@@ -670,6 +915,8 @@ class TrainingRunService:
                     f"{assignment['recipient_email']}:invitation"
                 ),
                 "training_run_id": str(run["_id"]),
+                "organization_id": run.get("organization_id"),
+                "created_by_user_id": run.get("created_by_user_id") or run["owner_user_id"],
                 "recipient_email": assignment["recipient_email"],
                 "template_id": "custom",
                 "template_vars": {

@@ -19,12 +19,31 @@ def _object_id(notification_id: str) -> ObjectId:
     return ObjectId(notification_id)
 
 
-def _active_notification_query(user_id: str) -> dict:
+def _active_notification_query(
+    user_id: str,
+    *,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
+) -> dict:
     now = datetime.now(timezone.utc)
-    return {
+    query = {
         "user_id": user_id,
         "$or": [{"expires_at": None}, {"expires_at": {"$gt": now}}],
     }
+    if organization_id is not None:
+        organization_filter: dict
+        if allow_legacy_personal:
+            organization_filter = {
+                "$or": [
+                    {"organization_id": organization_id},
+                    {"organization_id": {"$exists": False}},
+                    {"organization_id": None},
+                ]
+            }
+        else:
+            organization_filter = {"organization_id": organization_id}
+        return {"$and": [query, organization_filter]}
+    return query
 
 
 def _to_response(notification: dict) -> NotificationResponse:
@@ -82,9 +101,17 @@ async def list_user_notifications(
     user_id: str,
     limit: int,
     skip: int,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
 ) -> tuple[list[NotificationResponse], bool]:
     cursor = (
-        notifications_collection.find(_active_notification_query(user_id))
+        notifications_collection.find(
+            _active_notification_query(
+                user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        )
         .sort("created_at", -1)
         .skip(skip)
         .limit(limit + 1)
@@ -97,8 +124,14 @@ async def list_user_notifications(
 async def count_unread_notifications(
     notifications_collection: AsyncIOMotorCollection,
     user_id: str,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
 ) -> int:
-    query = _active_notification_query(user_id)
+    query = _active_notification_query(
+        user_id,
+        organization_id=organization_id,
+        allow_legacy_personal=allow_legacy_personal,
+    )
     query["read"] = False
     return await notifications_collection.count_documents(query)
 
@@ -107,9 +140,20 @@ async def mark_notification_read(
     notifications_collection: AsyncIOMotorCollection,
     notification_id: str,
     user_id: str,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
 ) -> bool:
     result = await notifications_collection.update_one(
-        {"_id": _object_id(notification_id), **_active_notification_query(user_id)},
+        {
+            "$and": [
+                {"_id": _object_id(notification_id)},
+                _active_notification_query(
+                    user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                ),
+            ]
+        },
         {"$set": {"read": True}},
     )
     return result.modified_count > 0 or result.matched_count > 0
@@ -118,8 +162,14 @@ async def mark_notification_read(
 async def mark_all_notifications_read(
     notifications_collection: AsyncIOMotorCollection,
     user_id: str,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
 ) -> int:
-    query = _active_notification_query(user_id)
+    query = _active_notification_query(
+        user_id,
+        organization_id=organization_id,
+        allow_legacy_personal=allow_legacy_personal,
+    )
     query["read"] = False
     result = await notifications_collection.update_many(query, {"$set": {"read": True}})
     return result.modified_count
@@ -129,8 +179,19 @@ async def delete_notification(
     notifications_collection: AsyncIOMotorCollection,
     notification_id: str,
     user_id: str,
+    organization_id: str | None = None,
+    allow_legacy_personal: bool = False,
 ) -> bool:
     result = await notifications_collection.delete_one(
-        {"_id": _object_id(notification_id), "user_id": user_id}
+        {
+            "$and": [
+                {"_id": _object_id(notification_id)},
+                _active_notification_query(
+                    user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                ),
+            ]
+        }
     )
     return result.deleted_count > 0

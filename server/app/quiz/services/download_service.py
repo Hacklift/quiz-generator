@@ -153,7 +153,7 @@ def download_quiz_from_payload(
 async def download_quiz_by_id(
     quiz_id: str,
     file_format: str,
-    user_id: str | None = None,
+    organization_id: str,
 ) -> StreamingResponse:
     """
     Download an existing quiz by its MongoDB ObjectId.
@@ -169,7 +169,13 @@ async def download_quiz_by_id(
         raise HTTPException(status_code=400, detail="Invalid quiz_id (must be a valid ObjectId)")
 
     payload = None
-    quiz_doc = await v2_collection.find_one({"_id": object_id})
+    quiz_doc = await v2_collection.find_one(
+        {
+            "_id": object_id,
+            "organization_id": organization_id,
+            "status": {"$ne": "deleted"},
+        }
+    )
     if quiz_doc:
         payload = _build_download_payload(
             title=quiz_doc.get("title"),
@@ -181,14 +187,6 @@ async def download_quiz_by_id(
     if not quiz_doc:
         logger.warning(f"unable to pull quiz {quiz_id} from db")
         raise HTTPException(status_code=404, detail=f"Quiz not found for id {quiz_id}")
-
-    owner_user_id = (
-        quiz_doc.get("owner_user_id")
-        or quiz_doc.get("user_id")
-        or quiz_doc.get("owner_id")
-    )
-    if user_id is not None and owner_user_id and str(owner_user_id) != str(user_id):
-        raise HTTPException(status_code=403, detail="Not authorized")
 
     # STEP 3 — Extract compatible quiz structure
     if not payload or not payload["questions"]:

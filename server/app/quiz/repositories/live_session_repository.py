@@ -22,6 +22,14 @@ class LiveQuizSessionRepository:
         quiz = await self.quiz_repository.find_by_id(quiz_id)
         return quiz.model_dump(by_alias=True) if quiz else None
 
+    async def get_quiz_by_id_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        quiz = await self.quiz_repository.find_by_id_for_organization(quiz_id, organization_id)
+        return quiz.model_dump(by_alias=True) if quiz else None
+
     async def get_quiz_by_access_code(self, access_code: str) -> Optional[Dict[str, Any]]:
         quiz = await self.quiz_repository.find_by_access_code(access_code.strip().upper())
         return quiz.model_dump(by_alias=True) if quiz else None
@@ -32,17 +40,35 @@ class LiveQuizSessionRepository:
     async def list_live_quizzes_by_creator(
         self,
         creator_user_id: str,
+        organization_id: str | None = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        query: dict[str, Any] = {
+            "live_quiz_enabled": True,
+            "status": {"$ne": "deleted"},
+            "$or": [
+                {"owner_user_id": creator_user_id},
+                {"created_by": creator_user_id},
+                {"owner_id": creator_user_id},
+            ],
+        }
+        if organization_id is not None:
+            query["organization_id"] = organization_id
+        cursor = self.quiz_repository.collection.find(
+            query
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def list_live_quizzes_by_organization(
+        self,
+        organization_id: str,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         cursor = self.quiz_repository.collection.find(
             {
+                "organization_id": organization_id,
                 "live_quiz_enabled": True,
                 "status": {"$ne": "deleted"},
-                "$or": [
-                    {"owner_user_id": creator_user_id},
-                    {"created_by": creator_user_id},
-                    {"owner_id": creator_user_id},
-                ],
             }
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
@@ -56,6 +82,7 @@ class LiveQuizSessionRepository:
         creator_id: str,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[List[str]] = None,
+        organization_id: str | None = None,
     ) -> Optional[Dict[str, Any]]:
         updated = await self.quiz_repository.enable_live_quiz(
             quiz_id,
@@ -64,6 +91,7 @@ class LiveQuizSessionRepository:
             access_code_expires_at=access_code_expires_at,
             participant_access_mode=participant_access_mode,
             invited_participant_emails=invited_participant_emails or [],
+            organization_id=organization_id,
         )
         return updated.model_dump(by_alias=True) if updated else None
 
@@ -169,8 +197,15 @@ class LiveQuizSessionRepository:
             },
         )
 
-    async def list_quiz_sessions(self, quiz_id: str) -> List[Dict[str, Any]]:
-        cursor = self.sessions_collection.find({"quiz_id": quiz_id}).sort(
+    async def list_quiz_sessions(
+        self,
+        quiz_id: str,
+        organization_id: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        query: dict[str, Any] = {"quiz_id": quiz_id}
+        if organization_id is not None:
+            query["organization_id"] = organization_id
+        cursor = self.sessions_collection.find(query).sort(
             "created_at", -1,
         )
         return await cursor.to_list(length=500)

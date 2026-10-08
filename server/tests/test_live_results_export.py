@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 from pypdf import PdfReader
 
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.quiz.routes.live_sessions import export_live_quiz_results
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.utils.live_results_export import (
@@ -14,6 +15,17 @@ from server.app.quiz.utils.live_results_export import (
     generate_live_results_pdf,
     generate_live_results_txt,
 )
+
+
+def _owner_context() -> OrganizationContext:
+    principal = OrganizationPrincipal(user_id="teacher-1", session_id="session-1")
+    return OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="personal",
+        membership_role="owner",
+        principal=principal,
+        membership={"role": "owner", "status": "active"},
+    )
 
 
 class ResultsRepository:
@@ -174,18 +186,29 @@ async def test_authenticated_creator_route_exports_csv():
     payload = {"title": "Class Results", "question_count": 0, "participants": []}
 
     class Service:
-        async def build_results_export(self, quiz_id, requester_id):
+        class Repository:
+            async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+                return {
+                    "_id": quiz_id,
+                    "organization_id": organization_id,
+                    "created_by_user_id": "teacher-1",
+                }
+
+        repository = Repository()
+
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             assert (quiz_id, requester_id) == ("quiz-1", "teacher-1")
+            assert authorized_quiz["organization_id"] == "organization-1"
             return payload
 
     response = await export_live_quiz_results(
-        "quiz-1",
-        "csv",
-        SimpleNamespace(id="teacher-1", persona_user_type="teacher"),
-        Service(),
+        quiz_id="quiz-1",
+        format="csv",
+        current_user=SimpleNamespace(id="teacher-1"),
+        organization=_owner_context(),
+        service=Service(),
     )
-    chunks = [chunk async for chunk in response.body_iterator]
-    body = "".join(chunk.decode() if isinstance(chunk, bytes) else chunk for chunk in chunks)
+    body = response.body.decode()
     assert body == "Participant,Score,Percentage\n"
     assert response.media_type == "text/csv"
     assert response.headers["content-type"] == "text/csv; charset=utf-8"

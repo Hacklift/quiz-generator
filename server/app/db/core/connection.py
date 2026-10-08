@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from cryptography.fernet import Fernet
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from server.app.quiz.repositories.v2.setup import ensure_v2_collections_and_validators, ensure_v2_indexes
+from server.app.organizations.validators import ensure_organization_collections
 from server.app.users.validators import ensure_user_collections
 
 load_dotenv()
@@ -28,6 +29,9 @@ quizzes_collection = database["quizzes"]
 users_collection = database["users"]
 user_sessions_collection = database["user_sessions"]
 auth_events_collection = database["auth_events"]
+organizations_collection = database["organizations"]
+organization_memberships_collection = database["organization_memberships"]
+organization_invitations_collection = database["organization_invitations"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
@@ -68,6 +72,14 @@ async def ensure_user_tokens_indexes(user_tokens_collection: AsyncIOMotorCollect
 async def ensure_notification_indexes(notifications_collection: AsyncIOMotorCollection):
     await notifications_collection.create_index([("user_id", 1), ("created_at", -1)])
     await notifications_collection.create_index([("user_id", 1), ("read", 1)])
+    await notifications_collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("created_at", -1)],
+        name="organization_notification_user_created",
+    )
+    await notifications_collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("read", 1)],
+        name="organization_notification_user_read",
+    )
     index_info = await notifications_collection.index_information()
     expires_index = index_info.get("expires_at_1")
     if expires_index and expires_index.get("expireAfterSeconds") != 0:
@@ -111,30 +123,38 @@ async def ensure_live_quiz_session_indexes(
     live_quiz_sessions_collection: AsyncIOMotorCollection,
 ):
     """Indexes for participant live quiz sessions."""
-    await live_quiz_sessions_collection.create_index("quiz_id")
+    await live_quiz_sessions_collection.create_index(
+        [("organization_id", 1), ("quiz_id", 1), ("created_at", -1)],
+        name="organization_live_quiz_session_created",
+    )
     await live_quiz_sessions_collection.create_index("guest_id")
     await live_quiz_sessions_collection.create_index("status")
     await live_quiz_sessions_collection.create_index("expires_at")
     await live_quiz_sessions_collection.create_index("training_run_id")
     await live_quiz_sessions_collection.create_index(
-        [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
-        name="creator_quiz_submitted_at",
+        [("organization_id", 1), ("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
+        name="organization_creator_quiz_submitted_at",
     )
 
 
 async def ensure_document_rag_cache_indexes(
     document_rag_cache_collection: AsyncIOMotorCollection,
 ):
+    cache_key = [
+        ("organization_id", 1),
+        ("document_fingerprint", 1),
+        ("embedding_model", 1),
+        ("chunk_size_chars", 1),
+        ("chunk_overlap_chars", 1),
+        ("chunk_limit", 1),
+    ]
+    existing = (await document_rag_cache_collection.index_information()).get(
+        "document_rag_cache_key"
+    )
+    if existing and existing.get("key") != cache_key:
+        await document_rag_cache_collection.drop_index("document_rag_cache_key")
     await document_rag_cache_collection.create_index(
-        [
-            ("document_fingerprint", 1),
-            ("embedding_model", 1),
-            ("chunk_size_chars", 1),
-            ("chunk_overlap_chars", 1),
-            ("chunk_limit", 1),
-        ],
-        unique=True,
-        name="document_rag_cache_key",
+        cache_key, unique=True, name="document_rag_cache_key"
     )
     await document_rag_cache_collection.create_index(
         [("last_accessed_at", -1)],
@@ -157,12 +177,16 @@ async def ensure_live_quiz_invitation_indexes(
     live_quiz_invitations_collection: AsyncIOMotorCollection,
 ):
     """Indexes for live quiz invitations."""
-    await live_quiz_invitations_collection.create_index("quiz_id")
+    await live_quiz_invitations_collection.create_index(
+        [("organization_id", 1), ("quiz_id", 1), ("created_at", 1)],
+        name="organization_live_quiz_invitation_created",
+    )
     await live_quiz_invitations_collection.create_index("creator_user_id")
     await live_quiz_invitations_collection.create_index("status")
     await live_quiz_invitations_collection.create_index(
-        [("quiz_id", 1), ("email", 1)],
+        [("organization_id", 1), ("quiz_id", 1), ("email", 1)],
         unique=True,
+        name="organization_quiz_invitation_email_unique",
     )
 
 
@@ -211,6 +235,41 @@ async def _ensure_training_run_access_code_index(
         )
 
 
+async def _ensure_training_run_idempotency_index(
+    training_runs_collection: AsyncIOMotorCollection,
+):
+    """Reconcile the feature-owned idempotency index to its tenant scope."""
+    index_name = "training_run_owner_idempotency_key"
+    index_keys = [
+        ("organization_id", 1),
+        ("owner_user_id", 1),
+        ("idempotency_key", 1),
+    ]
+    partial_filter = {"idempotency_key": {"$type": "string"}}
+    index_info = await training_runs_collection.index_information()
+    existing = index_info.get(index_name)
+    if existing:
+        key = existing.get("key", [])
+        key_items = list(key.items()) if isinstance(key, Mapping) else list(key)
+        if (
+            key_items == index_keys
+            and existing.get("unique") is True
+            and existing.get("partialFilterExpression") == partial_filter
+        ):
+            return
+        # The old index was created by this feature before organization scope
+        # was introduced. Its uniqueness constraint is strictly stronger, so
+        # replacing it cannot introduce duplicate existing records.
+        await training_runs_collection.drop_index(index_name)
+
+    await training_runs_collection.create_index(
+        index_keys,
+        unique=True,
+        partialFilterExpression=partial_filter,
+        name=index_name,
+    )
+
+
 async def ensure_training_run_indexes(
     training_runs_collection: AsyncIOMotorCollection,
     training_assignments_collection: AsyncIOMotorCollection,
@@ -219,16 +278,11 @@ async def ensure_training_run_indexes(
 ):
     """Indexes for the run-based corporate training workflow."""
     await _ensure_training_run_access_code_index(training_runs_collection)
+    await _ensure_training_run_idempotency_index(training_runs_collection)
     await training_runs_collection.create_index(
-        [("owner_user_id", 1), ("idempotency_key", 1)],
-        unique=True,
-        # Compound sparse indexes still index legacy rows with an owner but no
-        # idempotency key as a shared null value. Only new string keys belong
-        # in this uniqueness domain.
-        partialFilterExpression={"idempotency_key": {"$type": "string"}},
-        name="training_run_owner_idempotency_key",
+        [("organization_id", 1), ("owner_user_id", 1), ("created_at", -1)],
+        name="organization_training_run_owner_created",
     )
-    await training_runs_collection.create_index([("owner_user_id", 1), ("created_at", -1)])
     await training_runs_collection.create_index([("status", 1), ("closes_at", 1)])
     await training_assignments_collection.create_index(
         [("training_run_id", 1), ("recipient_email", 1)], unique=True
@@ -238,6 +292,10 @@ async def ensure_training_run_indexes(
     )
     await training_assignments_collection.create_index(
         [("recipient_email", 1), ("status", 1), ("due_at", 1)]
+    )
+    await training_assignments_collection.create_index(
+        [("organization_id", 1), ("recipient_user_id", 1), ("status", 1), ("due_at", 1)],
+        name="organization_training_assignment_recipient_status_due",
     )
     await training_audit_events_collection.create_index(
         [("training_run_id", 1), ("occurred_at", 1)]
@@ -271,6 +329,12 @@ async def startUp():
         user_sessions_collection,
         auth_events_collection,
         backfill_limit=100_000,
+    )
+    await ensure_organization_collections(
+        database,
+        organizations_collection,
+        organization_memberships_collection,
+        organization_invitations_collection,
     )
     await drop_removed_collections()
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
@@ -315,6 +379,18 @@ def get_auth_events_collection() -> AsyncIOMotorCollection:
     if auth_events_collection is None:
         raise RuntimeError("[DB Error] auth_events_collection has not been initialized properly.")
     return auth_events_collection
+
+
+def get_organizations_collection() -> AsyncIOMotorCollection:
+    return organizations_collection
+
+
+def get_organization_memberships_collection() -> AsyncIOMotorCollection:
+    return organization_memberships_collection
+
+
+def get_organization_invitations_collection() -> AsyncIOMotorCollection:
+    return organization_invitations_collection
 
 def get_quizzes_collection() -> AsyncIOMotorCollection:
     if quizzes_collection is None:

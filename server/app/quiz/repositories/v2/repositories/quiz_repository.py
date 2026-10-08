@@ -10,6 +10,7 @@ from pymongo.errors import DuplicateKeyError
 from ..models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2, QuizQuestionsUpdateV2
 
 _OWNER_SCOPE_UNSET = object()
+_ORGANIZATION_SCOPE_UNSET = object()
 
 
 class QuizV2Repository:
@@ -39,17 +40,29 @@ class QuizV2Repository:
         self,
         content_fingerprint: str,
         owner_user_id: Optional[str] | object = _OWNER_SCOPE_UNSET,
+        organization_id: Optional[str] | object = _ORGANIZATION_SCOPE_UNSET,
     ) -> Optional[QuizDocumentV2]:
         query = {"content_fingerprint": content_fingerprint}
         if owner_user_id is not _OWNER_SCOPE_UNSET:
             # MongoDB matches both an explicit null and a missing field here,
             # preserving ownerless legacy/seed deduplication.
             query["owner_user_id"] = owner_user_id
+        if organization_id is not _ORGANIZATION_SCOPE_UNSET:
+            # Private generated content must not deduplicate across tenants.
+            # Explicit None preserves compatibility for unscoped legacy rows.
+            query["organization_id"] = organization_id
         document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
-    async def find_by_structure_fingerprint(self, structure_fingerprint: str) -> Optional[QuizDocumentV2]:
-        document = await self.collection.find_one({"structure_fingerprint": structure_fingerprint})
+    async def find_by_structure_fingerprint(
+        self,
+        structure_fingerprint: str,
+        organization_id: Optional[str] | object = _ORGANIZATION_SCOPE_UNSET,
+    ) -> Optional[QuizDocumentV2]:
+        query = {"structure_fingerprint": structure_fingerprint}
+        if organization_id is not _ORGANIZATION_SCOPE_UNSET:
+            query["organization_id"] = organization_id
+        document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
     async def find_by_access_code(self, access_code: str) -> Optional[QuizDocumentV2]:
@@ -207,6 +220,7 @@ class QuizV2Repository:
         existing = await self.find_by_content_fingerprint(
             quiz.content_fingerprint,
             quiz.owner_user_id,
+            quiz.organization_id,
         )
         if existing:
             return existing
@@ -216,6 +230,7 @@ class QuizV2Repository:
             existing = await self.find_by_content_fingerprint(
                 quiz.content_fingerprint,
                 quiz.owner_user_id,
+                quiz.organization_id,
             )
             if existing:
                 return existing
@@ -224,6 +239,38 @@ class QuizV2Repository:
     async def find_by_id(self, quiz_id: str) -> Optional[QuizDocumentV2]:
         try:
             document = await self.collection.find_one({"_id": ObjectId(quiz_id)})
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
+    async def find_by_id_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[QuizDocumentV2]:
+        """Load a canonical quiz through its tenant boundary."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "organization_id": organization_id,
+                    "status": {"$ne": "deleted"},
+                }
+            )
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
+    async def find_public_shareable_by_id(self, quiz_id: str) -> Optional[QuizDocumentV2]:
+        """Resolve an anonymous share only through an explicit visibility grant."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "status": "active",
+                    "visibility": {"$in": ["public", "unlisted"]},
+                }
+            )
         except InvalidId:
             return None
         return QuizDocumentV2(**document) if document else None
@@ -273,10 +320,14 @@ class QuizV2Repository:
         access_code_expires_at: datetime,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[list[str]] = None,
+        organization_id: str | None = None,
     ) -> Optional[QuizDocumentV2]:
         try:
+            query = {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}}
+            if organization_id is not None:
+                query["organization_id"] = organization_id
             updated = await self.collection.find_one_and_update(
-                {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}},
+                query,
                 {
                     "$set": {
                         "live_quiz_enabled": True,

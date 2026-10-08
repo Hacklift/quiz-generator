@@ -71,6 +71,7 @@ async def quiz_generate(
     result = await get_questions(
         request,
         user_id=context.user_id,
+        organization_id=context.tenant_id,
     )
     questions = result.get("questions") or []
     history_id = None
@@ -90,7 +91,10 @@ async def quiz_generate(
                 "audience_type": audience_type,
                 "custom_instruction": custom_instruction,
                 "questions": _history_questions(questions, question_type),
-            }
+                "organization_id": context.tenant_id,
+                "created_by_user_id": context.user_id,
+            },
+            allow_legacy_personal=False,
         )
         history_id = str(history_reference.id)
         history_quiz_id = history_reference.quiz_id

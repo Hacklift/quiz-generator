@@ -34,21 +34,94 @@ class TrainingRunRepository:
         except (InvalidId, TypeError):
             return None
 
-    async def get_owned_quiz(self, quiz_id: str, owner_user_id: str) -> Optional[dict]:
+    @staticmethod
+    def _organization_scope(
+        organization_id: str | None, allow_legacy_personal: bool
+    ) -> dict:
+        if organization_id is None:
+            return {}
+        if allow_legacy_personal:
+            return {
+                "$or": [
+                    {"organization_id": organization_id},
+                    {"organization_id": {"$exists": False}},
+                    {"organization_id": None},
+                ]
+            }
+        return {"organization_id": organization_id}
+
+    @classmethod
+    def _scoped_query(
+        cls, query: dict, organization_id: str | None, allow_legacy_personal: bool
+    ) -> dict:
+        scope = cls._organization_scope(organization_id, allow_legacy_personal)
+        return {"$and": [query, scope]} if scope else query
+
+    async def get_owned_quiz(
+        self,
+        quiz_id: str,
+        owner_user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> Optional[dict]:
+        object_id = self._object_id(quiz_id)
+        if not object_id:
+            return None
+        return await self.quizzes_collection.find_one(
+            self._scoped_query(
+                {
+                "_id": object_id,
+                "owner_user_id": owner_user_id,
+                "status": {"$ne": "deleted"},
+                },
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
+
+    async def list_owned_quizzes(
+        self,
+        owner_user_id: str,
+        limit: int = 100,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
+        cursor = self.quizzes_collection.find(
+            self._scoped_query(
+                {"owner_user_id": owner_user_id, "status": {"$ne": "deleted"}},
+                organization_id,
+                allow_legacy_personal,
+            ),
+            {"title": 1, "created_at": 1, "quiz_type": 1},
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def get_quiz_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[dict]:
         object_id = self._object_id(quiz_id)
         if not object_id:
             return None
         return await self.quizzes_collection.find_one(
             {
                 "_id": object_id,
-                "owner_user_id": owner_user_id,
+                "organization_id": organization_id,
                 "status": {"$ne": "deleted"},
             }
         )
 
-    async def list_owned_quizzes(self, owner_user_id: str, limit: int = 100) -> list[dict]:
+    async def list_quizzes_for_organization(
+        self,
+        organization_id: str,
+        limit: int = 100,
+    ) -> list[dict]:
         cursor = self.quizzes_collection.find(
-            {"owner_user_id": owner_user_id, "status": {"$ne": "deleted"}},
+            {
+                "organization_id": organization_id,
+                "status": {"$ne": "deleted"},
+            },
             {"title": 1, "created_at": 1, "quiz_type": 1},
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
@@ -64,10 +137,18 @@ class TrainingRunRepository:
         return {**payload, "_id": result.inserted_id}
 
     async def get_run_by_idempotency_key(
-        self, owner_user_id: str, idempotency_key: str
+        self,
+        owner_user_id: str,
+        idempotency_key: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> Optional[dict]:
         return await self.runs_collection.find_one(
-            {"owner_user_id": owner_user_id, "idempotency_key": idempotency_key}
+            self._scoped_query(
+                {"owner_user_id": owner_user_id, "idempotency_key": idempotency_key},
+                organization_id,
+                allow_legacy_personal,
+            )
         )
 
     async def mark_run_open(self, run_id: str, now: datetime) -> Optional[dict]:
@@ -101,14 +182,76 @@ class TrainingRunRepository:
     async def get_run_by_access_code(self, access_code: str) -> Optional[dict]:
         return await self.runs_collection.find_one({"access_code": access_code.strip().upper()})
 
-    async def list_runs_for_owner(self, owner_user_id: str, limit: int = 100) -> list[dict]:
+    async def list_runs_for_owner(
+        self,
+        owner_user_id: str,
+        limit: int = 100,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
         cursor = self.runs_collection.find(
-            {"owner_user_id": owner_user_id, "status": {"$in": ["open", "closed"]}}
+            self._scoped_query(
+                {"owner_user_id": owner_user_id, "status": {"$in": ["open", "closed"]}},
+                organization_id,
+                allow_legacy_personal,
+            )
+        ).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def get_run_for_owner(
+        self,
+        run_id: str,
+        owner_user_id: str,
+        organization_id: str | None,
+        allow_legacy_personal: bool = False,
+    ) -> Optional[dict]:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return None
+        return await self.runs_collection.find_one(
+            self._scoped_query(
+                {"_id": object_id, "owner_user_id": owner_user_id},
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
+
+    async def get_run_for_organization(
+        self,
+        run_id: str,
+        organization_id: str,
+    ) -> Optional[dict]:
+        object_id = self._object_id(run_id)
+        if not object_id:
+            return None
+        return await self.runs_collection.find_one(
+            {
+                "_id": object_id,
+                "organization_id": organization_id,
+                "status": {"$in": ["open", "closed"]},
+            }
+        )
+
+    async def list_runs_for_organization(
+        self,
+        organization_id: str,
+        limit: int = 100,
+    ) -> list[dict]:
+        cursor = self.runs_collection.find(
+            {
+                "organization_id": organization_id,
+                "status": {"$in": ["open", "closed"]},
+            }
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
     async def claim_run_closure(
-        self, run_id: str, owner_user_id: Optional[str], started_at: datetime
+        self,
+        run_id: str,
+        owner_user_id: Optional[str],
+        started_at: datetime,
+        *,
+        require_owner: bool = True,
     ) -> Optional[dict]:
         """Claim finalization before changing the visible run status."""
         object_id = self._object_id(run_id)
@@ -119,7 +262,7 @@ class TrainingRunRepository:
             "status": "open",
             "closure_in_progress": {"$ne": True},
         }
-        if owner_user_id:
+        if owner_user_id and require_owner:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(
             query,
@@ -136,7 +279,12 @@ class TrainingRunRepository:
         )
 
     async def finalize_run_closure(
-        self, run_id: str, owner_user_id: Optional[str], closed_at: datetime
+        self,
+        run_id: str,
+        owner_user_id: Optional[str],
+        closed_at: datetime,
+        *,
+        require_owner: bool = True,
     ) -> Optional[dict]:
         object_id = self._object_id(run_id)
         if not object_id:
@@ -146,7 +294,7 @@ class TrainingRunRepository:
             "status": "open",
             "closure_in_progress": True,
         }
-        if owner_user_id:
+        if owner_user_id and require_owner:
             query["owner_user_id"] = owner_user_id
         return await self.runs_collection.find_one_and_update(
             query,
@@ -261,19 +409,33 @@ class TrainingRunRepository:
         object_id = self._object_id(assignment_id)
         return await self.assignments_collection.find_one({"_id": object_id}) if object_id else None
 
-    async def bind_assignments_to_user(self, recipient_email: str, user_id: str) -> list[dict]:
+    async def bind_assignments_to_user(
+        self,
+        recipient_email: str,
+        user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
         """Bind only previously-unclaimed assignments and return those newly bound."""
         bound = []
         now = datetime.now(timezone.utc)
         while True:
             pending = await self.assignments_collection.find(
-                {"recipient_email": recipient_email, "recipient_user_id": None}
+                self._scoped_query(
+                    {"recipient_email": recipient_email, "recipient_user_id": None},
+                    organization_id,
+                    allow_legacy_personal,
+                )
             ).limit(500).to_list(length=500)
             if not pending:
                 return bound
             for assignment in pending:
                 updated = await self.assignments_collection.find_one_and_update(
-                    {"_id": assignment["_id"], "recipient_user_id": None},
+                    self._scoped_query(
+                        {"_id": assignment["_id"], "recipient_user_id": None},
+                        organization_id,
+                        allow_legacy_personal,
+                    ),
                     {"$set": {"recipient_user_id": user_id, "updated_at": now}},
                     return_document=ReturnDocument.AFTER,
                 )
@@ -281,19 +443,48 @@ class TrainingRunRepository:
                     bound.append(updated)
         return bound
 
-    async def list_assignments_for_recipient(self, recipient_email: str, user_id: str, limit: int = 100) -> list[dict]:
+    async def list_assignments_for_recipient(
+        self,
+        recipient_email: str,
+        user_id: str,
+        limit: int = 100,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict]:
         cursor = self.assignments_collection.find(
-            {
-                "$or": [
-                    {"recipient_user_id": user_id},
-                    {
-                        "recipient_email": recipient_email,
-                        "recipient_user_id": None,
-                    },
-                ]
-            }
+            self._scoped_query(
+                {
+                    "$or": [
+                        {"recipient_user_id": user_id},
+                        {
+                            "recipient_email": recipient_email,
+                            "recipient_user_id": None,
+                        },
+                    ]
+                },
+                organization_id,
+                allow_legacy_personal,
+            )
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
+
+    async def get_assignment_for_recipient(
+        self,
+        assignment_id: str,
+        user_id: str,
+        organization_id: str | None,
+        allow_legacy_personal: bool = False,
+    ) -> Optional[dict]:
+        object_id = self._object_id(assignment_id)
+        if not object_id:
+            return None
+        return await self.assignments_collection.find_one(
+            self._scoped_query(
+                {"_id": object_id, "recipient_user_id": user_id},
+                organization_id,
+                allow_legacy_personal,
+            )
+        )
 
     async def reserve_attempt(self, assignment_id: str, user_id: str, now: datetime) -> Optional[dict]:
         assignment = await self.get_assignment(assignment_id)

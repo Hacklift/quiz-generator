@@ -123,12 +123,27 @@ class LegacyQuizResolutionService:
         }
         return self.canonical_service.build_content_fingerprint(structure_payload)
 
-    async def resolve_from_canonical_backref(self, canonical_quiz_id: str | None):
+    async def resolve_from_canonical_backref(
+        self,
+        canonical_quiz_id: str | None,
+        *,
+        organization_id: str | None = None,
+    ):
         if not canonical_quiz_id:
             return None
+        if organization_id:
+            return await self.canonical_service.repository.find_by_id_for_organization(
+                canonical_quiz_id,
+                organization_id,
+            )
         return await self.canonical_service.get_quiz_v2_by_id(canonical_quiz_id)
 
-    async def resolve_from_source_quiz_id(self, source_quiz_id: str | None):
+    async def resolve_from_source_quiz_id(
+        self,
+        source_quiz_id: str | None,
+        *,
+        organization_id: str | None = None,
+    ):
         if not source_quiz_id:
             return None
 
@@ -137,7 +152,9 @@ class LegacyQuizResolutionService:
                 collection_name,
                 source_quiz_id,
             )
-            if canonical_quiz:
+            if canonical_quiz and (
+                not organization_id or canonical_quiz.organization_id == organization_id
+            ):
                 return canonical_quiz
 
         object_id = self._coerce_object_id(source_quiz_id)
@@ -146,7 +163,10 @@ class LegacyQuizResolutionService:
             {"_id": object_id if object_id is not None else source_quiz_id}
         )
         if legacy_ai and legacy_ai.get("canonical_quiz_id"):
-            canonical_quiz = await self.resolve_from_canonical_backref(legacy_ai["canonical_quiz_id"])
+            canonical_quiz = await self.resolve_from_canonical_backref(
+                legacy_ai["canonical_quiz_id"],
+                organization_id=organization_id,
+            )
             if canonical_quiz:
                 return canonical_quiz
 
@@ -154,7 +174,10 @@ class LegacyQuizResolutionService:
             {"_id": object_id if object_id is not None else source_quiz_id}
         )
         if legacy_manual and legacy_manual.get("canonical_quiz_id"):
-            return await self.resolve_from_canonical_backref(legacy_manual["canonical_quiz_id"])
+            return await self.resolve_from_canonical_backref(
+                legacy_manual["canonical_quiz_id"],
+                organization_id=organization_id,
+            )
 
         return None
 
@@ -283,16 +306,23 @@ class LegacyQuizResolutionService:
         match: LegacySourceQuizMatch,
         *,
         allow_create: bool,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
     ):
         existing = await self.canonical_service.repository.find_by_legacy_mapping(
             match.source_collection,
             match.legacy_quiz_id,
         )
         if existing:
-            return existing
+            # Legacy IDs are globally unique, but a reference from a different
+            # tenant must never attach to that canonical document during backfill.
+            return existing if not organization_id or existing.organization_id == organization_id else None
 
         if match.document.get("canonical_quiz_id"):
-            canonical_quiz = await self.resolve_from_canonical_backref(match.document["canonical_quiz_id"])
+            canonical_quiz = await self.resolve_from_canonical_backref(
+                match.document["canonical_quiz_id"],
+                organization_id=organization_id,
+            )
             if canonical_quiz:
                 return canonical_quiz
 
@@ -300,7 +330,10 @@ class LegacyQuizResolutionService:
             title=self._candidate_display_title(match.document),
             description=match.document.get("custom_instruction") or match.document.get("description"),
             quiz_type=match.document.get("question_type") or match.document.get("quiz_type") or "multichoice",
-            owner_user_id=match.document.get("user_id") or match.document.get("owner_id"),
+            owner_user_id=owner_user_id
+            or match.document.get("user_id")
+            or match.document.get("owner_id"),
+            organization_id=organization_id or match.document.get("organization_id"),
             source="ai" if match.source_collection == "ai_generated_quizzes" else "legacy",
             questions=match.document.get("questions", []),
             legacy_source_collection=match.source_collection,
@@ -317,6 +350,8 @@ class LegacyQuizResolutionService:
         quiz_type: str,
         questions: list[Any],
         allow_create: bool,
+        organization_id: str | None = None,
+        owner_user_id: str | None = None,
     ):
         match = await self.find_legacy_source_match_by_structure(
             title=title,
@@ -328,6 +363,8 @@ class LegacyQuizResolutionService:
         return await self.resolve_or_build_from_legacy_source_match(
             match,
             allow_create=allow_create,
+            organization_id=organization_id,
+            owner_user_id=owner_user_id,
         )
 
     async def resolve_existing_v2_from_question_structure(
@@ -336,14 +373,18 @@ class LegacyQuizResolutionService:
         title: str,
         quiz_type: str,
         questions: list[Any],
+        organization_id: str | None = None,
     ):
         target_fingerprint = self._build_question_structure_fingerprint(
             quiz_type=quiz_type,
             questions=questions,
         )
         candidates: list[dict[str, Any]] = []
+        query: dict[str, Any] = {"quiz_type": quiz_type, "status": {"$ne": "deleted"}}
+        if organization_id:
+            query["organization_id"] = organization_id
         async for document in self.canonical_service.repository.collection.find(
-            {"quiz_type": quiz_type, "status": {"$ne": "deleted"}},
+            query,
             {"_id": 1, "title": 1, "quiz_type": 1, "questions": 1},
         ):
             candidate_fingerprint = self._build_question_structure_fingerprint(
