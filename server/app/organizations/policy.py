@@ -61,6 +61,7 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
     "facilitator": frozenset(
         {
             OrganizationAction.CONTENT_READ,
+            OrganizationAction.DELIVERY_READ,
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
         }

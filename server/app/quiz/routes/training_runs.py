@@ -152,6 +152,13 @@ async def list_training_runs(
         action=OrganizationAction.DELIVERY_READ,
         resource=None,
     )
+    if organization.membership_role == "facilitator":
+        # The facilitator policy is creator-scoped. Listing must retain that
+        # boundary instead of exposing every delivery run in the tenant.
+        return await service.list_owner_runs(
+            str(current_user.id),
+            organization.organization_id,
+        )
     return await service.list_organization_runs(organization.organization_id)
 
 

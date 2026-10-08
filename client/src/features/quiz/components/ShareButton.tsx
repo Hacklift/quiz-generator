@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import ShareModal from "./ShareModal";
 import { api } from "@shared/api/http";
+import publicApi from "@shared/api/publicHttp";
+import { TokenService } from "@shared/auth/tokenService";
 
 const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
   const [quizId, setQuizId] = useState<string>("");
@@ -20,7 +22,11 @@ const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
       }
 
       setQuizId(id);
-      const linkResponse = await api.get(`/share/share-quiz/${id}`);
+      // Guests can copy links for already public/unlisted quizzes. Signed-in
+      // users send their context so private quizzes receive a useful policy
+      // error rather than being indistinguishable from a missing quiz.
+      const httpClient = TokenService.hasTokens() ? api : publicApi;
+      const linkResponse = await httpClient.get(`/share/share-quiz/${id}`);
       const newShareableLink = linkResponse.data.link;
       setShareableLink(newShareableLink);
 

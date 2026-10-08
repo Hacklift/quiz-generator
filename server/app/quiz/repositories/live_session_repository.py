@@ -40,18 +40,22 @@ class LiveQuizSessionRepository:
     async def list_live_quizzes_by_creator(
         self,
         creator_user_id: str,
+        organization_id: str | None = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
+        query: dict[str, Any] = {
+            "live_quiz_enabled": True,
+            "status": {"$ne": "deleted"},
+            "$or": [
+                {"owner_user_id": creator_user_id},
+                {"created_by": creator_user_id},
+                {"owner_id": creator_user_id},
+            ],
+        }
+        if organization_id is not None:
+            query["organization_id"] = organization_id
         cursor = self.quiz_repository.collection.find(
-            {
-                "live_quiz_enabled": True,
-                "status": {"$ne": "deleted"},
-                "$or": [
-                    {"owner_user_id": creator_user_id},
-                    {"created_by": creator_user_id},
-                    {"owner_id": creator_user_id},
-                ],
-            }
+            query
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 

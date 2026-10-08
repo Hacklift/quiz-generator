@@ -681,8 +681,12 @@ class LiveQuizSessionService:
     async def list_creator_live_quizzes(
         self,
         creator_user_id: str,
+        organization_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        quizzes = await self.repository.list_live_quizzes_by_creator(creator_user_id)
+        quizzes = await self.repository.list_live_quizzes_by_creator(
+            creator_user_id,
+            organization_id=organization_id,
+        )
         return await self._build_live_quiz_summary_rows(quizzes)
 
     async def _build_live_quiz_summary_rows(

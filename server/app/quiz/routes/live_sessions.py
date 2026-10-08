@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import List, Literal, Optional
 
 import jwt
@@ -74,6 +75,7 @@ from server.app.quiz.utils.live_results_export import (
 
 router = APIRouter()
 WEBSOCKET_AUTH_TIMEOUT_SECONDS = 10
+logger = logging.getLogger(__name__)
 
 
 def get_live_quiz_service(
@@ -212,6 +214,13 @@ async def list_creator_live_quizzes(
         action=OrganizationAction.DELIVERY_READ,
         resource=None,
     )
+    if organization.membership_role == "facilitator":
+        # Facilitators may operate the delivery they created, but a list route
+        # must not convert that scoped capability into tenant-wide reporting.
+        return await service.list_creator_live_quizzes(
+            current_user.id,
+            organization.organization_id,
+        )
     return await service.list_organization_live_quizzes(organization.organization_id)
 
 
@@ -530,6 +539,12 @@ async def live_quiz_participants_ws(
         )
     except HTTPException:
         await websocket.close(code=1008)
+        return
+    except Exception:
+        # Do not leave an accepted socket open when its authorization or
+        # initial analytics snapshot fails unexpectedly.
+        logger.exception("Live quiz websocket setup failed for quiz %s", quiz_id)
+        await websocket.close(code=1011)
         return
 
     channel = live_quiz_realtime_broadcaster.channel_key(

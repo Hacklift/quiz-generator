@@ -496,7 +496,9 @@ class FakeCreatorLiveQuizzesRepository:
             },
         ]
 
-    async def list_live_quizzes_by_creator(self, creator_user_id):
+    async def list_live_quizzes_by_creator(self, creator_user_id, organization_id=None):
+        self.creator_user_id = creator_user_id
+        self.organization_id = organization_id
         return self.quizzes
 
     async def list_quiz_sessions(self, quiz_id):
@@ -654,6 +656,32 @@ async def test_live_quiz_websocket_rejects_missing_auth_message():
 
 
 @pytest.mark.asyncio
+async def test_live_quiz_websocket_closes_cleanly_when_setup_fails(monkeypatch):
+    websocket = FakeWebSocket({"type": "authenticate", "token": "valid-token"})
+
+    async def fail_authentication(*_args, **_kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "_get_verified_user_from_websocket_token",
+        fail_authentication,
+    )
+
+    await live_sessions_routes.live_quiz_participants_ws(
+        websocket,
+        "quiz-1",
+        service=object(),
+        users_collection=object(),
+        sessions_collection=object(),
+    )
+
+    assert websocket.accepted is True
+    assert websocket.close_code == 1011
+    assert websocket.sent_json == []
+
+
+@pytest.mark.asyncio
 async def test_live_quiz_websocket_authenticates_with_first_message(monkeypatch):
     user_id = ObjectId()
     user = {
@@ -800,3 +828,20 @@ async def test_creator_can_list_live_quizzes_with_stats(monkeypatch):
     assert rows[0]["participant_count"] == 2
     assert rows[0]["completed_count"] == 1
     assert rows[0]["average_score"] == 2
+
+
+@pytest.mark.asyncio
+async def test_creator_live_quiz_list_preserves_organization_scope(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repository = FakeCreatorLiveQuizzesRepository()
+    service = LiveQuizSessionService(repository)
+
+    await service.list_creator_live_quizzes(
+        "creator-1",
+        organization_id="organization-1",
+    )
+
+    assert repository.creator_user_id == "creator-1"
+    assert repository.organization_id == "organization-1"

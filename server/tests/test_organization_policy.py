@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from bson import ObjectId
 
@@ -35,6 +37,7 @@ EXPECTED_ACTIONS = {
     },
     "facilitator": {
         OrganizationAction.CONTENT_READ,
+        OrganizationAction.DELIVERY_READ,
         OrganizationAction.DELIVERY_RUN,
         OrganizationAction.REPORT_READ,
     },
@@ -143,6 +146,79 @@ def test_facilitator_can_operate_delivery_they_created():
         resource,
         context,
     )
+
+
+def test_facilitator_can_list_only_their_delivery_resources():
+    context = _context("facilitator")
+
+    assert OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.DELIVERY_READ,
+        None,
+        context,
+    )
+
+
+@pytest.mark.asyncio
+async def test_live_quiz_list_scopes_facilitator_to_their_own_delivery(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("EMAIL_SENDER", "no-reply@example.test")
+    monkeypatch.setenv("EMAIL_PASSWORD", "test-password")
+    monkeypatch.setenv("EMAIL_HOST", "smtp.example.test")
+    monkeypatch.setenv("EMAIL_PORT", "587")
+    monkeypatch.setenv("SHARE_URL", "http://localhost:3000")
+    monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017/test")
+    from server.app.quiz.routes import live_sessions
+
+    context = _context("facilitator")
+
+    class LiveQuizService:
+        async def list_creator_live_quizzes(self, user_id: str, organization_id: str):
+            assert user_id == context.principal.user_id
+            assert organization_id == context.organization_id
+            return [{"quiz_id": "facilitator-quiz"}]
+
+        async def list_organization_live_quizzes(self, organization_id: str):
+            raise AssertionError("facilitators must not receive tenant-wide delivery rows")
+
+    rows = await live_sessions.list_creator_live_quizzes(
+        current_user=SimpleNamespace(id=context.principal.user_id),
+        organization=context,
+        service=LiveQuizService(),
+    )
+
+    assert rows == [{"quiz_id": "facilitator-quiz"}]
+
+
+@pytest.mark.asyncio
+async def test_training_run_list_scopes_facilitator_to_their_own_delivery(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("EMAIL_SENDER", "no-reply@example.test")
+    monkeypatch.setenv("EMAIL_PASSWORD", "test-password")
+    monkeypatch.setenv("EMAIL_HOST", "smtp.example.test")
+    monkeypatch.setenv("EMAIL_PORT", "587")
+    monkeypatch.setenv("SHARE_URL", "http://localhost:3000")
+    monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017/test")
+    from server.app.quiz.routes import training_runs
+
+    context = _context("facilitator")
+
+    class TrainingRunService:
+        async def list_owner_runs(self, user_id: str, organization_id: str):
+            assert user_id == context.principal.user_id
+            assert organization_id == context.organization_id
+            return [{"id": "facilitator-run"}]
+
+        async def list_organization_runs(self, organization_id: str):
+            raise AssertionError("facilitators must not receive tenant-wide delivery rows")
+
+    rows = await training_runs.list_training_runs(
+        current_user=SimpleNamespace(id=context.principal.user_id),
+        organization=context,
+        service=TrainingRunService(),
+    )
+
+    assert rows == [{"id": "facilitator-run"}]
 
 
 @pytest.mark.asyncio
