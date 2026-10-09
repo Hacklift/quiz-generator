@@ -20,10 +20,21 @@ import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import PersonaPicker from "@features/persona/components/PersonaPicker";
 import { usePersona } from "@features/persona/context/personaContext";
+import { useLocale } from "@features/locale/context/localeContext";
+import {
+  LOCALE_DISPLAY_NAMES,
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from "@shared/config/locale";
+import { useTranslation } from "react-i18next";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 export default function ProfilePage() {
   const { user, isLoading, logout, refreshUser } = useAuth();
   const { persona, definition, categoryDefinition } = usePersona();
+  const { preferredLocale, setPreferredLocale } = useLocale();
+  const { t } = useTranslation();
+  const { t: personaText } = usePersonaCopy();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -38,13 +49,14 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [activeSettingSection, setActiveSettingSection] = useState<
-    "account" | "billing" | "profile" | "persona" | null
+    "account" | "billing" | "language" | "profile" | "persona" | null
   >(null);
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "cancelled" | "success";
     message: string;
   } | null>(null);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [isSavingLocale, setIsSavingLocale] = useState(false);
   const [billingSummary, setBillingSummary] =
     useState<SubscriptionSummary | null>(null);
 
@@ -259,6 +271,18 @@ export default function ProfilePage() {
     }
   };
 
+  const handleLocaleChange = async (locale: SupportedLocale | null) => {
+    setIsSavingLocale(true);
+    try {
+      await setPreferredLocale(locale);
+      toast.success(t("language.saved"));
+    } catch (error: any) {
+      toast.error(error?.message || t("language.saveError"));
+    } finally {
+      setIsSavingLocale(false);
+    }
+  };
+
   const handleManageSubscription = async () => {
     try {
       setIsOpeningPortal(true);
@@ -300,9 +324,12 @@ export default function ProfilePage() {
     "#6366f1",
   ];
 
-  const billingPlan = billingSummary?.subscription_plan || user?.subscription_plan || "free";
+  const billingPlan =
+    billingSummary?.subscription_plan || user?.subscription_plan || "free";
   const billingStatus =
-    billingSummary?.subscription_status || user?.subscription_status || "inactive";
+    billingSummary?.subscription_status ||
+    user?.subscription_status ||
+    "inactive";
   const billingRenewalDate =
     billingSummary?.current_period_end || user?.current_period_end || null;
   const hasBillingPortalAccess = Boolean(
@@ -335,7 +362,7 @@ export default function ProfilePage() {
   const personaLabel =
     categoryDefinition && definition
       ? `${categoryDefinition.label} · ${definition.label}`
-      : "Not set";
+      : personaText("profile.unset");
 
   if (isLoading) {
     return (
@@ -826,10 +853,12 @@ export default function ProfilePage() {
                   >
                     <div>
                       <h4 className="text-lg font-semibold text-[#143E6F]">
-                        Persona
+                        {personaText("profile.title")}
                       </h4>
                       <p className="mt-1 text-sm text-gray-500">
-                        Current selection: {personaLabel}
+                        {personaText("profile.current", {
+                          persona: personaLabel,
+                        })}
                       </p>
                     </div>
                     <span className="text-[#143E6F]">
@@ -839,14 +868,74 @@ export default function ProfilePage() {
                   {activeSettingSection === "persona" && (
                     <div className="border-t border-[#143E6F]/10 p-5">
                       <PersonaPicker
-                        heading="Change your Quizwerk persona"
+                        heading={personaText("profile.heading")}
                         initialCategory={persona?.category ?? null}
                         source="profile"
                         onPicked={() => {
-                          toast.success("Persona updated successfully.");
+                          toast.success(personaText("profile.saved"));
                           setActiveSettingSection(null);
                         }}
                       />
+                    </div>
+                  )}
+                </div>
+
+                <div className="border border-[#143E6F]/20 rounded-xl">
+                  <button
+                    onClick={() =>
+                      setActiveSettingSection((prev) =>
+                        prev === "language" ? null : "language",
+                      )
+                    }
+                    className="w-full px-5 py-4 flex items-center justify-between text-left"
+                  >
+                    <div>
+                      <h4 className="text-lg font-semibold text-[#143E6F]">
+                        {t("language.settings")}
+                      </h4>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {t("language.description")}
+                      </p>
+                    </div>
+                    <span className="text-[#143E6F]">
+                      {activeSettingSection === "language" ? "-" : "+"}
+                    </span>
+                  </button>
+                  {activeSettingSection === "language" && (
+                    <div className="border-t border-[#143E6F]/10 p-5 space-y-3">
+                      <label
+                        className="block text-sm font-medium text-gray-700"
+                        htmlFor="preferred-locale"
+                      >
+                        {t("language.settings")}
+                      </label>
+                      <select
+                        id="preferred-locale"
+                        value={preferredLocale ?? "inherit"}
+                        disabled={isSavingLocale}
+                        onChange={(event) =>
+                          void handleLocaleChange(
+                            event.target.value === "inherit"
+                              ? null
+                              : (event.target.value as SupportedLocale),
+                          )
+                        }
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#143E6F] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="inherit">
+                          {t("language.useOrganizationDefault")}
+                        </option>
+                        {SUPPORTED_LOCALES.map((locale) => (
+                          <option key={locale} value={locale}>
+                            {LOCALE_DISPLAY_NAMES[locale]}
+                          </option>
+                        ))}
+                      </select>
+                      {isSavingLocale && (
+                        <p className="text-sm text-gray-500">
+                          {t("language.saving")}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import re
 
 from rapidfuzz import fuzz
+from .mock_grading import grade_mock_answers
 
 
 def fuzzy_similarity(a, b):
@@ -34,6 +35,8 @@ def grade_with_ai(user_answers):
 
 
         if question_type == "true-false":
+            result.extend(grade_mock_answers([answer]))
+            continue
 
             try:
 
@@ -183,4 +186,3 @@ def grade_with_ai(user_answers):
 
 
     return result
-

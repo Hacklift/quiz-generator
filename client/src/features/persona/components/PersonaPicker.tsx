@@ -3,13 +3,14 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import {
-  PERSONA_TAXONOMY,
+  PERSONA_CATEGORIES,
   type Persona,
   type PersonaCategory,
 } from "@shared/config/persona";
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import { usePersona } from "@features/persona/context/personaContext";
 import type { PersonaWriteSource } from "@features/persona/types/persona";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 /**
  * Two-step category -> user-type picker, styled to the Quizwerk system.
@@ -19,7 +20,7 @@ import type { PersonaWriteSource } from "@features/persona/types/persona";
  */
 export default function PersonaPicker({
   onPicked,
-  heading = "Who are you setting up for?",
+  heading,
   initialCategory = null,
   source = "profile",
 }: {
@@ -29,6 +30,7 @@ export default function PersonaPicker({
   source?: PersonaWriteSource;
 }) {
   const { setPersona } = usePersona();
+  const { t, categories } = usePersonaCopy();
   const [category, setCategory] = useState<PersonaCategory | null>(
     initialCategory,
   );
@@ -40,7 +42,7 @@ export default function PersonaPicker({
       await setPersona(persona, { source });
       onPicked?.(persona);
     } catch {
-      toast.error("Could not save your choice. Please try again.");
+      toast.error(t("picker.error"));
     } finally {
       setIsSaving(false);
     }
@@ -49,13 +51,13 @@ export default function PersonaPicker({
   if (!category) {
     return (
       <div>
-        <Kicker>Get set up</Kicker>
+        <Kicker>{t("picker.setup")}</Kicker>
         <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
-          {heading}
+          {heading ?? t("picker.heading")}
         </h2>
         <div className="mt-[32px] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[28px]">
-          {(Object.keys(PERSONA_TAXONOMY) as PersonaCategory[]).map((slug) => {
-            const group = PERSONA_TAXONOMY[slug];
+          {PERSONA_CATEGORIES.map((slug) => {
+            const group = categories[slug];
             return (
               <button
                 key={slug}
@@ -85,13 +87,13 @@ export default function PersonaPicker({
     );
   }
 
-  const group = PERSONA_TAXONOMY[category];
+  const group = categories[category];
 
   return (
     <div>
       <Kicker>{group.label}</Kicker>
       <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
-        Which describes you best?
+        {t("picker.role")}
       </h2>
       <div className="mt-[28px] max-w-[560px]">
         {group.userTypes.map((definition) => (
@@ -99,9 +101,7 @@ export default function PersonaPicker({
             key={definition.slug}
             type="button"
             disabled={isSaving}
-            onClick={() =>
-              choose({ category, userType: definition.slug })
-            }
+            onClick={() => choose({ category, userType: definition.slug })}
             className="block w-full border-t-2 border-divider px-[6px] py-[16px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="flex items-center gap-[14px]">
@@ -127,9 +127,11 @@ export default function PersonaPicker({
           onClick={() => setCategory(null)}
           className={BTN_GHOST}
         >
-          Back
+          {t("picker.back")}
         </button>
-        {isSaving ? <span className={BTN_PRIMARY}>Saving…</span> : null}
+        {isSaving ? (
+          <span className={BTN_PRIMARY}>{t("picker.saving")}</span>
+        ) : null}
       </div>
     </div>
   );

@@ -74,7 +74,9 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
               disabled={disabled}
               className="h-4 w-4 shrink-0 accent-[#0F2654]"
             />
-            <span className="font-medium capitalize">{option}</span>
+            <span className="font-medium capitalize">
+              {options?.[optionIndex] ?? option}
+            </span>
           </label>
         ))}
       </div>

@@ -49,6 +49,9 @@ folder_items_v2_collection = database["folder_items_v2"]
 saved_quizzes_v2_collection = database["saved_quizzes_v2"]
 quiz_history_v2_collection = database["quiz_history_v2"]
 document_rag_cache_collection = database["document_rag_cache"]
+organizations_collection = database["organizations"]
+organization_memberships_collection = database["organization_memberships"]
+translation_memory_collection = database["translation_memory"]
 
 
 async def ensure_ai_quiz_indexes(ai_generated_quizzes_collection: AsyncIOMotorCollection):
@@ -264,6 +267,27 @@ async def ensure_training_run_indexes(
     )
 
 
+async def ensure_organization_indexes(
+    organizations: AsyncIOMotorCollection,
+    memberships: AsyncIOMotorCollection,
+):
+    await organizations.create_index("name")
+    await memberships.create_index(
+        [("organization_id", 1), ("user_id", 1)],
+        unique=True,
+        name="organization_member_once",
+    )
+    await memberships.create_index([("user_id", 1), ("organization_id", 1)])
+    await memberships.create_index([("organization_id", 1), ("created_at", 1)])
+
+
+async def ensure_translation_memory_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("locale", 1), ("namespace", 1), ("key", 1)], unique=True,
+        name="translation_memory_locale_namespace_key",
+    )
+
+
 async def startUp():
     await ensure_user_collections(
         database,
@@ -285,6 +309,10 @@ async def startUp():
         training_audit_events_collection,
         training_email_deliveries_collection,
     )
+    await ensure_organization_indexes(
+        organizations_collection,
+        organization_memberships_collection,
+    )
     await ensure_v2_collections_and_validators(database)
     await ensure_v2_indexes(
         quizzes_v2_collection,
@@ -303,6 +331,14 @@ def get_users_collection() -> AsyncIOMotorCollection:
     if users_collection is None:
         raise RuntimeError("[DB Error] users_collection has not been initialized properly.")
     return users_collection
+
+
+def get_organizations_collection() -> AsyncIOMotorCollection:
+    return organizations_collection
+
+
+def get_organization_memberships_collection() -> AsyncIOMotorCollection:
+    return organization_memberships_collection
 
 
 def get_user_sessions_collection() -> AsyncIOMotorCollection:

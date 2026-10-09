@@ -36,6 +36,7 @@ async def get_mcp_request_context(
         is_authenticated=True,
         is_verified=bool(user.is_verified),
         role=user.role,
+        effective_locale=user.effective_locale,
         scopes=required_scopes or set(),
     )
 

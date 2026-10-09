@@ -22,6 +22,8 @@ from server.app.quiz.utils.extract_text import (
     extract_text_from_bytes,
     extract_text_from_pasted_content,
 )
+from server.app.i18n.locales import DEFAULT_LOCALE, SupportedLocale
+from server.app.organizations.services import resolve_user_effective_locale
 
 
 router = APIRouter()
@@ -58,6 +60,7 @@ async def generate_document_quiz(
     time_limit_minutes: int | None = Form(default=None),
     access_code_expires_at: datetime | None = Form(default=None),
     document_file: UploadFile | None = File(default=None),
+    content_locale: SupportedLocale | None = Form(default=None),
     current_user=Depends(get_current_user_optional),
 ):
     if not document_file and not (document_text and document_text.strip()):
@@ -136,6 +139,18 @@ async def generate_document_quiz(
         )
 
     user_id = str(current_user.id) if current_user else None
+    if current_user:
+        content_locale = await resolve_user_effective_locale(
+            current_user,
+            request.app.state.organizations_collection,
+            request.app.state.organization_memberships_collection,
+        )
+    else:
+        content_locale = content_locale or DEFAULT_LOCALE
+    if not settings.MULTILINGUAL_ENABLED:
+        content_locale = DEFAULT_LOCALE
+    if content_locale != DEFAULT_LOCALE and not settings.MULTILINGUAL_GENERATION_ENABLED:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Multilingual generation is temporarily disabled")
     try:
         rag_result = await generate_document_quiz_with_rag(
             document=document,
@@ -148,6 +163,7 @@ async def generate_document_quiz(
             focus_topic=focus_topic,
             user_id=user_id,
             token=token,
+            content_locale=content_locale,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -170,7 +186,9 @@ async def generate_document_quiz(
     }
 
     save_payload = {
-        "profession": document.title,
+        "profession": rag_result.title or document.title,
+        "title": rag_result.title or document.title,
+        "description": rag_result.description,
         "question_type": question_type,
         "difficulty_level": difficulty_level,
         "num_questions": num_questions,
@@ -180,6 +198,7 @@ async def generate_document_quiz(
         "token": token,
         "questions": rag_result.questions,
         "user_id": user_id,
+        "content_locale": content_locale,
     }
 
     try:
@@ -242,5 +261,6 @@ async def generate_document_quiz(
         retrieval_query=rag_result.retrieval_query,
         rag_strategy=rag_result.rag_strategy,
         embedding_cache_hit=rag_result.embedding_cache_hit,
+        content_locale=content_locale,
         **category_metadata,
     )

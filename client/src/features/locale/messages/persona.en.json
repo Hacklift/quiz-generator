@@ -1,0 +1,245 @@
+{
+  "home": {
+    "kicker": "Who it's for",
+    "heading": "Pick the seat you're sitting in",
+    "description": "Two worlds, one generator. Choose a persona and we start you with a quiz that fits it — change anything before you run it."
+  },
+  "placeholder": {
+    "progress": "In progress",
+    "description": "{{description}}. This view is being built in issue #{{issue}} — until then, everything else in the app works as before.",
+    "track": "Track issue #{{issue}}"
+  },
+  "picker": {
+    "heading": "Who are you setting up for?",
+    "setup": "Get set up",
+    "role": "Which describes you best?",
+    "back": "Back",
+    "saving": "Saving…",
+    "error": "Could not save your choice. Please try again."
+  },
+  "onboarding": {
+    "title": "First-time setup",
+    "description": "Choose the seat you are sitting in so Quizwerk can tune your dashboard, language, and starting points.",
+    "skip": "Skip",
+    "heading": "Pick your Quizwerk persona",
+    "later": "I'll do this later"
+  },
+  "badge": {
+    "setup": "Set up for: {{persona}}",
+    "defaults": "Persona defaults applied",
+    "audience": "Audience:",
+    "difficulty": "Difficulty:",
+    "format": "Format:",
+    "guidance": "Guidance:",
+    "applied": "Applied",
+    "questions_one": "question",
+    "questions_other": "questions"
+  },
+  "profile": {
+    "heading": "Change your Quizwerk persona",
+    "current": "Current selection: {{persona}}",
+    "unset": "Not set",
+    "saved": "Persona updated successfully.",
+    "title": "Persona"
+  },
+  "audiences": {
+    "students": "Students",
+    "undergraduates": "Undergraduates",
+    "children": "Children",
+    "employees": "Employees",
+    "general": "General",
+    "learners": "Learners"
+  },
+  "difficulty": {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard"
+  },
+  "formats": {
+    "multichoice": "Multiple Choice",
+    "true-false": "True/False",
+    "short-answer": "Short Answer",
+    "open-ended": "Open Ended"
+  },
+  "categories": {
+    "school": {
+      "label": "School",
+      "description": "Teachers, lecturers, students and parents."
+    },
+    "corporate": {
+      "label": "Corporate",
+      "description": "Businesses, employees and HR personnel."
+    }
+  },
+  "roles": {
+    "teacher": {
+      "label": "Teacher",
+      "description": "Class quizzes, homework checks, exam revision",
+      "defaultTopic": "Photosynthesis — Grade 8 biology"
+    },
+    "lecturer": {
+      "label": "Lecturer",
+      "description": "Lecture recaps and seminar prep for large cohorts",
+      "defaultTopic": "Introduction to microeconomics"
+    },
+    "student": {
+      "label": "Student",
+      "description": "Self-testing before the exam",
+      "defaultTopic": "World War II — key dates and causes"
+    },
+    "parent": {
+      "label": "Parent",
+      "description": "Practice at home, marked automatically",
+      "defaultTopic": "Multiplication tables — ages 7 to 9"
+    },
+    "business": {
+      "label": "Business",
+      "description": "Onboarding and product knowledge at scale",
+      "defaultTopic": "Company onboarding essentials"
+    },
+    "employee": {
+      "label": "Employee",
+      "description": "Upskill and certify at your own pace",
+      "defaultTopic": "Data protection basics"
+    },
+    "hr": {
+      "label": "HR personnel",
+      "description": "Compliance training with an audit trail",
+      "defaultTopic": "Workplace policy — harassment prevention"
+    }
+  },
+  "terms": {
+    "defaultTerms": {
+      "learner": {
+        "singular": "learner",
+        "plural": "learners"
+      },
+      "group": {
+        "singular": "group",
+        "plural": "groups"
+      },
+      "quiz": {
+        "singular": "quiz",
+        "plural": "quizzes"
+      },
+      "live_quiz": {
+        "singular": "live quiz",
+        "plural": "live quizzes"
+      },
+      "assignment": {
+        "singular": "quiz",
+        "plural": "quizzes"
+      },
+      "library": {
+        "singular": "library",
+        "plural": "libraries"
+      },
+      "report": {
+        "singular": "report",
+        "plural": "reports"
+      },
+      "session": {
+        "singular": "session",
+        "plural": "sessions"
+      }
+    },
+    "categoryTerms": {
+      "school": {
+        "learner": {
+          "singular": "student",
+          "plural": "students"
+        },
+        "group": {
+          "singular": "class",
+          "plural": "classes"
+        },
+        "quiz": {
+          "singular": "class quiz",
+          "plural": "class quizzes"
+        },
+        "live_quiz": {
+          "singular": "live class quiz",
+          "plural": "live class quizzes"
+        },
+        "assignment": {
+          "singular": "homework",
+          "plural": "homework"
+        },
+        "library": {
+          "singular": "resources",
+          "plural": "resources"
+        },
+        "report": {
+          "singular": "gradebook",
+          "plural": "gradebooks"
+        },
+        "session": {
+          "singular": "class quiz",
+          "plural": "class quizzes"
+        }
+      },
+      "corporate": {
+        "learner": {
+          "singular": "team member",
+          "plural": "team members"
+        },
+        "group": {
+          "singular": "team",
+          "plural": "teams"
+        },
+        "quiz": {
+          "singular": "training quiz",
+          "plural": "training quizzes"
+        },
+        "live_quiz": {
+          "singular": "live training session",
+          "plural": "live training sessions"
+        },
+        "assignment": {
+          "singular": "course",
+          "plural": "courses"
+        },
+        "library": {
+          "singular": "training catalogue",
+          "plural": "training catalogues"
+        },
+        "report": {
+          "singular": "compliance record",
+          "plural": "compliance records"
+        },
+        "session": {
+          "singular": "training session",
+          "plural": "training sessions"
+        }
+      }
+    },
+    "userTypeTerms": {
+      "lecturer": {
+        "group": {
+          "singular": "cohort",
+          "plural": "cohorts"
+        },
+        "session": {
+          "singular": "lecture",
+          "plural": "lectures"
+        }
+      },
+      "parent": {
+        "learner": {
+          "singular": "child",
+          "plural": "children"
+        },
+        "assignment": {
+          "singular": "practice set",
+          "plural": "practice sets"
+        }
+      },
+      "hr": {
+        "assignment": {
+          "singular": "compliance course",
+          "plural": "compliance courses"
+        }
+      }
+    }
+  }
+}

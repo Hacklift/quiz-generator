@@ -1,0 +1,10 @@
+{
+  "language": {
+    "settings": "Langue",
+    "description": "Choisissez la langue utilisée dans Quizwerk.",
+    "useOrganizationDefault": "Utiliser la langue par défaut de l’organisation",
+    "saving": "Enregistrement de la langue…",
+    "saved": "Votre préférence linguistique est enregistrée.",
+    "saveError": "Votre préférence linguistique n’a pas pu être mise à jour."
+  }
+}

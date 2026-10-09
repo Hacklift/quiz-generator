@@ -45,6 +45,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                             "confidence": {"bsonType": ["double", "int", "long", "decimal", "null"]},
                         },
                     },
+                    "content_locale": {"enum": ["en", "es", "fr", None]},
                     "legacy_source_collection": {"bsonType": ["string", "null"]},
                     "legacy_quiz_id": {"bsonType": ["string", "null"]},
                     "content_fingerprint": {"bsonType": ["string", "null"]},

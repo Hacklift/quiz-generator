@@ -59,6 +59,7 @@ class QuizUserLibraryService:
                 "question": question.question,
                 "options": question.options,
                 "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
                 "question_type": quiz.quiz_type.value if hasattr(quiz.quiz_type, "value") else quiz.quiz_type,
             }
             for question in quiz.questions
@@ -71,6 +72,7 @@ class QuizUserLibraryService:
                 "question": question.question,
                 "options": question.options,
                 "answer": question.correct_answer,
+                "explanation": question.explanation,
             }
             for question in quiz.questions
         ]
@@ -266,6 +268,7 @@ class QuizUserLibraryService:
             return None
         quiz = await self.quiz_repository.find_by_id(reference.quiz_id)
         return SavedQuizResponse(
+            content_locale=quiz.content_locale if quiz else None,
             id=str(reference.id),
             quiz_id=reference.quiz_id,
             title=title,
@@ -340,6 +343,7 @@ class QuizUserLibraryService:
             return None
         metadata = reference.metadata or {}
         return QuizHistoryDetailResponse(
+            content_locale=quiz.content_locale,
             id=str(reference.id),
             created_at=reference.created_at,
             quiz_name=metadata.get("quiz_name") or quiz.title,
@@ -353,6 +357,7 @@ class QuizUserLibraryService:
                     question=question.question,
                     options=question.options,
                     answer=question.correct_answer,
+                    explanation=question.explanation,
                 )
                 for question in quiz.questions
             ],

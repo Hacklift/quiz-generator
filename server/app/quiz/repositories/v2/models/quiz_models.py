@@ -6,6 +6,7 @@ from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..constants import QUIZ_SCHEMA_VERSION
+from server.app.i18n.locales import SupportedLocale
 
 
 class QuizTypeV2(str, Enum):
@@ -54,6 +55,9 @@ class QuizClassificationV2(BaseModel):
 class QuizQuestionV2(BaseModel):
     question: str
     correct_answer: str
+    explanation: Optional[str] = None
+    correct_option_index: Optional[int] = Field(default=None, ge=0, le=3)
+    correct_boolean: Optional[bool] = None
     options: Optional[List[str]] = None
 
     model_config = ConfigDict(extra="forbid")
@@ -84,6 +88,7 @@ class QuizCreateV2(BaseModel):
     subcategory_slug: Optional[str] = None
     persona_category: Optional[PersonaCategoryV2] = None
     classification: Optional[QuizClassificationV2] = None
+    content_locale: SupportedLocale = "en"
 
     model_config = ConfigDict(extra="forbid")
 
@@ -131,6 +136,7 @@ class QuizDocumentV2(BaseModel):
     subcategory_slug: Optional[str] = None
     persona_category: Optional[PersonaCategoryV2] = None
     classification: Optional[QuizClassificationV2] = None
+    content_locale: SupportedLocale = "en"
     legacy_source_collection: Optional[str] = None
     legacy_quiz_id: Optional[str] = None
     content_fingerprint: Optional[str] = None

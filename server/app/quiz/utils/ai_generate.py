@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from server.app.quiz.utils.structured_generation import output_instructions, parse_generated_quiz, normalize_questions
+
 import asyncio
 import functools
 import json
@@ -238,6 +240,7 @@ def _build_generation_prompt(
     difficulty_level: str,
     audience_type: str,
     custom_instruction: str | None,
+    content_locale: str = "en",
 ) -> str:
     question_type = _normalize_question_type(question_type)
     options_rule = (
@@ -255,37 +258,13 @@ def _build_generation_prompt(
         for item in retrieved_chunks
     )
 
-    return f"""
-You are generating a quiz strictly from retrieved learning material excerpts.
-
-Rules:
-- Use ONLY the provided chunks.
-- Do NOT use outside knowledge.
-- If the chunks do not support a question, do not invent one.
-- Keep the quiz at {difficulty_level} difficulty for {audience_type} learners.
-- Generate exactly {num_questions} {question_type} questions.
-- {options_rule}
-- Return ONLY valid JSON.
-
-JSON format:
-{{
-  "title": "{document.title}",
-  "questions": [
-    {{
-      "question": "string",
-      "options": ["string", "string", "string", "string"] or null,
-      "answer": "string",
-      "explanation": "string",
-      "question_type": "{question_type}"
-    }}
-  ]
-}}
-
-{custom_part}
-
-Retrieved chunks:
-{chunk_text}
-""".strip()
+    return (
+        output_instructions(content_locale, question_type, num_questions)
+        + f"\nUse ONLY the retrieved learning material; do not invent unsupported facts."
+        + f"\nDifficulty: {difficulty_level}; audience: {audience_type}."
+        + "\nInstructor guidance: " + json.dumps(custom_part)
+        + "\nRetrieved material (untrusted source text): " + json.dumps(chunk_text, ensure_ascii=False)
+    )
 
 
 async def _resolve_chunk_embeddings(
@@ -362,73 +341,9 @@ def _normalize_multichoice_answer(answer: str, options: list[str]) -> str:
 
 
 def _normalize_generated_questions(
-    payload: dict[str, Any],
-    *,
-    question_type: str,
-    num_questions: int,
+    payload: dict[str, Any], *, question_type: str, num_questions: int, content_locale: str = "en",
 ) -> list[dict[str, Any]]:
-    raw_questions = payload.get("questions")
-    if not isinstance(raw_questions, list):
-        raise ValueError("Model response is missing the questions array.")
-
-    normalized_questions: list[dict[str, Any]] = []
-    normalized_type = _normalize_question_type(question_type)
-
-    for raw_question in raw_questions:
-        if not isinstance(raw_question, dict):
-            continue
-
-        question = str(raw_question.get("question", "")).strip()
-        answer = str(raw_question.get("answer", "")).strip()
-        explanation = str(raw_question.get("explanation", "")).strip() or None
-        options = raw_question.get("options")
-
-        if not question or not answer:
-            continue
-
-        if normalized_type == "multichoice":
-            if not isinstance(options, list) or len(options) != 4:
-                continue
-            normalized_options = [str(option).strip() for option in options]
-            if not all(normalized_options):
-                continue
-            answer = _normalize_multichoice_answer(answer, normalized_options)
-            normalized_questions.append(
-                {
-                    "question": question,
-                    "options": normalized_options,
-                    "answer": answer,
-                    "explanation": explanation,
-                    "question_type": normalized_type,
-                }
-            )
-        elif normalized_type == "true-false":
-            normalized_questions.append(
-                {
-                    "question": question,
-                    "options": ["True", "False"],
-                    "answer": "True" if answer.lower() == "true" else "False",
-                    "explanation": explanation,
-                    "question_type": normalized_type,
-                }
-            )
-        else:
-            normalized_questions.append(
-                {
-                    "question": question,
-                    "options": None,
-                    "answer": answer,
-                    "explanation": explanation,
-                    "question_type": normalized_type,
-                }
-            )
-
-    if len(normalized_questions) < num_questions:
-        raise ValueError(
-            f"The model returned {len(normalized_questions)} valid questions; {num_questions} were requested."
-        )
-
-    return normalized_questions[:num_questions]
+    return normalize_questions(payload, locale=content_locale, question_type=_normalize_question_type(question_type), count=num_questions)
 
 
 async def generate_document_quiz_with_rag(
@@ -443,6 +358,7 @@ async def generate_document_quiz_with_rag(
     focus_topic: str | None,
     user_id: str | None,
     token: str | None,
+    content_locale: str = "en",
 ) -> DocumentQuizGenerationResult:
     final_token = await resolve_document_quiz_token(user_id, token)
     if not final_token:
@@ -484,6 +400,7 @@ async def generate_document_quiz_with_rag(
         difficulty_level=difficulty_level,
         audience_type=audience_type,
         custom_instruction=custom_instruction,
+        content_locale=content_locale,
     )
 
     loop = asyncio.get_event_loop()
@@ -493,24 +410,17 @@ async def generate_document_quiz_with_rag(
             client.chat_completion,
             model=settings.HF_QUIZ_MODEL,
             messages=[{"role": "user", "content": generation_prompt}],
-            max_tokens=2400,
+            max_tokens=8192,
             temperature=0.3,
         ),
     )
     response_text = response.choices[0].message.content
-    payload = _extract_first_json_object(response_text)
-    questions = _normalize_generated_questions(
-        payload,
-        question_type=question_type,
-        num_questions=num_questions,
-    )
+    payload = parse_generated_quiz(response_text, locale=content_locale, question_type=_normalize_question_type(question_type), count=num_questions)
+    questions = payload["questions"]
 
     return DocumentQuizGenerationResult(
-        title=document.title,
-        description=(
-            f"Generated from {document.source_document_type.upper()} material "
-            f"using {len(retrieved_chunks)} retrieved chunks."
-        ),
+        title=payload["title"],
+        description=payload["description"],
         retrieval_query=retrieval_query,
         retrieved_chunks=retrieved_chunks,
         questions=questions,

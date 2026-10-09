@@ -11,11 +11,7 @@ import React, {
 } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@features/auth/context/authContext";
-import {
-  getCategoryDefinition,
-  getUserTypeDefinition,
-  type Persona,
-} from "@shared/config/persona";
+import { type Persona } from "@shared/config/persona";
 import { updatePersona } from "@features/persona/api/personaApi";
 import {
   clearStoredPersona,
@@ -28,6 +24,7 @@ import type {
   PersonaState,
   PersonaWriteSource,
 } from "@features/persona/types/persona";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 const EMPTY_STATE: PersonaState = {
   persona: null,
@@ -54,6 +51,7 @@ interface PersonaOverride {
 export function PersonaProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const router = useRouter();
+  const { roles, categories } = usePersonaCopy();
 
   // A successful profile write can take one render to reach AuthProvider.
   // Bind the optimistic value to that user so it cannot mask another
@@ -111,7 +109,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     const normalizedTopic = hasTopicParam ? topic.trim().slice(0, 300) : "";
     const storedTopic = readStoredPersonaTopic(resolved.persona) || "";
     const storagePersona = storedPersona ?? readStoredPersona();
-    const isStoredPersonaCurrent = samePersona(storagePersona, resolved.persona);
+    const isStoredPersonaCurrent = samePersona(
+      storagePersona,
+      resolved.persona,
+    );
     const targetTopic = hasTopicParam ? normalizedTopic : storedTopic;
 
     if (!isStoredPersonaCurrent || storedTopic !== targetTopic) {
@@ -123,18 +124,10 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
     if (!samePersona(storedPersona, resolved.persona)) {
       setStoredPersona(resolved.persona);
     }
-  }, [
-    resolved.persona,
-    resolved.source,
-    router.query?.topic,
-    storedPersona,
-  ]);
+  }, [resolved.persona, resolved.source, router.query?.topic, storedPersona]);
 
   const setPersona = useCallback(
-    async (
-      persona: Persona,
-      options: { source?: PersonaWriteSource } = {},
-    ) => {
+    async (persona: Persona, options: { source?: PersonaWriteSource } = {}) => {
       if (isAuthenticated) {
         const userId = user?.id ?? null;
         setOverride({ persona, userId });
@@ -170,16 +163,22 @@ export function PersonaProvider({ children }: { children: React.ReactNode }) {
       persona,
       category: persona?.category ?? null,
       userType: persona?.userType ?? null,
-      definition: persona ? getUserTypeDefinition(persona.userType) : null,
-      categoryDefinition: persona
-        ? getCategoryDefinition(persona.category)
-        : null,
+      definition: persona ? roles[persona.userType] : null,
+      categoryDefinition: persona ? categories[persona.category] : null,
       source: resolved.source,
       isLoading: isLoading || !storageHydrated,
       setPersona,
       clearPersona,
     };
-  }, [resolved, isLoading, storageHydrated, setPersona, clearPersona]);
+  }, [
+    resolved,
+    isLoading,
+    storageHydrated,
+    setPersona,
+    clearPersona,
+    roles,
+    categories,
+  ]);
 
   return (
     <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>

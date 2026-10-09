@@ -1,6 +1,15 @@
 from rapidfuzz import fuzz
 
 
+def boolean_value(value):
+    normalized = str(value).strip().casefold()
+    if normalized in {"true", "1", "vrai", "verdadero"}:
+        return True
+    if normalized in {"false", "0", "faux", "falso"}:
+        return False
+    return None
+
+
 def fuzzy_similarity(a, b):
 
     return fuzz.token_set_ratio(str(a), str(b))
@@ -78,6 +87,10 @@ def grade_mock_answers(user_answers):
         elif question_type in ["multichoice", "true-false"]:
 
             is_correct = (user_answer.lower() == correct_answer.lower())
+            if question_type == "true-false":
+                user_boolean = boolean_value(user_answer)
+                correct_boolean = boolean_value(correct_answer)
+                is_correct = user_boolean is not None and correct_boolean is not None and user_boolean == correct_boolean
 
             result.append({
 

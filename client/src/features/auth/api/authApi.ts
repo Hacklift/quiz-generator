@@ -5,6 +5,7 @@ import {
   RefreshTokenResponse,
   UpdateProfilePayload,
   UpdateProfileResponse,
+  UpdateLocalePayload,
 } from "@features/auth/types/User";
 import { API_BASE_URL, api } from "@shared/api/http";
 
@@ -96,6 +97,19 @@ export const updateProfile = async (
     return response.data as UpdateProfileResponse;
   } catch (error: any) {
     throw new Error(error.response?.data?.detail || "Failed to update profile");
+  }
+};
+
+export const updateLocale = async (
+  data: UpdateLocalePayload,
+): Promise<UpdateProfileResponse> => {
+  try {
+    const response = await api.put("/auth/profile/locale", data);
+    return response.data as UpdateProfileResponse;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.detail || "Failed to update language preference",
+    );
   }
 };
 

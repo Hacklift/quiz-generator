@@ -25,6 +25,8 @@ async def get_questions(
     email_service=None,
 ) -> Dict:
 
+    generated_title = request.profession
+    generated_description = None
     ai_down = False
     notification_message = None
     ai_quiz_payload = None
@@ -56,6 +58,7 @@ async def get_questions(
         "custom_instruction": request.custom_instruction,
         "token": request.token,
         "user_id": user_id,
+        "content_locale": request.content_locale or "en",
     }
 
     try:
@@ -78,15 +81,19 @@ async def get_questions(
         for q in final_questions:
             q["question_type"] = request.question_type
         source = "huggingface"
+        generated_title = response.get("title") or request.profession
+        generated_description = response.get("description")
 
         ai_quiz_payload = {
             **base_quiz_payload,
             "questions": final_questions,
+            "title": generated_title,
+            "description": generated_description,
 
         }
 
     except Exception as e:
-        if not request.allow_fallback:
+        if not request.allow_fallback or (request.content_locale or "en") != "en":
             logging.warning(f"Quiz generation failed with fallback disabled: {e}")
             raise HTTPException(
                 status_code=503,
@@ -213,6 +220,8 @@ async def get_questions(
 
     result = {
         "source": source,
+        "title": generated_title,
+        "description": generated_description,
         "questions": final_questions,
         "ai_down": ai_down,
         "notification_message": notification_message,
@@ -227,6 +236,7 @@ async def get_questions(
         "invitations_created": live_invitations_created,
         "invitations_delivered": live_invitations_delivered,
         "invitations_queued": live_invitations_queued,
+        "content_locale": request.content_locale or "en",
     }
 
     logging.warning(f"Final API Response: {result}")

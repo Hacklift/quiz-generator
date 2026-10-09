@@ -2,7 +2,6 @@
 
 import React, { ComponentType } from "react";
 import {
-  getCategoryDefinition,
   personaGenerateHref,
   type CorporateUserType,
 } from "@shared/config/persona";
@@ -16,6 +15,7 @@ import { ROUTES } from "@shared/config/patterns/routes";
 import BusinessDashboard from "./views/BusinessDashboard";
 import EmployeeDashboard from "./views/EmployeeDashboard";
 import HrDashboard from "./views/HrDashboard";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 const CORPORATE_COPY: Record<
   CorporateUserType,
@@ -52,6 +52,7 @@ export default function CorporateDashboard({
   user,
 }: DashboardViewProps) {
   const t = useTerms();
+  const { categories } = usePersonaCopy();
   const UserTypeView = CORPORATE_VIEWS[persona.userType as CorporateUserType];
   const copy = CORPORATE_COPY[persona.userType as CorporateUserType];
 
@@ -61,12 +62,14 @@ export default function CorporateDashboard({
       ? [
           {
             label: "Assigned training",
-            description: "Start required training, track due dates, and view completed scores.",
+            description:
+              "Start required training, track due dates, and view completed scores.",
             href: ROUTES.ASSIGNED_TRAINING,
           },
           {
             label: `Practice ${t("quiz")}`,
-            description: "Generate a private practice quiz for your next skill.",
+            description:
+              "Generate a private practice quiz for your next skill.",
             href: personaGenerateHref(persona.userType),
           },
         ]
@@ -82,21 +85,23 @@ export default function CorporateDashboard({
           {
             label:
               persona.userType === "hr" ? "Compliance runs" : "Training runs",
-            description: "Assign training, share access, and review completion in one workspace.",
+            description:
+              "Assign training, share access, and review completion in one workspace.",
             href: `${ROUTES.TRAINING_RUNS}?kind=${
               persona.userType === "hr" ? "compliance" : "business"
             }`,
           },
           {
             label: `Run ${t("live_quiz")}`,
-            description: "Manage existing live training and review participant activity.",
+            description:
+              "Manage existing live training and review participant activity.",
             href: "/my-live-quizzes",
           },
         ];
 
   return (
     <DashboardShell
-      kicker={getCategoryDefinition(persona.category).label}
+      kicker={categories[persona.category].label}
       title={`Welcome back, ${greetingName}. ${copy.title}`}
       lede={`${copy.lede(t)} Everything for your ${t("group", "plural")} is in one place.`}
     >

@@ -1,4 +1,6 @@
 import os
+import json
+from server.app.quiz.utils.structured_generation import output_instructions, parse_generated_quiz
 
 from pathlib import Path
 
@@ -252,78 +254,16 @@ def build_prompt(
 
     audience_type: str,
 
-    custom_instruction: Optional[str]
+    custom_instruction: Optional[str],
+    target_locale: str = "en",
 
 ) -> str:
 
-    """
-    Builds a prompt with all required parameters to generate a well-structured quiz.
-    """
-
-
-    type_formats = {
-
-        "multichoice": """
-Each question must have 4 options (A–D), with only one correct answer.
-Format Example:
-**1. What is the capital of France?**
-A) Berlin  
-B) Madrid  
-C) Paris  
-D) Rome  
-
-**Answer:** C
-""",
-
-        "true-false": """
-For each True/False item:
-- Each question must be answerable as "True" or "False" only.
-- Ensure the statement is factually correct for the specified topic and timeframe.
-- (Optional) Add a 5–10 word justification after the label starting with “Because…”.
-
-Format Example:
-**1. The Earth revolves around the Sun.**
-
-**Answer:** True
-""",
-
-        "open-ended": """
-Each question should require a descriptive response of 1-2 sentences.
-Format Example:
-**1. Explain the process of photosynthesis.**
-
-**Answer:** Photosynthesis is the process by which green plants use sunlight to synthesize nutrients from carbon dioxide and water.
-""",
-
-        "short-answer": """
-Each question should require a very short response (1–3 words).
-Format Example:
-**1. What is the chemical symbol for water?**
-
-**Answer:** H2O
-"""
-
-    }
-
-
-    custom_part = f"\nAdditional instructions: {custom_instruction}" if custom_instruction else ""
-
-
-    return f"""
-You are generating a **{difficulty_level} difficulty** {question_type} quiz with **{num_questions} questions**.
-The quiz topic is **{profession}**, and it is intended for **{audience_type} learners**.
-
-The questions **must strictly follow the format shown below** and must be tailored to the specified topic, audience, and difficulty level.
-Ensure every question reflects the topic and context.
-Return only the quiz content. Do not include introductions, headings, markdown code fences, separators such as "---", closing commentary, or offers like "let me know if you'd like adjustments".
-Every answer must appear only after its own "**Answer:**" marker and never inside the question or option text.
-
-{type_formats.get(question_type, type_formats['multichoice'])}
-
-{custom_part}
-
-Now generate the quiz:
-"""
+    context = json.dumps({
+        "topic": profession, "difficulty": difficulty_level, "audience": audience_type,
+        "instructor_guidance": custom_instruction,
+    }, ensure_ascii=False)
+    return output_instructions(target_locale, question_type, num_questions) + "\nContext: " + context
 
 
 async def resolve_final_token(user_id: Optional[str], provided_token: Optional[str]):
@@ -388,13 +328,14 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
 
                     payload.get("audience_type", "general"),
 
-                    payload.get("custom_instruction")
+                    payload.get("custom_instruction"),
+                    payload.get("content_locale") or "en",
 
                 )
 
             }],
 
-            max_tokens=2048,
+            max_tokens=8192,
 
             temperature=0.7,
 
@@ -409,30 +350,14 @@ async def generate_quiz_with_huggingface(payload: Dict[str, Any]) -> Dict[str, A
     qtype = payload.get("question_type", "multichoice").lower()
 
 
-    if qtype == "multichoice":
-
-        questions = parse_multichoice(response_text)
-
-    elif qtype == "true-false":
-
-        questions = parse_true_false(response_text)
-
-    elif qtype == "open-ended":
-
-        questions = parse_open_ended(response_text)
-
-    elif qtype == "short-answer":
-
-        questions = parse_short_answer(response_text)
-
-    else:
-
-        return {"error": f"Unsupported question type: {qtype}"}
-
+    generated = parse_generated_quiz(
+        response_text, locale=payload.get("content_locale") or "en",
+        question_type=qtype, count=int(payload.get("num_questions", 5)),
+    )
 
     return {
 
-        "questions": questions,
+        **generated,
 
         "raw_response": response_text,
 

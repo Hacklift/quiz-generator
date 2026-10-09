@@ -1,0 +1,10 @@
+{
+  "language": {
+    "settings": "Language",
+    "description": "Choose the language used across Quizwerk.",
+    "useOrganizationDefault": "Use organization default",
+    "saving": "Saving language…",
+    "saved": "Language preference saved.",
+    "saveError": "We could not update your language preference."
+  }
+}

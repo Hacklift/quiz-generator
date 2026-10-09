@@ -34,6 +34,9 @@ class CanonicalQuizWriteService:
                 {
                     "question": raw_question.get("question"),
                     "options": raw_question.get("options"),
+                    "explanation": raw_question.get("explanation"),
+                    "correct_option_index": raw_question.get("correct_option_index"),
+                    "correct_boolean": raw_question.get("correct_boolean"),
                     "correct_answer": raw_question.get("correct_answer") or raw_question.get("answer"),
                 }
             )
@@ -62,6 +65,7 @@ class CanonicalQuizWriteService:
         subcategory_slug: str | None = None,
         persona_category: str | None = None,
         classification: dict[str, Any] | QuizClassificationV2 | None = None,
+        content_locale: str = "en",
         legacy_source_collection: str | None = None,
         legacy_quiz_id: str | None = None,
     ) -> QuizDocumentV2:
@@ -81,6 +85,7 @@ class CanonicalQuizWriteService:
             subcategory_slug=subcategory_slug,
             persona_category=persona_category,
             classification=classification,
+            content_locale=content_locale,
             questions=normalized_questions,
         )
         fingerprint_payload = {
@@ -88,10 +93,12 @@ class CanonicalQuizWriteService:
             "description": quiz_create.description,
             "quiz_type": quiz_create.quiz_type,
             "questions": [question.model_dump(exclude_none=True) for question in quiz_create.questions],
+            "content_locale": quiz_create.content_locale,
         }
         structure_payload = {
             "title": quiz_create.title,
             "quiz_type": quiz_create.quiz_type,
+            "content_locale": quiz_create.content_locale,
             "questions": [
                 {
                     "question": question.question,
@@ -117,6 +124,7 @@ class CanonicalQuizWriteService:
             persona_category=quiz_create.persona_category,
             subcategory_slug=quiz_create.subcategory_slug,
             classification=quiz_create.classification,
+            content_locale=quiz_create.content_locale,
             legacy_source_collection=legacy_source_collection,
             legacy_quiz_id=legacy_quiz_id,
             content_fingerprint=self.build_content_fingerprint(fingerprint_payload),
@@ -143,6 +151,7 @@ class CanonicalQuizWriteService:
             subcategory_slug=quiz_data.subcategory_slug,
             classification=quiz_data.classification,
             persona_category=quiz_data.persona_category,
+            content_locale=quiz_data.content_locale,
         )
         return await self.repository.insert_quiz(quiz_document)
 

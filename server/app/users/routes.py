@@ -7,6 +7,7 @@ from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
 from server.app.users.models import (
     UpdatePersonaRequest,
+    UpdateLocaleRequest,
     UpdateProfileRequest,
     UpdateProfileResponse,
     UserOut,
@@ -20,6 +21,7 @@ from server.app.users.services import (
     delete_account_service,
     get_user_profile_service,
     update_user_persona_service,
+    update_user_locale_service,
     request_email_change_service,
     update_user_profile_service,
     verify_email_change_service,
@@ -55,7 +57,11 @@ async def get_profile(
     response: Response,
     current_user: UserOut = Depends(get_current_user),
 ):
-    return get_user_profile_service(current_user)
+    return await get_user_profile_service(
+        current_user,
+        request.app.state.organizations_collection,
+        request.app.state.organization_memberships_collection,
+    )
 
 
 @router.put("/auth/profile", response_model=UpdateProfileResponse)
@@ -83,6 +89,21 @@ async def update_persona(
 ):
     return await update_user_persona_service(
         persona_data,
+        current_user,
+        request.app.state.users_collection,
+    )
+
+
+@router.put("/auth/profile/locale", response_model=UpdateProfileResponse)
+@limiter.limit(RateLimits.API_WRITE)
+async def update_locale(
+    request: Request,
+    response: Response,
+    locale_data: UpdateLocaleRequest,
+    current_user: UserOut = Depends(get_current_user),
+):
+    return await update_user_locale_service(
+        locale_data,
         current_user,
         request.app.state.users_collection,
     )

@@ -5,6 +5,7 @@ from bson import ObjectId
 from .validators import PyObjectId
 from server.app.users.identity import DEFAULT_AVATAR_COLOR
 from server.app.users.persona import persona_pair_is_valid
+from server.app.i18n.locales import SupportedLocale
 
 
 # Literal members are pinned against persona.PERSONA_USER_TYPES_BY_CATEGORY by
@@ -38,6 +39,8 @@ class UserProfile(BaseModel):
     website: Optional[str] = None
     avatar_color: Optional[str] = DEFAULT_AVATAR_COLOR
     persona: Optional[UserPersona] = None
+    preferred_locale: Optional[SupportedLocale] = None
+    active_organization_id: Optional[str] = None
 
     @field_validator("bio")
     @classmethod
@@ -106,6 +109,14 @@ class UserDB(BaseModel):
     def persona(self) -> Optional[UserPersona]:
         return self.profile.persona
 
+    @property
+    def preferred_locale(self) -> Optional[SupportedLocale]:
+        return self.profile.preferred_locale
+
+    @property
+    def active_organization_id(self) -> Optional[str]:
+        return self.profile.active_organization_id
+
     class Config:
         populate_by_name = True
         from_attributes = True
@@ -159,6 +170,9 @@ class UserOut(BaseModel):
     persona_category: Optional[str] = None
     persona_user_type: Optional[str] = None
     persona_set_at: Optional[str] = None
+    preferred_locale: Optional[SupportedLocale] = None
+    effective_locale: SupportedLocale = "en"
+    active_organization_id: Optional[str] = None
     role: Optional[str] = "user"
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
@@ -208,6 +222,11 @@ class UpdateProfileRequest(BaseModel):
         if v and not (v.startswith('http://') or v.startswith('https://')):
             raise ValueError('Website must be a valid URL starting with http:// or https://')
         return v
+
+
+class UpdateLocaleRequest(BaseModel):
+    # This field is required but may be null to restore organisation inheritance.
+    preferred_locale: Optional[SupportedLocale] = Field(...)
 
 
 class UpdatePersonaRequest(BaseModel):

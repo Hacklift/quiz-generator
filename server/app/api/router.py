@@ -6,6 +6,8 @@ from server.app.auth.routes import router as auth_router
 from server.app.billing.routes import router as billing_router
 from server.app.core.rate_limiter import limiter
 from server.app.notifications.routes import router as notifications_router
+from server.app.organizations.routes import router as organizations_router
+from server.app.i18n.routes import router as translations_router
 from server.app.quiz.routes.categories import router as categories_router
 from server.app.quiz.routes.canonical_quizzes import router as canonical_quizzes_router
 from server.app.quiz.routes.document_quiz import router as document_quiz_router
@@ -36,6 +38,8 @@ router.include_router(assistant_router, prefix="/api", tags=["assistant"])
 router.include_router(auth_router, prefix="/auth", tags=["authentication"])
 router.include_router(billing_router)
 router.include_router(users_router)
+router.include_router(organizations_router, prefix="/api/organizations")
+router.include_router(translations_router, prefix="/api/i18n")
 router.include_router(quiz_generation_router, prefix="/api", tags=["quiz"])
 router.include_router(canonical_quizzes_router, prefix="/api", tags=["quiz"])
 router.include_router(document_quiz_router, prefix="/api", tags=["quiz"])

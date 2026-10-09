@@ -37,6 +37,8 @@ def build_profile(
     website: str | None = None,
     avatar_color: str | None = None,
     persona: dict[str, Any] | None = None,
+    preferred_locale: str | None = None,
+    active_organization_id: str | None = None,
 ) -> dict[str, Any]:
     # Imported lazily: persona.py imports now_utc from this module.
     from server.app.users.persona import build_persona
@@ -48,6 +50,9 @@ def build_profile(
         "website": website,
         "avatar_color": avatar_color or DEFAULT_AVATAR_COLOR,
         "persona": persona if persona is not None else build_persona(),
+        # None deliberately means "inherit the organisation/platform default".
+        "preferred_locale": preferred_locale,
+        "active_organization_id": active_organization_id,
     }
 
 

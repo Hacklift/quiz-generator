@@ -2,7 +2,6 @@
 
 import React, { ComponentType } from "react";
 import {
-  getCategoryDefinition,
   personaGenerateHref,
   type SchoolUserType,
 } from "@shared/config/persona";
@@ -16,6 +15,7 @@ import TeacherDashboard from "./views/TeacherDashboard";
 import LecturerDashboard from "./views/LecturerDashboard";
 import StudentDashboard from "./views/StudentDashboard";
 import ParentDashboard from "./views/ParentDashboard";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 const SCHOOL_COPY: Record<
   SchoolUserType,
@@ -54,7 +54,10 @@ const SCHOOL_COPY: Record<
  * edits its own leaf file — do not convert it to next/dynamic, the static
  * imports are what make `next build` fail loudly on a missing view.
  */
-const SCHOOL_VIEWS: Record<SchoolUserType, ComponentType<DashboardViewProps>> = {
+const SCHOOL_VIEWS: Record<
+  SchoolUserType,
+  ComponentType<DashboardViewProps>
+> = {
   teacher: TeacherDashboard,
   lecturer: LecturerDashboard,
   student: StudentDashboard,
@@ -62,6 +65,7 @@ const SCHOOL_VIEWS: Record<SchoolUserType, ComponentType<DashboardViewProps>> = 
 };
 
 export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
+  const { categories } = usePersonaCopy();
   const t = useTerms();
   const UserTypeView = SCHOOL_VIEWS[persona.userType as SchoolUserType];
   const copy = SCHOOL_COPY[persona.userType as SchoolUserType];
@@ -70,7 +74,7 @@ export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
 
   return (
     <DashboardShell
-      kicker={getCategoryDefinition(persona.category).label}
+      kicker={categories[persona.category].label}
       title={`Welcome back, ${greetingName}. ${copy.title}`}
       lede={`${copy.lede(t)} Everything for your ${t("group", "plural")} is in one place.`}
     >
@@ -89,7 +93,8 @@ export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
             },
             {
               label: "Revision practice",
-              description: "Build a self-marking practice set from a past topic.",
+              description:
+                "Build a self-marking practice set from a past topic.",
               href: "/popular",
             },
           ]}

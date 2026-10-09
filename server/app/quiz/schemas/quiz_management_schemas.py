@@ -9,6 +9,7 @@ class RenameSavedQuizRequest(BaseModel):
 
 
 class SavedQuizResponse(BaseModel):
+    content_locale: Optional[str] = None
     id: str = Field(alias="_id")
     quiz_id: str
     title: str
@@ -27,6 +28,7 @@ class QuizHistoryQuestionResponse(BaseModel):
     question: str
     options: list[str] | None = None
     answer: str
+    explanation: Optional[str] = None
 
 
 class LiveQuizStatsResponse(BaseModel):
@@ -39,6 +41,7 @@ class LiveQuizStatsResponse(BaseModel):
 
 
 class QuizHistoryDetailResponse(BaseModel):
+    content_locale: Optional[str] = None
     id: str = Field(alias="_id")
     quiz_id: Optional[str] = None
     created_at: Optional[datetime] = None

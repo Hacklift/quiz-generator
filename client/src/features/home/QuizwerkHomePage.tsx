@@ -13,8 +13,7 @@ import {
 } from "@features/profile/api/billingApi";
 import { BillingPlanAction } from "@shared/config/billingPlans";
 import {
-  PERSONA_TAXONOMY,
-  PersonaCategory,
+  PERSONA_CATEGORIES,
   PersonaUserType,
   personaGenerateHref,
 } from "@shared/config/persona";
@@ -30,6 +29,7 @@ import {
   ResultBar,
 } from "@shared/ui/quizwerk";
 import HeroMockup from "./HeroMockup";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 /* ── data ────────────────────────────────────────────────────────────── */
 
@@ -41,10 +41,26 @@ const STATS = [
 ];
 
 const HOW_IT_WORKS = [
-  { n: "01", title: "Enter your topic", copy: "Anything you would train on. One line is enough." },
-  { n: "02", title: "Pick the format", copy: "Multiple choice, true–false or short answer. 5 to 50 questions." },
-  { n: "03", title: "Review the draft", copy: "Answer keys included. Edit, reorder, regenerate." },
-  { n: "04", title: "Run it or ship it", copy: "Live with a join code, or exported to PDF and text." },
+  {
+    n: "01",
+    title: "Enter your topic",
+    copy: "Anything you would train on. One line is enough.",
+  },
+  {
+    n: "02",
+    title: "Pick the format",
+    copy: "Multiple choice, true–false or short answer. 5 to 50 questions.",
+  },
+  {
+    n: "03",
+    title: "Review the draft",
+    copy: "Answer keys included. Edit, reorder, regenerate.",
+  },
+  {
+    n: "04",
+    title: "Run it or ship it",
+    copy: "Live with a join code, or exported to PDF and text.",
+  },
 ];
 
 const PLANS: {
@@ -60,7 +76,12 @@ const PLANS: {
   {
     name: "Free",
     price: "$0",
-    features: ["5 quizzes a month", "Basic question types", "Save and share quizzes", "Community templates"],
+    features: [
+      "5 quizzes a month",
+      "Basic question types",
+      "Save and share quizzes",
+      "Community templates",
+    ],
     cta: "Start free",
     action: "free",
   },
@@ -69,7 +90,13 @@ const PLANS: {
     microlabel: "Most teams",
     price: "$20",
     unit: "/ month",
-    features: ["Unlimited quiz generation", "Advanced question types", "Edit and customise questions", "Export to PDF and text", "Priority support"],
+    features: [
+      "Unlimited quiz generation",
+      "Advanced question types",
+      "Edit and customise questions",
+      "Export to PDF and text",
+      "Priority support",
+    ],
     cta: "Get Pro",
     action: "monthly",
     featured: true,
@@ -78,7 +105,12 @@ const PLANS: {
     name: "Premium",
     price: "$100",
     unit: "/ year",
-    features: ["Everything in Pro", "Early access to new features", "Personalised templates", "Premium support"],
+    features: [
+      "Everything in Pro",
+      "Early access to new features",
+      "Personalised templates",
+      "Premium support",
+    ],
     cta: "Go Premium",
     action: "yearly",
   },
@@ -86,15 +118,18 @@ const PLANS: {
 
 const TESTIMONIALS = [
   {
-    quote: "“We ran a 40-person compliance refresher off a join code on the projector. Scoring that used to take an evening happened before the room emptied.”",
+    quote:
+      "“We ran a 40-person compliance refresher off a join code on the projector. Scoring that used to take an evening happened before the room emptied.”",
     who: "Dana M. — Compliance trainer, logistics",
   },
   {
-    quote: "“Topic to printed handout inside the coffee break. My slide decks stopped being the bottleneck.”",
+    quote:
+      "“Topic to printed handout inside the coffee break. My slide decks stopped being the bottleneck.”",
     who: "R. Okafor — L&D lead, fintech",
   },
   {
-    quote: "“My Friday revision quiz takes five minutes to set, and the class marks itself before the bell.”",
+    quote:
+      "“My Friday revision quiz takes five minutes to set, and the class marks itself before the bell.”",
     who: "T. Adeyemi — Secondary school teacher",
   },
 ];
@@ -102,10 +137,13 @@ const TESTIMONIALS = [
 /* ── page ────────────────────────────────────────────────────────────── */
 
 export default function QuizwerkHomePage() {
+  const { categories, t: personaText } = usePersonaCopy();
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuth();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [activePlan, setActivePlan] = useState<"monthly" | "yearly" | null>(null);
+  const [activePlan, setActivePlan] = useState<"monthly" | "yearly" | null>(
+    null,
+  );
   const [billingError, setBillingError] = useState("");
 
   const goGenerate = () => router.push("/generate");
@@ -145,14 +183,38 @@ export default function QuizwerkHomePage() {
     <div className={`${archivo.className} bg-paper text-ink antialiased`}>
       {/* ── 1. Nav ── */}
       <header className="border-b-2 border-divider">
-        <nav className={`${CONTAINER} flex flex-wrap items-center gap-x-[24px] gap-y-[10px] py-[14px]`}>
-          <Link href="/" className="mr-auto text-[18px] font-extrabold tracking-[-0.015em]">
+        <nav
+          className={`${CONTAINER} flex flex-wrap items-center gap-x-[24px] gap-y-[10px] py-[14px]`}
+        >
+          <Link
+            href="/"
+            className="mr-auto text-[18px] font-extrabold tracking-[-0.015em]"
+          >
             Quizwerk
           </Link>
-          <a href="#product" className="min-h-[44px] content-center text-[15px] hover:text-brand">Product</a>
-          <a href="#categories" className="min-h-[44px] content-center text-[15px] hover:text-brand">Categories</a>
-          <a href="#pricing" className="min-h-[44px] content-center text-[15px] hover:text-brand">Pricing</a>
-          <button type="button" onClick={goJoin} className="min-h-[44px] cursor-pointer text-[15px] hover:text-brand">
+          <a
+            href="#product"
+            className="min-h-[44px] content-center text-[15px] hover:text-brand"
+          >
+            Product
+          </a>
+          <a
+            href="#categories"
+            className="min-h-[44px] content-center text-[15px] hover:text-brand"
+          >
+            Categories
+          </a>
+          <a
+            href="#pricing"
+            className="min-h-[44px] content-center text-[15px] hover:text-brand"
+          >
+            Pricing
+          </a>
+          <button
+            type="button"
+            onClick={goJoin}
+            className="min-h-[44px] cursor-pointer text-[15px] hover:text-brand"
+          >
             Join a quiz
           </button>
           <button type="button" onClick={goGenerate} className={BTN_PRIMARY}>
@@ -177,7 +239,11 @@ export default function QuizwerkHomePage() {
                 exported to PDF. For the classroom and the training room alike.
               </p>
               <div className="mt-[32px] flex flex-wrap gap-[14px]">
-                <button type="button" onClick={goGenerate} className={BTN_PRIMARY}>
+                <button
+                  type="button"
+                  onClick={goGenerate}
+                  className={BTN_PRIMARY}
+                >
                   Generate a quiz
                 </button>
                 <button type="button" onClick={goJoin} className={BTN_GHOST}>
@@ -191,7 +257,9 @@ export default function QuizwerkHomePage() {
 
         {/* ── 3. Stat row ── */}
         <section className="border-y-2 border-divider">
-          <div className={`${CONTAINER} grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-[28px] py-[42px]`}>
+          <div
+            className={`${CONTAINER} grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-[28px] py-[42px]`}
+          >
             {STATS.map((stat) => (
               <div key={stat.label}>
                 <p className="text-[clamp(34px,3.4vw,48px)] font-extrabold leading-none tracking-[-0.015em] text-brand [font-variant-numeric:tabular-nums]">
@@ -208,21 +276,24 @@ export default function QuizwerkHomePage() {
         {/* ── 4. Categories band — full-bleed navy ── */}
         <section id="categories" className="bg-brand text-paper">
           <div className={`${CONTAINER} py-[84px]`}>
-            <Kicker onPaper>Who it&apos;s for</Kicker>
+            <Kicker onPaper>{personaText("home.kicker")}</Kicker>
             <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
-              Pick the seat you&apos;re sitting in
+              {personaText("home.heading")}
             </h2>
             <p className="mt-[12px] max-w-[52ch] text-[15.5px] leading-[28px] text-paper/80">
-              Two worlds, one generator. Choose a persona and we start you with
-              a quiz that fits it — change anything before you run it.
+              {personaText("home.description")}
             </p>
             <div className="mt-[48px] grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-[64px] gap-y-[40px]">
-              {(Object.keys(PERSONA_TAXONOMY) as PersonaCategory[]).map((key) => {
-                const group = PERSONA_TAXONOMY[key];
+              {PERSONA_CATEGORIES.map((key) => {
+                const group = categories[key];
                 return (
                   <div key={key}>
-                    <h3 className="text-[22px] font-extrabold tracking-[-0.015em]">{group.label}</h3>
-                    <p className="mb-[20px] mt-[4px] text-[13.5px] text-paper/70">{group.description}</p>
+                    <h3 className="text-[22px] font-extrabold tracking-[-0.015em]">
+                      {group.label}
+                    </h3>
+                    <p className="mb-[20px] mt-[4px] text-[13.5px] text-paper/70">
+                      {group.description}
+                    </p>
                     {group.userTypes.map((row) => (
                       <button
                         key={row.slug}
@@ -233,10 +304,16 @@ export default function QuizwerkHomePage() {
                         <span className="flex items-center gap-[14px]">
                           <span className="h-[8px] w-[8px] flex-none bg-paper" />
                           <span className="flex-1">
-                            <span className="block text-[17px] font-extrabold leading-[1.2]">{row.label}</span>
-                            <span className="mt-[3px] block text-[13.5px] text-paper/[0.72]">{row.description}</span>
+                            <span className="block text-[17px] font-extrabold leading-[1.2]">
+                              {row.label}
+                            </span>
+                            <span className="mt-[3px] block text-[13.5px] text-paper/[0.72]">
+                              {row.description}
+                            </span>
                           </span>
-                          <span aria-hidden="true" className="text-[18px]">→</span>
+                          <span aria-hidden="true" className="text-[18px]">
+                            →
+                          </span>
                         </span>
                       </button>
                     ))}
@@ -281,7 +358,9 @@ export default function QuizwerkHomePage() {
             vignette={
               <div>
                 <Microlabel>Session code</Microlabel>
-                <p className="text-[52px] font-extrabold leading-none tracking-[0.08em]">4F7–KQ2</p>
+                <p className="text-[52px] font-extrabold leading-none tracking-[0.08em]">
+                  4F7–KQ2
+                </p>
                 <p className="mt-[14px] flex items-center gap-[8px] text-[13px] text-ink/[0.78]">
                   <span className="h-[8px] w-[8px] animate-live-pulse bg-brand" />
                   24 participants joined
@@ -310,9 +389,15 @@ export default function QuizwerkHomePage() {
           <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-[28px]">
             {HOW_IT_WORKS.map((step) => (
               <div key={step.n}>
-                <p className="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]">{step.n}</p>
-                <h3 className="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]">{step.title}</h3>
-                <p className="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]">{step.copy}</p>
+                <p className="text-[15px] font-extrabold [font-variant-numeric:tabular-nums]">
+                  {step.n}
+                </p>
+                <h3 className="mt-[10px] text-[18px] font-extrabold tracking-[-0.015em]">
+                  {step.title}
+                </h3>
+                <p className="mt-[6px] text-[14px] leading-[24px] text-ink/[0.78]">
+                  {step.copy}
+                </p>
               </div>
             ))}
           </div>
@@ -345,7 +430,10 @@ export default function QuizwerkHomePage() {
         </section>
 
         {/* ── 8. Pricing ── */}
-        <section id="pricing" className={`${CONTAINER} border-t-2 border-divider py-[70px]`}>
+        <section
+          id="pricing"
+          className={`${CONTAINER} border-t-2 border-divider py-[70px]`}
+        >
           <Kicker>Pricing</Kicker>
           <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
             Pick a plan that fits how you train
@@ -368,7 +456,9 @@ export default function QuizwerkHomePage() {
                     {plan.microlabel}
                   </p>
                 ) : null}
-                <h3 className="text-[20px] font-extrabold tracking-[-0.015em]">{plan.name}</h3>
+                <h3 className="text-[20px] font-extrabold tracking-[-0.015em]">
+                  {plan.name}
+                </h3>
                 <p className="mt-[10px] text-[44px] font-extrabold leading-none tracking-[-0.015em] [font-variant-numeric:tabular-nums]">
                   {plan.price}
                   {plan.unit ? (
@@ -379,7 +469,10 @@ export default function QuizwerkHomePage() {
                 </p>
                 <ul className="mb-[28px] mt-[22px] flex-1 space-y-[12px]">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-[12px] text-[15px]">
+                    <li
+                      key={feature}
+                      className="flex items-center gap-[12px] text-[15px]"
+                    >
                       <span className="h-[8px] w-[8px] flex-none bg-brand" />
                       {feature}
                     </li>
@@ -389,7 +482,9 @@ export default function QuizwerkHomePage() {
                   <button
                     type="button"
                     onClick={() => handlePlanSelection(plan.action)}
-                    disabled={activePlan === plan.action || isCurrentPlan(plan.action)}
+                    disabled={
+                      activePlan === plan.action || isCurrentPlan(plan.action)
+                    }
                     className={`${plan.featured ? BTN_PRIMARY : BTN_GHOST} disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     {isCurrentPlan(plan.action)
@@ -409,7 +504,10 @@ export default function QuizwerkHomePage() {
           <Kicker>From classrooms and boardrooms</Kicker>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[36px]">
             {TESTIMONIALS.map((t) => (
-              <figure key={t.who} className="border-t-2 border-divider pt-[20px]">
+              <figure
+                key={t.who}
+                className="border-t-2 border-divider pt-[20px]"
+              >
                 <blockquote className="text-[19px] font-extrabold leading-[27px] tracking-[-0.015em]">
                   {t.quote}
                 </blockquote>
@@ -439,13 +537,36 @@ export default function QuizwerkHomePage() {
       </main>
 
       {/* ── 11. Footer ── */}
-      <footer className={`${CONTAINER} flex flex-wrap items-center justify-between gap-x-[28px] gap-y-[12px] py-[28px] text-[13px] text-ink/70`}>
-        <span className="text-[15px] font-extrabold tracking-[-0.015em] text-ink">Quizwerk</span>
+      <footer
+        className={`${CONTAINER} flex flex-wrap items-center justify-between gap-x-[28px] gap-y-[12px] py-[28px] text-[13px] text-ink/70`}
+      >
+        <span className="text-[15px] font-extrabold tracking-[-0.015em] text-ink">
+          Quizwerk
+        </span>
         <span className="flex flex-wrap gap-x-[24px] gap-y-[8px]">
-          <a href="#product" className="min-h-[44px] content-center hover:text-brand">Product</a>
-          <a href="#categories" className="min-h-[44px] content-center hover:text-brand">Categories</a>
-          <a href="#pricing" className="min-h-[44px] content-center hover:text-brand">Pricing</a>
-          <button type="button" onClick={goJoin} className="min-h-[44px] cursor-pointer hover:text-brand">
+          <a
+            href="#product"
+            className="min-h-[44px] content-center hover:text-brand"
+          >
+            Product
+          </a>
+          <a
+            href="#categories"
+            className="min-h-[44px] content-center hover:text-brand"
+          >
+            Categories
+          </a>
+          <a
+            href="#pricing"
+            className="min-h-[44px] content-center hover:text-brand"
+          >
+            Pricing
+          </a>
+          <button
+            type="button"
+            onClick={goJoin}
+            className="min-h-[44px] cursor-pointer hover:text-brand"
+          >
             Join a live quiz
           </button>
         </span>

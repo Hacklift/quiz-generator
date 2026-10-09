@@ -69,7 +69,12 @@ def grade_against_stored_questions(
             }
         )
 
-    return grade_answers(grading_payload, source)
+    results = grade_answers(grading_payload, source)
+    for result in results:
+        stored = questions_by_text[result["question"]]
+        result["correct_answer"] = stored["correct_answer"]
+        result["explanation"] = stored.get("explanation")
+    return results
 
 
 class QuizGradingService:
@@ -119,6 +124,7 @@ class QuizGradingService:
             {
                 "question": question.question,
                 "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
             }
             for question in quiz_doc.questions
         ]

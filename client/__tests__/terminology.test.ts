@@ -49,4 +49,17 @@ describe("resolveTerm", () => {
       resolveTerm("report", { category: "corporate", userType: "hr" }),
     ).toBe("compliance record");
   });
+
+  test("localizes terms while retaining persona-specific wording", () => {
+    const teacher = { category: "school", userType: "teacher" } as const;
+    const parent = { category: "school", userType: "parent" } as const;
+    const business = { category: "corporate", userType: "business" } as const;
+
+    expect(resolveTerm("learner", teacher, "plural", "es")).toBe("alumnos");
+    expect(resolveTerm("group", teacher, "singular", "fr")).toBe("classe");
+    expect(resolveTerm("learner", parent, "singular", "es")).toBe("hijo");
+    expect(resolveTerm("quiz", business, "singular", "fr")).toBe(
+      "quiz de formation",
+    );
+  });
 });

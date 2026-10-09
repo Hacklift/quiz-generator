@@ -8,17 +8,21 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test:watch": "jest --watchAll",
+    "i18n:extract": "node scripts/i18n.mjs --extract",
+    "i18n:check": "node scripts/i18n.mjs --check"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
     "axios": "^1.7.7",
     "framer-motion": "^12.23.24",
+    "i18next": "^26.4.2",
     "lucide-react": "^0.503.0",
     "next": "14.2.7",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.5.2",
+    "react-i18next": "^17.0.16",
     "react-icons": "^5.5.0",
     "rxjs": "^7.8.1"
   },

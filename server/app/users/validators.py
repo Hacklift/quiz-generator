@@ -65,6 +65,8 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
     # Persona adoption reporting (#137) aggregates on these.
     await users_collection.create_index("profile.persona.category", sparse=True)
     await users_collection.create_index("profile.persona.user_type", sparse=True)
+    await users_collection.create_index("profile.preferred_locale", sparse=True)
+    await users_collection.create_index("profile.active_organization_id", sparse=True)
 
 
 async def ensure_users_validator(database):
@@ -108,6 +110,11 @@ async def ensure_users_validator(database):
                         "location": {"bsonType": ["string", "null"]},
                         "website": {"bsonType": ["string", "null"]},
                         "avatar_color": {"bsonType": ["string", "null"]},
+                        "preferred_locale": {
+                            "bsonType": ["string", "null"],
+                            "enum": ["en", "es", "fr", None],
+                        },
+                        "active_organization_id": {"bsonType": ["string", "null"]},
                         "persona": {
                             "bsonType": ["object", "null"],
                             "properties": {

@@ -1,5 +1,5 @@
 /**
- * Persona taxonomy — the single source of truth for persona copy on the client.
+ * Persona taxonomy — stable IDs and generation defaults with English fallback copy.
  *
  * The backend (server/app/users/persona.py) owns the same *slugs* but no copy;
  * server/tests/test_persona_taxonomy.py fails if the two drift. Adding or
@@ -7,6 +7,8 @@
  *
  * See PERSONA_SCAFFOLDING.md for which ticket owns which file.
  */
+
+import personaMessages from "@features/locale/messages/persona.en.json";
 
 export const PERSONA_CATEGORIES = ["school", "corporate"] as const;
 export type PersonaCategory = (typeof PERSONA_CATEGORIES)[number];
@@ -65,15 +67,15 @@ export const PERSONA_TAXONOMY: Record<
 > = {
   school: {
     slug: "school",
-    label: "School",
-    description: "Teachers, lecturers, students and parents.",
+    label: personaMessages.categories.school.label,
+    description: personaMessages.categories.school.description,
     userTypes: [
       {
         slug: "teacher",
         category: "school",
-        label: "Teacher",
-        description: "Class quizzes, homework checks, exam revision",
-        defaultTopic: "Photosynthesis — Grade 8 biology",
+        label: personaMessages.roles.teacher.label,
+        description: personaMessages.roles.teacher.description,
+        defaultTopic: personaMessages.roles.teacher.defaultTopic,
         generationDefaults: {
           audienceType: "students",
           customInstruction:
@@ -86,9 +88,9 @@ export const PERSONA_TAXONOMY: Record<
       {
         slug: "lecturer",
         category: "school",
-        label: "Lecturer",
-        description: "Lecture recaps and seminar prep for large cohorts",
-        defaultTopic: "Introduction to microeconomics",
+        label: personaMessages.roles.lecturer.label,
+        description: personaMessages.roles.lecturer.description,
+        defaultTopic: personaMessages.roles.lecturer.defaultTopic,
         generationDefaults: {
           audienceType: "undergraduates",
           customInstruction:
@@ -101,9 +103,9 @@ export const PERSONA_TAXONOMY: Record<
       {
         slug: "student",
         category: "school",
-        label: "Student",
-        description: "Self-testing before the exam",
-        defaultTopic: "World War II — key dates and causes",
+        label: personaMessages.roles.student.label,
+        description: personaMessages.roles.student.description,
+        defaultTopic: personaMessages.roles.student.defaultTopic,
         generationDefaults: {
           audienceType: "students",
           customInstruction:
@@ -116,9 +118,9 @@ export const PERSONA_TAXONOMY: Record<
       {
         slug: "parent",
         category: "school",
-        label: "Parent",
-        description: "Practice at home, marked automatically",
-        defaultTopic: "Multiplication tables — ages 7 to 9",
+        label: personaMessages.roles.parent.label,
+        description: personaMessages.roles.parent.description,
+        defaultTopic: personaMessages.roles.parent.defaultTopic,
         generationDefaults: {
           audienceType: "children",
           customInstruction:
@@ -132,15 +134,15 @@ export const PERSONA_TAXONOMY: Record<
   },
   corporate: {
     slug: "corporate",
-    label: "Corporate",
-    description: "Businesses, employees and HR personnel.",
+    label: personaMessages.categories.corporate.label,
+    description: personaMessages.categories.corporate.description,
     userTypes: [
       {
         slug: "business",
         category: "corporate",
-        label: "Business",
-        description: "Onboarding and product knowledge at scale",
-        defaultTopic: "Company onboarding essentials",
+        label: personaMessages.roles.business.label,
+        description: personaMessages.roles.business.description,
+        defaultTopic: personaMessages.roles.business.defaultTopic,
         generationDefaults: {
           audienceType: "employees",
           customInstruction:
@@ -153,9 +155,9 @@ export const PERSONA_TAXONOMY: Record<
       {
         slug: "employee",
         category: "corporate",
-        label: "Employee",
-        description: "Upskill and certify at your own pace",
-        defaultTopic: "Data protection basics",
+        label: personaMessages.roles.employee.label,
+        description: personaMessages.roles.employee.description,
+        defaultTopic: personaMessages.roles.employee.defaultTopic,
         generationDefaults: {
           audienceType: "employees",
           customInstruction:
@@ -168,9 +170,9 @@ export const PERSONA_TAXONOMY: Record<
       {
         slug: "hr",
         category: "corporate",
-        label: "HR personnel",
-        description: "Compliance training with an audit trail",
-        defaultTopic: "Workplace policy — harassment prevention",
+        label: personaMessages.roles.hr.label,
+        description: personaMessages.roles.hr.description,
+        defaultTopic: personaMessages.roles.hr.defaultTopic,
         generationDefaults: {
           audienceType: "employees",
           customInstruction:

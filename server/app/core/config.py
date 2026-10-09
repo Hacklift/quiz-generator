@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     ASSISTANT_PENDING_RUN_TTL_SECONDS: int = 900
     QUIZ_GENERATION_MAX_QUESTIONS: int = 10
     QUIZ_GENERATION_REQUIRES_AUTH: bool = False
+    MULTILINGUAL_ENABLED: bool = True
+    MULTILINGUAL_GENERATION_ENABLED: bool = True
+    TRANSLATION_PROVIDER: Literal["none", "deepl", "google", "gemini", "llm"] = "none"
+    TRANSLATION_MODEL: str = "gemini-2.5-flash-lite"
+    TRANSLATION_PROVIDER_URL: Optional[str] = None
+    TRANSLATION_PROVIDER_API_KEY: Optional[str] = None
+    TRANSLATION_PROVIDER_TIMEOUT_SECONDS: float = 8.0
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:

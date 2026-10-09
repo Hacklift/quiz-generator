@@ -12,6 +12,8 @@ from server.app.email_platform.service import EmailService
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
     LiveQuizInvitationRepository,
 )
+from server.app.i18n.locales import DEFAULT_LOCALE
+from server.app.organizations.services import resolve_user_effective_locale
 
 
 router = APIRouter()
@@ -36,6 +38,21 @@ async def get_quiz(
         )
 
     payload.num_questions = validate_generation_question_count(payload.num_questions)
+
+    if not settings.MULTILINGUAL_ENABLED:
+        payload.content_locale = DEFAULT_LOCALE
+
+    if current_user:
+        payload.content_locale = await resolve_user_effective_locale(
+            current_user,
+            request.app.state.organizations_collection,
+            request.app.state.organization_memberships_collection,
+        )
+    else:
+        payload.content_locale = payload.content_locale or DEFAULT_LOCALE
+
+    if payload.content_locale != DEFAULT_LOCALE and not settings.MULTILINGUAL_GENERATION_ENABLED:
+        raise HTTPException(status_code=503, detail="Multilingual generation is temporarily disabled")
 
     user_id = str(current_user.id) if current_user else None
     invitation_repository = LiveQuizInvitationRepository(

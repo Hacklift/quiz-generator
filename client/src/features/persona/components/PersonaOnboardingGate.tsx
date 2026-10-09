@@ -11,11 +11,13 @@ import {
 } from "@features/persona/lib/personaOnboardingStorage";
 import { parsePersona } from "@shared/config/persona";
 import { BTN_GHOST, CONTAINER } from "@shared/ui/quizwerk";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 const SUPPRESSED_ROUTES = ["/auth"];
 
 export default function PersonaOnboardingGate() {
   const router = useRouter();
+  const { t } = usePersonaCopy();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { persona, source, setPersona } = usePersona();
   const [skipState, setSkipState] = useState<{
@@ -28,9 +30,7 @@ export default function PersonaOnboardingGate() {
 
   const profilePersona = useMemo(
     () =>
-      user
-        ? parsePersona(user.persona_category, user.persona_user_type)
-        : null,
+      user ? parsePersona(user.persona_category, user.persona_user_type) : null,
     [user],
   );
 
@@ -90,7 +90,13 @@ export default function PersonaOnboardingGate() {
     user,
   ]);
 
-  if (isLoading || !isAuthenticated || !user || profilePersona || isAutoSaving) {
+  if (
+    isLoading ||
+    !isAuthenticated ||
+    !user ||
+    profilePersona ||
+    isAutoSaving
+  ) {
     return null;
   }
 
@@ -120,11 +126,10 @@ export default function PersonaOnboardingGate() {
           <div className="mb-[28px] flex items-start justify-between gap-4">
             <div>
               <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-brand">
-                First-time setup
+                {t("onboarding.title")}
               </p>
               <p className="mt-[8px] max-w-[56ch] text-[15px] leading-[24px] text-ink/72">
-                Choose the seat you are sitting in so Quizwerk can tune your
-                dashboard, language, and starting points.
+                {t("onboarding.description")}
               </p>
             </div>
             <button
@@ -132,12 +137,12 @@ export default function PersonaOnboardingGate() {
               onClick={onSkip}
               className="text-[14px] font-extrabold text-ink/70 underline-offset-4 hover:text-ink hover:underline"
             >
-              Skip
+              {t("onboarding.skip")}
             </button>
           </div>
 
           <PersonaPicker
-            heading="Pick your Quizwerk persona"
+            heading={t("onboarding.heading")}
             initialCategory={persona?.category ?? null}
             source="onboarding"
             onPicked={onSkip}
@@ -145,7 +150,7 @@ export default function PersonaOnboardingGate() {
 
           <div className="mt-[28px] border-t-2 border-divider pt-[18px]">
             <button type="button" onClick={onSkip} className={BTN_GHOST}>
-              I&apos;ll do this later
+              {t("onboarding.later")}
             </button>
           </div>
         </section>

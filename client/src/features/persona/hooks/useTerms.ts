@@ -3,10 +3,12 @@
 import { useCallback } from "react";
 import { usePersona } from "@features/persona/context/personaContext";
 import {
-  resolveTerm,
+  termMessageKey,
   type TermForm,
   type TermKey,
 } from "@shared/config/terminology";
+import { useTranslation } from "react-i18next";
+import "@features/locale/i18n";
 
 /**
  * Persona-bound terminology.
@@ -18,10 +20,11 @@ import {
  */
 export function useTerms() {
   const { persona } = usePersona();
+  const { t } = useTranslation("persona");
 
   return useCallback(
     (key: TermKey, form: TermForm = "singular") =>
-      resolveTerm(key, persona, form),
-    [persona],
+      t(termMessageKey(key, persona, form)),
+    [t, persona],
   );
 }

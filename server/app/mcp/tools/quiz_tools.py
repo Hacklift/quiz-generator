@@ -35,6 +35,7 @@ def _history_questions(questions: list[dict], question_type: str) -> list[dict]:
         {
             "question": question.get("question"),
             "options": question.get("options"),
+            "explanation": question.get("explanation"),
             "answer": question.get("answer") or question.get("correct_answer"),
             "question_type": question.get("question_type") or question_type,
         }
@@ -67,6 +68,7 @@ async def quiz_generate(
         custom_instruction=custom_instruction,
         token=provider_token,
         live_quiz_enabled=False,
+        content_locale=context.effective_locale,
     )
     result = await get_questions(
         request,
@@ -82,7 +84,8 @@ async def quiz_generate(
                 "user_id": context.user_id,
                 "quiz_id": result.get("quiz_id"),
                 "canonical_quiz_id": result.get("quiz_id"),
-                "quiz_name": profession or f"{question_type} Quiz",
+                "quiz_name": result.get("title") or profession,
+                "content_locale": result.get("content_locale"),
                 "question_type": question_type,
                 "num_questions": parsed_num_questions,
                 "difficulty_level": difficulty_level,
@@ -101,5 +104,5 @@ async def quiz_generate(
         "history_id": history_id,
         "question_count": len(questions),
         "question_type": question_type,
-        "title": profession or f"{question_type} Quiz",
+        "title": result.get("title") or profession,
     }

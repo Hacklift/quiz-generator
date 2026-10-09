@@ -27,6 +27,7 @@ export interface DocumentQuizResponse {
   retrieval_query: string;
   rag_strategy?: string;
   embedding_cache_hit?: boolean;
+  content_locale: "en" | "es" | "fr";
 }
 
 export async function generateDocumentQuiz(

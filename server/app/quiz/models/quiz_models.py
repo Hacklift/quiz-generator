@@ -6,6 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from typing import Literal, Optional, List
+from server.app.i18n.locales import SupportedLocale
 
 
 class QuizRequest(BaseModel):
@@ -29,6 +30,7 @@ class QuizRequest(BaseModel):
     invited_emails: List[str] = []
     send_email_invitations: bool = False
     allow_fallback: bool = True
+    content_locale: Optional[SupportedLocale] = None
 
 
 
@@ -42,9 +44,13 @@ class QuizQuestion(BaseModel):
 
     answer: str
     explanation: Optional[str] = None
+    correct_option_index: Optional[int] = None
+    correct_boolean: Optional[bool] = None
 
 
 class QuizResponse(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
 
     source: str
 
@@ -69,3 +75,4 @@ class QuizResponse(BaseModel):
     invitations_created: int = 0
     invitations_delivered: int = 0
     invitations_queued: int = 0
+    content_locale: SupportedLocale = "en"

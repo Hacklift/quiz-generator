@@ -17,6 +17,7 @@ from server.app.users.identity import (
     now_utc,
 )
 from server.app.users.persona import build_persona, get_persona
+from server.app.i18n.locales import resolve_effective_locale
 from server.app.users.schemas import (
     CreateUserRequest,
     DeleteUserResponse,
@@ -64,6 +65,11 @@ def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
         "persona_category": persona.get("category"),
         "persona_user_type": persona.get("user_type"),
         "persona_set_at": persona_set_at,
+        "preferred_locale": get_profile_value(user, "preferred_locale"),
+        "effective_locale": resolve_effective_locale(
+            get_profile_value(user, "preferred_locale")
+        ),
+        "active_organization_id": get_profile_value(user, "active_organization_id"),
         "role": user.get("role", "user"),
         "status": coerce_user_status(user),
         "is_active": user.get("is_active", True),
