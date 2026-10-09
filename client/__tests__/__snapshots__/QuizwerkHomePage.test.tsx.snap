@@ -3,7 +3,7 @@
 exports[`QuizwerkHomePage renders the full page markup 1`] = `
 <div>
   <div
-    class="className bg-paper text-ink antialiased"
+    class="font-sans bg-paper text-ink antialiased"
   >
     <header
       class="border-b-2 border-divider"

@@ -83,6 +83,7 @@ class LiveQuizSessionService:
                 if email
             ]
             return {
+                "_access_code_created": False,
                 "quiz_id": str(quiz["_id"]),
                 "access_code": existing_access_code,
                 "live_quiz_enabled": True,
@@ -194,6 +195,7 @@ class LiveQuizSessionService:
             )
 
         return {
+            "_access_code_created": True,
             "quiz_id": str(updated_quiz["_id"]),
             "access_code": code,
             "live_quiz_enabled": True,

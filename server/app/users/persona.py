@@ -37,6 +37,8 @@ _CATEGORY_BY_USER_TYPE = {
     for user_type in user_types
 }
 
+ANALYTICS_PERSONA_UNSET = "unset"
+
 
 def normalize_persona_category(value: Any) -> str | None:
     if not isinstance(value, str):
@@ -111,6 +113,27 @@ def get_persona(user: dict[str, Any]) -> dict[str, Any]:
         source=persona.get("source") or "unset",
         set_at=persona.get("set_at"),
     )
+
+
+def analytics_persona_snapshot(user: Any) -> dict[str, str]:
+    """Return a complete, trusted persona pair suitable for event snapshots."""
+    if isinstance(user, dict):
+        profile = user.get("profile")
+        persona = profile.get("persona") if isinstance(profile, dict) else None
+        category = persona.get("category") if isinstance(persona, dict) else None
+        user_type = persona.get("user_type") if isinstance(persona, dict) else None
+    else:
+        category = getattr(user, "persona_category", None) if user is not None else None
+        user_type = getattr(user, "persona_user_type", None) if user is not None else None
+
+    if not persona_pair_is_valid(category, user_type) or not category or not user_type:
+        category = ANALYTICS_PERSONA_UNSET
+        user_type = ANALYTICS_PERSONA_UNSET
+
+    return {
+        "persona_category": category,
+        "persona_user_type": user_type,
+    }
 
 
 def persona_update_fields(
