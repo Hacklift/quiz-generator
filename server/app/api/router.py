@@ -15,6 +15,7 @@ from server.app.quiz.routes.generation import router as quiz_generation_router
 from server.app.quiz.routes.grading import router as grading_router
 from server.app.quiz.routes.history import router as history_router
 from server.app.quiz.routes.live_sessions import router as live_quiz_router
+from server.app.quiz.routes.training_runs import router as training_runs_router
 from server.app.quiz.routes.provider_tokens import router as token_router
 from server.app.quiz.routes.saved_quizzes import router as saved_quizzes_router
 from server.app.share.routes import router as share_router
@@ -46,5 +47,6 @@ router.include_router(folders_router, prefix="/api/folders")
 router.include_router(history_router, prefix="/api")
 router.include_router(categories_router, prefix="/api")
 router.include_router(live_quiz_router, prefix="/api/v1", tags=["Live Quiz"])
+router.include_router(training_runs_router, prefix="/api/v1", tags=["Training Runs"])
 router.include_router(notifications_router, prefix="/api/notifications", tags=["Notifications"])
 router.include_router(share_router, prefix="/share", tags=["share"])

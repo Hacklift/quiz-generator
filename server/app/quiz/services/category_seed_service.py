@@ -146,6 +146,7 @@ class CategorySeedService:
             category_slug=classification.category_slug,
             subcategory=classification.subcategory,
             subcategory_slug=classification.subcategory_slug,
+            persona_category=classification.persona_category,
             classification={
                 "method": classification.method,
                 "confidence": classification.confidence,

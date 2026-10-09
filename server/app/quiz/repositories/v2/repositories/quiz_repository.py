@@ -64,16 +64,18 @@ class QuizV2Repository:
         documents = await cursor.to_list(length=20)
         return [QuizDocumentV2(**document) for document in documents]
 
-    async def list_category_values(self) -> list[str]:
-        values = await self.collection.distinct(
-            "category",
-            {
-                "category": {"$type": "string", "$ne": ""},
-                "category_slug": {"$type": "string", "$ne": ""},
-                "status": "active",
-                "visibility": "public",
-            },
-        )
+    async def list_category_values(self, persona_category: str | None = None) -> list[str]:
+        query: dict = {
+            "category": {"$type": "string", "$ne": ""},
+            "category_slug": {"$type": "string", "$ne": ""},
+            "status": "active",
+            "visibility": "public",
+        }
+        if persona_category:
+            # MongoDB matches both an explicit null and a missing field here,
+            # so pre-existing/untagged quizzes still surface under a persona filter.
+            query["persona_category"] = {"$in": [persona_category, None]}
+        values = await self.collection.distinct("category", query)
         return sorted(value for value in values if value)
 
     async def list_subcategory_values(self, category_slug: str) -> list[str]:

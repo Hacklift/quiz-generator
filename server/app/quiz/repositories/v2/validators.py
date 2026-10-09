@@ -36,6 +36,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "category_slug": {"bsonType": ["string", "null"]},
                     "subcategory": {"bsonType": ["string", "null"]},
                     "subcategory_slug": {"bsonType": ["string", "null"]},
+                    "persona_category": {"enum": ["school", "corporate", None]},
                     "classification": {
                         "bsonType": ["object", "null"],
                         "required": ["method", "confidence"],

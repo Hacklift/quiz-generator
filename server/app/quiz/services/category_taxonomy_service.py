@@ -89,6 +89,7 @@ TAXONOMY_ALIASES = {
     "idioms-and-phrases": {"idiom", "idioms", "phrase", "phrases"},
     "reading-comprehension": {"reading", "passage", "comprehension"},
 }
+CORPORATE_CATEGORY_DIRS = {"Onboarding", "Compliance"}
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class TaxonomyEntry:
     category_slug: str
     subcategory: str
     subcategory_slug: str
+    persona_category: str = "school"
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ class TaxonomyClassification:
     tags: tuple[str, ...]
     method: str
     confidence: float
+    persona_category: str = "school"
 
     def to_quiz_fields(self) -> dict[str, Any]:
         return {
@@ -115,6 +118,7 @@ class TaxonomyClassification:
             "category_slug": self.category_slug,
             "subcategory": self.subcategory,
             "subcategory_slug": self.subcategory_slug,
+            "persona_category": self.persona_category,
             "tags": list(self.tags),
             "classification": {
                 "method": self.method,
@@ -200,6 +204,7 @@ def get_taxonomy_entries() -> tuple[TaxonomyEntry, ...]:
                     category_slug=category_slug,
                     subcategory=subcategory,
                     subcategory_slug=slugify(subcategory),
+                    persona_category="corporate" if category_dir.name in CORPORATE_CATEGORY_DIRS else "school",
                 )
             )
     return tuple(entries)
@@ -227,6 +232,7 @@ def build_classification(entry: TaxonomyEntry, quiz_type: str, *, method: str, c
         tags=tuple(build_tags(entry, quiz_type)),
         method=method,
         confidence=max(0, min(confidence, 1)),
+        persona_category=entry.persona_category,
     )
 
 
