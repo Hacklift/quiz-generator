@@ -6,10 +6,7 @@ from bson import ObjectId
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 from server.app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
 from server.app.quiz.services.quiz_attempt_service import QuizAttemptService
-from server.app.quiz.services.quiz_grading_service import (
-    AttemptPersistenceError,
-    QuizGradingService,
-)
+from server.app.quiz.services.quiz_grading_service import QuizGradingService
 
 
 class FakeQuizRepository:
@@ -107,7 +104,8 @@ async def test_grade_submission_persists_attempt_for_authenticated_user():
         user_id="user-1",
     )
 
-    assert len(results) == 2
+    assert len(results.results) == 2
+    assert results.attempt_saved is True
     assert len(attempt_repository.attempts) == 1
     attempt = attempt_repository.attempts[0]
     assert attempt.user_id == "user-1"
@@ -144,7 +142,7 @@ async def test_grade_submission_does_not_persist_attempt_for_anonymous_user():
 
 
 @pytest.mark.asyncio
-async def test_grade_submission_reports_attempt_persistence_failure():
+async def test_grade_submission_returns_scores_when_attempt_persistence_fails(caplog):
     quiz = build_quiz_document()
     service = QuizGradingService(
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
@@ -152,16 +150,41 @@ async def test_grade_submission_reports_attempt_persistence_failure():
         attempt_repository=FailingAttemptRepository(),
     )
 
-    with pytest.raises(AttemptPersistenceError):
-        await service.grade_submission(
-            str(quiz.id),
-            [
-                {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
-                {"question": "Which port is commonly used for HTTPS?", "user_answer": "80"},
-            ],
-            source="mock",
-            user_id="user-1",
-        )
+    result = await service.grade_submission(
+        str(quiz.id),
+        [
+            {"question": "What protocol serves web pages?", "user_answer": "HTTP"},
+            {"question": "Which port is commonly used for HTTPS?", "user_answer": "80"},
+        ],
+        source="mock",
+        user_id="user-1",
+    )
+
+    assert result.attempt_saved is False
+    assert [answer["is_correct"] for answer in result.results] == [True, False]
+    assert "Failed to persist quiz attempt" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_duplicate_question_options_are_snapshotted_in_order():
+    quiz = QuizDocumentV2(
+        title="Repeated prompts", quiz_type="multichoice", questions=[
+            {"question": "Choose", "correct_answer": "A", "options": ["A", "B"]},
+            {"question": "Choose", "correct_answer": "C", "options": ["C", "D"]},
+        ],
+    )
+    attempts = FakeAttemptRepository()
+    service = QuizGradingService(
+        quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
+        reference_repository=FakeReferenceRepository(), attempt_repository=attempts,
+    )
+    result = await service.grade_submission(str(quiz.id), [
+        {"question": "Choose", "user_answer": "A"},
+        {"question": "Choose", "user_answer": "C"},
+    ], user_id="user-1")
+    assert result.attempt_saved is True
+    assert attempts.attempts[0].score == 2
+    assert [question.options for question in attempts.attempts[0].question_results] == [["A", "B"], ["C", "D"]]
 
 
 @pytest.mark.asyncio

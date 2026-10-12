@@ -5,8 +5,11 @@ correct answers supplied by the client. Correct answers are revealed
 only in the grading response, after submission.
 """
 import logging
-from collections import Counter
+from collections import Counter, defaultdict, deque
+from dataclasses import dataclass
 from typing import Any, Optional
+
+from fastapi import HTTPException
 
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
@@ -34,8 +37,10 @@ class SubmissionMismatchError(ValueError):
     """A submitted answer does not correspond to a question in the quiz."""
 
 
-class AttemptPersistenceError(RuntimeError):
-    """A graded result could not be saved as the user's attempt."""
+@dataclass(frozen=True)
+class GradedQuizSubmission:
+    results: list[dict[str, Any]]
+    attempt_saved: bool | None = None
 
 
 def _normalize_true_false(value: Any) -> str:
@@ -56,8 +61,8 @@ def grade_against_stored_questions(
 ) -> list[dict[str, Any]]:
     """Grade submitted {question, user_answer} pairs against stored questions.
 
-    Raises SubmissionMismatchError when a submitted question is not part of
-    the stored quiz.
+    Require exactly one answer per stored question for all callers. Repeated
+    question text is matched in stored order rather than collapsing answer keys.
     """
     stored_question_counts = Counter(
         question["question"] for question in stored_questions
@@ -70,21 +75,27 @@ def grade_against_stored_questions(
             "Submitted answers do not match this quiz's questions."
         )
 
-    questions_by_text = {q["question"]: q for q in stored_questions}
+    questions_by_text = defaultdict(deque)
+    for question in stored_questions:
+        questions_by_text[question["question"]].append(question)
 
     grading_payload = []
     for submitted in submitted_answers:
-        stored = questions_by_text.get(submitted.get("question"))
-        if stored is None:
+        matching_questions = questions_by_text.get(submitted.get("question"))
+        if not matching_questions:
             raise SubmissionMismatchError(
                 "Submitted answers do not match this quiz's questions."
             )
+        stored = matching_questions.popleft()
 
         user_answer = submitted.get("user_answer")
         correct_answer = stored["correct_answer"]
         if quiz_type == "true-false":
             user_answer = _normalize_true_false(user_answer)
             correct_answer = _normalize_true_false(correct_answer)
+            if source == "ai":
+                user_answer = {"true": 1, "false": 0}.get(user_answer, user_answer)
+                correct_answer = {"true": 1, "false": 0}.get(correct_answer, correct_answer)
 
         grading_payload.append(
             {
@@ -152,9 +163,12 @@ class QuizGradingService:
         user_id: str,
         quiz_id: str,
         graded_results: list[dict[str, Any]],
-        question_options_by_text: dict[str, list[str] | None],
+        stored_questions: list[dict[str, Any]],
     ) -> None:
         score, percentage = self._build_attempt_summary(graded_results)
+        options_by_text = defaultdict(deque)
+        for question in stored_questions:
+            options_by_text[question["question"]].append(question.get("options"))
         await self.attempt_repository.insert_attempt(
             QuizAttemptDocumentV2(
                 user_id=user_id,
@@ -163,9 +177,7 @@ class QuizGradingService:
                     QuizAttemptQuestionResultV2(
                         **graded_result,
                         options=self._history_options(
-                            question_options_by_text.get(
-                                str(graded_result.get("question") or "")
-                            ),
+                            options_by_text[graded_result["question"]].popleft(),
                             question_type=str(
                                 graded_result.get("question_type") or ""
                             ),
@@ -193,11 +205,17 @@ class QuizGradingService:
         *,
         source: str = "mock",
         user_id: str | None = None,
-    ) -> Optional[list[dict[str, Any]]]:
-        """Returns graded results, or None when the quiz does not exist."""
+    ) -> GradedQuizSubmission | None:
+        """Return scores and independent persistence status, or None if missing."""
         quiz_doc = await self._resolve_quiz(quiz_id)
-        if quiz_doc is None:
+        if quiz_doc is None or quiz_doc.status.value == "deleted":
             return None
+        if (
+            quiz_doc.visibility.value == "private"
+            and quiz_doc.owner_user_id
+            and quiz_doc.owner_user_id != user_id
+        ):
+            raise HTTPException(status_code=404, detail="Quiz not found")
 
         stored_questions = [
             {
@@ -213,25 +231,21 @@ class QuizGradingService:
             quiz_type=quiz_doc.quiz_type.value,
             source=source,
         )
+        attempt_saved = None
         if user_id is not None:
             try:
                 await self._store_attempt(
                     user_id=user_id,
                     quiz_id=str(quiz_doc.id),
                     graded_results=graded_results,
-                    question_options_by_text={
-                        question.question: self._history_options(
-                            question.options,
-                            question_type=quiz_doc.quiz_type.value,
-                        )
-                        for question in quiz_doc.questions
-                    },
+                    stored_questions=stored_questions,
                 )
-            except Exception as exc:
+                attempt_saved = True
+            except Exception:
                 logger.exception(
                     "Failed to persist quiz attempt for user_id=%s quiz_id=%s",
                     user_id,
                     str(quiz_doc.id),
                 )
-                raise AttemptPersistenceError("Unable to save this quiz attempt.") from exc
-        return graded_results
+                attempt_saved = False
+        return GradedQuizSubmission(results=graded_results, attempt_saved=attempt_saved)

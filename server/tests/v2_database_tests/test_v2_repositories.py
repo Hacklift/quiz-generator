@@ -409,6 +409,10 @@ async def test_quiz_attempt_repository_soft_delete(test_db):
         )
     )
 
+    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user") is None
+    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user") == 0
+    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete") is None
+    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete") == 0
     deleted_count = await repository.soft_delete_attempt_by_id(
         str(attempt.id),
         user_id="user-delete",

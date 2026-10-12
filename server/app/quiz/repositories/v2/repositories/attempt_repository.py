@@ -40,15 +40,14 @@ class QuizAttemptV2Repository:
         self,
         attempt_id: str,
         *,
-        user_id: str | None = None,
+        user_id: str,
     ) -> QuizAttemptDocumentV2 | None:
         query: dict[str, object] = {}
         try:
             query["_id"] = ObjectId(attempt_id)
         except InvalidId:
             return None
-        if user_id is not None:
-            query["user_id"] = user_id
+        query["user_id"] = user_id
         document = await self.collection.find_one({"$and": [query, self._active_query()]})
         return QuizAttemptDocumentV2(**document) if document else None
 
@@ -56,15 +55,14 @@ class QuizAttemptV2Repository:
         self,
         attempt_id: str,
         *,
-        user_id: str | None = None,
+        user_id: str,
     ) -> int:
         query: dict[str, object] = {}
         try:
             query["_id"] = ObjectId(attempt_id)
         except InvalidId:
             return 0
-        if user_id is not None:
-            query["user_id"] = user_id
+        query["user_id"] = user_id
         result = await self.collection.update_one(
             {"$and": [query, self._active_query()]},
             {"$set": {"deleted_at": datetime.utcnow()}},

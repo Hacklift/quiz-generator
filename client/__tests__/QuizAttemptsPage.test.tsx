@@ -7,6 +7,12 @@ import {
 } from "@features/quiz-history/api/quizHistoryApi";
 
 const mockPush = jest.fn();
+let mockUserId = "user-1";
+let mockAuthenticated = true;
+
+jest.mock("@features/auth/context/authContext", () => ({
+  useAuth: () => ({ user: { id: mockUserId } }),
+}));
 
 jest.mock("next/router", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -24,7 +30,7 @@ jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({
 
 jest.mock("@features/auth/components/RequireAuth", () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  default: ({ children }: { children: React.ReactNode }) => mockAuthenticated ? <>{children}</> : <p>Sign in</p>,
 }));
 
 jest.mock("@features/quiz/components/NavBar", () => ({
@@ -43,6 +49,9 @@ const mockDeleteQuizAttempt = deleteQuizAttempt as jest.Mock;
 describe("QuizAttemptsPage", () => {
   beforeEach(() => {
     mockPush.mockReset();
+    mockUserId = "user-1";
+    mockAuthenticated = true;
+    mockGetUserQuizAttempts.mockReset();
     mockGetUserQuizAttempts.mockResolvedValue([
       {
         id: "attempt-1",
@@ -83,5 +92,34 @@ describe("QuizAttemptsPage", () => {
     expect(
       screen.getByText("No graded quiz attempts available yet."),
     ).toBeInTheDocument();
+  });
+
+  test("fetches attempts only after authentication is ready", async () => {
+    mockAuthenticated = false;
+    const { rerender } = render(<QuizAttemptsPage />);
+    expect(mockGetUserQuizAttempts).not.toHaveBeenCalled();
+    mockAuthenticated = true;
+    rerender(<QuizAttemptsPage />);
+    expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
+  });
+
+  test("clears previous account attempts when the user changes", async () => {
+    const { rerender } = render(<QuizAttemptsPage />);
+    expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
+    mockUserId = "user-2";
+    mockGetUserQuizAttempts.mockResolvedValue([]);
+    rerender(<QuizAttemptsPage />);
+    expect(screen.queryByText("Networking Basics")).not.toBeInTheDocument();
+    expect(await screen.findByText("No graded quiz attempts available yet.")).toBeInTheDocument();
+  });
+
+  test("offers retry rather than presenting a failed fetch as empty history", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    mockGetUserQuizAttempts.mockRejectedValueOnce(new Error("network unavailable"));
+    render(<QuizAttemptsPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your graded attempts.");
+    expect(screen.queryByText("No graded quiz attempts available yet.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
   });
 });

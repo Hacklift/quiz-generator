@@ -31,17 +31,9 @@ export const deleteQuizHistoryItem = async (historyId: string) => {
   return response.data;
 };
 
-export const getUserQuizAttempts = async (): Promise<any[] | undefined> => {
-  try {
-    const token = TokenService.getAccessToken();
-    if (!token) throw new Error("No access token found");
-
-    const response = await api.get("/api/quiz-attempts");
-    return response.data;
-  } catch (error) {
-    console.error("Failed to fetch quiz attempts:", error);
-    return undefined;
-  }
+export const getUserQuizAttempts = async (): Promise<any[]> => {
+  const response = await api.get("/api/quiz-attempts");
+  return response.data;
 };
 
 export const getQuizAttempt = async (attemptId: string) => {
