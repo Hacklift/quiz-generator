@@ -5,18 +5,18 @@ import os
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from server.app.core.dependencies import get_current_user, get_current_user_optional
+from server.app.core.dependencies import get_current_user_optional, get_verified_user
 from server.app.organizations.dependencies import (
     get_active_organization_context,
-    resolve_active_organization_context,
+    resolve_current_user_organization_context,
 )
-from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.app.organizations.models import OrganizationContext
 from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
 )
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
-from server.app.core.rate_limiter import limiter
+from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.db.core.connection import (
     get_organization_memberships_collection,
     get_organizations_collection,
@@ -51,14 +51,30 @@ shared_quiz_read_service = SharedQuizReadService()
 
 
 @router.get("/get-quiz-id", response_model=QuizSchema)
+@limiter.limit(RateLimits.PUBLIC)
 async def get_random_quiz_id(
+    request: Request,
     quizzes_v2_collection: AsyncIOMotorCollection = Depends(get_quizzes_v2_collection),
+    organizations_collection: AsyncIOMotorCollection = Depends(get_organizations_collection),
 ):
     try:
         # Only curated seed quizzes are eligible: user-generated quizzes must
-        # never be handed out to anonymous callers.
+        # never be handed out to anonymous callers. The platform library is
+        # still a tenant, so disabling it withdraws this public capability.
+        platform_library = await organizations_collection.find_one(
+            {"system_key": "platform_library", "status": "active"},
+            projection={"_id": 1},
+        )
+        if platform_library is None:
+            raise HTTPException(detail="Unable to fetch from database!", status_code=404)
         quiz_list = await quizzes_v2_collection.aggregate([
-            {"$match": {"status": {"$ne": "deleted"}, "source": "seed"}},
+            {
+                "$match": {
+                    "status": {"$ne": "deleted"},
+                    "source": "seed",
+                    "organization_id": str(platform_library["_id"]),
+                }
+            },
             {"$sample": {"size": 1}},
         ]).to_list(length=1)
         if not quiz_list:
@@ -110,37 +126,10 @@ async def _is_anonymously_shareable(quiz_id: str) -> bool:
     return bool(await shared_quiz_read_service.resolve_shared_quiz(quiz_id))
 
 
-async def _resolve_share_organization(
-    current_user: UserOut,
-    *,
-    sessions_collection,
-    organizations_collection,
-    memberships_collection,
-) -> OrganizationContext:
-    """Resolve tenant state only after a link is known not to be public.
-
-    FastAPI resolves dependencies before entering the route. Keeping this
-    explicit prevents a stale authenticated tenant selection from blocking an
-    otherwise valid public link, while private resources still require a
-    current, server-proven membership.
-    """
-    if not current_user.session_id:
-        raise HTTPException(status_code=401, detail="Session context is missing")
-    return await resolve_active_organization_context(
-        current_user=current_user,
-        principal=OrganizationPrincipal(
-            user_id=current_user.id,
-            session_id=current_user.session_id,
-            platform_role=current_user.role or "user",
-        ),
-        sessions_collection=sessions_collection,
-        organizations_collection=organizations_collection,
-        memberships_collection=memberships_collection,
-    )
-
-
 @router.get("/share-quiz/{quiz_id}", response_model=ShareQuizResponse)
+@limiter.limit(RateLimits.PUBLIC)
 async def get_share_link(
+    request: Request,
     quiz_id: str,
     current_user: UserOut | None = Depends(get_current_user_optional),
     sessions_collection=Depends(get_user_sessions_collection),
@@ -159,8 +148,8 @@ async def get_share_link(
         if current_user is None:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
-        organization = await _resolve_share_organization(
-            current_user,
+        organization = await resolve_current_user_organization_context(
+            current_user=current_user,
             sessions_collection=sessions_collection,
             organizations_collection=organizations_collection,
             memberships_collection=memberships_collection,
@@ -181,7 +170,8 @@ async def get_share_link(
 
 
 @router.get("/shared-quiz/{quiz_id}", response_model=SharedQuizDataResponse)
-async def get_shared_quiz_data(quiz_id: str):
+@limiter.limit(RateLimits.PUBLIC)
+async def get_shared_quiz_data(request: Request, quiz_id: str):
     try:
         shared_quiz = await shared_quiz_read_service.resolve_shared_quiz(quiz_id)
         if not shared_quiz:
@@ -204,7 +194,7 @@ async def share_quiz_via_email(
     response: Response,
     query: ShareEmailRequest,
     email_svc: EmailService = Depends(get_email_service),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_verified_user),
     organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     try:

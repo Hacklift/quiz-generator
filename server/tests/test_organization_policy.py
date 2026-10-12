@@ -409,6 +409,20 @@ def test_learner_cannot_read_content_from_an_unrelated_user_id_field():
     )
 
 
+def test_learner_cannot_read_unassigned_organization_content():
+    context = _context("learner")
+
+    assert not OrganizationPolicy().can(
+        context.principal,
+        OrganizationAction.CONTENT_READ,
+        {
+            "organization_id": context.organization_id,
+            "created_by_user_id": "author-1",
+        },
+        context,
+    )
+
+
 @pytest.mark.parametrize(
     ("role", "action", "resource"),
     [

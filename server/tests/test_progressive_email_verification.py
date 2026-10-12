@@ -644,7 +644,7 @@ async def test_verified_user_can_download_authenticated_quiz():
         "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
         new=AsyncMock(return_value=quiz),
     ), patch(
-        "server.app.quiz.routes.downloads._resolve_download_organization",
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
         new=AsyncMock(return_value=_organization_context(current_user)),
     ):
         result = await download_quiz_handler(
@@ -675,7 +675,7 @@ async def test_mock_download_does_not_resolve_a_stale_organization_context():
     )
 
     with patch(
-        "server.app.quiz.routes.downloads._resolve_download_organization",
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
         new=resolver,
     ):
         result = await download_quiz_handler(
@@ -700,7 +700,7 @@ async def test_quiz_download_hides_cross_organization_quiz():
     resolver = AsyncMock(return_value=organization)
 
     with patch(
-        "server.app.quiz.routes.downloads._resolve_download_organization",
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
         new=resolver,
     ), patch(
         "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
@@ -741,7 +741,7 @@ async def test_quiz_download_preserves_in_organization_role_denial():
     }
 
     with patch(
-        "server.app.quiz.routes.downloads._resolve_download_organization",
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
         new=AsyncMock(return_value=organization),
     ), patch(
         "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",

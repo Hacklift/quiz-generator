@@ -10,8 +10,7 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
     get_user_sessions_collection,
 )
-from server.app.organizations.dependencies import resolve_active_organization_context
-from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.app.organizations.dependencies import resolve_current_user_organization_context
 from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
@@ -32,34 +31,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _resolve_download_organization(
-    current_user: UserOut,
-    *,
-    sessions_collection,
-    organizations_collection,
-    memberships_collection,
-) -> OrganizationContext:
-    """Resolve tenant authority only for downloads of stored tenant content.
-
-    Generated sample downloads are intentionally usable without tenant state.
-    Resolving scope inside the persisted-quiz branch prevents a stale
-    authenticated session from blocking that non-tenant capability.
-    """
-    if not current_user.session_id:
-        raise HTTPException(status_code=401, detail="Session context is missing")
-    return await resolve_active_organization_context(
-        current_user=current_user,
-        principal=OrganizationPrincipal(
-            user_id=current_user.id,
-            session_id=current_user.session_id,
-            platform_role=current_user.role or "user",
-        ),
-        sessions_collection=sessions_collection,
-        organizations_collection=organizations_collection,
-        memberships_collection=memberships_collection,
-    )
-
-
 @router.get("/download-quiz")
 @limiter.limit("20/minute")
 async def download_quiz_handler(
@@ -77,8 +48,10 @@ async def download_quiz_handler(
             raise HTTPException(status_code=401, detail="Authentication required")
         if not current_user.is_verified:
             raise HTTPException(status_code=403, detail="Email not verified")
-        organization = await _resolve_download_organization(
-            current_user,
+        # Sample downloads never enter this branch, so stale tenant state
+        # cannot block the non-tenant download capability.
+        organization = await resolve_current_user_organization_context(
+            current_user=current_user,
             sessions_collection=sessions_collection,
             organizations_collection=organizations_collection,
             memberships_collection=memberships_collection,

@@ -14,6 +14,16 @@ async def share_get_quiz(quiz_id: str) -> dict | None:
     return await SharedQuizReadService().resolve_shared_quiz(quiz_id)
 
 
+async def _require_anonymously_shareable(quiz_id: str) -> dict:
+    """Require that a generated link can be consumed by its recipient."""
+    shared_quiz = await SharedQuizReadService().resolve_shared_quiz(quiz_id)
+    if not shared_quiz:
+        raise ValueError(
+            "Quiz must be public or unlisted before it can be shared by link or email"
+        )
+    return shared_quiz
+
+
 async def share_create_link(quiz_id: str) -> dict[str, str]:
     context = await get_mcp_request_context(require_auth=True)
     if context.organization_context is None:
@@ -29,6 +39,7 @@ async def share_create_link(quiz_id: str) -> dict[str, str]:
         action=OrganizationAction.CONTENT_SHARE,
         resource=quiz.model_dump(by_alias=True),
     )
+    await _require_anonymously_shareable(quiz_id)
     return {"link": f"{settings.share_url}/share/{quiz_id}"}
 
 
@@ -51,9 +62,7 @@ async def share_send_email(
         action=OrganizationAction.CONTENT_SHARE,
         resource=quiz.model_dump(by_alias=True),
     )
-    shared_quiz = await SharedQuizReadService().resolve_shared_quiz(quiz_id)
-    if not shared_quiz:
-        raise ValueError("Quiz not found")
+    shared_quiz = await _require_anonymously_shareable(quiz_id)
 
     link = shareable_link or f"{settings.share_url}/share/{quiz_id}"
     email_service = build_email_service(None)
