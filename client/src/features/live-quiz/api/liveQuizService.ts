@@ -140,6 +140,8 @@ export interface LiveQuizAttemptDetail {
   graded_answers: GradedAnswer[];
 }
 
+export type LiveResultsExportFormat = "csv" | "pdf" | "txt";
+
 export type LiveQuizParticipantsEvent =
   | {
       type: "participants_snapshot";
@@ -282,6 +284,20 @@ export const liveQuizService = {
       `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-sessions/${encodeURIComponent(sessionId)}`,
     );
     return data;
+  },
+
+  async downloadResults(
+    quizId: string,
+    format: LiveResultsExportFormat,
+  ): Promise<{ blob: Blob; contentDisposition?: string }> {
+    const response = await api.get(
+      `/api/v1/quizzes/${encodeURIComponent(quizId)}/live-sessions/export`,
+      { params: { format }, responseType: "blob" },
+    );
+    return {
+      blob: new Blob([response.data]),
+      contentDisposition: response.headers["content-disposition"],
+    };
   },
 
   subscribeParticipants(

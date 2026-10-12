@@ -5,8 +5,10 @@ import toast from "react-hot-toast";
 import {
   ParticipantRow,
   liveQuizService,
+  type LiveResultsExportFormat,
 } from "@features/live-quiz/api/liveQuizService";
 import RequireAuth from "@features/auth/components/RequireAuth";
+import { usePersona } from "@features/persona/context/personaContext";
 
 interface LiveQuizCreatorDashboardProps {
   quizId: string;
@@ -51,14 +53,18 @@ const formatDuration = (seconds: number | null | undefined): string => {
   return `${s}s`;
 };
 
-const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
+export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
   quizId,
 }) => {
   const router = useRouter();
+  const { userType } = usePersona();
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [exportFormat, setExportFormat] =
+    useState<LiveResultsExportFormat>("csv");
+  const [isExporting, setIsExporting] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -194,6 +200,30 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
     fetchParticipants(true);
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const { blob, contentDisposition } =
+        await liveQuizService.downloadResults(quizId, exportFormat);
+      const filename =
+        contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ||
+        `live-quiz-results.${exportFormat}`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Session results downloaded.");
+    } catch {
+      toast.error("Could not export session results.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
@@ -256,6 +286,33 @@ const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-4">
+            {userType === "teacher" || userType === "lecturer" ? (
+              <div className="flex items-center gap-2">
+                <label htmlFor="results-export-format" className="sr-only">
+                  Export format
+                </label>
+                <select
+                  id="results-export-format"
+                  value={exportFormat}
+                  onChange={(event) =>
+                    setExportFormat(event.target.value as LiveResultsExportFormat)
+                  }
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="csv">CSV</option>
+                  <option value="pdf">PDF</option>
+                  <option value="txt">Text</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="rounded-lg bg-[#0a3264] px-4 py-2 text-sm font-medium text-white hover:bg-[#082952] disabled:opacity-60"
+                >
+                  {isExporting ? "Exporting…" : "Export results"}
+                </button>
+              </div>
+            ) : null}
             <button
               onClick={handleRefreshClick}
               className="rounded-lg bg-[#0a3264] px-4 py-2 text-sm font-medium text-white hover:bg-[#082952]"

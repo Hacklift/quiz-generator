@@ -1,10 +1,11 @@
 import asyncio
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
@@ -12,6 +13,10 @@ from server.app.db.core.connection import (
     get_live_quiz_invitations_collection,
     get_live_quiz_sessions_collection,
     get_quizzes_v2_collection,
+    get_training_assignments_collection,
+    get_training_audit_events_collection,
+    get_training_runs_collection,
+    get_notifications_collection,
     get_user_sessions_collection,
     get_users_collection,
 )
@@ -26,6 +31,8 @@ from server.app.core.dependencies import get_verified_user
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
+from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
+from server.app.quiz.services.training_notification_service import TrainingNotificationService
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
     LiveQuizInvitationRepository,
 )
@@ -46,6 +53,12 @@ from server.app.quiz.schemas.live_session_schemas import (
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.services.live_quiz_realtime import live_quiz_realtime_broadcaster
+from server.app.quiz.services.download_service import build_download_filename
+from server.app.quiz.utils.live_results_export import (
+    generate_live_results_csv,
+    generate_live_results_pdf,
+    generate_live_results_txt,
+)
 
 
 router = APIRouter()
@@ -57,12 +70,41 @@ def get_live_quiz_service(
     sessions_collection: AsyncIOMotorCollection = Depends(
         get_live_quiz_sessions_collection
     ),
+    training_runs_collection: AsyncIOMotorCollection = Depends(get_training_runs_collection),
+    training_assignments_collection: AsyncIOMotorCollection = Depends(
+        get_training_assignments_collection
+    ),
+    training_audit_events_collection: AsyncIOMotorCollection = Depends(
+        get_training_audit_events_collection
+    ),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+    notifications_collection: AsyncIOMotorCollection = Depends(
+        get_notifications_collection
+    ),
 ) -> LiveQuizSessionService:
     repository = LiveQuizSessionRepository(
         quizzes_v2_collection,
         sessions_collection,
     )
-    return LiveQuizSessionService(repository, broadcaster=live_quiz_realtime_broadcaster)
+    assignment_repository = TrainingRunRepository(
+        quizzes_v2_collection,
+        training_runs_collection,
+        training_assignments_collection,
+        training_audit_events_collection,
+        sessions_collection,
+    )
+    notification_service = TrainingNotificationService(
+        users_collection,
+        notifications_collection,
+        training_runs_collection,
+    )
+    return LiveQuizSessionService(
+        repository,
+        broadcaster=live_quiz_realtime_broadcaster,
+        assignment_repository=assignment_repository,
+        assignment_completion_notifier=notification_service.notify_completion,
+        training_owner_completion_notifier=notification_service.notify_run_owner_of_completion,
+    )
 
 
 def get_live_quiz_invitation_repository(
@@ -235,6 +277,28 @@ async def list_live_quiz_participants(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
     return await service.list_analytics(quiz_id, current_user.id)
+
+
+@router.get(
+    "/quizzes/{quiz_id}/live-sessions/export",
+)
+async def export_live_quiz_results(
+    quiz_id: str,
+    format: Literal["csv", "pdf", "txt"],
+    current_user: UserOut = Depends(get_verified_user),
+    service: LiveQuizSessionService = Depends(get_live_quiz_service),
+):
+    payload = await service.build_results_export(quiz_id, current_user.id)
+    generators = {
+        "csv": (generate_live_results_csv, "text/csv"),
+        "pdf": (generate_live_results_pdf, "application/pdf"),
+        "txt": (generate_live_results_txt, "text/plain"),
+    }
+    generator, media_type = generators[format]
+    response = StreamingResponse(generator(payload), media_type=media_type)
+    filename = build_download_filename(f'{payload["title"]} results', format)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @router.get(
