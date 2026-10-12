@@ -4,14 +4,19 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from server.app.core.dependencies import get_current_user_optional
-from server.app.organizations.dependencies import get_optional_active_organization_context
-from server.app.organizations.models import OrganizationContext
+from server.app.db.core.connection import (
+    get_organization_memberships_collection,
+    get_organizations_collection,
+    get_quizzes_v2_collection,
+    get_user_sessions_collection,
+)
+from server.app.organizations.dependencies import resolve_active_organization_context
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
 )
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
-from server.app.db.core.connection import get_quizzes_v2_collection
 from server.app.core.rate_limiter import limiter
 from server.app.quiz.schemas.download_query import DownloadQuizQuery
 from server.app.quiz.schemas.download_schemas import DownloadQuizRequestModel
@@ -27,6 +32,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _resolve_download_organization(
+    current_user: UserOut,
+    *,
+    sessions_collection,
+    organizations_collection,
+    memberships_collection,
+) -> OrganizationContext:
+    """Resolve tenant authority only for downloads of stored tenant content.
+
+    Generated sample downloads are intentionally usable without tenant state.
+    Resolving scope inside the persisted-quiz branch prevents a stale
+    authenticated session from blocking that non-tenant capability.
+    """
+    if not current_user.session_id:
+        raise HTTPException(status_code=401, detail="Session context is missing")
+    return await resolve_active_organization_context(
+        current_user=current_user,
+        principal=OrganizationPrincipal(
+            user_id=current_user.id,
+            session_id=current_user.session_id,
+            platform_role=current_user.role or "user",
+        ),
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
+    )
+
+
 @router.get("/download-quiz")
 @limiter.limit("20/minute")
 async def download_quiz_handler(
@@ -34,9 +67,9 @@ async def download_quiz_handler(
     response: Response,
     query: DownloadQuizQuery = Depends(),
     current_user: UserOut | None = Depends(get_current_user_optional),
-    organization: OrganizationContext | None = Depends(
-        get_optional_active_organization_context
-    ),
+    sessions_collection=Depends(get_user_sessions_collection),
+    organizations_collection=Depends(get_organizations_collection),
+    memberships_collection=Depends(get_organization_memberships_collection),
 ) -> StreamingResponse:
     logger.info("Received download query: %s", query)
     if query.quiz_id:
@@ -44,8 +77,12 @@ async def download_quiz_handler(
             raise HTTPException(status_code=401, detail="Authentication required")
         if not current_user.is_verified:
             raise HTTPException(status_code=403, detail="Email not verified")
-        if organization is None:
-            raise HTTPException(status_code=409, detail="Organization context is unavailable")
+        organization = await _resolve_download_organization(
+            current_user,
+            sessions_collection=sessions_collection,
+            organizations_collection=organizations_collection,
+            memberships_collection=memberships_collection,
+        )
         quiz = await QuizV2Repository(get_quizzes_v2_collection()).find_by_id_for_organization(
             query.quiz_id,
             organization.organization_id,

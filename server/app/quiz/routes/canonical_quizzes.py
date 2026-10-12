@@ -3,8 +3,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from server.app.core.dependencies import get_current_user_optional
+from server.app.db.core.connection import get_organizations_collection
 from server.app.organizations.dependencies import get_optional_active_organization_context
 from server.app.organizations.models import OrganizationContext
+from server.app.organizations.repository import OrganizationRepository
 from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
@@ -62,6 +64,7 @@ async def get_canonical_quiz(
     organization: OrganizationContext | None = Depends(
         get_optional_active_organization_context
     ),
+    organizations_collection=Depends(get_organizations_collection),
 ):
     quiz = await CanonicalQuizWriteService().get_quiz_v2_by_id(quiz_id)
     if quiz is None:
@@ -72,7 +75,13 @@ async def get_canonical_quiz(
         raise HTTPException(status_code=404, detail="Quiz not found")
 
     visibility = quiz.visibility.value if hasattr(quiz.visibility, "value") else str(quiz.visibility)
-    if visibility not in {"public", "unlisted"}:
+    if visibility in {"public", "unlisted"}:
+        # Public visibility does not outlive the tenant that granted it.
+        if not await OrganizationRepository(organizations_collection).get_active(
+            quiz.organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Quiz not found")
+    else:
         if current_user is None or organization is None:
             # Do not disclose the existence of a private resource to an
             # unauthenticated caller holding a guessed identifier.

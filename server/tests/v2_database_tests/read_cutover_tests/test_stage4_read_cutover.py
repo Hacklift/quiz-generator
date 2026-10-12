@@ -292,7 +292,22 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
 
     saved_id = ObjectId()
     quiz_id = ObjectId()
+    platform_organization_id = ObjectId()
     created_at = datetime.utcnow()
+    await read_cutover_db["organizations"].insert_one(
+        {
+            "_id": platform_organization_id,
+            "kind": "personal",
+            "name": "Quizwerk Library",
+            "status": "active",
+            "settings": {},
+            "personal_owner_user_id": None,
+            "system_key": "platform_library",
+            "created_by_user_id": None,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+    )
     await read_cutover_db["quizzes_v2"].insert_one(
         {
             "_id": quiz_id,
@@ -301,7 +316,7 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
             "questions": [{"question": "Q1", "options": ["A", "B"], "correct_answer": "B"}],
             "description": "Shared description",
             "owner_user_id": None,
-            "organization_id": "platform-library",
+            "organization_id": str(platform_organization_id),
             "visibility": "public",
             "status": "active",
             "source": "legacy",
@@ -332,3 +347,46 @@ async def test_stage4_shared_reads_v2_payload_and_can_resolve_saved_legacy_id(
     assert payload["id"] == str(quiz_id)
     assert payload["title"] == "Shared Quiz"
     assert "correct_answer" not in payload["questions"][0]
+
+
+@pytest.mark.asyncio
+async def test_stage4_shared_read_hides_content_from_a_suspended_organization(
+    read_cutover_db,
+    shared_read_service_factory,
+):
+    service = shared_read_service_factory()
+    organization_id = ObjectId()
+    quiz_id = ObjectId()
+    created_at = datetime.utcnow()
+    await read_cutover_db["organizations"].insert_one(
+        {
+            "_id": organization_id,
+            "kind": "corporate",
+            "name": "Suspended tenant",
+            "status": "suspended",
+            "settings": {},
+            "personal_owner_user_id": None,
+            "system_key": None,
+            "created_by_user_id": "owner-1",
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+    )
+    await read_cutover_db["quizzes_v2"].insert_one(
+        {
+            "_id": quiz_id,
+            "title": "Suspended shared quiz",
+            "quiz_type": "multichoice",
+            "questions": [{"question": "Question", "correct_answer": "Answer"}],
+            "organization_id": str(organization_id),
+            "visibility": "public",
+            "status": "active",
+            "source": "manual",
+            "tags": [],
+            "schema_version": 1,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+    )
+
+    assert await service.resolve_shared_quiz(str(quiz_id)) is None

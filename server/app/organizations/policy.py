@@ -60,7 +60,12 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
     ),
     "facilitator": frozenset(
         {
+            OrganizationAction.CONTENT_CREATE,
             OrganizationAction.CONTENT_READ,
+            OrganizationAction.CONTENT_UPDATE,
+            OrganizationAction.CONTENT_DELETE,
+            OrganizationAction.CONTENT_SHARE,
+            OrganizationAction.CONTENT_EXPORT,
             OrganizationAction.DELIVERY_READ,
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
@@ -147,7 +152,7 @@ class OrganizationPolicy:
         if action not in _ROLE_ACTIONS[role]:
             return False
 
-        if role == "author" and action in {
+        if role in {"author", "facilitator"} and action in {
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
             OrganizationAction.CONTENT_SHARE,
@@ -187,7 +192,6 @@ class OrganizationPolicy:
                 "recipient_user_id",
                 "created_by_user_id",
                 "owner_user_id",
-                "user_id",
             )
 
         if role == "learner" and action == OrganizationAction.ATTEMPT_COMPLETE:

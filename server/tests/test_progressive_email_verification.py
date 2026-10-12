@@ -643,6 +643,9 @@ async def test_verified_user_can_download_authenticated_quiz():
     ) as download_mock, patch(
         "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
         new=AsyncMock(return_value=quiz),
+    ), patch(
+        "server.app.quiz.routes.downloads._resolve_download_organization",
+        new=AsyncMock(return_value=_organization_context(current_user)),
     ):
         result = await download_quiz_handler(
             request=MagicMock(),
@@ -654,7 +657,6 @@ async def test_verified_user_can_download_authenticated_quiz():
                 num_question=1,
             ),
             current_user=current_user,
-            organization=_organization_context(current_user),
         )
 
     assert result == "streaming-response"
@@ -663,3 +665,99 @@ async def test_verified_user_can_download_authenticated_quiz():
         file_format="txt",
         organization_id="organization-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_mock_download_does_not_resolve_a_stale_organization_context():
+    current_user = _user(is_verified=True)
+    resolver = AsyncMock(
+        side_effect=HTTPException(status_code=403, detail="Organization access denied")
+    )
+
+    with patch(
+        "server.app.quiz.routes.downloads._resolve_download_organization",
+        new=resolver,
+    ):
+        result = await download_quiz_handler(
+            request=MagicMock(),
+            response=Response(),
+            query=DownloadQuizQuery(
+                format="txt",
+                question_type="multichoice",
+                num_question=1,
+            ),
+            current_user=current_user,
+        )
+
+    assert result.media_type == "text/plain"
+    resolver.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_quiz_download_hides_cross_organization_quiz():
+    current_user = _user(is_verified=True)
+    organization = _organization_context(current_user)
+    resolver = AsyncMock(return_value=organization)
+
+    with patch(
+        "server.app.quiz.routes.downloads._resolve_download_organization",
+        new=resolver,
+    ), patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=None),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await download_quiz_handler(
+                request=MagicMock(),
+                response=Response(),
+                query=DownloadQuizQuery(
+                    quiz_id=str(ObjectId()),
+                    format="txt",
+                    question_type="multichoice",
+                    num_question=1,
+                ),
+                current_user=current_user,
+            )
+
+    assert exc_info.value.status_code == 404
+    resolver.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_quiz_download_preserves_in_organization_role_denial():
+    current_user = _user(is_verified=True)
+    principal = OrganizationPrincipal(user_id=current_user.id, session_id="session-1")
+    organization = OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="corporate",
+        membership_role="author",
+        principal=principal,
+        membership={"role": "author", "status": "active"},
+    )
+    quiz = MagicMock()
+    quiz.model_dump.return_value = {
+        "organization_id": organization.organization_id,
+        "created_by_user_id": "another-user",
+    }
+
+    with patch(
+        "server.app.quiz.routes.downloads._resolve_download_organization",
+        new=AsyncMock(return_value=organization),
+    ), patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=quiz),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await download_quiz_handler(
+                request=MagicMock(),
+                response=Response(),
+                query=DownloadQuizQuery(
+                    quiz_id=str(ObjectId()),
+                    format="txt",
+                    question_type="multichoice",
+                    num_question=1,
+                ),
+                current_user=current_user,
+            )
+
+    assert exc_info.value.status_code == 403

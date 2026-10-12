@@ -33,8 +33,11 @@ const ShareButton = ({ quizId: activeQuizId }: { quizId?: string }) => {
       setIsModalOpen(true);
     } catch (error) {
       console.error("Error generating quiz or fetching sharable link:", error);
+      const detail = (
+        error as { response?: { data?: { detail?: string } } }
+      )?.response?.data?.detail;
       toast.error(
-        "An error occurred while generating the shareable link. Please try again.",
+        detail || "An error occurred while generating the shareable link. Please try again.",
       );
     }
   };

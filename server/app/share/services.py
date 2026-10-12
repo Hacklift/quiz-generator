@@ -7,10 +7,12 @@ from server.app.core.config import settings
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
     get_folders_v2_collection,
+    get_organizations_collection,
     get_quiz_history_v2_collection,
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
 )
+from server.app.organizations.repository import OrganizationRepository
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
@@ -30,6 +32,7 @@ class SharedQuizReadService:
         quizzes_collection: Optional[AsyncIOMotorCollection] = None,
         ai_generated_quizzes_collection: Optional[AsyncIOMotorCollection] = None,
         saved_quizzes_collection: Optional[AsyncIOMotorCollection] = None,
+        organizations_collection: Optional[AsyncIOMotorCollection] = None,
         quiz_repository: Optional[QuizV2Repository] = None,
         reference_repository: Optional[ReferenceV2Repository] = None,
     ):
@@ -45,6 +48,11 @@ class SharedQuizReadService:
                 get_saved_quizzes_v2_collection(),
                 get_quiz_history_v2_collection(),
             )
+        )
+        self.organization_repository = OrganizationRepository(
+            organizations_collection
+            if organizations_collection is not None
+            else get_organizations_collection()
         )
 
     def _log(self, event: str, **fields):
@@ -83,6 +91,13 @@ class SharedQuizReadService:
                     saved_reference.quiz_id
                 )
                 quiz_doc = candidate
+
+        # Public/unlisted visibility is an explicit anonymous-read grant, but
+        # that grant is withdrawn when the owning tenant is no longer active.
+        if quiz_doc and not await self.organization_repository.get_active(
+            quiz_doc.organization_id
+        ):
+            quiz_doc = None
 
         payload = self._normalize_v2_quiz(quiz_doc) if quiz_doc else None
         self._log("quiz_read_v2_served", operation="shared_quiz_detail", read_mode="v2_only", quiz_id=quiz_id)

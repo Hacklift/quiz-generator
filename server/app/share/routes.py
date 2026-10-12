@@ -208,6 +208,9 @@ async def share_quiz_via_email(
     organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     try:
+        # Public visibility grants anonymous read of an existing link. Sending
+        # an email is an active distribution action and still requires the
+        # tenant's CONTENT_SHARE permission.
         await _require_share_permission(query.quiz_id, organization)
         shared_quiz = await shared_quiz_read_service.resolve_shared_quiz(query.quiz_id)
         if not shared_quiz:

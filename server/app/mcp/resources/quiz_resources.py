@@ -1,9 +1,13 @@
-from server.app.db.core.connection import get_quizzes_v2_collection
+from server.app.db.core.connection import (
+    get_organizations_collection,
+    get_quizzes_v2_collection,
+)
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
 )
+from server.app.organizations.repository import OrganizationRepository
 from server.app.mcp.tools.share_tools import share_get_quiz
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 
@@ -26,6 +30,10 @@ async def quiz_resource(quiz_id: str) -> dict | None:
     else:
         quiz = await repository.find_public_shareable_by_id(quiz_id)
         if quiz is None:
+            return None
+        if not await OrganizationRepository(get_organizations_collection()).get_active(
+            quiz.organization_id
+        ):
             return None
     return quiz.model_dump(mode="json", by_alias=True)
 
