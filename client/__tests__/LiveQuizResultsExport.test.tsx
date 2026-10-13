@@ -1,8 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { LiveQuizCreatorDashboard } from "../pages/my-live-quizzes/[quizId]";
-import { MyLiveQuizzesPage } from "../pages/my-live-quizzes";
+import { LiveQuizCreatorDashboard } from "@features/live-quiz/pages/LiveQuizCreatorDashboardPage";
+import { MyLiveQuizzesPage } from "@features/live-quiz/pages/MyLiveQuizzesPage";
 import { liveQuizService } from "@features/live-quiz/api/liveQuizService";
 import { usePersona } from "@features/persona/context/personaContext";
 
