@@ -15,6 +15,16 @@ class QuizAttemptV2Repository:
     def _active_query() -> dict:
         return {"$or": [{"deleted_at": {"$exists": False}}, {"deleted_at": None}]}
 
+    @staticmethod
+    def _scope_query(organization_id: str, allow_legacy_personal: bool) -> dict:
+        if not organization_id:
+            raise ValueError("Organization scope is required")
+        if allow_legacy_personal:
+            # The user filter is always applied separately. Only personal
+            # contexts may opt into reading that user's pre-backfill records.
+            return {"$or": [{"organization_id": organization_id}, {"organization_id": None}]}
+        return {"organization_id": organization_id}
+
     async def insert_attempt(self, attempt: QuizAttemptDocumentV2) -> QuizAttemptDocumentV2:
         payload = attempt.model_dump(by_alias=True)
         result = await self.collection.insert_one(payload)
@@ -25,6 +35,8 @@ class QuizAttemptV2Repository:
         self,
         user_id: str,
         *,
+        organization_id: str,
+        allow_legacy_personal: bool = False,
         quiz_id: str | None = None,
         limit: int = 100,
     ) -> list[QuizAttemptDocumentV2]:
@@ -32,7 +44,7 @@ class QuizAttemptV2Repository:
         if quiz_id is not None:
             query["quiz_id"] = quiz_id
         documents = await self.collection.find(
-            {"$and": [query, self._active_query()]}
+            {"$and": [query, self._scope_query(organization_id, allow_legacy_personal), self._active_query()]}
         ).sort([("submitted_at", -1), ("_id", -1)]).to_list(length=limit)
         return [QuizAttemptDocumentV2(**document) for document in documents]
 
@@ -41,6 +53,8 @@ class QuizAttemptV2Repository:
         attempt_id: str,
         *,
         user_id: str,
+        organization_id: str,
+        allow_legacy_personal: bool = False,
     ) -> QuizAttemptDocumentV2 | None:
         query: dict[str, object] = {}
         try:
@@ -48,7 +62,9 @@ class QuizAttemptV2Repository:
         except InvalidId:
             return None
         query["user_id"] = user_id
-        document = await self.collection.find_one({"$and": [query, self._active_query()]})
+        document = await self.collection.find_one(
+            {"$and": [query, self._scope_query(organization_id, allow_legacy_personal), self._active_query()]}
+        )
         return QuizAttemptDocumentV2(**document) if document else None
 
     async def soft_delete_attempt_by_id(
@@ -56,6 +72,8 @@ class QuizAttemptV2Repository:
         attempt_id: str,
         *,
         user_id: str,
+        organization_id: str,
+        allow_legacy_personal: bool = False,
     ) -> int:
         query: dict[str, object] = {}
         try:
@@ -64,7 +82,7 @@ class QuizAttemptV2Repository:
             return 0
         query["user_id"] = user_id
         result = await self.collection.update_one(
-            {"$and": [query, self._active_query()]},
+            {"$and": [query, self._scope_query(organization_id, allow_legacy_personal), self._active_query()]},
             {"$set": {"deleted_at": datetime.utcnow()}},
         )
         return result.modified_count

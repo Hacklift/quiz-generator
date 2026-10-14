@@ -5,7 +5,7 @@ import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
@@ -295,7 +295,9 @@ async def export_live_quiz_results(
         "txt": (generate_live_results_txt, "text/plain"),
     }
     generator, media_type = generators[format]
-    response = StreamingResponse(generator(payload), media_type=media_type)
+    # Export generators fully materialize their in-memory buffers before this
+    # route runs, so streaming would only add an unnecessary thread-pool hop.
+    response = Response(content=generator(payload).getvalue(), media_type=media_type)
     filename = build_download_filename(f'{payload["title"]} results', format)
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

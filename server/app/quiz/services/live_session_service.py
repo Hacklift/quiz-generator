@@ -133,6 +133,8 @@ class LiveQuizSessionService:
                 invitation_id = await invitation_repository.upsert_invitation(
                     {
                         "quiz_id": str(updated_quiz["_id"]),
+                        "organization_id": updated_quiz.get("organization_id"),
+                        "created_by_user_id": updated_quiz.get("created_by_user_id") or creator_id,
                         "creator_user_id": creator_id,
                         "access_code": code,
                         "email": email,
@@ -310,6 +312,8 @@ class LiveQuizSessionService:
 
         session_data = {
             "quiz_id": str(quiz["_id"]),
+            "organization_id": quiz.get("organization_id"),
+            "created_by_user_id": quiz.get("created_by_user_id") or quiz.get("owner_user_id"),
             "creator_user_id": creator_user_id,
             "participant_type": participant_type,
             "user_id": user_id,

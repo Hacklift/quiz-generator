@@ -21,6 +21,7 @@ from server.app.quiz.services.live_session_service import LiveQuizSessionService
 async def get_questions(
     request: QuizRequest,
     user_id: str | None = None,
+    organization_id: str | None = None,
     invitation_repository=None,
     email_service=None,
 ) -> Dict:
@@ -56,6 +57,8 @@ async def get_questions(
         "custom_instruction": request.custom_instruction,
         "token": request.token,
         "user_id": user_id,
+        "organization_id": organization_id,
+        "created_by_user_id": user_id,
     }
 
     try:
