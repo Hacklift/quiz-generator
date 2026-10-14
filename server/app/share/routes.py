@@ -4,6 +4,7 @@ import os
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.errors import ConnectionFailure, ExecutionTimeout
 
 from server.app.core.dependencies import get_current_user_optional, get_verified_user
 from server.app.organizations.dependencies import (
@@ -24,7 +25,7 @@ from server.app.db.core.connection import (
     get_user_sessions_collection,
 )
 from server.app.quiz.schemas.quiz_schemas import QuizSchema
-from server.app.share.services import SharedQuizReadService
+from server.app.share.services import SharedQuizReadService, build_default_description
 from server.app.share.schemas import (
     ShareEmailRequest,
     ShareEmailResponse,
@@ -66,11 +67,16 @@ async def get_random_quiz_id(
             projection={"_id": 1},
         )
         if platform_library is None:
-            raise HTTPException(detail="Unable to fetch from database!", status_code=404)
+            logger.warning(
+                "Public quiz library unavailable: platform_library is missing or inactive; "
+                "verify organization provisioning and Protocol B reconciliation"
+            )
+            raise HTTPException(detail="Public quiz library is unavailable", status_code=404)
         quiz_list = await quizzes_v2_collection.aggregate([
             {
                 "$match": {
-                    "status": {"$ne": "deleted"},
+                    "status": "active",
+                    "visibility": "public",
                     "source": "seed",
                     "organization_id": str(platform_library["_id"]),
                 }
@@ -78,12 +84,12 @@ async def get_random_quiz_id(
             {"$sample": {"size": 1}},
         ]).to_list(length=1)
         if not quiz_list:
-            raise HTTPException(detail="Unable to fetch from database!", status_code=404)
+            raise HTTPException(detail="No public template quizzes are available", status_code=404)
         selected_quiz = quiz_list[0]
         return QuizSchema(
             id=str(selected_quiz["_id"]),
             title=selected_quiz["title"],
-            description=selected_quiz.get("description"),
+            description=selected_quiz.get("description") or build_default_description(selected_quiz["title"]),
             quiz_type=selected_quiz["quiz_type"],
             owner_id=selected_quiz.get("owner_user_id"),
             canonical_quiz_id=str(selected_quiz["_id"]),
@@ -93,9 +99,14 @@ async def get_random_quiz_id(
         )
     except HTTPException:
         raise
+    except (ConnectionFailure, ExecutionTimeout) as exc:
+        logger.exception("Database unavailable while selecting a public template quiz")
+        raise HTTPException(
+            detail="Public quiz library is temporarily unavailable", status_code=503,
+        ) from exc
     except Exception as exc:
-        logger.info("Error occured while fetching quiz from database: %s", exc)
-        raise HTTPException(detail="Unable to fetch from database!", status_code=404)
+        logger.exception("Failed to select a public template quiz")
+        raise HTTPException(detail="Failed to fetch a public template quiz", status_code=500) from exc
 
 
 async def _require_share_permission(
@@ -165,8 +176,8 @@ async def get_share_link(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.info("Unable to generate shareable link: %s", exc)
-        raise HTTPException(detail="Failed to generate shareable link", status_code=500)
+        logger.exception("Unable to generate shareable link for quiz %s", quiz_id)
+        raise HTTPException(detail="Failed to generate shareable link", status_code=500) from exc
 
 
 @router.get("/shared-quiz/{quiz_id}", response_model=SharedQuizDataResponse)

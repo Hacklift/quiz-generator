@@ -6,7 +6,10 @@ import pytest
 from bson import ObjectId
 
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
-from server.app.organizations.policy import OrganizationAction, OrganizationPolicy
+from server.app.organizations.policy import (
+    OrganizationAction, OrganizationPolicy, require_organization_permission,
+)
+from fastapi import HTTPException
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 
 
@@ -96,6 +99,47 @@ def test_author_cannot_edit_another_members_content():
         resource,
         context,
     )
+
+
+@pytest.mark.parametrize("action", [
+    OrganizationAction.CONTENT_READ,
+    OrganizationAction.CONTENT_UPDATE,
+    OrganizationAction.CONTENT_DELETE,
+    OrganizationAction.CONTENT_SHARE,
+    OrganizationAction.CONTENT_EXPORT,
+    OrganizationAction.DELIVERY_RUN,
+    OrganizationAction.REPORT_READ,
+])
+@pytest.mark.parametrize("role", ["admin", "author", "facilitator"])
+def test_tenant_admin_can_operate_others_resources_without_widening_other_roles(role, action):
+    context = _context(role)
+    resource = {
+        "organization_id": context.organization_id,
+        "created_by_user_id": "another-user",
+        "owner_user_id": "another-user",
+    }
+    expected = role == "admin" or action == OrganizationAction.CONTENT_READ
+    assert OrganizationPolicy().can(context.principal, action, resource, context) is expected
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "author", "learner"])
+def test_policy_helper_hides_cross_tenant_resources_even_from_administrators(role):
+    context = _context(role)
+    resource = {"organization_id": "another-organization", "created_by_user_id": context.principal.user_id}
+    assert not OrganizationPolicy().can(context.principal, OrganizationAction.CONTENT_READ, resource, context)
+    with pytest.raises(HTTPException) as exc:
+        require_organization_permission(context=context, action=OrganizationAction.CONTENT_READ, resource=resource)
+    assert exc.value.status_code == 404
+
+
+def test_policy_helper_preserves_in_tenant_permission_denial():
+    context = _context("learner")
+    with pytest.raises(HTTPException) as exc:
+        require_organization_permission(
+            context=context, action=OrganizationAction.CONTENT_SHARE,
+            resource={"organization_id": context.organization_id, "created_by_user_id": context.principal.user_id},
+        )
+    assert exc.value.status_code == 403
 
 
 def test_author_can_manage_a_legacy_owned_quiz_without_created_by_user_id():

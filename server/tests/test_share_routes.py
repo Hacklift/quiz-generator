@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.params import Depends
 from unittest.mock import MagicMock
+from pymongo.errors import ConnectionFailure, OperationFailure
 
 from server.app.core.dependencies import get_verified_user
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
@@ -55,6 +56,43 @@ async def test_random_seed_quiz_requires_an_active_platform_library():
         )
 
     assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Public quiz library is unavailable"
+    quizzes.aggregate.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["library", "sampling"])
+async def test_random_seed_quiz_database_failure_returns_503(failure_stage, caplog):
+    from server.app.share import routes
+
+    quizzes = MagicMock()
+    organizations = MagicMock()
+    organizations.find_one = AsyncMock(return_value={"_id": "platform-library"})
+    quizzes.aggregate.return_value = SimpleNamespace(to_list=AsyncMock())
+    failure = ConnectionFailure("sensitive database diagnostics")
+    if failure_stage == "library":
+        organizations.find_one.side_effect = failure
+    else:
+        quizzes.aggregate.return_value.to_list.side_effect = failure
+    handler = getattr(routes.get_random_quiz_id, "__wrapped__", routes.get_random_quiz_id)
+    with pytest.raises(HTTPException) as exc:
+        await handler(request=MagicMock(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "Public quiz library is temporarily unavailable"
+    assert "Database unavailable while selecting a public template quiz" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_random_seed_query_error_is_not_misreported_as_empty_or_retryable():
+    from server.app.share import routes
+
+    quizzes = MagicMock()
+    organizations = SimpleNamespace(find_one=AsyncMock(side_effect=OperationFailure("invalid query")))
+    handler = getattr(routes.get_random_quiz_id, "__wrapped__", routes.get_random_quiz_id)
+    with pytest.raises(HTTPException) as exc:
+        await handler(request=MagicMock(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
+    assert exc.value.status_code == 500
+    assert exc.value.detail == "Failed to fetch a public template quiz"
     quizzes.aggregate.assert_not_called()
 
 

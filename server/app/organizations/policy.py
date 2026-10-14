@@ -152,6 +152,8 @@ class OrganizationPolicy:
         if action not in _ROLE_ACTIONS[role]:
             return False
 
+        # Admin permissions are tenant-wide by design; creator restrictions
+        # below apply to authors/facilitators, never across tenant boundaries.
         if role in {"author", "facilitator"} and action in {
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
@@ -218,6 +220,8 @@ def require_organization_permission(
     resource. A resource in the active organization that the member cannot
     operate on produces a normal authorization error.
     """
+    # Keep the policy's fail-closed tenant check as defense in depth. This
+    # HTTP boundary additionally hides foreign resources as 404, not 403.
     if resource is not None and str(resource.get("organization_id")) != context.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
     if not OrganizationPolicy().can(context.principal, action, resource, context):
