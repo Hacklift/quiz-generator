@@ -190,7 +190,18 @@ async def test_resource_backfill_scopes_user_records_and_platform_seed_content(t
     await test_db["folders_v2"].insert_one({"_id": folder_id, "user_id": str(user_id)})
     await test_db["folder_items_v2"].insert_one({"_id": ObjectId(), "folder_id": str(folder_id)})
     await test_db["saved_quizzes_v2"].insert_one({"_id": saved_quiz_id, "user_id": str(user_id)})
-    await test_db["quiz_attempts_v2"].insert_one({"_id": attempt_id, "user_id": str(user_id)})
+    from server.app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
+    legacy_attempt = QuizAttemptDocumentV2(
+        _id=attempt_id, user_id=str(user_id), quiz_id=str(inferred_quiz_id),
+        organization_id=str(personal_organization_id),
+        question_results=[{
+            "question": "Choose", "user_answer": "A", "correct_answer": "A",
+            "options": ["A", "B"], "question_type": "multichoice",
+            "is_correct": True, "result": "Correct",
+        }], score=1, percentage=100, deleted_at=datetime.now(timezone.utc),
+    ).model_dump(by_alias=True, exclude={"organization_id", "created_by_user_id"})
+    await test_db["quiz_attempts_v2"].insert_one(legacy_attempt)
+    legacy_attempt = await test_db["quiz_attempts_v2"].find_one({"_id": attempt_id})
     await test_db["ai_generated_quizzes"].insert_one({"_id": generated_quiz_id, "user_id": str(user_id)})
     await test_db["ai_generated_quizzes"].insert_one({"_id": inferred_raw_quiz_id})
     await test_db["notifications"].insert_one({"_id": notification_id, "user_id": str(user_id)})
@@ -293,6 +304,11 @@ async def test_resource_backfill_scopes_user_records_and_platform_seed_content(t
         and document["created_by_user_id"] == str(user_id)
         for document in scoped_documents
     )
+    migrated_attempt = await test_db["quiz_attempts_v2"].find_one({"_id": attempt_id})
+    assert {
+        key: value for key, value in migrated_attempt.items()
+        if key not in {"organization_id", "created_by_user_id"}
+    } == legacy_attempt
 
     completed_report = await auto_backfill_resource_organizations(
         database_instance=test_db,
