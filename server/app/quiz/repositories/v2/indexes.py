@@ -161,3 +161,17 @@ async def ensure_quiz_history_v2_indexes(collection: AsyncIOMotorCollection):
         unique=True,
         partialFilterExpression={"legacy_history_id": {"$exists": True, "$type": "string"}},
     )
+
+
+async def ensure_quiz_attempts_v2_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("submitted_at", -1), ("_id", -1)],
+        name="organization_attempt_user_submitted_v2",
+    )
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("quiz_id", 1), ("submitted_at", -1), ("_id", -1)],
+        name="organization_attempt_user_quiz_submitted_v2",
+    )
+    await collection.create_index([("user_id", 1), ("submitted_at", -1)])
+    await collection.create_index([("user_id", 1), ("quiz_id", 1), ("submitted_at", -1)])
+    await collection.create_index([("quiz_id", 1), ("submitted_at", -1)])

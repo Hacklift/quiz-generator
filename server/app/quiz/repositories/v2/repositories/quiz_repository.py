@@ -252,6 +252,35 @@ class QuizV2Repository:
         by_id = {document["_id"]: document for document in documents}
         return [QuizDocumentV2(**by_id[object_id]) for object_id in order if object_id in by_id]
 
+    async def find_attempt_source_quizzes(
+        self,
+        quiz_ids: list[str],
+        *,
+        organization_id: str | None,
+        user_id: str | None,
+        allow_legacy_personal: bool = False,
+    ) -> list[QuizDocumentV2]:
+        """Resolve practice sources without joining another tenant's private data."""
+        object_ids = []
+        for quiz_id in quiz_ids:
+            try:
+                object_ids.append(ObjectId(quiz_id))
+            except InvalidId:
+                continue
+        if not object_ids:
+            return []
+        scopes = [{"visibility": {"$in": ["public", "unlisted"]}}]
+        if organization_id:
+            scopes.append({"organization_id": organization_id})
+            if allow_legacy_personal and user_id:
+                scopes.append({"organization_id": None, "owner_user_id": user_id})
+        documents = await self.collection.find({
+            "_id": {"$in": object_ids},
+            "status": {"$ne": "deleted"},
+            "$or": scopes,
+        }).to_list(length=len(object_ids))
+        return [QuizDocumentV2(**document) for document in documents]
+
     async def update_metadata(
         self,
         quiz_id: str,

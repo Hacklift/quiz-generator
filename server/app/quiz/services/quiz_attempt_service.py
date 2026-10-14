@@ -1,0 +1,137 @@
+from typing import Any
+
+from server.app.db.core.connection import (
+    get_quiz_attempts_v2_collection,
+    get_quizzes_v2_collection,
+)
+from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
+from server.app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
+from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
+
+
+class QuizAttemptService:
+    def __init__(
+        self,
+        *,
+        quiz_repository: QuizV2Repository | None = None,
+        attempt_repository: QuizAttemptV2Repository | None = None,
+    ):
+        self.quiz_repository = quiz_repository or QuizV2Repository(get_quizzes_v2_collection())
+        self.attempt_repository = attempt_repository or QuizAttemptV2Repository(
+            get_quiz_attempts_v2_collection()
+        )
+
+    @staticmethod
+    def _question_options_by_text(
+        quiz: QuizDocumentV2 | None,
+    ) -> dict[str, list[str] | None]:
+        if quiz is None:
+            return {}
+        default_options = ["True", "False"] if quiz.quiz_type.value == "true-false" else None
+        return {
+            question.question: question.options or default_options
+            for question in quiz.questions
+        }
+
+    @classmethod
+    def _attempt_payload(
+        cls,
+        attempt,
+        *,
+        quiz: QuizDocumentV2 | None,
+    ) -> dict[str, Any]:
+        question_options_by_text = cls._question_options_by_text(quiz)
+        return {
+            "_id": str(attempt.id),
+            "id": str(attempt.id),
+            "quiz_id": attempt.quiz_id,
+            "quiz_title": quiz.title if quiz else None,
+            "score": attempt.score,
+            "percentage": attempt.percentage,
+            "total_questions": len(attempt.question_results),
+            "submitted_at": attempt.submitted_at,
+            "question_results": [
+                {
+                    "question": result.question,
+                    "user_answer": result.user_answer,
+                    "correct_answer": result.correct_answer,
+                    "options": result.options
+                    or question_options_by_text.get(result.question)
+                    or (["True", "False"] if result.question_type == "true-false" else None),
+                    "question_type": result.question_type,
+                    "accuracy_percentage": result.accuracy_percentage,
+                    "is_correct": result.is_correct,
+                    "result": result.result,
+                }
+                for result in attempt.question_results
+            ],
+        }
+
+    async def _get_quizzes_by_ids(
+        self, quiz_ids: list[str], *, user_id: str, organization_id: str,
+        allow_legacy_personal: bool,
+    ) -> dict[str, QuizDocumentV2]:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            quiz_ids, user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        return {str(quiz.id): quiz for quiz in quizzes}
+
+    async def list_attempts(
+        self,
+        *,
+        user_id: str,
+        organization_id: str,
+        allow_legacy_personal: bool = False,
+        quiz_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        attempts = await self.attempt_repository.list_attempts_for_user(
+            user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+            quiz_id=quiz_id,
+            limit=limit,
+        )
+        quizzes_by_id = await self._get_quizzes_by_ids(
+            [attempt.quiz_id for attempt in attempts], user_id=user_id,
+            organization_id=organization_id, allow_legacy_personal=allow_legacy_personal,
+        )
+
+        payloads: list[dict[str, Any]] = []
+        for attempt in attempts:
+            quiz = quizzes_by_id.get(attempt.quiz_id)
+            payloads.append(self._attempt_payload(attempt, quiz=quiz))
+        return payloads
+
+    async def get_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any] | None:
+        attempt = await self.attempt_repository.get_attempt_by_id(
+            attempt_id,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        if attempt is None:
+            return None
+        quizzes = await self._get_quizzes_by_ids(
+            [attempt.quiz_id], user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        quiz = quizzes.get(attempt.quiz_id)
+        return self._attempt_payload(attempt, quiz=quiz)
+
+    async def delete_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
+        return (
+            await self.attempt_repository.soft_delete_attempt_by_id(
+                attempt_id,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        ) > 0

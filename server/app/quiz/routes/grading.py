@@ -1,9 +1,12 @@
 from typing import List, Union
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
+from server.app.core.dependencies import get_current_user_optional
 from server.app.core.rate_limiter import RateLimits, limiter
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.quiz.services.quiz_grading_service import (
     QuizGradingService,
     SubmissionMismatchError,
@@ -30,6 +33,8 @@ async def grade_quiz_submission(
     quiz_id: str,
     payload: GradeQuizRequest,
     source: str = Query("mock", enum=["mock", "ai"]),
+    current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(get_optional_active_organization_context),
 ):
     """Grade a submission against the stored quiz.
 
@@ -42,6 +47,9 @@ async def grade_quiz_submission(
             quiz_id,
             [answer.model_dump() for answer in payload.answers],
             source=source,
+            user_id=str(current_user.id) if current_user is not None else None,
+            organization_id=organization.organization_id if organization else None,
+            allow_legacy_personal=bool(organization and organization.organization_kind == "personal"),
         )
     except SubmissionMismatchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -52,4 +60,8 @@ async def grade_quiz_submission(
 
     if graded is None:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    return graded
+    response.headers["X-Quiz-Attempt-Status"] = (
+        "not-requested" if graded.attempt_saved is None
+        else "saved" if graded.attempt_saved else "failed"
+    )
+    return graded.results
