@@ -184,8 +184,7 @@ async def test_authenticated_creator_route_exports_csv():
         SimpleNamespace(id="teacher-1", persona_user_type="teacher"),
         Service(),
     )
-    chunks = [chunk async for chunk in response.body_iterator]
-    body = "".join(chunk.decode() if isinstance(chunk, bytes) else chunk for chunk in chunks)
+    body = response.body.decode()
     assert body == "Participant,Score,Percentage\n"
     assert response.media_type == "text/csv"
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
