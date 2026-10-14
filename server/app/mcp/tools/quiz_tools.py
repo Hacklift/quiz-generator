@@ -1,3 +1,5 @@
+from server.app.analytics.product_events import QUIZ_GENERATED, record_product_event
+from server.app.db.core.connection import get_product_events_collection
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.services.generation_policy import validate_generation_question_count
@@ -95,9 +97,19 @@ async def quiz_generate(
         history_id = str(history_reference.id)
         history_quiz_id = history_reference.quiz_id
 
+    quiz_id = result.get("quiz_id") or history_quiz_id
+    await record_product_event(
+        get_product_events_collection(),
+        event_type=QUIZ_GENERATED,
+        user_id=context.user_id,
+        user=context.user,
+        quiz_id=quiz_id,
+        origin="mcp",
+    )
+
     return {
         **result,
-        "quiz_id": result.get("quiz_id") or history_quiz_id,
+        "quiz_id": quiz_id,
         "history_id": history_id,
         "question_count": len(questions),
         "question_type": question_type,

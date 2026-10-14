@@ -62,6 +62,7 @@ async def get_quiz(
             user_id=current_user.id,
             user=current_user,
             quiz_id=result.get("quiz_id"),
+            origin="rest",
         )
         if result.get("live_quiz_enabled"):
             await record_product_event(

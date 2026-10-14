@@ -1,5 +1,6 @@
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
+from typing import Any
 
 
 _authorization_header: ContextVar[str | None] = ContextVar(
@@ -16,6 +17,7 @@ class McpRequestContext:
     role: str | None = None
     scopes: set[str] = field(default_factory=set)
     tenant_id: str | None = None
+    user: Any = field(default=None, repr=False, compare=False)
 
 
 def set_authorization_header(value: str | None) -> Token[str | None]:

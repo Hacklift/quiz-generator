@@ -1,3 +1,4 @@
+import asyncio
 import csv
 from datetime import datetime, timezone
 from io import StringIO
@@ -232,6 +233,39 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
         quiz_id="quiz-1",
         export_format=export_format,
     )
+
+
+@pytest.mark.asyncio
+async def test_export_response_is_not_delayed_by_slow_telemetry(monkeypatch):
+    class Service:
+        async def build_results_export(self, quiz_id, requester_id):
+            return {"title": "Class Results", "question_count": 0, "participants": []}
+
+    async def slow_insert(_event):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: SimpleNamespace(insert_one=slow_insert),
+    )
+    current_user = SimpleNamespace(id="teacher-1")
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    response = await export_live_quiz_results(
+        "quiz-1",
+        "csv",
+        current_user,
+        Service(),
+    )
+
+    assert response.media_type == "text/csv"
+    assert loop.time() - started_at < 0.2
 
 
 @pytest.mark.asyncio

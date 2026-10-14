@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     ASSISTANT_PENDING_RUN_TTL_SECONDS: int = 900
     QUIZ_GENERATION_MAX_QUESTIONS: int = 10
     QUIZ_GENERATION_REQUIRES_AUTH: bool = False
+    PRODUCT_EVENT_TIMEOUT_SECONDS: float = 0.25
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:
@@ -75,6 +76,8 @@ class Settings(BaseSettings):
             raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
         if self.QUIZ_GENERATION_MAX_QUESTIONS < 1:
             raise ValueError("QUIZ_GENERATION_MAX_QUESTIONS must be at least 1")
+        if self.PRODUCT_EVENT_TIMEOUT_SECONDS <= 0:
+            raise ValueError("PRODUCT_EVENT_TIMEOUT_SECONDS must be greater than 0")
         if not self.ASSISTANT_INTERNAL_MCP_URL:
             port = os.getenv("PORT", "8000")
             self.ASSISTANT_INTERNAL_MCP_URL = f"http://127.0.0.1:{port}/internal/mcp"

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -70,6 +71,52 @@ async def test_product_event_is_minimal_and_snapshots_persona_at_event_time():
         "quiz_id",
         "created_at",
     }
+
+
+@pytest.mark.asyncio
+async def test_product_event_timeout_is_bounded_and_does_not_raise(monkeypatch, caplog):
+    attempts = 0
+
+    async def slow_insert(_event):
+        nonlocal attempts
+        attempts += 1
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    collection = SimpleNamespace(insert_one=slow_insert)
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    await record_product_event(
+        collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    assert loop.time() - started_at < 0.2
+    assert attempts == 1
+    assert "Timed out recording product event quiz_generated" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_product_event_unexpected_exception_does_not_raise(caplog):
+    collection = SimpleNamespace(
+        insert_one=AsyncMock(side_effect=RuntimeError("telemetry unavailable"))
+    )
+
+    await record_product_event(
+        collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    collection.insert_one.assert_awaited_once()
+    assert "Unexpected failure recording product event quiz_generated" in caplog.text
 
 
 @pytest.mark.asyncio

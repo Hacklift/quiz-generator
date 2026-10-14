@@ -1,8 +1,11 @@
+import { Archivo } from "next/font/google";
+
 /**
- * Shared typography class for Quizwerk surfaces.
- *
- * Keep the same interface as a `next/font` instance so callers do not need to
- * know how the font stack is supplied. Using Tailwind's system sans stack
- * keeps production builds independent of Google Fonts network availability.
+ * The one Archivo instance in the app. A second next/font call would
+ * double-load the font, so always import this rather than re-declaring it.
  */
-export const archivo = { className: "font-sans" } as const;
+export const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});

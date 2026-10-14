@@ -258,6 +258,7 @@ async def generate_document_quiz(
             user_id=current_user.id,
             user=current_user,
             quiz_id=quiz_id,
+            origin="rest",
         )
         if live_access_code:
             await record_product_event(

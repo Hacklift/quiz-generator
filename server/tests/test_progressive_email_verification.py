@@ -1,4 +1,6 @@
+import asyncio
 import inspect
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -131,6 +133,46 @@ async def test_unverified_user_can_generate_quiz():
     record_event_mock.assert_awaited_once()
     assert record_event_mock.await_args.kwargs["event_type"] == "quiz_generated"
     assert record_event_mock.await_args.kwargs["user"] is current_user
+    assert record_event_mock.await_args.kwargs["origin"] == "rest"
+
+
+@pytest.mark.asyncio
+async def test_quiz_generation_response_is_not_delayed_by_slow_telemetry(monkeypatch):
+    async def slow_insert(_event):
+        await asyncio.sleep(1)
+
+    request = QuizRequest(
+        profession="teacher",
+        num_questions=1,
+        question_type="multichoice",
+        difficulty_level="easy",
+        audience_type="students",
+        token=None,
+    )
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        "server.app.quiz.routes.generation.get_questions",
+        AsyncMock(return_value={"source": "mock", "questions": []}),
+    )
+    monkeypatch.setattr(
+        "server.app.quiz.routes.generation.get_product_events_collection",
+        lambda: SimpleNamespace(insert_one=slow_insert),
+    )
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    result = await get_quiz(
+        MagicMock(),
+        Response(),
+        request,
+        current_user=_user(is_verified=True),
+    )
+
+    assert result == {"source": "mock", "questions": []}
+    assert loop.time() - started_at < 0.2
 
 
 @pytest.mark.asyncio
