@@ -63,6 +63,8 @@ services:
               "--loglevel=info", "--pool=solo", "--concurrency=1"]
     restart: unless-stopped
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       server:

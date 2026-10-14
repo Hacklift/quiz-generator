@@ -106,6 +106,8 @@ async def update_locale(
         locale_data,
         current_user,
         request.app.state.users_collection,
+        request.app.state.organizations_collection,
+        request.app.state.organization_memberships_collection,
     )
 
 

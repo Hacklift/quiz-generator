@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { ROUTES } from "@shared/config/patterns/routes";
@@ -7,13 +8,15 @@ import { EMAIL_REGEX, PASSWORD_REGEX } from "@shared/config/patterns/patterns";
 import { LoginPayload } from "@features/auth/types/User";
 
 export default function LoginPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       <h1 className="text-3xl font-bold mb-8 text-center text-[#143E6F]">
-        Welcome Back
+        {uiText("m0c3310a647b03717")}
       </h1>
 
       {/* Sign In Button */}
@@ -21,12 +24,12 @@ export default function LoginPage() {
 
       {/* Optional: Link to Sign Up */}
       <p className="text-sm text-gray-600 mb-8">
-        Don’t have an account?{" "}
+        {uiText("m9dd227f9ed37aeda")}{" "}
         <button
           onClick={() => router.push(ROUTES.REGISTER)}
           className="text-blue-600 hover:underline"
         >
-          Register
+          {uiText("mbb7234ec12451361")}
         </button>
       </p>
 

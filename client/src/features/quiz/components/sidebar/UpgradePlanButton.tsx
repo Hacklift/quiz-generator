@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import UpgradePlanModal from "@features/quiz/components/modals/UpgradePlanModal";
@@ -7,11 +8,13 @@ import { useAuth } from "@features/auth/context/authContext";
 import { billingPlans } from "@shared/config/billingPlans";
 
 const UpgradePlanButton: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const { user, isAuthenticated } = useAuth();
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
 
   const activePlanConfig = billingPlans.find(
-    (bp) => bp.action === user?.subscription_plan
+    (bp) => bp.action === user?.subscription_plan,
   );
 
   const isPremium =
@@ -26,11 +29,11 @@ const UpgradePlanButton: React.FC = () => {
         <div className="flex items-center gap-1">
           <span className="text-xl">👑</span>
           <span className="whitespace-nowrap font-semibold">
-            {activePlanConfig.plan} Plan
+            {activePlanConfig.plan} {uiText("mfa8ed0bdabdd6bcb")}
           </span>
         </div>
         <span className="text-[10px] uppercase bg-[#0F6BFF] mx-1 px-1.5 py-0.5 rounded font-bold tracking-wider animate-pulse">
-          Activated
+          {uiText("m7e7b3a01539b5dd8")}
         </span>
       </div>
     );
@@ -39,7 +42,7 @@ const UpgradePlanButton: React.FC = () => {
   return (
     <>
       <SidebarButton
-        label="Upgrade Plan"
+        label={uiText("m17787ab7182ee2aa")}
         icon="🚀"
         onClick={() => setIsUpgradeOpen(true)}
       />

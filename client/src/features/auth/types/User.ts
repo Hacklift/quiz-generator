@@ -18,6 +18,8 @@ export interface User {
   preferred_locale?: SupportedLocale | null;
   effective_locale?: SupportedLocale;
   active_organization_id?: string | null;
+  onboarding_organization_id?: string | null;
+  language_selected?: boolean;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   subscription_plan?: string;

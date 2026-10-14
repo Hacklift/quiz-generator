@@ -7,12 +7,13 @@ import fr from "./messages/fr.json";
 import personaEn from "./messages/persona.en.json";
 import personaEs from "./messages/persona.es.json";
 import personaFr from "./messages/persona.fr.json";
+import uiEn from "./messages/ui.en.json";
 
 export function createLocaleI18n() {
   const instance = createInstance();
   void instance.init({
     resources: {
-      en: { translation: en, persona: personaEn },
+      en: { translation: en, persona: personaEn, ui: uiEn },
       es: { translation: es, persona: personaEs },
       fr: { translation: fr, persona: personaFr },
     },
@@ -21,6 +22,10 @@ export function createLocaleI18n() {
     defaultNS: "translation",
     initAsync: false,
     interpolation: { escapeValue: false },
+    react: {
+      bindI18n: "languageChanged loaded",
+      bindI18nStore: "added removed",
+    },
   });
   return instance;
 }

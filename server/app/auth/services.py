@@ -79,6 +79,7 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
         username=user.username,
         email=user.email,
         full_name=user.full_name,
+        preferred_locale=user.preferred_locale,
         password=user.password
     )
     

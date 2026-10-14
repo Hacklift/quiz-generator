@@ -3,9 +3,11 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from enum import Enum
 import re
+from server.app.i18n.locales import SupportedLocale
 
 
 class UserRegisterSchema(BaseModel):
+    preferred_locale: Optional[SupportedLocale] = None
     username: str
     email: EmailStr
     full_name: Optional[str] = None

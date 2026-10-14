@@ -1,10 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { MouseEvent, useEffect, useRef, useState } from "react";
 import AssistantComposer from "@features/assistant/components/AssistantComposer";
 import AssistantMessageList from "@features/assistant/components/AssistantMessageList";
-import {
-  AssistantAction,
-  AssistantMessage,
-} from "@features/assistant/types";
+import { AssistantAction, AssistantMessage } from "@features/assistant/types";
 
 interface AssistantPanelProps {
   messages: AssistantMessage[];
@@ -31,14 +29,17 @@ const AssistantPanel = ({
   onConfirmAction,
   onClose,
 }: AssistantPanelProps) => {
+  const { t: uiText } = useTranslation("ui");
+
   const panelRef = useRef<HTMLElement | null>(null);
   const dragStateRef = useRef<{
     offsetX: number;
     offsetY: number;
   } | null>(null);
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(
-    () => getDefaultPanelPosition(),
-  );
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(() => getDefaultPanelPosition());
 
   useEffect(() => {
     setPosition(getDefaultPanelPosition());
@@ -97,29 +98,36 @@ const AssistantPanel = ({
       }}
     >
       <div className="flex h-full w-full flex-col overflow-hidden">
-      <header
-        onMouseDown={startDrag}
-        className="flex cursor-move select-none items-center justify-between border-b border-gray-200 bg-white px-4 py-3"
-      >
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900">QuizApp Assistant</h2>
-          <p className="text-xs text-gray-500">Powered by internal quiz tools</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full px-3 py-1 text-sm font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-          aria-label="Close assistant"
+        <header
+          onMouseDown={startDrag}
+          className="flex cursor-move select-none items-center justify-between border-b border-gray-200 bg-white px-4 py-3"
         >
-          Close
-        </button>
-      </header>
-      <AssistantMessageList
-        messages={messages}
-        isSending={isSending}
-        onConfirmAction={onConfirmAction}
-      />
-      <AssistantComposer isSending={isSending} onSendMessage={onSendMessage} />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              {uiText("m83c56f57fc198c8a")}
+            </h2>
+            <p className="text-xs text-gray-500">
+              {uiText("m6e976a934f8b5165")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-3 py-1 text-sm font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            aria-label={uiText("m5ff71d6b661cbfa1")}
+          >
+            {uiText("m7d9eb7acb13e2462")}
+          </button>
+        </header>
+        <AssistantMessageList
+          messages={messages}
+          isSending={isSending}
+          onConfirmAction={onConfirmAction}
+        />
+        <AssistantComposer
+          isSending={isSending}
+          onSendMessage={onSendMessage}
+        />
       </div>
     </section>
   );

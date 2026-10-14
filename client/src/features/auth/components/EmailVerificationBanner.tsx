@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { resendVerification } from "@features/auth/api/authApi";
@@ -7,6 +8,8 @@ import VerifyEmailModal from "@features/auth/components/VerifyEmailModal";
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function EmailVerificationBanner() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user, refreshUser } = useAuth();
 
   const [dismissed, setDismissed] = useState(false);
@@ -39,7 +42,7 @@ export default function EmailVerificationBanner() {
     setIsSending(true);
     try {
       await resendVerification(user.email);
-      toast.success("Verification email sent");
+      toast.success(uiText("m6ab97e1ce3c2fbb4"));
       setCooldown(RESEND_COOLDOWN_SECONDS);
 
       // 🔥 IMPORTANT: open modal after resend
@@ -69,8 +72,7 @@ export default function EmailVerificationBanner() {
       <div className="sticky top-0 z-[120] w-full border-b border-amber-300 bg-amber-100 px-4 py-3 shadow-sm">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
           <p className="text-sm font-medium text-amber-900">
-            Your email is not verified. Verify your email to unlock all
-            features.
+            {uiText("m50087a01463186c7")}
           </p>
 
           <div className="flex items-center gap-2">
@@ -84,8 +86,8 @@ export default function EmailVerificationBanner() {
               {cooldown > 0
                 ? `Resend (${cooldown}s)`
                 : isSending
-                  ? "Sending..."
-                  : "Resend Email"}
+                  ? uiText("m286a3af7348e8312")
+                  : uiText("m7c0d0df78303a31d")}
             </button>
 
             {/* Verify Now */}
@@ -94,7 +96,7 @@ export default function EmailVerificationBanner() {
               onClick={onVerifyNow}
               className="rounded-md border border-amber-700 px-3 py-1.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-200"
             >
-              Verify Now
+              {uiText("m1dccacb53bb2adf7")}
             </button>
 
             {/* Dismiss */}
@@ -103,7 +105,7 @@ export default function EmailVerificationBanner() {
               onClick={() => setDismissed(true)}
               className="rounded-md px-2 py-1 text-sm text-amber-900 transition hover:bg-amber-200"
             >
-              Dismiss
+              {uiText("m48845bff334a50a5")}
             </button>
           </div>
         </div>
@@ -115,7 +117,7 @@ export default function EmailVerificationBanner() {
         onClose={() => setShowModal(false)}
         userEmail={user?.email || ""}
         onVerified={async () => {
-          toast.success("Email verified successfully");
+          toast.success(uiText("m0bae7b45c0c57fd5"));
 
           await refreshUser?.();
 

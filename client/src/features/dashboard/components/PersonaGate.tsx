@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { CONTAINER } from "@shared/ui/quizwerk";
@@ -13,9 +14,11 @@ import PersonaPicker from "@features/persona/components/PersonaPicker";
  * onboarding.
  */
 export default function PersonaGate() {
+  const { t: uiText } = useTranslation("ui");
+
   return (
     <div className={`${CONTAINER} py-[clamp(32px,5vw,56px)]`}>
-      <PersonaPicker heading="Let's set up your workspace" />
+      <PersonaPicker heading={uiText("m261039373173ee63")} />
     </div>
   );
 }

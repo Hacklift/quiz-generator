@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React, { FormEvent, useState } from "react";
 import toast from "react-hot-toast";
 import { TokenService } from "@shared/auth/tokenService";
@@ -16,6 +17,8 @@ const tomorrowLocalValue = () => {
 const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
   quizId,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [duration, setDuration] = useState(20);
   const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
   const [participantAccessMode, setParticipantAccessMode] = useState<
@@ -40,7 +43,7 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
         participantAccessMode === "invited_only") &&
       invitedEmails.length === 0
     ) {
-      toast.error("Add at least one invited email for restricted access.");
+      toast.error(uiText("m65a4f2d4dd83e5ec"));
       return;
     }
 
@@ -80,10 +83,12 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
 
   return (
     <section className="rounded-md border border-slate-200 bg-white px-4 py-5 shadow-sm">
-      <h2 className="text-lg font-bold text-[#0F2654]">Live Quiz Mode</h2>
+      <h2 className="text-lg font-bold text-[#0F2654]">
+        {uiText("mb34cb0aed279e420")}
+      </h2>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="block text-sm font-semibold text-slate-700">
-          Duration minutes
+          {uiText("m471195f5d126bfed")}
           <input
             type="number"
             min={1}
@@ -94,7 +99,7 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
           />
         </label>
         <label className="block text-sm font-semibold text-slate-700">
-          Access code expires
+          {uiText("m6e5ab5d97b456f1c")}
           <input
             type="datetime-local"
             value={expiresAt}
@@ -103,7 +108,7 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
           />
         </label>
         <label className="block text-sm font-semibold text-slate-700">
-          Participant access
+          {uiText("m6ab7c606d3128746")}
           <select
             value={participantAccessMode}
             onChange={(event) =>
@@ -113,17 +118,17 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
             }
             className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
           >
-            <option value="public">Public link</option>
-            <option value="restricted">Invited emails only</option>
-            <option value="invited_only">Invited emails only (strict)</option>
+            <option value="public">{uiText("m178b790b1cb2c176")}</option>
+            <option value="restricted">{uiText("m0c906cdd09708c8b")}</option>
+            <option value="invited_only">{uiText("mf9636e9a7397b7af")}</option>
           </select>
         </label>
         <label className="block text-sm font-semibold text-slate-700 md:col-span-2">
-          Invitation emails
+          {uiText("m26f1e46c9dfb0e3f")}
           <textarea
             value={invitedEmailsText}
             onChange={(event) => setInvitedEmailsText(event.target.value)}
-            placeholder="ada@example.com, grace@example.com"
+            placeholder={uiText("mefe42627ddbff54d")}
             rows={3}
             className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100"
           />
@@ -135,20 +140,24 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
             onChange={(event) => setSendEmailInvitations(event.target.checked)}
             className="h-4 w-4 accent-[#0F2654]"
           />
-          Send invitation emails
+          {uiText("ma04fe96c22a26440")}
         </label>
         <button
           type="submit"
           disabled={isLoading}
           className="self-end rounded-md bg-[#0a3264] px-4 py-2 text-sm font-semibold text-white hover:bg-[#082952] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isLoading ? "Generating..." : "Generate Code"}
+          {isLoading
+            ? uiText("m49286f33b674a0a6")
+            : uiText("m828abc2dd1b3b70c")}
         </button>
       </form>
 
       {accessCode && (
         <div className="mt-4 rounded-md bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-600">Access code</p>
+          <p className="text-sm font-semibold text-slate-600">
+            {uiText("mdb76a756cec85e60")}
+          </p>
           <p className="mt-1 text-2xl font-bold tracking-widest text-[#0F2654]">
             {accessCode}
           </p>
@@ -156,11 +165,11 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
             type="button"
             onClick={() => {
               navigator.clipboard.writeText(accessUrl);
-              toast.success("Live quiz link copied.");
+              toast.success(uiText("mc0a1b867714c680f"));
             }}
             className="mt-3 rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
           >
-            Copy Link
+            {uiText("m724e78a3254c899d")}
           </button>
         </div>
       )}

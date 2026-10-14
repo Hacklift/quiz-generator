@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import NavBar from "@features/quiz/components/NavBar";
@@ -8,6 +9,8 @@ import VerifyEmailModal from "@features/auth/components/VerifyEmailModal";
 import toast from "react-hot-toast";
 
 export default function VerifyEmailNoticePage() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const [showModal, setShowModal] = useState(false);
@@ -40,9 +43,9 @@ export default function VerifyEmailNoticePage() {
         <main className="mx-auto flex w-full max-w-3xl flex-1 items-center px-4 py-10">
           <section className="w-full rounded-2xl border border-amber-200 bg-white p-8 shadow-sm">
             <h1 className="text-2xl font-bold text-[#143E6F]">
-              Verify your email to continue
+              {uiText("maec6836d2e5098f0")}
             </h1>
-            <p className="mt-3 text-gray-700">Opening verification modal...</p>
+            <p className="mt-3 text-gray-700">{uiText("m419cbf12d5604188")}</p>
           </section>
         </main>
         <Footer />
@@ -56,7 +59,7 @@ export default function VerifyEmailNoticePage() {
         }}
         userEmail={user.email}
         onVerified={async () => {
-          toast.success("Email verified successfully");
+          toast.success(uiText("m0bae7b45c0c57fd5"));
           await refreshUser?.();
           setShowModal(false);
           router.push(ROUTES.PROFILE);

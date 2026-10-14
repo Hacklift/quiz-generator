@@ -70,6 +70,8 @@ def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
             get_profile_value(user, "preferred_locale")
         ),
         "active_organization_id": get_profile_value(user, "active_organization_id"),
+        "onboarding_organization_id": get_profile_value(user, "onboarding_organization_id"),
+        "language_selected": bool(get_profile_value(user, "language_selected") or get_profile_value(user, "preferred_locale")),
         "role": user.get("role", "user"),
         "status": coerce_user_status(user),
         "is_active": user.get("is_active", True),
@@ -105,7 +107,7 @@ async def create_user(users_collection: AsyncIOMotorCollection, user: CreateUser
             "username_normalized": normalize_username(user_dict["username"]),
             "email": user_dict["email"],
             "email_normalized": normalize_email(user_dict["email"]),
-            "profile": build_profile(full_name=user_dict.get("full_name")),
+            "profile": build_profile(full_name=user_dict.get("full_name"), preferred_locale=user_dict.get("preferred_locale")),
             "quizzes": [],
             "is_active": True,
             "is_verified": is_verified,

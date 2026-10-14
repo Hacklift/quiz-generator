@@ -5,6 +5,14 @@
     "useOrganizationDefault": "Utiliser la langue par défaut de l’organisation",
     "saving": "Enregistrement de la langue…",
     "saved": "Votre préférence linguistique est enregistrée.",
-    "saveError": "Votre préférence linguistique n’a pas pu être mise à jour."
+    "saveError": "Votre préférence linguistique n’a pas pu être mise à jour.",
+    "search": "Rechercher une langue",
+    "searchPlaceholder": "Saisissez le nom ou le code d’une langue",
+    "noMatches": "Aucune langue trouvée. Essayez un autre nom ou code.",
+    "coverage": "L’espagnol et le français incluent des traductions hors ligne. Les autres langues utilisent l’IA ; la disponibilité et la qualité varient.",
+    "welcome": "Choisissez votre langue",
+    "continue": "Continuer",
+    "loading": "Préparation des traductions…",
+    "unavailable": "Certaines traductions sont indisponibles. L’anglais est affiché si nécessaire."
   }
 }

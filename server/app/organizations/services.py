@@ -43,12 +43,12 @@ async def resolve_user_effective_locale(
     organizations_collection: AsyncIOMotorCollection,
     memberships_collection: AsyncIOMotorCollection,
 ) -> SupportedLocale:
-    """Resolve a user override first, then their active organisation default."""
+    """Resolve a user override first, then their onboarding organisation default."""
 
     if current_user.preferred_locale:
         return resolve_effective_locale(current_user.preferred_locale)
 
-    organization_id = current_user.active_organization_id
+    organization_id = current_user.onboarding_organization_id
     if not organization_id or not ObjectId.is_valid(organization_id):
         return DEFAULT_LOCALE
 

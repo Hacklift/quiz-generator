@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -23,15 +24,17 @@ function studentPresetHref(
 }
 
 export default function StudentDashboard({ persona }: DashboardViewProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const t = useTerms();
 
   const presets: StudentPreset[] = [
     {
       id: "self-test",
-      title: "Self-test",
+      title: uiText("m17be10d46feeecbb"),
       badge: "Auto-marked / Immediate feedback",
-      description: `Practise any topic with an auto-marked ${t("assignment")} that scores itself the moment you finish, so you know straight away what to revise next.`,
+      description: uiText("m380ec11e82888063", { value0: t("assignment") }),
       href: studentPresetHref(persona, "self-test"),
     },
   ];
@@ -42,19 +45,19 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="student-practice-heading"
       >
-        <Kicker>Practice</Kicker>
+        <Kicker>{uiText("md3857b12b4cea2bc")}</Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
             <h2
               id="student-practice-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              Practise by subject
+              {uiText("me57c11eda5f86c44")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              Pick a topic and get a fresh {t("assignment")} to work through —
-              every attempt is saved to your {t("report")} so you can see how
-              you are doing over time.
+              {uiText("m548df4d924484b2e")}
+              {t("assignment")} {uiText("me4b9b1a66a4d2b8c")}
+              {t("report")} {uiText("m32aa8e95de5cd4fe")}
             </p>
           </div>
 
@@ -62,9 +65,9 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push(personaGenerateHref(persona.userType))}
             className={`${BTN_PRIMARY} px-[28px] py-[14px] text-[16px]`}
-            aria-label="Practise a topic"
+            aria-label={uiText("m09d9dcdba8c6431c")}
           >
-            Practise a topic
+            {uiText("m09d9dcdba8c6431c")}
           </button>
         </div>
 
@@ -73,17 +76,18 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push("/quiz_history")}
             className="flex flex-col items-start gap-[6px] border-2 border-divider bg-paper p-[20px] text-left transition hover:border-ink/60 hover:bg-ink/[0.02]"
-            aria-label={`My ${t("report")} history`}
+            aria-label={uiText("mb71c498fac1d5339", { value0: t("report") })}
           >
             <p className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-brand">
-              History
+              {uiText("m0e76960093379060")}
             </p>
             <p className="text-[15px] font-extrabold text-ink">
-              My {t("report")} history
+              {uiText("m8ed6791bdf3d61a1")}
+              {t("report")} {uiText("m259aa8ef98a8b91d")}
             </p>
             <p className="text-[13.5px] leading-[20px] text-ink/70">
-              See every {t("assignment")} you have taken and your score on each
-              one.
+              {uiText("md1a6b2216eee1350")}
+              {t("assignment")} {uiText("m27a1718736f75bf6")}
             </p>
           </button>
 
@@ -91,16 +95,16 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push("/quiz_history")}
             className="flex flex-col items-start gap-[6px] border-2 border-divider bg-paper p-[20px] text-left transition hover:border-ink/60 hover:bg-ink/[0.02]"
-            aria-label="Retry weak areas"
+            aria-label={uiText("m3c331defca9c5dec")}
           >
             <p className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-brand">
-              Retry
+              {uiText("m942087cc2d41e013")}
             </p>
             <p className="text-[15px] font-extrabold text-ink">
-              Retry weak areas
+              {uiText("m3c331defca9c5dec")}
             </p>
             <p className="text-[13.5px] leading-[20px] text-ink/70">
-              Jump back into topics where your scores were lowest and try again.
+              {uiText("m8c2340890eb7b8b4")}
             </p>
           </button>
         </div>
@@ -110,15 +114,15 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="student-presets-heading"
       >
-        <Kicker>Student dashboard</Kicker>
+        <Kicker>{uiText("m1aa90426a6a2701d")}</Kicker>
         <h2
           id="student-presets-heading"
           className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
         >
-          Quick-create presets
+          {uiText("mfd5383c2f9a05cd0")}
         </h2>
         <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-          Jumpstart your revision without generic configuration.
+          {uiText("m6cbd8fa167b45571")}
         </p>
 
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">
@@ -143,9 +147,12 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
                 type="button"
                 onClick={() => router.push(preset.href)}
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
-                aria-label={`Create ${preset.title}`}
+                aria-label={uiText("m37a7e45e1b49df1f", {
+                  value0: preset.title,
+                })}
               >
-                Create {preset.title}
+                {uiText("m4759498ac2a719c6")}
+                {preset.title}
               </button>
             </article>
           ))}
@@ -156,18 +163,19 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="student-live-heading"
       >
-        <Kicker>Live quiz</Kicker>
+        <Kicker>{uiText("mfef250162a1277bb")}</Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
             <h2
               id="student-live-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              Joining a live {t("session")}?
+              {uiText("me7a4b61ebfd289ed")}
+              {t("session")}?
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
-              Got a code? Enter it to join a live {t("session")} and see your
-              results as soon as it ends.
+              {uiText("mf0fb6ea0a110a927")}
+              {t("session")} {uiText("mf718aee0b49bbf2b")}
             </p>
           </div>
 
@@ -175,9 +183,9 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push("/quiz-access")}
             className={BTN_GHOST}
-            aria-label="Join a live quiz"
+            aria-label={uiText("m21e31e177db66d84")}
           >
-            Join a live quiz
+            {uiText("m21e31e177db66d84")}
           </button>
         </div>
       </section>

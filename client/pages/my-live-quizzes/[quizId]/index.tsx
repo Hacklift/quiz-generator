@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -53,9 +54,11 @@ const formatDuration = (seconds: number | null | undefined): string => {
   return `${s}s`;
 };
 
-export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> = ({
-  quizId,
-}) => {
+export const LiveQuizCreatorDashboard: React.FC<
+  LiveQuizCreatorDashboardProps
+> = ({ quizId }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { userType } = usePersona();
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
@@ -94,15 +97,15 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
         }
       } catch (err: any) {
         if (err?.response?.status === 403) {
-          setError("You are not the owner of this quiz.");
+          setError(uiText("m453398ec8faae0ac"));
           return;
         }
         if (err?.response?.status === 404) {
-          setError("Quiz not found.");
+          setError(uiText("mc1f3338199a7dc69"));
           return;
         }
         if (mountedRef.current && !showLoading) {
-          setError("Could not load participants.");
+          setError(uiText("m106d72b913bdde29"));
         }
       } finally {
         if (mountedRef.current && showLoading) {
@@ -159,7 +162,7 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
 
           setRealtimeConnected(false);
           if (event.code === 1008) {
-            setError("Could not establish real-time updates for this quiz.");
+            setError(uiText("m5ddf353b1a0782f0"));
             return;
           }
           scheduleReconnect();
@@ -216,9 +219,9 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("Session results downloaded.");
+      toast.success(uiText("m3715d1e17072082a"));
     } catch {
-      toast.error("Could not export session results.");
+      toast.error(uiText("mebdce5656ec7dbf5"));
     } finally {
       setIsExporting(false);
     }
@@ -229,7 +232,7 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-[#0a3264]" />
-          <p className="mt-4 text-gray-600">Loading participants...</p>
+          <p className="mt-4 text-gray-600">{uiText("m3411f62cd1f70714")}</p>
         </div>
       </div>
     );
@@ -244,7 +247,7 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
             onClick={() => router.push("/quiz_history")}
             className="mt-4 text-sm text-[#0a3264] hover:underline"
           >
-            Back to Quiz History
+            {uiText("mdb661b2b0b8c0183")}
           </button>
         </div>
       </div>
@@ -269,39 +272,45 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-[#0F2654]">
-              Live Quiz Dashboard
+              {uiText("m5d1b26ccb5184022")}
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Quiz ID: <span className="font-mono">{quizId}</span>
+              {uiText("m0d94a4d468d41edc")}
+              <span className="font-mono">{quizId}</span>
             </p>
             <p className="mt-1 text-sm text-gray-500">
-              Updates:{" "}
+              {uiText("mf14f7563bf5420db")}{" "}
               <span
                 className={
                   realtimeConnected ? "text-green-700" : "text-amber-700"
                 }
               >
-                {realtimeConnected ? "Real time" : "Connecting"}
+                {realtimeConnected
+                  ? uiText("m0f174bf10469d244")
+                  : uiText("md403c686f6a10480")}
               </span>
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {userType === "teacher" || userType === "lecturer" ? (
+            {userType === uiText("m1057a9604e04b274") ||
+            userType === uiText("m1ca7aaa322fbe8cd") ? (
               <div className="flex items-center gap-2">
                 <label htmlFor="results-export-format" className="sr-only">
-                  Export format
+                  {uiText("mdf339cb8da14714c")}
                 </label>
                 <select
                   id="results-export-format"
                   value={exportFormat}
                   onChange={(event) =>
-                    setExportFormat(event.target.value as LiveResultsExportFormat)
+                    setExportFormat(
+                      event.target.value as LiveResultsExportFormat,
+                    )
                   }
                   className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="csv">CSV</option>
-                  <option value="pdf">PDF</option>
-                  <option value="txt">Text</option>
+                  <option value="csv">{uiText("meb6b42f54c42d283")}</option>
+                  <option value="pdf">{uiText("m1d393b0081b632c5")}</option>
+                  <option value="txt">{uiText("m71988c4d8e0803ba")}</option>
                 </select>
                 <button
                   type="button"
@@ -309,7 +318,9 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
                   disabled={isExporting}
                   className="rounded-lg bg-[#0a3264] px-4 py-2 text-sm font-medium text-white hover:bg-[#082952] disabled:opacity-60"
                 >
-                  {isExporting ? "Exporting…" : "Export results"}
+                  {isExporting
+                    ? uiText("ma2dd9cbb7013bb70")
+                    : uiText("mc2a4bcacd72097b2")}
                 </button>
               </div>
             ) : null}
@@ -317,13 +328,13 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
               onClick={handleRefreshClick}
               className="rounded-lg bg-[#0a3264] px-4 py-2 text-sm font-medium text-white hover:bg-[#082952]"
             >
-              Refresh Now
+              {uiText("mc7b4a057f059ca05")}
             </button>
             <button
               onClick={() => router.push("/my-live-quizzes")}
               className="text-sm text-[#0a3264] hover:underline"
             >
-              Back to Live Quizzes History
+              {uiText("m849fc4542573ef98")}
             </button>
           </div>
         </div>
@@ -331,19 +342,25 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
         {/* Summary Cards */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Total Participants</p>
+            <p className="text-sm text-gray-500">
+              {uiText("m4dfc6b8847cf8203")}
+            </p>
             <p className="mt-1 text-3xl font-bold text-[#0F2654]">
               {totalParticipants}
             </p>
           </div>
           <div className="rounded-xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">In Progress</p>
+            <p className="text-sm text-gray-500">
+              {uiText("mb4cc4b07c300103a")}
+            </p>
             <p className="mt-1 text-3xl font-bold text-blue-600">
               {inProgressCount}
             </p>
           </div>
           <div className="rounded-xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">Submitted</p>
+            <p className="text-sm text-gray-500">
+              {uiText("m64900440a8c9a5ed")}
+            </p>
             <p className="mt-1 text-3xl font-bold text-green-600">
               {submittedCount}
             </p>
@@ -353,9 +370,11 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
         {/* Participants Table */}
         {participants.length === 0 ? (
           <div className="rounded-xl bg-white p-12 text-center shadow-sm">
-            <p className="text-lg text-gray-500">No participants yet.</p>
+            <p className="text-lg text-gray-500">
+              {uiText("m8987d03b2dae88c4")}
+            </p>
             <p className="mt-2 text-sm text-gray-400">
-              Participants will appear here once they join the quiz.
+              {uiText("m59e9f8320a3c8d6d")}
             </p>
           </div>
         ) : (
@@ -364,34 +383,34 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Name
+                    {uiText("mdcd1d5223f73b3a9")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Email
+                    {uiText("m969ccbd3cf6300ec")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Status
+                    {uiText("m920e413c7d411b61")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Score
+                    {uiText("m38e5a46cbc5ad328")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Progress
+                    {uiText("m4664827f8e890192")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Current
+                    {uiText("me0d1b68224bf0b31")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Joined
+                    {uiText("m69318b0c6a928e7e")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Submitted
+                    {uiText("m64900440a8c9a5ed")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Duration
+                    {uiText("m4fc52a3c4c558b51")}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Results
+                    {uiText("m219c4a6c86a716e9")}
                   </th>
                 </tr>
               </thead>
@@ -457,7 +476,7 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
                           }
                           className="font-semibold text-[#0a3264] underline"
                         >
-                          View answers
+                          {uiText("mbf666fba3ab0ad71")}
                         </button>
                       ) : (
                         "—"
@@ -475,6 +494,8 @@ export const LiveQuizCreatorDashboard: React.FC<LiveQuizCreatorDashboardProps> =
 };
 
 const LiveQuizCreatorDashboardPage: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { quizId } = router.query;
 
@@ -482,12 +503,12 @@ const LiveQuizCreatorDashboardPage: React.FC = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100">
         <div className="text-center">
-          <p className="text-gray-500">No quiz specified.</p>
+          <p className="text-gray-500">{uiText("m067e07afd9270eeb")}</p>
           <button
             onClick={() => router.push("/quiz_history")}
             className="mt-4 text-sm text-[#0a3264] hover:underline"
           >
-            Back to Quiz History
+            {uiText("mdb661b2b0b8c0183")}
           </button>
         </div>
       </div>
@@ -496,8 +517,8 @@ const LiveQuizCreatorDashboardPage: React.FC = () => {
 
   return (
     <RequireAuth
-      title="Live Quiz Dashboard"
-      description="You need to be signed in to view the quiz dashboard."
+      title={uiText("m5d1b26ccb5184022")}
+      description={uiText("m8bdd0472e13707a6")}
     >
       <LiveQuizCreatorDashboard quizId={quizId} />
     </RequireAuth>

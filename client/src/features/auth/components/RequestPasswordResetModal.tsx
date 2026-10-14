@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { RequestPasswordResetProps } from "@features/auth/types/RequestPasswordResetProps";
 import { requestPasswordReset } from "@features/auth/api/authApi";
@@ -7,6 +8,8 @@ const RequestPasswordResetModal: React.FC<RequestPasswordResetProps> = ({
   onClose,
   onRequestSuccess,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -55,23 +58,24 @@ const RequestPasswordResetModal: React.FC<RequestPasswordResetProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold text-center mb-4 text-[#143E6F]">
-          Request Password Reset
+          {uiText("m456d421c453ea7bd")}
         </h2>
 
         {success ? (
           <div className="text-center py-6">
             <div className="text-green-600 text-5xl mb-4">✓</div>
-            <p className="text-gray-700 mb-2 font-medium">Check your email!</p>
+            <p className="text-gray-700 mb-2 font-medium">
+              {uiText("m965fcfda5511a747")}
+            </p>
             <p className="text-sm text-gray-500 mb-3">
-              We&apos;ve sent a 6-digit OTP and reset link to:
+              {uiText("mfada359b0adf9809")}
             </p>
             <p className="text-sm font-medium text-[#143E6F]">{email}</p>
           </div>
         ) : (
           <>
             <p className="text-sm text-gray-600 mb-4 text-center">
-              Enter your email address and we&apos;ll send you a code to reset
-              your password.
+              {uiText("m04e12aa7f342c8da")}
             </p>
 
             {error && (
@@ -83,13 +87,13 @@ const RequestPasswordResetModal: React.FC<RequestPasswordResetProps> = ({
             <form onSubmit={handleSubmit}>
               <input
                 type="email"
-                placeholder="you@example.com"
+                placeholder={uiText("m53e6cdc30765aade")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full border border-gray-300 px-3 py-2 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
                 required
                 disabled={loading}
-                aria-label="Email address"
+                aria-label={uiText("mf2488fd4ef4adbc6")}
               />
 
               <div className="flex gap-2">
@@ -99,14 +103,16 @@ const RequestPasswordResetModal: React.FC<RequestPasswordResetProps> = ({
                   disabled={loading}
                   className="flex-1 border border-gray-300 text-gray-700 py-2 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="flex-1 bg-[#143E6F] text-white py-2 rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0f2f54] transition-colors"
                 >
-                  {loading ? "Sending..." : "Send Code"}
+                  {loading
+                    ? uiText("m286a3af7348e8312")
+                    : uiText("m882389bfc4750bbd")}
                 </button>
               </div>
             </form>

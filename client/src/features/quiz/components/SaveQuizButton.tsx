@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
@@ -15,6 +16,8 @@ export default function SaveQuizButton({
   quizData: any[];
   quizId?: string;
 }) {
+  const { t: uiText } = useTranslation("ui");
+
   const { user } = useAuth();
   const [showInput, setShowInput] = useState(false);
   const [quizTitle, setQuizTitle] = useState("");
@@ -29,12 +32,12 @@ export default function SaveQuizButton({
     }
 
     if (!quizData || quizData.length === 0) {
-      toast.error("❌ No questions found to save!");
+      toast.error(uiText("m573b98650c4821cc"));
       return;
     }
 
     if (!quizTitle.trim()) {
-      toast.error("Please enter a quiz title.");
+      toast.error(uiText("m849238dc014418b3"));
       return;
     }
 
@@ -43,7 +46,7 @@ export default function SaveQuizButton({
 
     const token = TokenService.getAccessToken();
     if (!token) {
-      toast.error("Authentication token missing. Please log in again.");
+      toast.error(uiText("mf3defa56991cf1ff"));
       return;
     }
 
@@ -64,12 +67,12 @@ export default function SaveQuizButton({
         quizId,
       );
 
-      toast.success("✅ Quiz saved successfully!");
+      toast.success(uiText("mb0a5634981d45ccf"));
       setQuizTitle("");
       setShowInput(false);
     } catch (err) {
       console.error("Failed to save quiz:", err);
-      toast.error("Failed to save quiz. Try again.");
+      toast.error(uiText("m66694bee1a13d54e"));
     } finally {
       setLoading(false);
     }
@@ -82,13 +85,13 @@ export default function SaveQuizButton({
           onClick={() => setShowInput(true)}
           className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-4 py-2 rounded-xl shadow-md transition text-sm"
         >
-          Save Quiz
+          {uiText("m91a50b3cecd409a8")}
         </button>
       ) : (
         <div className="flex items-center gap-2">
           <input
             type="text"
-            placeholder="Enter title"
+            placeholder={uiText("m19f940da0f2376fa")}
             value={quizTitle}
             onChange={(e) => setQuizTitle(e.target.value)}
             className="border border-gray-300 rounded px-2 py-1 text-sm w-36"
@@ -98,7 +101,7 @@ export default function SaveQuizButton({
             disabled={loading}
             className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-3 py-1.5 rounded-xl shadow-md transition text-sm disabled:bg-gray-400"
           >
-            {loading ? "Saving..." : "✓"}
+            {loading ? uiText("mdc85af8f2b1d0d67") : "✓"}
           </button>
           <button
             onClick={() => {

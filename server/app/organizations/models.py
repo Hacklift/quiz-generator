@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 
 from server.app.i18n.locales import SupportedLocale
 
@@ -42,3 +42,11 @@ class OrganizationMemberResponse(BaseModel):
 
 class OrganizationMemberListResponse(BaseModel):
     members: list[OrganizationMemberResponse]
+
+
+class OrganizationInvitationRequest(BaseModel):
+    email: EmailStr
+
+
+class OrganizationOnboardingRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=4096)

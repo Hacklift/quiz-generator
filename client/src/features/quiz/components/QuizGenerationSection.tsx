@@ -1,13 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { QuizGenerationSectionProps } from "@shared/types/props";
 import RequiredLabel from "./common/RequiredLabel";
-
-const QUESTION_TYPES = [
-  { label: "Multiple Choice", value: "multichoice" },
-  { label: "True/False", value: "true-false" },
-  { label: "Short Answer", value: "short-answer" },
-  { label: "Open Ended", value: "open-ended" },
-];
 
 const QUIZ_GENERATION_MAX_QUESTIONS = Number(
   process.env.NEXT_PUBLIC_QUIZ_GENERATION_MAX_QUESTIONS || 10,
@@ -48,14 +42,23 @@ export default function QuizGenerationSection({
   setToken: (val: string) => void;
   previousToken?: string;
 }) {
+  const { t: uiText } = useTranslation("ui");
+
+  const QUESTION_TYPES = [
+    { label: uiText("m987caef59af796c7"), value: "multichoice" },
+    { label: uiText("m3d971996ecec47b9"), value: "true-false" },
+    { label: uiText("m91b03d90535d804c"), value: "short-answer" },
+    { label: uiText("mfbea5ba076ee9152"), value: "open-ended" },
+  ];
+
   const [showSuggestion, setShowSuggestion] = useState(false);
   const [difficultyOpen, setDifficultyOpen] = useState(false);
   const difficultyRef = useRef<HTMLDivElement | null>(null);
 
   const difficultyOptions = [
-    { value: "easy", label: "Easy" },
-    { value: "medium", label: "Medium" },
-    { value: "hard", label: "Hard" },
+    { value: "easy", label: uiText("md6915875decb6e43") },
+    { value: "medium", label: uiText("m8e588cd187741f1c") },
+    { value: "hard", label: uiText("m9e73f8fa9cb76c44") },
   ];
 
   const formatBytes = (bytes: number) => {
@@ -92,10 +95,10 @@ export default function QuizGenerationSection({
   return (
     <section className="w-full max-w-3xl mx-auto bg-white shadow rounded-xl px-6 py-8">
       <h2 className="text-2xl font-semibold text-[#2C3E50] mb-2">
-        Generate Quiz
+        {uiText("m5da69270e5973c17")}
       </h2>
       <p className="text-sm text-gray-500 mb-8">
-        Effortlessly create customized quizzes on any topic
+        {uiText("m6fe47ccceda6ec3d")}
       </p>
 
       <div className="mb-8">
@@ -110,13 +113,15 @@ export default function QuizGenerationSection({
                 : "border-gray-300 bg-white text-[#2C3E50] hover:border-[#0F2654]/40"
             }`}
           >
-            <span className="block text-sm font-semibold">Topic prompt</span>
+            <span className="block text-sm font-semibold">
+              {uiText("mad3d6c55ff5304dd")}
+            </span>
             <span
               className={`mt-1 block text-xs ${
                 generationMode === "topic" ? "text-white/80" : "text-gray-500"
               }`}
             >
-              Generate from a concept, profession, or learning context.
+              {uiText("m829ee8b0f2ebe54b")}
             </span>
           </button>
           <button
@@ -129,7 +134,7 @@ export default function QuizGenerationSection({
             }`}
           >
             <span className="block text-sm font-semibold">
-              Document or pasted text
+              {uiText("mc55b2768bbf36dbc")}
             </span>
             <span
               className={`mt-1 block text-xs ${
@@ -138,8 +143,7 @@ export default function QuizGenerationSection({
                   : "text-gray-500"
               }`}
             >
-              Upload PDF, DOCX, TXT, or paste study notes for RAG-based quiz
-              generation.
+              {uiText("ma11570acd2a57311")}
             </span>
           </button>
         </div>
@@ -166,20 +170,20 @@ export default function QuizGenerationSection({
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-                  Material title
+                  {uiText("mf5e2ce5b03c3702c")}
                 </label>
                 <input
                   type="text"
                   value={documentTitle}
                   onChange={(event) => setDocumentTitle(event.target.value)}
-                  placeholder="Optional title for this material"
+                  placeholder={uiText("m9c465613449fb3a8")}
                   className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-[#2C3E50] mb-2">
-                  Learning material input
+                  {uiText("m1de62c92c10ab9f5")}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -191,7 +195,7 @@ export default function QuizGenerationSection({
                         : "bg-gray-100 text-[#2C3E50] hover:bg-gray-200"
                     }`}
                   >
-                    Upload file
+                    {uiText("md99bcd78b586826a")}
                   </button>
                   <button
                     type="button"
@@ -202,7 +206,7 @@ export default function QuizGenerationSection({
                         : "bg-gray-100 text-[#2C3E50] hover:bg-gray-200"
                     }`}
                   >
-                    Paste text
+                    {uiText("m9328724b4cf1557b")}
                   </button>
                 </div>
               </div>
@@ -210,7 +214,7 @@ export default function QuizGenerationSection({
               {documentInputMode === "upload" ? (
                 <div className="rounded-xl border border-dashed border-[#0F2654]/30 bg-[#f8fbff] p-5">
                   <label className="block text-sm font-semibold text-[#2C3E50] mb-2">
-                    Upload PDF, DOCX, or TXT
+                    {uiText("m1d6fb8d10a82b6b0")}
                   </label>
                   <input
                     type="file"
@@ -221,33 +225,35 @@ export default function QuizGenerationSection({
                     className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-[#0F2654] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#0a3264]"
                   />
                   <p className="mt-3 text-xs text-gray-500">
-                    Accepted range: 1 byte to{" "}
-                    {documentUploadMaxBytes.toLocaleString()} bytes (
+                    {uiText("m1ffa64707f0066b9")}{" "}
+                    {documentUploadMaxBytes.toLocaleString()}{" "}
+                    {uiText("mc40c17fb5a78b29e")}
                     {formatBytes(documentUploadMaxBytes)}).
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
                     {documentFileName
                       ? `Selected file: ${documentFileName} (${documentFileSizeBytes.toLocaleString()} bytes / ${formatBytes(documentFileSizeBytes)})`
-                      : "No file selected yet."}
+                      : uiText("medeb5926f8115ab1")}
                   </p>
                 </div>
               ) : (
                 <div>
                   <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-                    Paste the learning material
+                    {uiText("mefbcbd3468f628cd")}
                   </label>
                   <textarea
                     rows={8}
                     value={documentText}
                     onChange={(event) => setDocumentText(event.target.value)}
                     maxLength={documentTextLimit}
-                    placeholder="Paste lecture notes, textbook excerpts, or study material here."
+                    placeholder={uiText("m379e9c08827781ad")}
                     className="w-full border border-gray-300 rounded-md px-4 py-3 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
                   />
                   <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
                     <span>
-                      Max {documentTextLimit.toLocaleString()} characters for
-                      pasted material.
+                      {uiText("ma1a5936d3b0f8a69")}
+                      {documentTextLimit.toLocaleString()}{" "}
+                      {uiText("m789ec2b3e81da8c9")}
                     </span>
                     <span
                       className={
@@ -265,18 +271,17 @@ export default function QuizGenerationSection({
 
               <div>
                 <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-                  Focus area in this material (optional)
+                  {uiText("m0a29ef02931121f6")}
                 </label>
                 <input
                   type="text"
                   value={profession}
                   onChange={(e) => setProfession(e.target.value)}
-                  placeholder="Example: chapter 3 definitions or respiratory system"
+                  placeholder={uiText("m3f5aeb7abf596752")}
                   className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  Leave blank to generate from the most central ideas in the
-                  material.
+                  {uiText("mda5fb0acd70e0452")}
                 </p>
               </div>
             </div>
@@ -285,7 +290,7 @@ export default function QuizGenerationSection({
 
         <div className="md:col-span-2 relative">
           <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-            API Token (Optional)
+            {uiText("m52e85ebf5fc86938")}
           </label>
           <input
             type="text"
@@ -293,7 +298,7 @@ export default function QuizGenerationSection({
             onChange={(e) => setToken(e.target.value)}
             onFocus={() => setShowSuggestion(true)}
             onBlur={() => setTimeout(() => setShowSuggestion(false), 150)}
-            placeholder="Enter your API token"
+            placeholder={uiText("maf61075931655199")}
             className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
           />
           {showSuggestion && previousToken && (
@@ -306,34 +311,34 @@ export default function QuizGenerationSection({
             >
               <div className="px-4 py-2 hover:bg-gray-100">
                 <p className="text-xs text-gray-500">
-                  Use previously saved token
+                  {uiText("m488bf65bb224734c")}
                 </p>
                 <p className="text-sm text-gray-700">{previousToken}</p>
               </div>
             </div>
           )}
           <p className="text-xs text-gray-500 mt-1">
-            Leave blank to use the default server API key.
+            {uiText("md1ea04648b55a84b")}
           </p>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-              Audience type
+              {uiText("mb9f830f1e015527b")}
             </label>
             <input
               type="text"
               value={audienceType}
               onChange={(e) => setAudienceType(e.target.value)}
-              placeholder="Audience"
+              placeholder={uiText("m545c02357695a6ff")}
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-              Select difficulty level
+              {uiText("m59bb1df0ef048050")}
             </label>
             <div className="relative" ref={difficultyRef}>
               <button
@@ -396,19 +401,18 @@ export default function QuizGenerationSection({
 
           <div>
             <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-              Custom instruction
+              {uiText("m8ff736eb8406612e")}
             </label>
             <textarea
               rows={3}
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
-              placeholder="Add specific instruction"
+              placeholder={uiText("m46c3614819d1ccda")}
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
             />
             {generationMode === "document" && (
               <p className="mt-1 text-xs text-gray-500">
-                The backend uses RAG retrieval first, then generates questions
-                only from the retrieved document chunks.
+                {uiText("m682291948542e96e")}
               </p>
             )}
           </div>
@@ -453,7 +457,7 @@ export default function QuizGenerationSection({
                   ),
                 )
               }
-              placeholder="Number of questions"
+              placeholder={uiText("m4bbde39fcd87f7de")}
               min={1}
               max={QUIZ_GENERATION_MAX_QUESTIONS}
               className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"

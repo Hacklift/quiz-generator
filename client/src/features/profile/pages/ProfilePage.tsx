@@ -20,6 +20,7 @@ import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import PersonaPicker from "@features/persona/components/PersonaPicker";
 import { usePersona } from "@features/persona/context/personaContext";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
 import { useLocale } from "@features/locale/context/localeContext";
 import {
   LOCALE_DISPLAY_NAMES,
@@ -30,6 +31,8 @@ import { useTranslation } from "react-i18next";
 import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 export default function ProfilePage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user, isLoading, logout, refreshUser } = useAuth();
   const { persona, definition, categoryDefinition } = usePersona();
   const { preferredLocale, setPreferredLocale } = useLocale();
@@ -195,7 +198,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     if (user && user.is_verified === false) {
-      toast.error("Verify your email before editing your profile");
+      toast.error(uiText("m10cf11c897a08692"));
       return;
     }
 
@@ -232,13 +235,13 @@ export default function ProfilePage() {
 
   const handleUpdateEmail = async () => {
     if (!newEmail.trim()) {
-      toast.error("Please enter a new email.");
+      toast.error(uiText("md0cb54952d33cbfc"));
       return;
     }
     try {
       await requestEmailChange(newEmail.trim());
       setEmailChangePending(true);
-      toast.success("Verification code sent to the new email.");
+      toast.success(uiText("ma4cfdc73bfcb2671"));
     } catch (error: any) {
       toast.error(error?.message || "Failed to send verification email.");
     }
@@ -246,7 +249,7 @@ export default function ProfilePage() {
 
   const handleVerifyEmailChange = async () => {
     if (!emailOtp.trim()) {
-      toast.error("Enter the verification code.");
+      toast.error(uiText("medadbd5aa4f49cc8"));
       return;
     }
     try {
@@ -255,7 +258,7 @@ export default function ProfilePage() {
       setEmailOtp("");
       setNewEmail("");
       await refreshUser();
-      toast.success("Email updated successfully.");
+      toast.success(uiText("mcad80028698178d3"));
     } catch (error: any) {
       toast.error(error?.message || "Failed to verify email.");
     }
@@ -369,7 +372,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#143E6F]"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">{uiText("m47d2a515ef2f05b8")}</p>
         </div>
       </div>
     );
@@ -380,19 +383,21 @@ export default function ProfilePage() {
       <NavBar />
 
       <RequireAuth
-        title="My Profile"
-        description="Sign in to view and manage your profile."
+        title={uiText("m991bfa015514f9d5")}
+        description={uiText("m0bbb194809df9769")}
       >
         <main className="flex-grow mx-auto px-4 py-8 w-full max-w-6xl">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-[#143E6F]">My Profile</h1>
+            <h1 className="text-3xl font-bold text-[#143E6F]">
+              {uiText("m991bfa015514f9d5")}
+            </h1>
             <button
               onClick={() => {
                 setIsSettingsOpen((prev) => !prev);
                 setActiveSettingSection(null);
               }}
               className="p-2 rounded-full border border-gray-200 text-[#143E6F] hover:bg-gray-50 transition-colors"
-              aria-label="Open settings"
+              aria-label={uiText("mca381c1e76e681b6")}
             >
               <Settings size={20} />
             </button>
@@ -414,7 +419,7 @@ export default function ProfilePage() {
                 />
               </svg>
               <span className="text-green-800">
-                Profile updated successfully!
+                {uiText("m5d76b99b7f954c20")}
               </span>
             </div>
           )}
@@ -463,7 +468,7 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Full Name
+                        {uiText("m8e00cdf71fa7cc76")}
                       </label>
                       <input
                         type="text"
@@ -471,12 +476,12 @@ export default function ProfilePage() {
                         value={formData.full_name}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        placeholder="Enter your full name"
+                        placeholder={uiText("mb3627016e7e783ec")}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Avatar Color
+                        {uiText("m7c73323031d48c70")}
                       </label>
                       <div className="flex gap-2 flex-wrap">
                         {avatarColors.map((color) => (
@@ -503,13 +508,15 @@ export default function ProfilePage() {
                 ) : (
                   <div>
                     <h2 className="text-2xl font-semibold text-gray-900">
-                      {formData.full_name || user?.username || "User"}
+                      {formData.full_name ||
+                        user?.username ||
+                        uiText("mb512d97e7cbf97c2")}
                     </h2>
                     <p className="text-gray-500 mt-1">
-                      @{user?.username || "user"}
+                      @{user?.username || uiText("m04f8996da763b7a9")}
                     </p>
                     <p className="text-gray-600 mt-2">
-                      {user?.email || "No email provided"}
+                      {user?.email || uiText("mc7e5603e095c22e4")}
                     </p>
                   </div>
                 )}
@@ -520,7 +527,7 @@ export default function ProfilePage() {
               {isEditing ? (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bio
+                    {uiText("m3933b1802161254f")}
                   </label>
                   <textarea
                     name="bio"
@@ -528,7 +535,7 @@ export default function ProfilePage() {
                     onChange={handleInputChange}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                    placeholder="Tell us about yourself..."
+                    placeholder={uiText("m697f10251d5bd2ed")}
                     maxLength={500}
                   />
                   <p className="text-sm text-gray-500 mt-1">
@@ -539,7 +546,7 @@ export default function ProfilePage() {
                 formData.bio && (
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      Bio
+                      {uiText("m3933b1802161254f")}
                     </h3>
                     <p className="text-gray-700">{formData.bio}</p>
                   </div>
@@ -549,14 +556,16 @@ export default function ProfilePage() {
 
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {isEditing ? "Edit Information" : "Information"}
+                {isEditing
+                  ? uiText("m9fd84fecd300b57c")
+                  : uiText("m1cb0ba125f84c982")}
               </h3>
               <div className="space-y-4">
                 {isEditing ? (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Location
+                        {uiText("m15b61974b2707a7b")}
                       </label>
                       <input
                         type="text"
@@ -564,12 +573,12 @@ export default function ProfilePage() {
                         value={formData.location}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        placeholder="City, Country"
+                        placeholder={uiText("ma7bc8816f26258d2")}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Website
+                        {uiText("mb5a229ac8becc603")}
                       </label>
                       <input
                         type="url"
@@ -638,27 +647,35 @@ export default function ProfilePage() {
                 )}
 
                 <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">Username</span>
+                  <span className="text-gray-600">
+                    {uiText("me3b89e9d33f88e52")}
+                  </span>
                   <span className="font-medium text-gray-900">
                     {user?.username || "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">Email</span>
+                  <span className="text-gray-600">
+                    {uiText("m969ccbd3cf6300ec")}
+                  </span>
                   <span className="font-medium text-gray-900">
                     {user?.email || "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center gap-4 py-3 border-t">
-                  <span className="text-gray-600">Persona</span>
+                  <span className="text-gray-600">
+                    {uiText("m31bdeef94e7d9a9c")}
+                  </span>
                   <span className="text-right font-medium text-gray-900">
                     {personaLabel}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">Account Status</span>
+                  <span className="text-gray-600">
+                    {uiText("mdafb01abaf3dd0c7")}
+                  </span>
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                    Active
+                    {uiText("m92340695899bd2d8")}
                   </span>
                 </div>
                 <div className="border-t pt-4">
@@ -666,10 +683,11 @@ export default function ProfilePage() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#143E6F]/70">
-                          Billing
+                          {uiText("m3ac8bbca9a74cfbd")}
                         </p>
                         <h4 className="mt-2 text-lg font-semibold text-[#102347]">
-                          {formatPlanLabel(billingPlan)} plan
+                          {formatPlanLabel(billingPlan)}{" "}
+                          {uiText("m64879f7d6b960a01")}
                         </h4>
                         <div className="mt-3">
                           <span
@@ -682,8 +700,8 @@ export default function ProfilePage() {
                           {billingRenewalDate
                             ? `Renews on ${new Date(billingRenewalDate).toLocaleDateString()}`
                             : billingPlan === "free"
-                              ? "Upgrade to unlock paid billing features and higher quiz capacity."
-                              : "Your renewal date will appear after Stripe confirms the subscription."}
+                              ? uiText("m1d6022df68d719ff")
+                              : uiText("m29835dc37c881570")}
                         </p>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
@@ -694,22 +712,22 @@ export default function ProfilePage() {
                             className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {isOpeningPortal
-                              ? "Opening portal..."
-                              : "Manage subscription"}
+                              ? uiText("maa987d702e9696af")
+                              : uiText("m9041c6aa2c3d4670")}
                           </button>
                         ) : (
                           <button
                             onClick={() => router.push("/#pricing")}
                             className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54]"
                           >
-                            View plans
+                            {uiText("ma72e2bd3e148c05e")}
                           </button>
                         )}
                         <button
                           onClick={() => router.push("/billing_history")}
                           className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5"
                         >
-                          Billing history
+                          {uiText("m9aa99a0fb494e1a8")}
                         </button>
                       </div>
                     </div>
@@ -725,14 +743,16 @@ export default function ProfilePage() {
                   disabled={isSaving}
                   className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   onClick={handleSaveProfile}
                   disabled={isSaving}
                   className="flex-1 bg-[#143E6F] text-white py-2.5 rounded-lg font-medium hover:bg-[#0f2f54] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isSaving ? "Saving..." : "Save Changes"}
+                  {isSaving
+                    ? uiText("mdc85af8f2b1d0d67")
+                    : uiText("m35322b5bb5a218a1")}
                 </button>
               </div>
             )}
@@ -742,10 +762,10 @@ export default function ProfilePage() {
             <div className="bg-white rounded-2xl shadow-sm p-8 max-w-4xl mx-auto w-full space-y-8">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900">
-                  Settings
+                  {uiText("m74a883a037bc227f")}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  Manage your profile and account.
+                  {uiText("m4e62cb99b2d7421c")}
                 </p>
               </div>
 
@@ -760,7 +780,7 @@ export default function ProfilePage() {
                     className="w-full px-5 py-4 flex items-center justify-between text-left"
                   >
                     <h4 className="text-lg font-semibold text-[#143E6F]">
-                      Billing
+                      {uiText("m3ac8bbca9a74cfbd")}
                     </h4>
                     <span className="text-[#143E6F]">
                       {activeSettingSection === "billing" ? "-" : "+"}
@@ -772,17 +792,18 @@ export default function ProfilePage() {
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div>
                             <p className="text-sm text-gray-500">
-                              Current plan
+                              {uiText("m37ca715f53b6bb83")}
                             </p>
                             <h5 className="mt-1 text-xl font-semibold text-[#102347]">
                               {formatPlanLabel(billingPlan)}
                             </h5>
                             <p className="mt-2 text-sm text-gray-600">
-                              Status: {formatStatusLabel(billingStatus)}
+                              {uiText("m755c8b2a9fb11446")}
+                              {formatStatusLabel(billingStatus)}
                             </p>
                             {billingRenewalDate ? (
                               <p className="mt-1 text-sm text-gray-600">
-                                Renewal date:{" "}
+                                {uiText("ma59c4e8b7b095f0e")}{" "}
                                 {new Date(
                                   billingRenewalDate,
                                 ).toLocaleDateString()}
@@ -806,12 +827,11 @@ export default function ProfilePage() {
                           >
                             <p className="font-medium">
                               {isOpeningPortal
-                                ? "Opening portal..."
-                                : "Manage subscription"}
+                                ? uiText("maa987d702e9696af")
+                                : uiText("m9041c6aa2c3d4670")}
                             </p>
                             <p className="mt-1 text-sm text-white/80">
-                              Open the Stripe customer portal to update your
-                              billing details.
+                              {uiText("m1d382a8ab4e5c436")}
                             </p>
                           </button>
                         ) : (
@@ -819,9 +839,11 @@ export default function ProfilePage() {
                             onClick={() => router.push("/#pricing")}
                             className="rounded-lg bg-[#143E6F] px-4 py-3 text-left text-white hover:bg-[#0f2f54]"
                           >
-                            <p className="font-medium">Upgrade plan</p>
+                            <p className="font-medium">
+                              {uiText("m39b7ec1e84022198")}
+                            </p>
                             <p className="mt-1 text-sm text-white/80">
-                              Return to pricing and start a paid subscription.
+                              {uiText("m77f18dd9902e47cf")}
                             </p>
                           </button>
                         )}
@@ -831,10 +853,10 @@ export default function ProfilePage() {
                           className="rounded-lg border border-gray-200 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
                         >
                           <p className="font-medium text-gray-900">
-                            Billing history
+                            {uiText("m9aa99a0fb494e1a8")}
                           </p>
                           <p className="mt-1 text-sm text-gray-500">
-                            Review invoices, receipts, and subscription charges.
+                            {uiText("m4d0ecb2353213fad")}
                           </p>
                         </button>
                       </div>
@@ -903,34 +925,17 @@ export default function ProfilePage() {
                   </button>
                   {activeSettingSection === "language" && (
                     <div className="border-t border-[#143E6F]/10 p-5 space-y-3">
-                      <label
-                        className="block text-sm font-medium text-gray-700"
-                        htmlFor="preferred-locale"
-                      >
-                        {t("language.settings")}
-                      </label>
-                      <select
-                        id="preferred-locale"
-                        value={preferredLocale ?? "inherit"}
-                        disabled={isSavingLocale}
-                        onChange={(event) =>
-                          void handleLocaleChange(
-                            event.target.value === "inherit"
-                              ? null
-                              : (event.target.value as SupportedLocale),
-                          )
+                      <LanguagePicker
+                        value={
+                          preferredLocale ??
+                          (user?.onboarding_organization_id ? null : "en")
                         }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#143E6F] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <option value="inherit">
-                          {t("language.useOrganizationDefault")}
-                        </option>
-                        {SUPPORTED_LOCALES.map((locale) => (
-                          <option key={locale} value={locale}>
-                            {LOCALE_DISPLAY_NAMES[locale]}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next) => void handleLocaleChange(next)}
+                        disabled={isSavingLocale}
+                        allowOrganizationDefault={Boolean(
+                          user?.onboarding_organization_id,
+                        )}
+                      />
                       {isSavingLocale && (
                         <p className="text-sm text-gray-500">
                           {t("language.saving")}
@@ -950,7 +955,7 @@ export default function ProfilePage() {
                     className="w-full px-5 py-4 flex items-center justify-between text-left"
                   >
                     <h4 className="text-lg font-semibold text-[#143E6F]">
-                      Edit Profile
+                      {uiText("mfec2ac0f4cf167e3")}
                     </h4>
                     <span className="text-[#143E6F]">
                       {activeSettingSection === "profile" ? "-" : "+"}
@@ -960,7 +965,7 @@ export default function ProfilePage() {
                     <div className="border-t border-[#143E6F]/10 p-5 space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Name
+                          {uiText("mdcd1d5223f73b3a9")}
                         </label>
                         <input
                           type="text"
@@ -972,7 +977,7 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Bio
+                          {uiText("m3933b1802161254f")}
                         </label>
                         <textarea
                           name="bio"
@@ -984,7 +989,7 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Avatar color
+                          {uiText("m003d1aeefd3feda6")}
                         </label>
                         <div className="flex gap-2 flex-wrap">
                           {avatarColors.map((color) => (
@@ -1013,10 +1018,10 @@ export default function ProfilePage() {
                         className="w-full bg-[#143E6F] text-white py-2 rounded-lg hover:bg-[#0f2f54] transition-colors disabled:opacity-50"
                       >
                         {isSaving
-                          ? "Saving..."
+                          ? uiText("mdc85af8f2b1d0d67")
                           : saveSuccess
-                            ? "Saved"
-                            : "Save profile settings"}
+                            ? uiText("mb5c120b316c237a0")
+                            : uiText("m09d0725ba3e9d186")}
                       </button>
                     </div>
                   )}
@@ -1032,7 +1037,7 @@ export default function ProfilePage() {
                     className="w-full px-5 py-4 flex items-center justify-between text-left"
                   >
                     <h4 className="text-lg font-semibold text-[#143E6F]">
-                      Account
+                      {uiText("m7e1b0d5641f2640c")}
                     </h4>
                     <span className="text-[#143E6F]">
                       {activeSettingSection === "account" ? "-" : "+"}
@@ -1045,29 +1050,29 @@ export default function ProfilePage() {
                         className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                       >
                         <p className="font-medium text-gray-900">
-                          Change password
+                          {uiText("m3f9c991f63a9a376")}
                         </p>
                         <p className="text-sm text-gray-500">
-                          Send a password reset link to your email.
+                          {uiText("med9b989fde608b9b")}
                         </p>
                       </button>
 
                       <div className="border border-gray-200 rounded-lg p-4 space-y-3">
                         <label className="block text-sm font-medium text-gray-700">
-                          Update email (with verification)
+                          {uiText("m5f8ce4b504c93564")}
                         </label>
                         <input
                           type="email"
                           value={newEmail}
                           onChange={(event) => setNewEmail(event.target.value)}
-                          placeholder="new@email.com"
+                          placeholder={uiText("m8a77fe02a1966fdb")}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
                         />
                         <button
                           onClick={handleUpdateEmail}
                           className="w-full bg-[#143E6F] text-white py-2 rounded-lg hover:bg-[#0f2f54] transition-colors"
                         >
-                          Send verification
+                          {uiText("meb42487f94ff995b")}
                         </button>
                         {emailChangePending && (
                           <div className="space-y-2">
@@ -1077,14 +1082,14 @@ export default function ProfilePage() {
                               onChange={(event) =>
                                 setEmailOtp(event.target.value)
                               }
-                              placeholder="Enter verification code"
+                              placeholder={uiText("m78d5714a87cb6948")}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
                             />
                             <button
                               onClick={handleVerifyEmailChange}
                               className="w-full border border-[#143E6F] text-[#143E6F] py-2 rounded-lg hover:bg-[#143E6F]/10 transition-colors"
                             >
-                              Verify email
+                              {uiText("me89a77e7fe58a6d1")}
                             </button>
                           </div>
                         )}
@@ -1095,11 +1100,10 @@ export default function ProfilePage() {
                         className="w-full text-left px-4 py-3 rounded-lg border border-red-300 hover:bg-red-50 transition-colors"
                       >
                         <p className="font-medium text-red-600">
-                          Delete account
+                          {uiText("ma2e20a33570001ae")}
                         </p>
                         <p className="text-sm text-red-500">
-                          Permanently remove your account and all associated
-                          data.
+                          {uiText("mf551c1f211804b74")}
                         </p>
                       </button>
                     </div>
@@ -1120,10 +1124,10 @@ export default function ProfilePage() {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-xl font-semibold text-center mb-4 text-gray-900">
-                Confirm Logout
+                {uiText("m01fb32f707d76eec")}
               </h2>
               <p className="text-gray-600 text-center mb-6">
-                Are you sure you want to logout?
+                {uiText("m067f10b734111433")}
               </p>
               <div className="flex gap-3">
                 <button
@@ -1131,14 +1135,16 @@ export default function ProfilePage() {
                   disabled={isLoggingOut}
                   className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   onClick={handleLogout}
                   disabled={isLoggingOut}
                   className="flex-1 bg-[#143E6F] text-white py-2.5 rounded-lg font-medium hover:bg-[#0f2f54] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isLoggingOut ? "Logging out..." : "Logout"}
+                  {isLoggingOut
+                    ? uiText("md0c59d736b1322a3")
+                    : uiText("md0527e4b3d658351")}
                 </button>
               </div>
             </div>
@@ -1154,24 +1160,23 @@ export default function ProfilePage() {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-xl font-semibold text-center mb-4 text-gray-900">
-                Delete Account
+                {uiText("mc031bf992e172f57")}
               </h2>
               <p className="text-gray-600 text-center mb-6">
-                This will permanently remove your account and quizzes. This
-                action cannot be undone.
+                {uiText("mf0ba927c8e57c2cb")}
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
                   className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   onClick={handleDeleteAccount}
                   className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 transition-colors"
                 >
-                  Delete
+                  {uiText("me2d0a54968ead24e")}
                 </button>
               </div>
             </div>

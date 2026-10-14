@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -10,6 +11,8 @@ interface NavGenerateQuizButtonProps {
 const NavGenerateQuizButton: React.FC<NavGenerateQuizButtonProps> = ({
   className = "",
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const t = useTerms();
 
@@ -24,7 +27,8 @@ const NavGenerateQuizButton: React.FC<NavGenerateQuizButtonProps> = ({
         ${className}
       `}
     >
-      Create {t("quiz")}
+      {uiText("m4759498ac2a719c6")}
+      {t("quiz")}
     </button>
   );
 };

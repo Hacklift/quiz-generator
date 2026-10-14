@@ -1,10 +1,13 @@
+import { useTranslation } from "react-i18next";
 import React from "react";
 import { DisplayQuizProps } from "@shared/types/props/share-display-props";
 import { Question } from "@features/quiz/types";
 
 export default function DisplayQuiz({ quiz }: DisplayQuizProps) {
+  const { t: uiText } = useTranslation("ui");
+
   if (!quiz)
-    return <div className="text-center p-4">No quiz data available</div>;
+    return <div className="text-center p-4">{uiText("m353b426564197522")}</div>;
 
   const { title, description, quiz_type, questions } = quiz;
 
@@ -44,7 +47,7 @@ export default function DisplayQuiz({ quiz }: DisplayQuizProps) {
         {quiz_type === "open-ended" && (
           <input
             type="text"
-            placeholder="Type your answer"
+            placeholder={uiText("md078bf7520a710d0")}
             className="mt-2 w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         )}

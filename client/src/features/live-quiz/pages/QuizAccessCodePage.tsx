@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { FormEvent, useEffect, useState } from "react";
@@ -15,6 +16,8 @@ interface QuizAccessPreviewPageProps {
 const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
   code,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const [preview, setPreview] = useState<LiveQuizPreview | null>(null);
   const [participantName, setParticipantName] = useState("");
@@ -28,7 +31,9 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
         setIsLoading(true);
         setPreview(await liveQuizService.validateAccessCode(code));
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Access code unavailable.");
+        toast.error(
+          error?.response?.data?.detail || "Access code unavailable.",
+        );
         router.replace("/quiz-access");
       } finally {
         setIsLoading(false);
@@ -40,7 +45,7 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
   const handleStart = async (event: FormEvent) => {
     event.preventDefault();
     if (!participantName.trim()) {
-      toast.error("Enter your full name.");
+      toast.error(uiText("mb5cd3b070f53c235"));
       return;
     }
 
@@ -76,28 +81,34 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
           className="w-full max-w-xl rounded-md border border-slate-200 bg-white p-6 shadow-sm"
         >
           <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Live quiz
+            {uiText("mfef250162a1277bb")}
           </p>
           <h1 className="mt-2 text-2xl font-bold text-[#0F2654]">
             {preview.title}
           </h1>
           <div className="mt-5 grid gap-3 text-sm text-slate-700 sm:grid-cols-3">
             <div className="rounded-md bg-slate-50 p-3">
-              <span className="block font-semibold">Questions</span>
+              <span className="block font-semibold">
+                {uiText("m9a72221a27476f3e")}
+              </span>
               {preview.total_questions}
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <span className="block font-semibold">Duration</span>
-              {preview.time_limit_minutes} minutes
+              <span className="block font-semibold">
+                {uiText("m4fc52a3c4c558b51")}
+              </span>
+              {preview.time_limit_minutes} {uiText("m90e63d85fa1ab2c8")}
             </div>
             <div className="rounded-md bg-slate-50 p-3">
-              <span className="block font-semibold">Code expires</span>
+              <span className="block font-semibold">
+                {uiText("m40a35cf6c6bf5fdc")}
+              </span>
               {new Date(preview.access_code_expires_at).toLocaleDateString()}
             </div>
           </div>
 
           <label className="mt-6 block text-sm font-semibold text-slate-700">
-            Full name
+            {uiText("mf13a64ba2fea87ef")}
           </label>
           <input
             value={participantName}
@@ -106,7 +117,7 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
           />
 
           <label className="mt-4 block text-sm font-semibold text-slate-700">
-            Email
+            {uiText("m969ccbd3cf6300ec")}
           </label>
           <input
             type="email"
@@ -120,7 +131,9 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
             disabled={isStarting}
             className="mt-6 w-full rounded-md bg-[#0a3264] px-4 py-2 text-sm font-semibold text-white hover:bg-[#082952] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isStarting ? "Starting..." : "Start Quiz"}
+            {isStarting
+              ? uiText("m82b93630a921dddf")
+              : uiText("m56628cf845696718")}
           </button>
         </form>
       </main>

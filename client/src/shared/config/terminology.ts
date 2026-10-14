@@ -59,7 +59,7 @@ export function resolveTerm(
   form: TermForm = "singular",
   locale: SupportedLocale = "en",
 ): string {
-  const catalog = catalogs[locale];
+  const catalog = catalogs[locale] || catalogs.en;
   const definition =
     (persona && catalog.userTypeTerms[persona.userType]?.[key]) ||
     (persona && catalog.categoryTerms[persona.category]?.[key]) ||

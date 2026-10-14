@@ -87,7 +87,7 @@ async def resolve_user_from_access_token(
     if isinstance(user_payload.get("created_at"), datetime):
         user_payload["created_at"] = user_payload["created_at"].isoformat()
     resolved_user = UserOut(**user_payload)
-    if resolved_user.active_organization_id and not resolved_user.preferred_locale:
+    if resolved_user.onboarding_organization_id and not resolved_user.preferred_locale:
         from server.app.db.core.connection import get_organizations_collection, get_organization_memberships_collection
         from server.app.organizations.services import resolve_user_effective_locale
 

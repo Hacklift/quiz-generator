@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -24,30 +25,31 @@ function lecturerPresetHref(
 }
 
 export default function LecturerDashboard({ persona }: DashboardViewProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const t = useTerms();
 
   const presets: LecturerPreset[] = [
     {
       id: "lecture-recap",
-      title: "Lecture recap",
+      title: uiText("m9f164b0f032b786d"),
       badge: "Post-lecture / Retention check",
-      description: `Reinforce what your ${t(
-        "group",
-      )} just covered with a short recap ${t(
-        "assignment",
-      )} they can complete right after the ${t("session")}.`,
+      description: uiText("m56c74aad54c9863d", {
+        value0: t("group"),
+        value1: t("assignment"),
+        value2: t("session"),
+      }),
       href: lecturerPresetHref(persona, "lecture-recap"),
     },
     {
       id: "seminar-prep",
-      title: "Seminar prep",
+      title: uiText("me318131ee57f1056"),
       badge: "Pre-seminar / Readiness check",
-      description: `Check your ${t(
-        "group",
-      )} has done the reading before seminar with a quick, low-stakes ${t(
-        "assignment",
-      )}.`,
+      description: uiText("m440711e4b9d3e8ca", {
+        value0: t("group"),
+        value1: t("assignment"),
+      }),
       href: lecturerPresetHref(persona, "seminar-prep"),
     },
   ];
@@ -58,19 +60,22 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="lecturer-live-heading"
       >
-        <Kicker>Live session</Kicker>
+        <Kicker>{uiText("m94f506b7d34d68a2")}</Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
             <h2
               id="lecturer-live-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              Run a live {t("session")} for your {t("group")}
+              {uiText("m05c850f4bdf692cc")}
+              {t("session")} {uiText("m75b99b5e3a11e30b")}
+              {t("group")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              Built for large {t("group", "plural")} — put a join code on the
-              projector, track {t("group")} size as {t("learner", "plural")}
-              {" "}join, and score them in real time.
+              {uiText("mf3212c4d5d0cfd2f")}
+              {t("group", "plural")} {uiText("m0c1d84c48ce4804e")}
+              {t("group")} {uiText("m6c55798ab10d843d")}
+              {t("learner", "plural")} {uiText("m4a7b489bf3310639")}
             </p>
           </div>
 
@@ -78,19 +83,23 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
             type="button"
             onClick={() => router.push("/my-live-quizzes")}
             className={`${BTN_PRIMARY} px-[28px] py-[14px] text-[16px]`}
-            aria-label={`Start live ${t("session")}`}
+            aria-label={uiText("m3e76d87073ed499f", { value0: t("session") })}
           >
-            Start live {t("session")}
+            {uiText("md2cfdf716a507690")}
+            {t("session")}
           </button>
         </div>
 
         <div className="mt-[20px] border-2 border-divider bg-paper p-[20px]">
           <p className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-brand">
-            Recent {t("session", "plural")}
+            {uiText("m690dbe9dc0993c42")}
+            {t("session", "plural")}
           </p>
           <p className="mt-[8px] text-[13.5px] leading-[22px] text-ink/70">
-            Nothing here yet. Once you start a live {t("session")}, it will
-            show up here with {t("group")} size and participation counts.
+            {uiText("m947363a28565f3fc")}
+            {t("session")}
+            {uiText("m85dea3df1f9cfcb1")}
+            {t("group")} {uiText("m426a630ace303b2c")}
           </p>
         </div>
       </section>
@@ -99,16 +108,17 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="lecturer-presets-heading"
       >
-        <Kicker>Lecturer dashboard</Kicker>
+        <Kicker>{uiText("ma2c8e03408a0b012")}</Kicker>
         <h2
           id="lecturer-presets-heading"
           className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
         >
-          Quick-create presets
+          {uiText("mfd5383c2f9a05cd0")}
         </h2>
         <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-          Jumpstart your {t("assignment")} without generic configuration.
-          Every preset is pre-configured for large {t("group", "plural")}.
+          {uiText("m7f1cf035027ae984")}
+          {t("assignment")} {uiText("me43ee3eb508e991f")}
+          {t("group", "plural")}.
         </p>
 
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">
@@ -133,9 +143,12 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
                 type="button"
                 onClick={() => router.push(preset.href)}
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
-                aria-label={`Create ${preset.title}`}
+                aria-label={uiText("m37a7e45e1b49df1f", {
+                  value0: preset.title,
+                })}
               >
-                Create {preset.title}
+                {uiText("m4759498ac2a719c6")}
+                {preset.title}
               </button>
             </article>
           ))}
@@ -146,18 +159,21 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="lecturer-results-heading"
       >
-        <Kicker>{titleCaseTerm(t("group"))} results</Kicker>
+        <Kicker>
+          {titleCaseTerm(t("group"))} {uiText("mc099142bc3186ded")}
+        </Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
             <h2
               id="lecturer-results-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              {titleCaseTerm(t("group"))} {t("session")} results
+              {titleCaseTerm(t("group"))} {t("session")}{" "}
+              {uiText("mc099142bc3186ded")}
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
-              Inspect participation and scores from your live{" "}
-              {t("session", "plural")}, optimised for viewing on a projector.
+              {uiText("mb4acaa153ba09ba6")} {t("session", "plural")}
+              {uiText("mfdda72301790e2d0")}
             </p>
           </div>
 
@@ -166,17 +182,21 @@ export default function LecturerDashboard({ persona }: DashboardViewProps) {
               type="button"
               onClick={() => router.push("/my-live-quizzes")}
               className={BTN_PRIMARY}
-              aria-label={`View live ${t("session")} results`}
+              aria-label={uiText("mc6728d026c2fc4b5", { value0: t("session") })}
             >
-              View live {t("session")} results
+              {uiText("mfbe9628a9380f412")}
+              {t("session")} {uiText("mc099142bc3186ded")}
             </button>
             <button
               type="button"
               onClick={() => router.push("/quiz_history")}
               className={BTN_GHOST}
-              aria-label={`All ${t("assignment", "plural")} history`}
+              aria-label={uiText("mde8eafec5e6fe027", {
+                value0: t("assignment", "plural"),
+              })}
             >
-              All {t("assignment", "plural")}
+              {uiText("ma52ace420f2175d0")}
+              {t("assignment", "plural")}
             </button>
           </div>
         </div>

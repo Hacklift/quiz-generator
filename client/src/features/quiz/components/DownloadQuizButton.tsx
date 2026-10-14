@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
@@ -31,6 +32,8 @@ export default function DownloadQuizButton({
   title,
   description,
 }: DownloadQuizProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const { user } = useAuth();
   const [selectedFormat, setSelectedFormat] = useState<FileFormat>("txt");
   const [isDownloading, setIsDownloading] = useState(false);
@@ -75,13 +78,13 @@ export default function DownloadQuizButton({
 
     if (isRealQuiz) {
       if (!user) {
-        toast.error("Please register or sign in to download this quiz.");
+        toast.error(uiText("m450370578d039d81"));
         setShowSignUpModal(true);
         return;
       }
 
       if (user.is_verified === false) {
-        toast.error("Please verify your email to download this quiz.");
+        toast.error(uiText("m671210b7bfe8e23d"));
         if (typeof window !== "undefined") {
           window.location.assign("/auth/verify-email-notice");
         }
@@ -136,16 +139,16 @@ export default function DownloadQuizButton({
       }
 
       setShowOptions(false);
-      toast.success("Quiz download started.");
+      toast.success(uiText("m83b8ccb16b4c9996"));
     } catch (error: any) {
       const status = error?.response?.status;
       const detail = error?.response?.data?.detail;
 
       if (status === 401) {
-        toast.error("Authentication required. Please sign in or sign up.");
+        toast.error(uiText("m9d3a4ed1fbba664c"));
         setShowSignUpModal(true);
       } else if (status === 403 && detail === "Email not verified") {
-        toast.error("Please verify your email before downloading quizzes.");
+        toast.error(uiText("m41a10fafb6ebfdba"));
         if (typeof window !== "undefined") {
           window.location.assign("/auth/verify-email-notice");
         }
@@ -168,7 +171,9 @@ export default function DownloadQuizButton({
         }
         disabled={isDownloading}
       >
-        {isDownloading ? "Downloading..." : "Download Quiz"}
+        {isDownloading
+          ? uiText("mf976eb284ebb156b")
+          : uiText("m4ce34dc2f2013b8c")}
       </button>
 
       {showOptions && (
@@ -177,7 +182,7 @@ export default function DownloadQuizButton({
             htmlFor="format"
             className="block text-[#2C3E50] font-medium text-sm mb-2"
           >
-            Select format
+            {uiText("mc810c402a124120a")}
           </label>
           <select
             id="format"
@@ -185,17 +190,17 @@ export default function DownloadQuizButton({
             onChange={handleFormatChange}
             className="w-full border border-gray-300 rounded-md px-3 py-2 mb-4 focus:outline-none focus:ring focus:ring-blue-500 text-sm"
           >
-            <option value="txt">TXT</option>
-            <option value="json">JSON</option>
-            <option value="pdf">PDF</option>
-            <option value="docx">DOCX</option>
+            <option value="txt">{uiText("md3dc6ac9490999b5")}</option>
+            <option value="json">{uiText("mdb1a21a0bc2ef8fb")}</option>
+            <option value="pdf">{uiText("m1d393b0081b632c5")}</option>
+            <option value="docx">{uiText("mf0abcf998d363c44")}</option>
           </select>
           <button
             onClick={handleDownload}
             disabled={isDownloading}
             className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold px-3 py-2 rounded-xl shadow-sm text-sm transition disabled:opacity-50"
           >
-            Confirm Download
+            {uiText("md89b4c38861ddf9a")}
           </button>
         </div>
       )}

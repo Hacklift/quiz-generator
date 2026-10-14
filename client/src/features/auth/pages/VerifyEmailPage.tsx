@@ -1,9 +1,12 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { ROUTES } from "@shared/config/patterns/routes";
 import { verifyLink } from "@features/auth/api/authApi";
 
 const VerifyEmailPage: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { token } = router.query; // Récupère le token depuis l'URL
   const [status, setStatus] = useState<"loading" | "success" | "error">(
@@ -39,13 +42,13 @@ const VerifyEmailPage: React.FC = () => {
     <div className="min-h-screen flex justify-center items-center bg-gray-100">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8 text-center">
         <h2 className="text-2xl font-semibold text-[#143E6F] font-serif mb-6">
-          Email Verification
+          {uiText("m36575d819a4c6ced")}
         </h2>
 
         {status === "loading" && (
           <div>
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#143E6F] mx-auto mb-4"></div>
-            <p className="text-gray-600">Verifying your email...</p>
+            <p className="text-gray-600">{uiText("m7b3734fae0c5c888")}</p>
           </div>
         )}
 
@@ -64,7 +67,7 @@ const VerifyEmailPage: React.FC = () => {
               onClick={() => router.push(ROUTES.LOGIN)}
               className="bg-[#143E6F] text-white px-6 py-2 rounded-md hover:bg-[#0f2f54]"
             >
-              Go to Login
+              {uiText("m6dd273b16dd0bca7")}
             </button>
           </div>
         )}

@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
@@ -30,6 +31,8 @@ interface Folder {
 const getFolderId = (folder: Partial<Folder>) => folder.id || "";
 
 const FoldersPage = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const t = useTerms();
@@ -48,7 +51,7 @@ const FoldersPage = () => {
         setFolders(data);
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load folders");
+        toast.error(uiText("mb44e9fbeb8bfb4ed"));
       }
     };
 
@@ -59,10 +62,10 @@ const FoldersPage = () => {
     try {
       await deleteFolder(folderId);
       setFolders((prev) => prev.filter((f) => getFolderId(f) !== folderId));
-      toast.success("Folder deleted successfully");
+      toast.success(uiText("m2cccc1e55371326c"));
     } catch (err) {
       console.error(err);
-      toast.error("Failed to delete folder");
+      toast.error(uiText("md4f50856e9920c73"));
     }
   };
 
@@ -73,10 +76,10 @@ const FoldersPage = () => {
       setFolders((prev) =>
         prev.filter((f) => !folderIds.includes(getFolderId(f))),
       );
-      toast.success("Selected folders deleted successfully");
+      toast.success(uiText("m5c32fb01b6f243dc"));
     } catch (err) {
       console.error(err);
-      toast.error("Failed to delete folders");
+      toast.error(uiText("mc7e4c8d9890435cd"));
     }
   };
 
@@ -85,12 +88,14 @@ const FoldersPage = () => {
       <NavBar />
 
       <RequireAuth
-        title="Folders"
-        description="You need to be signed in to access your folders."
+        title={uiText("mc4d6bb200f4c058a")}
+        description={uiText("mee6e6a6da4f31ffd")}
       >
         <main className="flex-grow px-6 py-10 max-w-6xl mx-auto w-full">
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-semibold text-navy-900">My Folders</h1>
+            <h1 className="text-3xl font-semibold text-navy-900">
+              {uiText("mf9aef2b30eee9ce8")}
+            </h1>
             <FolderOptionsMenu
               onCreate={() => setShowCreateModal(true)}
               onOrganize={() => setShowOrganizeModal(true)}
@@ -102,9 +107,10 @@ const FoldersPage = () => {
 
           {folders.length === 0 ? (
             <div className="text-center text-gray-500 mt-20">
-              <p>No folders yet.</p>
+              <p>{uiText("md890b00a67442bf0")}</p>
               <p className="text-sm">
-                Create a folder to organize your saved {t("quiz", "plural")}.
+                {uiText("ma8963583bf4f8d4b")}
+                {t("quiz", "plural")}.
               </p>
             </div>
           ) : (
@@ -139,7 +145,7 @@ const FoldersPage = () => {
 
           {showOrganizeModal && (
             <OrganizeModal
-              title="Organize Folders"
+              title={uiText("mf9885788b35df9b1")}
               items={folders}
               onClose={() => setShowOrganizeModal(false)}
               onOrganized={(sorted) => setFolders(sorted)}

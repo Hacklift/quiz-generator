@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import {
   useState,
@@ -163,6 +164,8 @@ function formatBytes(bytes: number) {
 }
 
 export default function QuizForm() {
+  const { t: uiText } = useTranslation("ui");
+
   const [generationMode, setGenerationMode] = useState<"document" | "topic">(
     "topic",
   );
@@ -227,34 +230,36 @@ export default function QuizForm() {
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (!extension || !SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
       setDocumentFile(null);
-      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
-      toast.error("Unsupported file type. Upload PDF, DOCX, or TXT.");
+      setErrorMessage(uiText("m173a2e1479fc5e3c"));
+      toast.error(uiText("mb8a3c5e48f9a324e"));
       return;
     }
 
     if (file.size <= 0) {
       setDocumentFile(null);
-      setErrorMessage("The selected file is empty.");
-      toast.error("The selected file is empty.");
+      setErrorMessage(uiText("m42eb27c3baf606ac"));
+      toast.error(uiText("m42eb27c3baf606ac"));
       return;
     }
 
     if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
       setDocumentFile(null);
       setErrorMessage(
-        `The selected file is too large. Maximum size is ${DOCUMENT_UPLOAD_MAX_BYTES.toLocaleString()} bytes.`,
+        uiText("ma761247cd1d6b805", {
+          value0: DOCUMENT_UPLOAD_MAX_BYTES.toLocaleString(),
+        }),
       );
       toast.error(
-        `File too large. Maximum size is ${formatBytes(DOCUMENT_UPLOAD_MAX_BYTES)}.`,
+        uiText("m3212b912177d8b53", {
+          value0: formatBytes(DOCUMENT_UPLOAD_MAX_BYTES),
+        }),
       );
       return;
     }
 
     setDocumentFile(file);
     setErrorMessage("");
-    toast.success(
-      `${file.name} uploaded successfully. Ready for quiz generation.`,
-    );
+    toast.success(uiText("mb22b6c8a5a7dd202", { value0: file.name }));
   };
 
   // PersonaProvider resolves profile > URL query > localStorage, so persona
@@ -415,7 +420,7 @@ export default function QuizForm() {
     const resolvedAudienceType = audienceType || t("learner", "plural");
 
     if (generationMode === "topic" && !profession) {
-      setErrorMessage("Please enter a profession or topic for your quiz.");
+      setErrorMessage(uiText("m227c928826ed8bcb"));
       return;
     }
 
@@ -424,7 +429,7 @@ export default function QuizForm() {
       documentInputMode === "upload" &&
       !documentFile
     ) {
-      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
+      setErrorMessage(uiText("m173a2e1479fc5e3c"));
       return;
     }
 
@@ -433,7 +438,7 @@ export default function QuizForm() {
       documentInputMode === "paste" &&
       !documentText.trim()
     ) {
-      setErrorMessage("Please paste the learning material.");
+      setErrorMessage(uiText("m2da7107eed1cff79"));
       return;
     }
 
@@ -443,28 +448,30 @@ export default function QuizForm() {
       documentText.length > DOCUMENT_TEXT_MAX_CHARS
     ) {
       setErrorMessage(
-        `Pasted text is too long. Maximum length is ${DOCUMENT_TEXT_MAX_CHARS.toLocaleString()} characters.`,
+        uiText("mad55b9bf63883c88", {
+          value0: DOCUMENT_TEXT_MAX_CHARS.toLocaleString(),
+        }),
       );
       return;
     }
 
     if (!questionType) {
-      setErrorMessage("Please select a question type.");
+      setErrorMessage(uiText("mec3eab8cd2416496"));
       return;
     }
 
     if (!numQuestions || numQuestions <= 0) {
-      setErrorMessage("Please enter a valid number of questions.");
+      setErrorMessage(uiText("m73a3247c93fbb9ff"));
       return;
     }
 
     if (enableLiveQuiz && (!user || !isAuthenticated)) {
-      setErrorMessage("Please log in to generate a live quiz access code.");
+      setErrorMessage(uiText("m53cbf34943e51c86"));
       return;
     }
 
     if (enableLiveQuiz && liveDurationMinutes <= 0) {
-      setErrorMessage("Please enter a valid live quiz duration.");
+      setErrorMessage(uiText("m108c206214c743c4"));
       return;
     }
 
@@ -472,7 +479,7 @@ export default function QuizForm() {
       enableLiveQuiz &&
       new Date(liveAccessExpiresAt).getTime() <= Date.now()
     ) {
-      setErrorMessage("Please choose a future access code expiration time.");
+      setErrorMessage(uiText("mbeb717e219eb1d60"));
       return;
     }
 
@@ -487,9 +494,7 @@ export default function QuizForm() {
         participantAccessMode === "invited_only") &&
       invitedEmails.length === 0
     ) {
-      setErrorMessage(
-        "Please add at least one invited email for restricted access.",
-      );
+      setErrorMessage(uiText("ma0d76e1e03a44731"));
       return;
     }
 
@@ -774,11 +779,10 @@ export default function QuizForm() {
             />
             <span>
               <span className="block text-sm font-semibold text-[#2C3E50]">
-                Generate this quiz as a live session
+                {uiText("m6936063ced1ea266")}
               </span>
               <span className="mt-1 block text-xs text-gray-500">
-                A shareable access code will be generated as soon as the quiz is
-                created.
+                {uiText("mbaacd1e96806262c")}
               </span>
             </span>
           </label>
@@ -786,7 +790,7 @@ export default function QuizForm() {
           {enableLiveQuiz && (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Quiz duration minutes
+                {uiText("m5232eb04a336ab88")}
                 <input
                   type="number"
                   min={1}
@@ -799,7 +803,7 @@ export default function QuizForm() {
                 />
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Access code expiration
+                {uiText("m4090711b316909a5")}
                 <input
                   type="datetime-local"
                   value={liveAccessExpiresAt}
@@ -810,7 +814,7 @@ export default function QuizForm() {
                 />
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Participant access
+                {uiText("m6ab7c606d3128746")}
                 <select
                   value={participantAccessMode}
                   onChange={(event) =>
@@ -823,19 +827,21 @@ export default function QuizForm() {
                   }
                   className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
                 >
-                  <option value="public">Public link</option>
-                  <option value="restricted">Invited emails only</option>
+                  <option value="public">{uiText("m178b790b1cb2c176")}</option>
+                  <option value="restricted">
+                    {uiText("m0c906cdd09708c8b")}
+                  </option>
                   <option value="invited_only">
-                    Invited emails only (strict)
+                    {uiText("mf9636e9a7397b7af")}
                   </option>
                 </select>
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50] md:col-span-2">
-                Invitation emails
+                {uiText("m26f1e46c9dfb0e3f")}
                 <textarea
                   value={invitedEmailsText}
                   onChange={(event) => setInvitedEmailsText(event.target.value)}
-                  placeholder="ada@example.com, grace@example.com"
+                  placeholder={uiText("mefe42627ddbff54d")}
                   rows={3}
                   className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
                 />
@@ -849,7 +855,7 @@ export default function QuizForm() {
                   }
                   className="h-4 w-4 accent-[#0F2654]"
                 />
-                Send invitation emails
+                {uiText("ma04fe96c22a26440")}
               </label>
             </div>
           )}

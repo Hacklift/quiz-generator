@@ -1,4 +1,5 @@
 import axios from "axios";
+import { isSupportedLocale } from "@shared/config/locale";
 import {
   LoginResponse,
   LoginPayload,
@@ -18,7 +19,15 @@ export const registerUser = async (data: {
   password: string;
 }) => {
   try {
-    const response = await api.post("/auth/register/", data);
+    let preferred_locale: string | null = null;
+    try {
+      const stored = localStorage.getItem("quizwerk.guestLocale");
+      if (isSupportedLocale(stored)) preferred_locale = stored;
+    } catch {}
+    const response = await api.post("/auth/register/", {
+      ...data,
+      preferred_locale,
+    });
     return response.data;
   } catch (error: any) {
     const detail = error.response?.data?.detail;
@@ -45,7 +54,33 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
     const response = await api.post("/auth/login", payload);
     return response.data as LoginResponse;
   } catch (error: any) {
-    throw new Error(error.response?.data?.detail || "Login failed");
+    const status = error?.response?.status;
+    const responseData = error?.response?.data;
+    const detail = responseData?.detail ?? responseData?.message;
+    const detailMessage = Array.isArray(detail)
+      ? detail
+          .map((item: any) => item?.msg || item?.message)
+          .filter(Boolean)
+          .join("; ")
+      : typeof detail === "string"
+        ? detail
+        : "";
+
+    if (detailMessage) {
+      throw new Error(detailMessage);
+    }
+
+    if (!error?.response) {
+      throw new Error(
+        `Cannot reach the API at ${String(api.defaults.baseURL || "the server")}. ` +
+          "Check that the backend container is running and the API URL is correct.",
+      );
+    }
+
+    throw new Error(
+      `Login failed (server returned ${status || "an unknown status"}). ` +
+        "Check the backend logs for the request details.",
+    );
   }
 };
 

@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -20,15 +21,27 @@ const titleize = (value: string) =>
     .join(" ");
 
 export default function SubcategoryDetailPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
-  const categorySlug = typeof router.query.categorySlug === "string" ? router.query.categorySlug : "";
+  const categorySlug =
+    typeof router.query.categorySlug === "string"
+      ? router.query.categorySlug
+      : "";
   const subcategorySlug =
-    typeof router.query.subcategorySlug === "string" ? router.query.subcategorySlug : "";
-  const queryType = typeof router.query.type === "string" ? router.query.type : "";
-  const pageQuery = typeof router.query.page === "string" ? Number(router.query.page) : 1;
+    typeof router.query.subcategorySlug === "string"
+      ? router.query.subcategorySlug
+      : "";
+  const queryType =
+    typeof router.query.type === "string" ? router.query.type : "";
+  const pageQuery =
+    typeof router.query.page === "string" ? Number(router.query.page) : 1;
   const page = Number.isFinite(pageQuery) && pageQuery > 0 ? pageQuery : 1;
   const categoryLabel = useMemo(() => titleize(categorySlug), [categorySlug]);
-  const subcategoryLabel = useMemo(() => titleize(subcategorySlug), [subcategorySlug]);
+  const subcategoryLabel = useMemo(
+    () => titleize(subcategorySlug),
+    [subcategorySlug],
+  );
   const [quizTypes, setQuizTypes] = useState<string[]>([]);
   const [questions, setQuestions] = useState<CategoryQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +55,7 @@ export default function SubcategoryDetailPage() {
         setQuizTypes(types);
       } catch (error) {
         console.error(error);
-        toast.error("Failed to load quiz types.");
+        toast.error(uiText("m6d53e7c6027ab946"));
       }
     };
     loadQuizTypes();
@@ -66,7 +79,7 @@ export default function SubcategoryDetailPage() {
         );
       } catch (error) {
         console.error(error);
-        toast.error("Failed to load category questions.");
+        toast.error(uiText("m4463710667c194da"));
       } finally {
         setIsLoading(false);
       }
@@ -104,7 +117,8 @@ export default function SubcategoryDetailPage() {
           href={`/categories/${encodeURIComponent(categorySlug)}`}
           className="text-sm font-semibold text-blue-700 hover:text-blue-900"
         >
-          Back to {categoryLabel}
+          {uiText("mcd9182ceab27df65")}
+          {categoryLabel}
         </Link>
         <div className="mb-8 mt-4">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
@@ -112,7 +126,7 @@ export default function SubcategoryDetailPage() {
           </p>
           <h1 className="mt-2 text-3xl font-bold">{subcategoryLabel}</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Browse available questions by quiz type.
+            {uiText("ma77bdfbc7be0765a")}
           </p>
         </div>
 
@@ -136,9 +150,13 @@ export default function SubcategoryDetailPage() {
         )}
 
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading questions...</p>
+          <p className="text-sm text-slate-500">
+            {uiText("md4abe7c89bcfcd6a")}
+          </p>
         ) : questions.length === 0 ? (
-          <p className="text-sm text-slate-500">No questions are available for this selection.</p>
+          <p className="text-sm text-slate-500">
+            {uiText("m1c39335c71e6859f")}
+          </p>
         ) : (
           <div className="space-y-4">
             {questions.map((question, index) => (
@@ -147,15 +165,19 @@ export default function SubcategoryDetailPage() {
                 className="rounded-2xl border border-blue-100 bg-blue-50 p-5"
               >
                 <h2 className="font-semibold">{question.question}</h2>
-                {Array.isArray(question.options) && question.options.length > 0 && (
-                  <ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                    {question.options.map((option) => (
-                      <li key={option} className="rounded-xl bg-white px-3 py-2">
-                        {option}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {Array.isArray(question.options) &&
+                  question.options.length > 0 && (
+                    <ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                      {question.options.map((option) => (
+                        <li
+                          key={option}
+                          className="rounded-xl bg-white px-3 py-2"
+                        >
+                          {option}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
               </article>
             ))}
             <div className="flex items-center justify-between pt-2">
@@ -165,16 +187,19 @@ export default function SubcategoryDetailPage() {
                 onClick={() => updatePage(page - 1)}
                 className="rounded-xl border border-blue-100 px-4 py-2 text-sm font-semibold text-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Previous
+                {uiText("ma57b08a480b822a0")}
               </button>
-              <span className="text-sm text-slate-500">Page {page}</span>
+              <span className="text-sm text-slate-500">
+                {uiText("m0a30a815d67d7dd2")}
+                {page}
+              </span>
               <button
                 type="button"
                 disabled={questions.length < 10}
                 onClick={() => updatePage(page + 1)}
                 className="rounded-xl border border-blue-100 px-4 py-2 text-sm font-semibold text-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Next
+                {uiText("m1ff57a29d7c9d11b")}
               </button>
             </div>
           </div>

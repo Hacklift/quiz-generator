@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Trash2 } from "lucide-react";
@@ -28,6 +29,8 @@ const formatDate = (value: string) =>
   });
 
 export default function NotificationsPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -51,7 +54,7 @@ export default function NotificationsPage() {
         await loadNotifications(0);
       } catch (error) {
         console.error("Failed to load notifications:", error);
-        toast.error("Failed to load notifications");
+        toast.error(uiText("mc97d948c5ac9e1d7"));
       } finally {
         setIsLoading(false);
       }
@@ -124,8 +127,8 @@ export default function NotificationsPage() {
 
   return (
     <RequireAuth
-      title="Notifications"
-      description="Sign in to view your notification inbox."
+      title={uiText("m788011833a5a0f22")}
+      description={uiText("m7d3c99ec85060ddc")}
     >
       <div className="flex min-h-screen flex-col bg-gray-100">
         <NavBar />
@@ -135,10 +138,10 @@ export default function NotificationsPage() {
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h1 className="text-3xl font-bold text-[#0F2654]">
-                  Notifications
+                  {uiText("m788011833a5a0f22")}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  {unreadCount} unread notification
+                  {unreadCount} {uiText("m197674f294c4feca")}
                   {unreadCount === 1 ? "" : "s"}
                 </p>
               </div>
@@ -149,7 +152,7 @@ export default function NotificationsPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0F2654] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#173773] disabled:cursor-not-allowed disabled:bg-gray-400"
               >
                 <CheckCheck size={18} />
-                Mark all read
+                {uiText("m3bc62a9e6a39484a")}
               </button>
             </div>
 
@@ -177,7 +180,7 @@ export default function NotificationsPage() {
                 </div>
               ) : filteredNotifications.length === 0 ? (
                 <div className="px-6 py-16 text-center text-gray-600">
-                  No notifications to show.
+                  {uiText("me14023d3dd094f7f")}
                 </div>
               ) : (
                 filteredNotifications.map((notification) => (
@@ -203,7 +206,7 @@ export default function NotificationsPage() {
                             </span>
                             {!notification.read && (
                               <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
-                                New
+                                {uiText("m18fdd549b2ed367a")}
                               </span>
                             )}
                           </div>
@@ -219,7 +222,7 @@ export default function NotificationsPage() {
                             href={notification.action_url}
                             className="mt-3 inline-block text-sm font-semibold text-[#0F2654] underline"
                           >
-                            Open link
+                            {uiText("maab63f85c7f1cd14")}
                           </a>
                         )}
                       </div>
@@ -227,7 +230,7 @@ export default function NotificationsPage() {
                         type="button"
                         onClick={() => handleDelete(notification.id)}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                        aria-label="Delete notification"
+                        aria-label={uiText("m511c885008e479ce")}
                       >
                         <Trash2 size={18} />
                       </button>
@@ -245,7 +248,9 @@ export default function NotificationsPage() {
                   disabled={isLoadingMore}
                   className="rounded-lg border border-[#0F2654] px-5 py-2 text-sm font-semibold text-[#0F2654] transition hover:bg-[#0F2654] hover:text-white disabled:cursor-not-allowed disabled:border-gray-400 disabled:text-gray-400"
                 >
-                  {isLoadingMore ? "Loading..." : "Load more"}
+                  {isLoadingMore
+                    ? uiText("m47d2a515ef2f05b8")
+                    : uiText("mac8991ef01019cf5")}
                 </button>
               </div>
             )}

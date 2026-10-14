@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -11,6 +12,8 @@ import TestimonialsSection from "@features/quiz/components/TestimonialsSection";
 import HowItWorksSection from "@features/quiz/components/HowItWorksSection";
 
 export default function Home() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
 
   return (
@@ -21,12 +24,17 @@ export default function Home() {
         {/* ───── HERO ───── */}
         <section className="bg-white text-center px-4 sm:px-6 md:px-8 py-12 md:py-16">
           <h1 className="font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl mb-4">
-            Instant <span className="text-[#0F2654]">Quizzes</span>, Smart{" "}
-            <span className="text-[#0F2654]">Answers</span>
+            {uiText("me2861894f065ab75")}
+            <span className="text-[#0F2654]">
+              {uiText("mf1e638bae6e83167")}
+            </span>
+            {uiText("m4b866271e5c93f13")}{" "}
+            <span className="text-[#0F2654]">
+              {uiText("m4ad0a0a6ae56d6bc")}
+            </span>
           </h1>
           <p className="text-sm sm:text-base md:text-lg text-gray-600 mb-6 max-w-xl mx-auto">
-            Create engaging quizzes and get answers in seconds. Make learning
-            fun and effortless!
+            {uiText("me09481aabb728cca")}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -40,7 +48,7 @@ export default function Home() {
               "
             >
               <Radio size={18} aria-hidden="true" />
-              Generate Live Quiz
+              {uiText("ma0e3a9103479ddfc")}
             </button>
             <button
               onClick={() => router.push("/quiz-access")}
@@ -53,7 +61,7 @@ export default function Home() {
               "
             >
               <Users size={18} aria-hidden="true" />
-              Participate in Quiz
+              {uiText("m90330531b0455f3e")}
             </button>
           </div>
         </section>
@@ -63,7 +71,7 @@ export default function Home() {
           <div className="mx-auto max-w-screen-md">
             <Image
               src="/images/hquiz1.png"
-              alt="Quiz Example"
+              alt={uiText("mfa5b9f193df54b21")}
               width={1000}
               height={500}
               className="w-full h-auto rounded-lg shadow"
@@ -74,22 +82,22 @@ export default function Home() {
         {/* ───── QUIZ CARDS ───── */}
         <section className="px-4 sm:px-6 md:px-8 py-8 md:py-12 max-w-screen-lg mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold mb-8 text-center">
-            Quiz Here
+            {uiText("mde53383db46551cc")}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
               {
-                title: "Generate Quiz",
+                title: uiText("m5da69270e5973c17"),
                 desc: "Effortlessly create customized quizzes on any topic. Our smart quiz generator crafts tailored questions on any subject.",
                 img: "/images/hquiz2.png",
               },
               {
-                title: "Your Quiz Result",
+                title: uiText("m8375f132f4d8767d"),
                 desc: "Display all generated quizzes with answers. Export quiz to PDF, text or platform format if applicable.",
                 img: "/images/hquiz3.png",
               },
               {
-                title: "Explore Template",
+                title: uiText("m2eab8d4ec8a9f654"),
                 desc: "Users can input one question for quick answers. Shows AI-generated answers immediately below input.",
                 img: "/images/hquiz4.png",
               },
@@ -117,7 +125,7 @@ export default function Home() {
                   </h3>
                   <p className="text-sm text-gray-600 flex-1">{item.desc}</p>
                   <p className="mt-4 text-[#0F2654] text-sm font-medium cursor-pointer hover:underline">
-                    Learn More
+                    {uiText("m8d8cd546b58d91c3")}
                   </p>
                 </div>
               </div>

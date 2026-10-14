@@ -1,10 +1,13 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import React from "react";
 
 const SplashScreen: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const [fadeOut, setFadeOut] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
 
@@ -28,7 +31,7 @@ const SplashScreen: React.FC = () => {
     >
       <Image
         src="/images/logo.png"
-        alt="HQUIZ Logo"
+        alt={uiText("ma14458f46b977dc8")}
         width={340}
         height={340}
         className="

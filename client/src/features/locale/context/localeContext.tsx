@@ -11,15 +11,18 @@ import { I18nextProvider } from "react-i18next";
 import { useAuth } from "@features/auth/context/authContext";
 import { updateLocale } from "@features/auth/api/authApi";
 import {
-  browserLocale,
+  isSupportedLocale,
+  languageDirection,
   DEFAULT_LOCALE,
   type SupportedLocale,
 } from "@shared/config/locale";
 import { createLocaleI18n } from "@features/locale/i18n";
+import { loadLanguageCatalogs } from "@features/locale/catalogClient";
 
 interface LocaleContextValue {
   locale: SupportedLocale;
   preferredLocale: SupportedLocale | null;
+  translationStatus?: "loading" | "ready" | "unavailable";
   setPreferredLocale: (locale: SupportedLocale | null) => Promise<void>;
 }
 
@@ -29,23 +32,59 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const { user, refreshUser } = useAuth();
   const [i18n] = useState(createLocaleI18n);
   const [locale, setLocale] = useState<SupportedLocale>(DEFAULT_LOCALE);
+  const [guestLocale, setGuestLocale] = useState<string>(DEFAULT_LOCALE);
+  const [translationStatus, setTranslationStatus] = useState<
+    "loading" | "ready" | "unavailable"
+  >("ready");
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("quizwerk.guestLocale");
+      if (isSupportedLocale(stored)) setGuestLocale(stored);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const nextLocale = user
       ? (user.preferred_locale ?? user.effective_locale ?? DEFAULT_LOCALE)
-      : browserLocale();
+      : guestLocale;
     setLocale(nextLocale);
     void i18n.changeLanguage(nextLocale);
-  }, [i18n, user?.id, user?.preferred_locale, user?.effective_locale]);
+  }, [
+    i18n,
+    user?.id,
+    user?.preferred_locale,
+    user?.effective_locale,
+    guestLocale,
+  ]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadLanguageCatalogs(
+      i18n,
+      locale,
+      Boolean(user),
+      controller.signal,
+      setTranslationStatus,
+    );
+    return () => controller.abort();
+  }, [i18n, locale, user?.id]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    document.documentElement.dir = "ltr";
+    document.documentElement.dir = languageDirection(locale);
   }, [locale]);
 
   const setPreferredLocale = useCallback(
     async (preferredLocale: SupportedLocale | null) => {
-      if (!user) throw new Error("Sign in to update your language preference.");
+      if (!user) {
+        const next = preferredLocale || DEFAULT_LOCALE;
+        try {
+          localStorage.setItem("quizwerk.guestLocale", next);
+        } catch {}
+        setGuestLocale(next);
+        return;
+      }
 
       // A cleared preference must be resolved by the server, since it may
       // inherit an organization locale. Publish changes after persistence.
@@ -58,10 +97,11 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       locale,
+      translationStatus,
       preferredLocale: user?.preferred_locale ?? null,
       setPreferredLocale,
     }),
-    [locale, setPreferredLocale, user?.preferred_locale],
+    [locale, translationStatus, setPreferredLocale, user?.preferred_locale],
   );
 
   return (

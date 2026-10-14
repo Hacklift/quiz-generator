@@ -16,9 +16,31 @@ from server.app.organizations.services import (
     update_organization_settings,
 )
 from server.app.users.models import UserOut
+from server.app.organizations.models import OrganizationInvitationRequest, OrganizationOnboardingRequest
+from server.app.organizations.onboarding import issue_onboarding_token, accept_onboarding_token
 
 
 router = APIRouter(tags=["Organizations"])
+
+
+@router.post("/{organization_id}/onboarding-invitations")
+async def invite_organization_learner(
+    organization_id: str, payload: OrganizationInvitationRequest, request: Request,
+    current_user: UserOut = Depends(get_verified_user),
+):
+    token = await issue_onboarding_token(organization_id, payload.email, current_user,
+        request.app.state.organizations_collection, request.app.state.organization_memberships_collection)
+    return {"token": token}
+
+
+@router.post("/onboarding")
+async def onboard_organization_learner(
+    payload: OrganizationOnboardingRequest, request: Request,
+    current_user: UserOut = Depends(get_verified_user),
+):
+    return await accept_onboarding_token(payload.token, current_user,
+        request.app.state.organizations_collection, request.app.state.organization_memberships_collection,
+        request.app.state.users_collection)
 
 
 @router.post("", response_model=OrganizationSettingsResponse)

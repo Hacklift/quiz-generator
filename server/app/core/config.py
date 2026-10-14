@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     TRANSLATION_MODEL: str = "gemini-2.5-flash-lite"
     TRANSLATION_PROVIDER_URL: Optional[str] = None
     TRANSLATION_PROVIDER_API_KEY: Optional[str] = None
-    TRANSLATION_PROVIDER_TIMEOUT_SECONDS: float = 8.0
+    TRANSLATION_PROVIDER_TIMEOUT_SECONDS: float = Field(default=45.0, gt=0, le=120)
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:

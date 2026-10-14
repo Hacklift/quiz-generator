@@ -112,9 +112,11 @@ async def ensure_users_validator(database):
                         "avatar_color": {"bsonType": ["string", "null"]},
                         "preferred_locale": {
                             "bsonType": ["string", "null"],
-                            "enum": ["en", "es", "fr", None],
+                            "pattern": "^[a-z]{2,3}$",
                         },
                         "active_organization_id": {"bsonType": ["string", "null"]},
+                        "onboarding_organization_id": {"bsonType": ["string", "null"]},
+                        "language_selected": {"bsonType": "bool"},
                         "persona": {
                             "bsonType": ["object", "null"],
                             "properties": {

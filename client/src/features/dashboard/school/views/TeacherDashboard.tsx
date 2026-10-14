@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -24,37 +25,34 @@ function teacherPresetHref(
 }
 
 export default function TeacherDashboard({ persona }: DashboardViewProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const t = useTerms();
 
   const presets: TeacherPreset[] = [
     {
       id: "class-quiz",
-      title: "Class quiz",
+      title: uiText("md7de3c47d3ed1f06"),
       badge: "In-class / Auto-marked",
-      description: `Run a live, interactive check during your ${t(
-        "session",
-      )}. Generates multiple-choice and short answers pre-set for ${t(
-        "learner",
-        "plural",
-      )}.`,
+      description: uiText("m72fca694bfb26042", {
+        value0: t("session"),
+        value1: t("learner", "plural"),
+      }),
       href: teacherPresetHref(persona, "class-quiz"),
     },
     {
       id: "homework-check",
-      title: "Homework check",
+      title: uiText("mcd8487e72acad79f"),
       badge: "Take-home / Answer key",
-      description: `Create ${t(
-        "assignment",
-      )} with detailed answer explanations suited for independent submission and rapid marking.`,
+      description: uiText("m2d1e38422f214ad7", { value0: t("assignment") }),
       href: teacherPresetHref(persona, "homework-check"),
     },
     {
       id: "exam-revision",
-      title: "Exam revision",
+      title: uiText("m53c1afad724e63a9"),
       badge: "Revision / Mixed formats",
-      description:
-        "Comprehensive practice set covering key topics and core curriculum concepts before upcoming exams.",
+      description: uiText("mf4b4ed76766c4d7a"),
       href: teacherPresetHref(persona, "exam-revision"),
     },
   ];
@@ -65,17 +63,16 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="teacher-presets-heading"
       >
-        <Kicker>Teacher dashboard</Kicker>
+        <Kicker>{uiText("me7d8da86fdb02358")}</Kicker>
         <h2
           id="teacher-presets-heading"
           className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
         >
-          Classroom assessment presets
+          {uiText("mc79ebb88be61c53c")}
         </h2>
         <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-          Jumpstart your assessment without generic configuration. Every preset
-          is pre-configured for {t("learner", "plural")} with marking-ready
-          formats.
+          {uiText("ma5c48069f1c00808")}
+          {t("learner", "plural")} {uiText("ma1dc833185effade")}
         </p>
 
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">
@@ -100,9 +97,12 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
                 type="button"
                 onClick={() => router.push(preset.href)}
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
-                aria-label={`Create ${preset.title}`}
+                aria-label={uiText("m37a7e45e1b49df1f", {
+                  value0: preset.title,
+                })}
               >
-                Create {preset.title}
+                {uiText("m4759498ac2a719c6")}
+                {preset.title}
               </button>
             </article>
           ))}
@@ -113,18 +113,20 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
         className="border-t-2 border-divider pt-[28px]"
         aria-labelledby="teacher-results-heading"
       >
-        <Kicker>{titleCaseTerm(t("group"))} assessment</Kicker>
+        <Kicker>
+          {titleCaseTerm(t("group"))} {uiText("m89c08f7a02989db8")}
+        </Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
             <h2
               id="teacher-results-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              {titleCaseTerm(t("group"))} session results and marking
+              {titleCaseTerm(t("group"))} {uiText("mf38cdc51b183ae32")}
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
-              Inspect participant scores, per-question breakdown, and mark
-              submissions from your live {t("session", "plural")}.
+              {uiText("m45a3d7f7810b705a")}
+              {t("session", "plural")}.
             </p>
           </div>
 
@@ -133,17 +135,21 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
               type="button"
               onClick={() => router.push("/my-live-quizzes")}
               className={BTN_PRIMARY}
-              aria-label={`View live ${t("session")} results`}
+              aria-label={uiText("mc6728d026c2fc4b5", { value0: t("session") })}
             >
-              View live {t("session")} results
+              {uiText("mfbe9628a9380f412")}
+              {t("session")} {uiText("mc099142bc3186ded")}
             </button>
             <button
               type="button"
               onClick={() => router.push("/quiz_history")}
               className={BTN_GHOST}
-              aria-label={`View ${t("assignment")} history`}
+              aria-label={uiText("m79830cfc06f30299", {
+                value0: t("assignment"),
+              })}
             >
-              All {t("assignment", "plural")}
+              {uiText("ma52ace420f2175d0")}
+              {t("assignment", "plural")}
             </button>
           </div>
         </div>

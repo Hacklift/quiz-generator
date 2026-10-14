@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import MoveQuizModal from "./MoveQuizModal";
@@ -21,6 +22,8 @@ const getFolderId = (folder: { id?: string }) => folder.id || "";
 const getFolderItemId = (quiz: { id?: string }) => quiz.id || "";
 
 const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showOrganizeModal, setShowOrganizeModal] = useState(false);
@@ -35,13 +38,14 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
           onClick={() => setShowOrganizeModal(true)}
           className="text-sm bg-navy-600 text-white px-3 py-2 rounded-lg hover:bg-navy-700"
         >
-          Organize
+          {uiText("m29cc2fca75ebda5f")}
         </button>
       </div>
 
       {quizzes.length === 0 ? (
         <p className="text-gray-500 text-sm">
-          No {t("quiz", "plural")} in this folder yet.
+          {uiText("m1ea442a134b2a184")}
+          {t("quiz", "plural")} {uiText("ma6929558a2437d3d")}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -51,10 +55,10 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
               className="p-4 border border-gray-200 rounded-xl hover:shadow-md transition"
             >
               <h3 className="text-lg font-medium text-navy-700 mb-1">
-                {quiz.title || "Untitled Quiz"}
+                {quiz.title || uiText("m96c2c6ca09471b4d")}
               </h3>
               <p className="text-sm text-gray-500 mb-3">
-                {quiz.category || "Uncategorized"}
+                {quiz.category || uiText("m8d40d123b2e1e296")}
               </p>
               <div className="flex justify-between">
                 <button
@@ -64,7 +68,7 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
                   }}
                   className="text-sm text-navy-600 hover:underline"
                 >
-                  Move
+                  {uiText("m6ecc3df6bffdd06c")}
                 </button>
               </div>
             </div>
@@ -83,11 +87,13 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
 
       {showOrganizeModal && (
         <OrganizeModal
-          title="Organize Quizzes"
+          title={uiText("md747d230e973dbb1")}
           items={quizzes}
           onClose={() => setShowOrganizeModal(false)}
           onOrganized={(sorted) => setQuizzes(sorted)}
-          renderItem={(quiz) => <span>{quiz.title || "Untitled Quiz"}</span>}
+          renderItem={(quiz) => (
+            <span>{quiz.title || uiText("m96c2c6ca09471b4d")}</span>
+          )}
         />
       )}
     </div>

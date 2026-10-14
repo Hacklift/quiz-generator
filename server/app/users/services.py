@@ -53,6 +53,8 @@ async def get_user_profile_service(
         "preferred_locale": current_user.preferred_locale,
         "effective_locale": effective_locale,
         "active_organization_id": current_user.active_organization_id,
+        "onboarding_organization_id": current_user.onboarding_organization_id,
+        "language_selected": current_user.language_selected,
         "role": current_user.role,
         "status": current_user.status,
         "is_active": current_user.is_active,
@@ -201,6 +203,8 @@ async def update_user_locale_service(
     locale_data: UpdateLocaleRequest,
     current_user: UserOut,
     users_collection: AsyncIOMotorCollection,
+    organizations_collection: AsyncIOMotorCollection | None = None,
+    memberships_collection: AsyncIOMotorCollection | None = None,
 ) -> UpdateProfileResponse:
     """Persist a user's explicit locale or clear it for organisation inheritance."""
 
@@ -217,6 +221,7 @@ async def update_user_locale_service(
         {
             "$set": {
                 "profile.preferred_locale": locale_data.preferred_locale,
+                "profile.language_selected": True,
                 "updated_at": now_utc(),
             }
         },
@@ -240,11 +245,17 @@ async def update_user_locale_service(
     if isinstance(updated_at_value, datetime):
         updated_at_value = updated_at_value.isoformat()
 
+    user_payload = build_user_out_payload(updated_user)
+    if organizations_collection is not None and memberships_collection is not None:
+        user_payload["effective_locale"] = await resolve_user_effective_locale(
+            UserOut(**{**user_payload, "created_at": created_at, "updated_at": updated_at_value}),
+            organizations_collection, memberships_collection,
+        )
     return UpdateProfileResponse(
         message="Language preference updated successfully",
         user=UserOut(
             **{
-                **build_user_out_payload(updated_user),
+                **user_payload,
                 "created_at": created_at,
                 "updated_at": updated_at_value,
             }

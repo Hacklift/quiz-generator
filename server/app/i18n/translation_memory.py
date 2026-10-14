@@ -6,7 +6,7 @@ published records.
 """
 from datetime import datetime, timezone
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -23,7 +23,7 @@ class TranslationUpsert(BaseModel):
     source_text: str = Field(min_length=1, max_length=20_000)
     target_text: str = Field(min_length=1, max_length=20_000)
     locale: SupportedLocale
-    status: str = "draft"
+    status: Literal["draft", "published"] = "draft"
     glossary_version: str | None = None
 
 
@@ -51,6 +51,18 @@ async def read_catalog(collection: AsyncIOMotorCollection, locale: SupportedLoca
 async def upsert_translation(collection: AsyncIOMotorCollection, payload: TranslationUpsert) -> dict[str, Any]:
     now = _now()
     record = payload.model_dump()
+    from server.app.i18n.catalogs import load_catalog, source_version, validate_messages, NAMESPACES
+    from server.app.i18n.provider import TranslationProviderError
+    if payload.namespace in NAMESPACES:
+        source = load_catalog("en", payload.namespace)
+        if payload.key in source:
+            if payload.source_text != source[payload.key]:
+                raise HTTPException(409, "The source message has changed; translate the current version")
+            try:
+                validate_messages({payload.key: payload.source_text}, {payload.key: payload.target_text})
+            except TranslationProviderError as exc:
+                raise HTTPException(422, "Translation placeholders must match the source") from exc
+            record["source_version"] = source_version(source)
     record.update({"updated_at": now, "reviewed_at": now if payload.status == "published" else None})
     await collection.update_one(
         {"locale": payload.locale, "namespace": payload.namespace, "key": payload.key},

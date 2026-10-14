@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from pydantic import BaseModel, Field
+from server.app.core.dependencies import get_current_user
+from server.app.core.rate_limiter import limiter
+from server.app.i18n.catalogs import get_catalog, prepare_catalog_batch
+from server.app.i18n.provider import TranslationProviderError
 
 from server.app.core.dependencies import get_verified_user
 from server.app.i18n.locales import SupportedLocale
@@ -13,6 +18,30 @@ from server.app.i18n.provider import translate_draft
 from server.app.users.models import UserOut
 
 router = APIRouter(tags=["Translations"])
+
+
+class CatalogBatch(BaseModel):
+    keys: list[str] = Field(min_length=1, max_length=64)
+
+
+@router.get("/catalogs/{locale}/{namespace}")
+@limiter.limit("120/minute")
+async def read_runtime_catalog(locale: SupportedLocale, namespace: str, request: Request, response: Response):
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return await get_catalog(request.app.state.translation_memory_collection, locale, namespace)
+
+
+@router.post("/catalogs/{locale}/{namespace}")
+@limiter.limit("30/minute")
+async def translate_runtime_catalog(
+    locale: SupportedLocale, namespace: str, payload: CatalogBatch, request: Request,
+    response: Response, current_user: UserOut = Depends(get_current_user),
+):
+    # Only registered UI IDs are accepted; no personal/user-generated text is sent.
+    try:
+        return await prepare_catalog_batch(request.app.state.translation_memory_collection, locale, namespace, payload.keys)
+    except TranslationProviderError as exc:
+        raise HTTPException(503, "Translations are temporarily unavailable; your language preference is saved.") from exc
 
 
 @router.get("/messages/{locale}")

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { ROUTES } from "@shared/config/patterns/routes";
@@ -6,6 +7,8 @@ import { resetPassword } from "@features/auth/api/authApi";
 import { PASSWORD_REGEX } from "@shared/config/patterns/patterns";
 
 export default function ResetPasswordPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { token, email, mode } = router.query;
 
@@ -57,7 +60,7 @@ export default function ResetPasswordPage() {
     setError("");
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(uiText("mb6eb82cd3300c838"));
       return;
     }
 
@@ -68,13 +71,13 @@ export default function ResetPasswordPage() {
     }
 
     if (!token) {
-      setError("Invalid reset link. Token is missing.");
+      setError(uiText("m7462faa556e7a4f1"));
       return;
     }
 
     const emailToUse = userEmail.trim();
     if (!emailToUse) {
-      setError("Please enter your email address");
+      setError(uiText("m1540d92de4a6a85e"));
       return;
     }
 
@@ -118,7 +121,7 @@ export default function ResetPasswordPage() {
   if (!router.isReady) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+        <div className="text-gray-600">{uiText("m47d2a515ef2f05b8")}</div>
       </div>
     );
   }
@@ -128,19 +131,21 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-lg">
           <h2 className="text-2xl font-semibold text-center mb-2 text-[#143E6F]">
-            Set New Password
+            {uiText("m43d483dfd64f7ae7")}
           </h2>
           <p className="text-sm text-gray-600 text-center mb-6">
-            Create a strong password for your account
+            {uiText("m19edfa92bfd5a60f")}
           </p>
 
           {success ? (
             <div className="text-center py-6">
               <div className="text-green-600 text-5xl mb-4">✓</div>
               <p className="text-gray-700 mb-2 font-medium">
-                Password Reset Successful!
+                {uiText("m34a35e3d3e701152")}
               </p>
-              <p className="text-sm text-gray-500">Redirecting to login...</p>
+              <p className="text-sm text-gray-500">
+                {uiText("ma2cc70119cabd772")}
+              </p>
             </div>
           ) : (
             <>
@@ -153,33 +158,33 @@ export default function ResetPasswordPage() {
               <form onSubmit={handleTokenReset}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
+                    {uiText("m09bf25ef30833633")}
                   </label>
                   <input
                     type="email"
                     value={userEmail}
                     onChange={(e) => setUserEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={uiText("m53e6cdc30765aade")}
                     className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#143E6F] text-gray-900"
                     required
                     disabled={loading}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {userEmail
-                      ? "Email verified from link"
-                      : "Enter the email you used to request the reset"}
+                      ? uiText("m41c527ceb7107968")
+                      : uiText("ma1c600dc89b79add")}
                   </p>
                 </div>
 
                 <div className="mb-3">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Password
+                    {uiText("m7c451e0f436d04a6")}
                   </label>
                   <input
                     type="password"
                     value={newPassword}
                     onChange={(e) => handlePasswordChange(e.target.value)}
-                    placeholder="Enter new password"
+                    placeholder={uiText("m15f691f800a4b76a")}
                     className={`w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 ${
                       passwordErrors.length > 0 && newPassword
                         ? "border-red-300 focus:ring-red-500"
@@ -201,13 +206,13 @@ export default function ResetPasswordPage() {
 
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
+                    {uiText("mc292210c44167923")}
                   </label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    placeholder={uiText("mbf000421aeb39493")}
                     className={`w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 ${
                       confirmPassword && newPassword !== confirmPassword
                         ? "border-red-300 focus:ring-red-500"
@@ -218,7 +223,7 @@ export default function ResetPasswordPage() {
                   />
                   {confirmPassword && newPassword !== confirmPassword && (
                     <p className="text-xs text-red-600 mt-1">
-                      Passwords do not match
+                      {uiText("mb6eb82cd3300c838")}
                     </p>
                   )}
                 </div>
@@ -235,7 +240,9 @@ export default function ResetPasswordPage() {
                   }
                   className="w-full bg-[#143E6F] text-white py-2.5 rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0f2f54] transition-colors"
                 >
-                  {loading ? "Resetting Password..." : "Reset Password"}
+                  {loading
+                    ? uiText("m62197cbcaffd7f65")
+                    : uiText("m4e70f1fd24babdea")}
                 </button>
               </form>
 
@@ -244,7 +251,7 @@ export default function ResetPasswordPage() {
                   onClick={() => router.push(ROUTES.LOGIN)}
                   className="text-sm text-gray-600 hover:text-[#143E6F] hover:underline"
                 >
-                  Back to Login
+                  {uiText("m40c55c13690170c6")}
                 </button>
               </div>
             </>

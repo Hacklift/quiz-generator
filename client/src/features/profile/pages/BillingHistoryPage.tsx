@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -41,6 +42,8 @@ const formatStatus = (status?: string) => {
 };
 
 export default function BillingHistoryPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const [invoices, setInvoices] = useState<BillingHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -63,8 +66,8 @@ export default function BillingHistoryPage() {
 
   return (
     <RequireAuth
-      title="Sign in to view billing history"
-      description="You need an account to review Stripe invoices and payment records."
+      title={uiText("m1a18cccbe11fe65b")}
+      description={uiText("md6bcfb2d2d8637bf")}
     >
       <div className="min-h-screen bg-[#f7f7f5] text-[#102347]">
         <NavBar />
@@ -72,37 +75,35 @@ export default function BillingHistoryPage() {
           <div className="flex items-center justify-between gap-4 mb-8">
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-[#143E6F]/70">
-                Billing
+                {uiText("m3ac8bbca9a74cfbd")}
               </p>
               <h1 className="text-3xl sm:text-4xl font-bold mt-2">
-                Billing History
+                {uiText("m5ade08611d1f4322")}
               </h1>
               <p className="mt-3 text-gray-600 max-w-2xl">
-                Review invoices, payment status, and downloadable receipts for
-                your Stripe subscription charges.
+                {uiText("m22de0f29f74f32ee")}
               </p>
             </div>
             <Link
               href="/profile"
               className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5"
             >
-              Back to Profile
+              {uiText("m351f14c7716123b8")}
             </Link>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-[#143E6F]/10 overflow-hidden">
             {isLoading ? (
               <div className="px-6 py-16 text-center text-gray-500">
-                Loading billing history...
+                {uiText("m6048993fb74846e4")}
               </div>
             ) : invoices.length === 0 ? (
               <div className="px-6 py-16 text-center">
                 <p className="text-lg font-semibold text-[#102347]">
-                  No invoices yet
+                  {uiText("m92d2d0ce0bd393f4")}
                 </p>
                 <p className="mt-2 text-gray-600">
-                  Stripe billing records will appear here after the first paid
-                  subscription charge is created.
+                  {uiText("mee8eab0374fa4a83")}
                 </p>
               </div>
             ) : (
@@ -111,22 +112,22 @@ export default function BillingHistoryPage() {
                   <thead className="bg-[#f8fafc]">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Date
+                        {uiText("m99c40ab405926cb5")}
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Description
+                        {uiText("m526e0087cc3f254d")}
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Period
+                        {uiText("m6e795d4d3cc21c5c")}
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Amount
+                        {uiText("m49e96d7cdf58069c")}
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Status
+                        {uiText("m920e413c7d411b61")}
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Receipt
+                        {uiText("mdad5a969231390f5")}
                       </th>
                     </tr>
                   </thead>
@@ -137,7 +138,7 @@ export default function BillingHistoryPage() {
                           {formatDate(invoice.created_at)}
                         </td>
                         <td className="px-6 py-4 text-sm text-[#102347]">
-                          {invoice.description || "Subscription payment"}
+                          {invoice.description || uiText("m52199592a197757b")}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
                           {formatDate(invoice.period_start)} -{" "}
@@ -163,10 +164,12 @@ export default function BillingHistoryPage() {
                               rel="noreferrer"
                               className="text-[#143E6F] font-medium hover:underline"
                             >
-                              View Invoice
+                              {uiText("m3600894333963a24")}
                             </a>
                           ) : (
-                            <span className="text-gray-400">Unavailable</span>
+                            <span className="text-gray-400">
+                              {uiText("mca184496974204a0")}
+                            </span>
                           )}
                         </td>
                       </tr>

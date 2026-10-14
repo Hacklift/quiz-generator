@@ -5,6 +5,14 @@
     "useOrganizationDefault": "Use organization default",
     "saving": "Saving language…",
     "saved": "Language preference saved.",
-    "saveError": "We could not update your language preference."
+    "saveError": "We could not update your language preference.",
+    "search": "Search languages",
+    "searchPlaceholder": "Type a language name or code",
+    "noMatches": "No matching languages. Try another name or language code.",
+    "coverage": "Spanish and French include offline translations. Other languages use AI; availability and quality vary.",
+    "welcome": "Choose your language",
+    "continue": "Continue",
+    "loading": "Preparing translations…",
+    "unavailable": "Some translations are unavailable. English is shown where needed."
   }
 }

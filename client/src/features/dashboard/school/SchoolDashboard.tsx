@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { ComponentType } from "react";
 import {
@@ -16,32 +17,6 @@ import LecturerDashboard from "./views/LecturerDashboard";
 import StudentDashboard from "./views/StudentDashboard";
 import ParentDashboard from "./views/ParentDashboard";
 import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
-
-const SCHOOL_COPY: Record<
-  SchoolUserType,
-  { title: string; lede: (t: TerminologyResolver) => string }
-> = {
-  teacher: {
-    title: "Plan your next class quiz.",
-    lede: (t) =>
-      `Set work, run it live, and see how your ${t("learner", "plural")} did.`,
-  },
-  lecturer: {
-    title: "Get your next lecture ready.",
-    lede: (t) =>
-      `Create focused checks for your ${t("group", "plural")} and review the results.`,
-  },
-  student: {
-    title: "Ready for revision?",
-    lede: (t) =>
-      `Build a practice quiz and strengthen your understanding before the next ${t("group")}.`,
-  },
-  parent: {
-    title: "Make practice time count.",
-    lede: (t) =>
-      `Create a short practice quiz to support your ${t("learner")}'s learning at home.`,
-  },
-};
 
 /**
  * [SCAFFOLD-OWNED] School category dashboard (#124).
@@ -65,6 +40,34 @@ const SCHOOL_VIEWS: Record<
 };
 
 export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
+  const { t: uiText } = useTranslation("ui");
+
+  const SCHOOL_COPY: Record<
+    SchoolUserType,
+    { title: string; lede: (t: TerminologyResolver) => string }
+  > = {
+    teacher: {
+      title: uiText("m80b19a1cbc57552a"),
+      lede: (t) =>
+        `Set work, run it live, and see how your ${t("learner", "plural")} did.`,
+    },
+    lecturer: {
+      title: uiText("mf24600100b29da55"),
+      lede: (t) =>
+        `Create focused checks for your ${t("group", "plural")} and review the results.`,
+    },
+    student: {
+      title: uiText("m5c26a05eac3da9f6"),
+      lede: (t) =>
+        `Build a practice quiz and strengthen your understanding before the next ${t("group")}.`,
+    },
+    parent: {
+      title: uiText("mea454e1a37703a1a"),
+      lede: (t) =>
+        `Create a short practice quiz to support your ${t("learner")}'s learning at home.`,
+    },
+  };
+
   const { categories } = usePersonaCopy();
   const t = useTerms();
   const UserTypeView = SCHOOL_VIEWS[persona.userType as SchoolUserType];
@@ -75,39 +78,41 @@ export default function SchoolDashboard({ persona, user }: DashboardViewProps) {
   return (
     <DashboardShell
       kicker={categories[persona.category].label}
-      title={`Welcome back, ${greetingName}. ${copy.title}`}
+      title={uiText("mbc4cdc1643f5ec38", {
+        value0: greetingName,
+        value1: copy.title,
+      })}
       lede={`${copy.lede(t)} Everything for your ${t("group", "plural")} is in one place.`}
     >
       <div className="flex flex-col gap-[36px]">
         <QuickActions
           actions={[
             {
-              label: `New ${t("quiz")}`,
-              description: `Generate a ${t("quiz")} on any topic, with the answer key included.`,
+              label: uiText("m642f9e9bfeafeb88", { value0: t("quiz") }),
+              description: uiText("mbfb29e4e4e786dab", { value0: t("quiz") }),
               href: personaGenerateHref(persona.userType),
             },
             {
-              label: `Join ${t("live_quiz")}`,
-              description: `Enter an access code to join a ${t("live_quiz")}.`,
+              label: uiText("m0b8eeac901367065", { value0: t("live_quiz") }),
+              description: uiText("m218c2b78d68d2979", {
+                value0: t("live_quiz"),
+              }),
               href: "/quiz-access",
             },
             {
-              label: "Revision practice",
-              description:
-                "Build a self-marking practice set from a past topic.",
+              label: uiText("m64f4f83dc91c5fca"),
+              description: uiText("mae0908865ae22343"),
               href: "/popular",
             },
           ]}
         />
 
         <RecentQuizzes
-          heading={`Recent ${t("quiz", "plural")}`}
-          emptyMessage={`Nothing here yet. Generate your first ${t(
-            "quiz",
-          )} and it will show up here, ready to use with your ${t(
-            "group",
-            "plural",
-          )}.`}
+          heading={uiText("m28ffefc4a23a9747", { value0: t("quiz", "plural") })}
+          emptyMessage={uiText("m14ca2b043b020a30", {
+            value0: t("quiz"),
+            value1: t("group", "plural"),
+          })}
         />
 
         <UserTypeView persona={persona} user={user} />

@@ -94,6 +94,7 @@ export default function PersonaOnboardingGate() {
     isLoading ||
     !isAuthenticated ||
     !user ||
+    (user.language_selected === false && !user.preferred_locale) ||
     profilePersona ||
     isAutoSaving
   ) {

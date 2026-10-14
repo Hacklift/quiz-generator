@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { QuizAnswerFieldProps } from "@shared/types/props";
 import React from "react";
 
@@ -9,6 +10,8 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
   value,
   disabled = false,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const stripOptionPrefix = (option: string) =>
     option.replace(/^[A-D][\)\.]\s*/i, "").trim();
 
@@ -88,7 +91,7 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
         onChange={handleInputChange}
         value={value ?? ""}
         disabled={disabled}
-        placeholder="Type your short answer here"
+        placeholder={uiText("m40624548587cb94d")}
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
     );
@@ -99,7 +102,7 @@ const QuizAnswerField: React.FC<QuizAnswerFieldProps> = ({
         onChange={handleInputChange}
         value={value ?? ""}
         disabled={disabled}
-        placeholder="Write your detailed answer here"
+        placeholder={uiText("m5c5a44ada858cd9a")}
         className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
       />
     );

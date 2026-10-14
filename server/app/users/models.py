@@ -41,6 +41,8 @@ class UserProfile(BaseModel):
     persona: Optional[UserPersona] = None
     preferred_locale: Optional[SupportedLocale] = None
     active_organization_id: Optional[str] = None
+    onboarding_organization_id: Optional[str] = None
+    language_selected: bool = False
 
     @field_validator("bio")
     @classmethod
@@ -173,6 +175,8 @@ class UserOut(BaseModel):
     preferred_locale: Optional[SupportedLocale] = None
     effective_locale: SupportedLocale = "en"
     active_organization_id: Optional[str] = None
+    onboarding_organization_id: Optional[str] = None
+    language_selected: bool = False
     role: Optional[str] = "user"
     status: Optional[str] = "pending_verification"
     is_verified: Optional[bool] = False
