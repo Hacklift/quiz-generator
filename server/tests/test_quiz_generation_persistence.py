@@ -42,6 +42,7 @@ async def test_authenticated_get_questions_persists_fallback_quiz(monkeypatch):
             custom_instruction="",
         ),
         user_id="user-1",
+        organization_id="organization-1",
     )
 
     assert result["quiz_id"] == "canonical-quiz-1"
@@ -69,8 +70,9 @@ async def test_parent_generation_can_disable_unrelated_fallback(monkeypatch):
                 difficulty_level="easy",
                 audience_type="children ages 7–9",
                 allow_fallback=False,
-            ),
-            user_id="parent-1",
+        ),
+        user_id="parent-1",
+        organization_id="organization-1",
         )
 
     assert getattr(error.value, "status_code", None) == 503
@@ -125,6 +127,11 @@ async def test_fingerprint_lookup_only_adds_owner_scope_when_requested():
     await repository.find_by_content_fingerprint("legacy-fingerprint")
     await repository.find_by_content_fingerprint("owned-fingerprint", "parent-1")
     await repository.find_by_content_fingerprint("ownerless-fingerprint", None)
+    await repository.find_by_content_fingerprint(
+        "organization-fingerprint",
+        "parent-1",
+        "organization-1",
+    )
 
     assert collection.queries == [
         {"content_fingerprint": "legacy-fingerprint"},
@@ -133,6 +140,11 @@ async def test_fingerprint_lookup_only_adds_owner_scope_when_requested():
             "owner_user_id": "parent-1",
         },
         {"content_fingerprint": "ownerless-fingerprint", "owner_user_id": None},
+        {
+            "content_fingerprint": "organization-fingerprint",
+            "owner_user_id": "parent-1",
+            "organization_id": "organization-1",
+        },
     ]
 
 
@@ -154,13 +166,25 @@ async def test_identical_generated_content_is_scoped_to_owner():
     }
 
     first = await service.find_or_create_quiz_v2_by_fingerprint(
-        service.build_quiz_document(**common, owner_user_id="parent-1")
+        service.build_quiz_document(
+            **common,
+            owner_user_id="parent-1",
+            organization_id="organization-parent-1",
+        )
     )
     second = await service.find_or_create_quiz_v2_by_fingerprint(
-        service.build_quiz_document(**common, owner_user_id="parent-2")
+        service.build_quiz_document(
+            **common,
+            owner_user_id="parent-2",
+            organization_id="organization-parent-2",
+        )
     )
     first_again = await service.find_or_create_quiz_v2_by_fingerprint(
-        service.build_quiz_document(**common, owner_user_id="parent-1")
+        service.build_quiz_document(
+            **common,
+            owner_user_id="parent-1",
+            organization_id="organization-parent-1",
+        )
     )
 
     assert first.owner_user_id == "parent-1"
@@ -187,7 +211,11 @@ async def test_content_fingerprint_remains_compatible_with_content_only_algorith
             }
         ],
     }
-    document = service.build_quiz_document(**common, owner_user_id="parent-1")
+    document = service.build_quiz_document(
+        **common,
+        owner_user_id="parent-1",
+        organization_id="organization-parent-1",
+    )
     expected_payload = {
         "title": "Compatibility Quiz",
         "description": "Existing fingerprint format",
@@ -208,7 +236,7 @@ async def test_content_fingerprint_remains_compatible_with_content_only_algorith
 
 
 @pytest.mark.asyncio
-async def test_ownerless_content_still_deduplicates():
+async def test_platform_library_content_still_deduplicates():
     repository = FingerprintRepository()
     service = CanonicalQuizWriteService(repository)
     common = {
@@ -221,10 +249,17 @@ async def test_ownerless_content_still_deduplicates():
     }
 
     first = await service.find_or_create_quiz_v2_by_fingerprint(
-        service.build_quiz_document(**common)
+        service.build_quiz_document(
+            **common,
+            organization_id="platform-library",
+        )
     )
     second = await service.find_or_create_quiz_v2_by_fingerprint(
-        service.build_quiz_document(**common, owner_user_id=None)
+        service.build_quiz_document(
+            **common,
+            owner_user_id=None,
+            organization_id="platform-library",
+        )
     )
 
     assert second is first
@@ -243,6 +278,11 @@ class FakeLiveQuizRepository:
 
     async def get_quiz_by_id(self, quiz_id):
         return self.quiz
+
+    async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+        if organization_id != "organization-1":
+            return None
+        return {**self.quiz, "organization_id": organization_id}
 
     async def access_code_exists(self, access_code):
         return False
@@ -350,6 +390,7 @@ async def test_live_get_questions_creates_invitations_and_uses_frontend_base_url
             send_email_invitations=True,
         ),
         user_id="user-1",
+        organization_id="organization-1",
         invitation_repository=invitation_repository,
         email_service=email_service,
     )

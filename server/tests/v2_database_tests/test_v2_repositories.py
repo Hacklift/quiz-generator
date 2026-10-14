@@ -21,6 +21,7 @@ async def test_quiz_v2_repository_insert_and_get(test_db):
         title="Repository insert",
         quiz_type="multichoice",
         source="manual",
+        organization_id="organization-1",
         questions=[
             {
                 "question": "What is MongoDB?",
@@ -45,6 +46,7 @@ async def test_quiz_v2_repository_update_metadata(test_db):
             title="Original",
             quiz_type="open-ended",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "What is scaling?",
@@ -72,6 +74,7 @@ async def test_quiz_v2_repository_soft_delete(test_db):
             title="Delete me",
             quiz_type="multichoice",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "What is cleanup?",
@@ -102,6 +105,7 @@ async def test_reference_repository_saved_quiz_soft_delete_and_revive(test_db):
         SavedQuizDocumentV2(
             user_id="user-1",
             quiz_id="quiz-1",
+            organization_id="organization-user-1",
             display_title="Saved quiz",
         ),
         revive_deleted=True,
@@ -116,6 +120,7 @@ async def test_reference_repository_saved_quiz_soft_delete_and_revive(test_db):
         SavedQuizDocumentV2(
             user_id="user-1",
             quiz_id="quiz-1",
+            organization_id="organization-user-1",
             display_title="Saved quiz revived",
         ),
         revive_deleted=True,
@@ -139,6 +144,7 @@ async def test_reference_repository_saved_quiz_legacy_upsert_preserves_deleted_s
         SavedQuizDocumentV2(
             user_id="user-legacy",
             quiz_id="quiz-legacy",
+            organization_id="organization-user-legacy",
             display_title="Legacy saved",
             legacy_saved_quiz_id="legacy-saved-1",
         ),
@@ -150,6 +156,7 @@ async def test_reference_repository_saved_quiz_legacy_upsert_preserves_deleted_s
         SavedQuizDocumentV2(
             user_id="user-legacy",
             quiz_id="quiz-legacy",
+            organization_id="organization-user-legacy",
             display_title="Legacy saved updated",
             legacy_saved_quiz_id="legacy-saved-1",
         ),
@@ -172,6 +179,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
     folder = await repository.insert_folder(
         FolderDocumentV2(
             user_id="user-folder",
+            organization_id="organization-user-folder",
             name="Backend",
         )
     )
@@ -179,6 +187,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-1",
+            organization_id="organization-user-folder",
             display_title="Quiz one",
             position=0,
         ),
@@ -195,6 +204,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
     revived_folder = await repository.insert_folder(
         FolderDocumentV2(
             user_id="user-folder",
+            organization_id="organization-user-folder",
             name="Backend",
         )
     )
@@ -211,11 +221,18 @@ async def test_reference_repository_folder_item_soft_delete_and_revive(test_db):
         test_db["quiz_history_v2"],
     )
 
-    folder = await repository.insert_folder(FolderDocumentV2(user_id="user-folder", name="Systems"))
+    folder = await repository.insert_folder(
+        FolderDocumentV2(
+            user_id="user-folder",
+            organization_id="organization-user-folder",
+            name="Systems",
+        )
+    )
     item = await repository.upsert_folder_item_by_legacy_id(
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Quiz two",
             position=0,
         ),
@@ -229,6 +246,7 @@ async def test_reference_repository_folder_item_soft_delete_and_revive(test_db):
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Quiz two revived",
             position=0,
         ),
@@ -249,11 +267,18 @@ async def test_reference_repository_backfills_folder_item_saved_quiz_id(test_db)
         test_db["quiz_history_v2"],
     )
 
-    folder = await repository.insert_folder(FolderDocumentV2(user_id="user-folder", name="Systems"))
+    folder = await repository.insert_folder(
+        FolderDocumentV2(
+            user_id="user-folder",
+            organization_id="organization-user-folder",
+            name="Systems",
+        )
+    )
     saved = await repository.upsert_saved_quiz(
         SavedQuizDocumentV2(
             user_id="user-folder",
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Saved quiz title",
         ),
         revive_deleted=True,
@@ -262,6 +287,7 @@ async def test_reference_repository_backfills_folder_item_saved_quiz_id(test_db)
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Stale folder title",
             position=0,
         ),
@@ -291,6 +317,7 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
         QuizHistoryDocumentV2(
             user_id="user-history",
             quiz_id="quiz-hist",
+            organization_id="organization-user-history",
             action="generated",
             metadata={"topic": "Caching"},
             legacy_history_id="legacy-history-1",
@@ -305,6 +332,7 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
         QuizHistoryDocumentV2(
             user_id="user-history",
             quiz_id="quiz-hist",
+            organization_id="organization-user-history",
             action="generated",
             metadata={"topic": "Caching updated"},
             legacy_history_id="legacy-history-1",
@@ -323,6 +351,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     older = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
             quiz_id="quiz-1",
             question_results=[
                 {
@@ -342,6 +372,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     newer = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
             quiz_id="quiz-2",
             question_results=[
                 {
@@ -361,6 +393,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-2",
+            organization_id="org-1",
+            created_by_user_id="user-2",
             quiz_id="quiz-1",
             question_results=[
                 {
@@ -378,8 +412,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
         )
     )
 
-    attempts = await repository.list_attempts_for_user("user-1")
-    filtered_attempts = await repository.list_attempts_for_user("user-1", quiz_id="quiz-1")
+    attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1")
+    filtered_attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1", quiz_id="quiz-1")
 
     assert [str(attempt.id) for attempt in attempts] == [str(newer.id), str(older.id)]
     assert len(filtered_attempts) == 1
@@ -393,6 +427,8 @@ async def test_quiz_attempt_repository_soft_delete(test_db):
     attempt = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-delete",
+            organization_id="org-1",
+            created_by_user_id="user-delete",
             quiz_id="quiz-delete",
             question_results=[
                 {
@@ -409,15 +445,16 @@ async def test_quiz_attempt_repository_soft_delete(test_db):
         )
     )
 
-    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user") is None
-    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user") == 0
-    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete") is None
-    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete") == 0
+    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") == 0
+    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") == 0
     deleted_count = await repository.soft_delete_attempt_by_id(
         str(attempt.id),
         user_id="user-delete",
+        organization_id="org-1",
     )
-    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete")
+    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete", organization_id="org-1")
 
     assert deleted_count == 1
     assert fetched is None

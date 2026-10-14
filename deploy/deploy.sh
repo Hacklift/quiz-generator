@@ -29,6 +29,10 @@ main() {
     echo "==> Building images..."
     $COMPOSE build
 
+    echo "==> Running tenancy migration gate..."
+    $COMPOSE up -d mongodb redis
+    $COMPOSE run --rm tenancy-migrate
+
     echo "==> Starting / updating containers..."
     $COMPOSE up -d --remove-orphans
 

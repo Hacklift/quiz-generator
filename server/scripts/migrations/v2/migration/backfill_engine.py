@@ -38,6 +38,7 @@ class MigrationContext:
     resolver: LegacyQuizResolver
     lock_service: MigrationLockService
     report_dir: Path
+    organization_scope_cache: dict[str, str | None]
 
 
 def _documents_match(existing_document: dict[str, Any] | None, target_document: BaseModel) -> bool:
@@ -103,7 +104,36 @@ def build_migration_context(
         resolver=resolver,
         lock_service=MigrationLockService(database),
         report_dir=report_dir,
+        organization_scope_cache={},
     )
+
+
+async def _organization_id_for_legacy_record(
+    context: MigrationContext,
+    document: dict[str, Any],
+) -> str | None:
+    """Resolve only recorded tenant evidence; never infer ownership from content."""
+    organization_id = document.get("organization_id")
+    if organization_id:
+        return str(organization_id)
+
+    user_id = document.get("user_id") or document.get("owner_id")
+    if not user_id:
+        return None
+    normalized_user_id = str(user_id)
+    if normalized_user_id in context.organization_scope_cache:
+        return context.organization_scope_cache[normalized_user_id]
+
+    user_query: dict[str, Any] = {"_id": user_id}
+    if isinstance(user_id, str):
+        try:
+            user_query = {"_id": ObjectId(user_id)}
+        except Exception:
+            user_query = {"_id": user_id}
+    user = await context.database["users"].find_one(user_query, {"default_organization_id": 1})
+    resolved = str(user["default_organization_id"]) if user and user.get("default_organization_id") else None
+    context.organization_scope_cache[normalized_user_id] = resolved
+    return resolved
 
 
 async def iterate_batches(
@@ -159,6 +189,13 @@ async def backfill_quizzes(context: MigrationContext) -> CollectionMigrationSumm
                 summary.scanned += 1
                 summary.last_processed_id = record_id
                 try:
+                    organization_id = await _organization_id_for_legacy_record(context, doc)
+                    if organization_id is None:
+                        summary.add_unresolved(
+                            record_id=record_id,
+                            reason="No recorded organization scope for legacy quiz",
+                        )
+                        continue
                     existing = await context.canonical_service.repository.find_by_legacy_mapping(
                         source_name,
                         record_id,
@@ -169,6 +206,7 @@ async def backfill_quizzes(context: MigrationContext) -> CollectionMigrationSumm
                         description=doc.get("custom_instruction") or doc.get("description"),
                         quiz_type=doc.get("question_type") or doc.get("quiz_type") or "multichoice",
                         owner_user_id=doc.get("user_id") or doc.get("owner_id"),
+                        organization_id=organization_id,
                         source="ai" if source_name == "ai_generated_quizzes" else "legacy",
                         questions=questions,
                         legacy_source_collection=source_name,
@@ -247,10 +285,18 @@ async def backfill_saved_quizzes(context: MigrationContext) -> CollectionMigrati
             if doc.get("is_deleted"):
                 summary.skipped += 1
                 continue
+            organization_id = await _organization_id_for_legacy_record(context, doc)
+            if organization_id is None:
+                summary.add_unresolved(
+                    record_id=record_id,
+                    reason="No recorded organization scope for legacy saved quiz",
+                )
+                continue
             try:
                 canonical_quiz = await context.resolver.resolve_saved_quiz(
                     doc,
                     allow_create=not context.config.dry_run,
+                    organization_id=organization_id,
                 )
             except LegacyQuizStructureConflictError as exc:
                 conflict_details = exc.to_log_fields()
@@ -271,6 +317,7 @@ async def backfill_saved_quizzes(context: MigrationContext) -> CollectionMigrati
                 continue
             target_document = SavedQuizDocumentV2(
                 user_id=doc["user_id"],
+                organization_id=organization_id,
                 quiz_id=str(canonical_quiz.id),
                 display_title=doc.get("title") or canonical_quiz.title,
                 legacy_saved_quiz_id=record_id,
@@ -339,10 +386,18 @@ async def backfill_quiz_history(context: MigrationContext) -> CollectionMigratio
             record_id = str(doc["_id"])
             summary.scanned += 1
             summary.last_processed_id = record_id
+            organization_id = await _organization_id_for_legacy_record(context, doc)
+            if organization_id is None:
+                summary.add_unresolved(
+                    record_id=record_id,
+                    reason="No recorded organization scope for legacy history",
+                )
+                continue
             try:
                 canonical_quiz = await context.resolver.resolve_quiz_history(
                     doc,
                     allow_create=not context.config.dry_run,
+                    organization_id=organization_id,
                 )
             except LegacyQuizStructureConflictError as exc:
                 conflict_details = exc.to_log_fields()
@@ -363,6 +418,7 @@ async def backfill_quiz_history(context: MigrationContext) -> CollectionMigratio
                 continue
             target_document = QuizHistoryDocumentV2(
                 user_id=doc["user_id"],
+                organization_id=organization_id,
                 quiz_id=str(canonical_quiz.id),
                 action="generated",
                 metadata={
@@ -435,10 +491,18 @@ async def backfill_folders(context: MigrationContext) -> CollectionMigrationSumm
             folder_id = str(folder["_id"])
             summary.scanned += 1
             summary.last_processed_id = folder_id
+            organization_id = await _organization_id_for_legacy_record(context, folder)
+            if organization_id is None:
+                summary.add_unresolved(
+                    record_id=folder_id,
+                    reason="No recorded organization scope for legacy folder",
+                )
+                continue
             existing_folder = await context.reference_repository.get_folder_by_legacy_id(folder_id)
             target_folder_created_at = _stable_legacy_timestamp(folder, "created_at")
             target_folder = FolderDocumentV2(
                 user_id=folder["user_id"],
+                organization_id=organization_id,
                 name=folder["name"],
                 description=folder.get("description"),
                 legacy_folder_id=folder_id,
@@ -467,6 +531,8 @@ async def backfill_folders(context: MigrationContext) -> CollectionMigrationSumm
                     canonical_quiz = await context.resolver.resolve_folder_item(
                         item,
                         allow_create=not context.config.dry_run,
+                        organization_id=organization_id,
+                        owner_user_id=folder.get("user_id"),
                     )
                 except LegacyQuizStructureConflictError as exc:
                     conflict_details = exc.to_log_fields()
@@ -485,6 +551,7 @@ async def backfill_folders(context: MigrationContext) -> CollectionMigrationSumm
                 target_item = FolderItemDocumentV2(
                     folder_id=str(folder_v2.id),
                     quiz_id=str(canonical_quiz.id),
+                    organization_id=organization_id,
                     added_by=folder.get("user_id"),
                     position=position,
                     display_title=item.get("title") or None,

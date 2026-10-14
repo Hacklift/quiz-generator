@@ -84,6 +84,7 @@ async def resolve_user_from_access_token(
         )
 
     user_payload = build_user_out_payload(user)
+    user_payload["session_id"] = session_id
     if isinstance(user_payload.get("created_at"), datetime):
         user_payload["created_at"] = user_payload["created_at"].isoformat()
     return UserOut(**user_payload)

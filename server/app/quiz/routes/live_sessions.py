@@ -1,11 +1,12 @@
 import asyncio
+import logging
 from typing import List, Literal, Optional
 
 import jwt
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorCollection
 from jwt.exceptions import DecodeError, ExpiredSignatureError, InvalidTokenError
 
@@ -19,6 +20,8 @@ from server.app.db.core.connection import (
     get_notifications_collection,
     get_user_sessions_collection,
     get_users_collection,
+    get_organization_memberships_collection,
+    get_organizations_collection,
 )
 from server.app.core.config import settings
 from server.app.users.models import UserOut
@@ -28,6 +31,15 @@ from server.app.quiz.schemas.quiz_schemas import (
     QuizAccessPreview,
 )
 from server.app.core.dependencies import get_verified_user
+from server.app.organizations.dependencies import (
+    get_active_organization_context,
+    resolve_active_organization_context,
+)
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
@@ -63,6 +75,7 @@ from server.app.quiz.utils.live_results_export import (
 
 router = APIRouter()
 WEBSOCKET_AUTH_TIMEOUT_SECONDS = 10
+logger = logging.getLogger(__name__)
 
 
 def get_live_quiz_service(
@@ -126,6 +139,27 @@ def get_participant_token(
     raise HTTPException(status_code=401, detail="Participant token missing")
 
 
+async def _authorized_quiz(
+    *,
+    quiz_id: str,
+    organization: OrganizationContext,
+    action: OrganizationAction,
+    service: LiveQuizSessionService,
+) -> dict:
+    quiz = await service.repository.get_quiz_by_id_for_organization(
+        quiz_id,
+        organization.organization_id,
+    )
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    require_organization_permission(
+        context=organization,
+        action=action,
+        resource=quiz,
+    )
+    return quiz
+
+
 @router.post(
     "/quizzes/{quiz_id}/access-code",
     response_model=AccessCodeResponse,
@@ -134,12 +168,19 @@ async def generate_quiz_access_code(
     quiz_id: str,
     payload: AccessCodeCreateRequest,
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
     invitation_repository: LiveQuizInvitationRepository = Depends(
         get_live_quiz_invitation_repository
     ),
     email_service: EmailService = Depends(get_email_service),
 ):
+    quiz = await _authorized_quiz(
+        quiz_id=quiz_id,
+        organization=organization,
+        action=OrganizationAction.CONTENT_SHARE,
+        service=service,
+    )
     return await service.generate_access_code(
         quiz_id=quiz_id,
         access_code_expires_at=payload.access_code_expires_at,
@@ -150,6 +191,7 @@ async def generate_quiz_access_code(
         send_email_invitations=payload.send_email_invitations,
         invitation_repository=invitation_repository,
         email_service=email_service,
+        authorized_quiz=quiz,
     )
 
 
@@ -164,9 +206,22 @@ async def validate_quiz_access_code(
 @router.get("/quizzes/live", response_model=List[LiveQuizSummaryRow])
 async def list_creator_live_quizzes(
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
-    return await service.list_creator_live_quizzes(current_user.id)
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.DELIVERY_READ,
+        resource=None,
+    )
+    if organization.membership_role == "facilitator":
+        # Facilitators may operate the delivery they created, but a list route
+        # must not convert that scoped capability into tenant-wide reporting.
+        return await service.list_creator_live_quizzes(
+            current_user.id,
+            organization.organization_id,
+        )
+    return await service.list_organization_live_quizzes(organization.organization_id)
 
 
 @router.post(
@@ -262,9 +317,20 @@ async def disconnect_live_quiz_session(
 async def list_live_quiz_sessions(
     quiz_id: str,
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
-    return await service.list_analytics(quiz_id, current_user.id)
+    quiz = await _authorized_quiz(
+        quiz_id=quiz_id,
+        organization=organization,
+        action=OrganizationAction.REPORT_READ,
+        service=service,
+    )
+    return await service.list_analytics(
+        quiz_id,
+        current_user.id,
+        authorized_quiz=quiz,
+    )
 
 
 @router.get(
@@ -274,9 +340,20 @@ async def list_live_quiz_sessions(
 async def list_live_quiz_participants(
     quiz_id: str,
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
-    return await service.list_analytics(quiz_id, current_user.id)
+    quiz = await _authorized_quiz(
+        quiz_id=quiz_id,
+        organization=organization,
+        action=OrganizationAction.REPORT_READ,
+        service=service,
+    )
+    return await service.list_analytics(
+        quiz_id,
+        current_user.id,
+        authorized_quiz=quiz,
+    )
 
 
 @router.get(
@@ -286,16 +363,29 @@ async def export_live_quiz_results(
     quiz_id: str,
     format: Literal["csv", "pdf", "txt"],
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
-    payload = await service.build_results_export(quiz_id, current_user.id)
+    quiz = await _authorized_quiz(
+        quiz_id=quiz_id,
+        organization=organization,
+        action=OrganizationAction.REPORT_READ,
+        service=service,
+    )
+    payload = await service.build_results_export(
+        quiz_id,
+        current_user.id,
+        authorized_quiz=quiz,
+    )
     generators = {
         "csv": (generate_live_results_csv, "text/csv"),
         "pdf": (generate_live_results_pdf, "application/pdf"),
         "txt": (generate_live_results_txt, "text/plain"),
     }
     generator, media_type = generators[format]
-    response = StreamingResponse(generator(payload), media_type=media_type)
+    # Export generators fully materialize their in-memory buffers before this
+    # route runs, so streaming would only add an unnecessary thread-pool hop.
+    response = Response(content=generator(payload).getvalue(), media_type=media_type)
     filename = build_download_filename(f'{payload["title"]} results', format)
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
@@ -309,12 +399,20 @@ async def get_live_quiz_attempt_detail(
     quiz_id: str,
     session_id: str,
     current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
 ):
+    quiz = await _authorized_quiz(
+        quiz_id=quiz_id,
+        organization=organization,
+        action=OrganizationAction.REPORT_READ,
+        service=service,
+    )
     return await service.get_attempt_detail(
         quiz_id,
         session_id,
         current_user.id,
+        authorized_quiz=quiz,
     )
 
 
@@ -365,6 +463,7 @@ async def _get_verified_user_from_websocket_token(
     )
 
     user_payload = build_user_out_payload(user)
+    user_payload["session_id"] = session_id
     created_at = user_payload.get("created_at")
     if hasattr(created_at, "isoformat"):
         user_payload["created_at"] = created_at.isoformat()
@@ -398,6 +497,10 @@ async def live_quiz_participants_ws(
     service: LiveQuizSessionService = Depends(get_live_quiz_service),
     users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
     sessions_collection: AsyncIOMotorCollection = Depends(get_user_sessions_collection),
+    organizations_collection: AsyncIOMotorCollection = Depends(get_organizations_collection),
+    memberships_collection: AsyncIOMotorCollection = Depends(
+        get_organization_memberships_collection
+    ),
 ):
     await websocket.accept()
 
@@ -412,12 +515,43 @@ async def live_quiz_participants_ws(
             users_collection,
             sessions_collection,
         )
-        rows = await service.list_analytics(quiz_id, current_user.id)
+        organization = await resolve_active_organization_context(
+            current_user=current_user,
+            principal=OrganizationPrincipal(
+                user_id=current_user.id,
+                session_id=current_user.session_id,
+                platform_role=current_user.role or "user",
+            ),
+            sessions_collection=sessions_collection,
+            organizations_collection=organizations_collection,
+            memberships_collection=memberships_collection,
+        )
+        quiz = await _authorized_quiz(
+            quiz_id=quiz_id,
+            organization=organization,
+            action=OrganizationAction.REPORT_READ,
+            service=service,
+        )
+        rows = await service.list_analytics(
+            quiz_id,
+            current_user.id,
+            authorized_quiz=quiz,
+        )
     except HTTPException:
         await websocket.close(code=1008)
         return
+    except Exception:
+        # Do not leave an accepted socket open when its authorization or
+        # initial analytics snapshot fails unexpectedly.
+        logger.exception("Live quiz websocket setup failed for quiz %s", quiz_id)
+        await websocket.close(code=1011)
+        return
 
-    await live_quiz_realtime_broadcaster.connect(quiz_id, websocket, accepted=True)
+    channel = live_quiz_realtime_broadcaster.channel_key(
+        organization.organization_id,
+        quiz_id,
+    )
+    await live_quiz_realtime_broadcaster.connect(channel, websocket, accepted=True)
     try:
         await websocket.send_json(
             jsonable_encoder({
@@ -429,4 +563,4 @@ async def live_quiz_participants_ws(
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        live_quiz_realtime_broadcaster.disconnect(quiz_id, websocket)
+        live_quiz_realtime_broadcaster.disconnect(channel, websocket)

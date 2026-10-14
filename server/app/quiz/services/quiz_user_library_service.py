@@ -49,6 +49,47 @@ class QuizUserLibraryService:
         return value.isoformat() if isinstance(value, datetime) else value
 
     @staticmethod
+    def _is_in_organization_scope(
+        record: Any,
+        *,
+        user_id: str,
+        organization_id: str | None,
+        allow_legacy_personal: bool,
+    ) -> bool:
+        """Allow unscope legacy data only to its owner in personal context."""
+        if organization_id is None:
+            return True
+        record_organization_id = getattr(record, "organization_id", None)
+        if record_organization_id == organization_id:
+            return True
+        return (
+            allow_legacy_personal
+            and record_organization_id is None
+            and (
+                getattr(record, "user_id", None)
+                or getattr(record, "added_by", None)
+                or getattr(record, "created_by_user_id", None)
+            )
+            == user_id
+        )
+
+    @staticmethod
+    def _is_quiz_in_organization_scope(
+        quiz: QuizDocumentV2,
+        *,
+        user_id: str,
+        organization_id: str | None,
+        allow_legacy_personal: bool,
+    ) -> bool:
+        if organization_id is None or quiz.organization_id == organization_id:
+            return True
+        return (
+            allow_legacy_personal
+            and quiz.organization_id is None
+            and quiz.owner_user_id == user_id
+        )
+
+    @staticmethod
     def _quiz_type(quiz: QuizDocumentV2) -> str:
         return quiz.quiz_type.value if hasattr(quiz.quiz_type, "value") else str(quiz.quiz_type)
 
@@ -84,32 +125,80 @@ class QuizUserLibraryService:
         *,
         user_id: str,
         quiz_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> QuizDocumentV2 | None:
-        quiz = await self.quiz_repository.find_by_id(quiz_id)
+        quiz = (
+            await self.quiz_repository.find_by_id(quiz_id)
+            if organization_id is None
+            else await self.quiz_repository.find_by_id_for_organization(
+                quiz_id,
+                organization_id,
+            )
+        )
         if quiz is None:
             return None
 
-        if quiz.owner_user_id == user_id:
+        if self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ) and quiz.owner_user_id == user_id:
             return quiz
 
         saved_references = await self.reference_repository.list_saved_quizzes_for_user(
             user_id,
             limit=1000,
         )
-        if any(reference.quiz_id == quiz_id for reference in saved_references):
+        if any(
+            reference.quiz_id == quiz_id
+            and self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+            for reference in saved_references
+        ):
             return quiz
 
         history_references = await self.reference_repository.list_quiz_history_for_user(
             user_id,
             limit=1000,
         )
-        if any(reference.quiz_id == quiz_id for reference in history_references):
+        if any(
+            reference.quiz_id == quiz_id
+            and self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+            for reference in history_references
+        ):
             return quiz
 
         folders = await self.reference_repository.list_folders_for_user(user_id)
         for folder in folders:
+            if not self._is_in_organization_scope(
+                folder,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            ):
+                continue
             items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
-            if any(item.quiz_id == quiz_id for item in items):
+            if any(
+                item.quiz_id == quiz_id
+                and self._is_in_organization_scope(
+                    item,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                )
+                for item in items
+            ):
                 return quiz
 
         return None
@@ -135,6 +224,8 @@ class QuizUserLibraryService:
         questions: list[Any] | None,
         description: str | None = None,
         owner_user_id: str | None = None,
+        organization_id: str | None = None,
+        created_by_user_id: str | None = None,
         source: str = "manual",
     ) -> QuizDocumentV2:
         if quiz_id:
@@ -152,6 +243,8 @@ class QuizUserLibraryService:
             description=description,
             quiz_type=question_type,
             owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            created_by_user_id=created_by_user_id or owner_user_id,
             source=source,
             questions=questions,
         )
@@ -182,49 +275,118 @@ class QuizUserLibraryService:
         question_type: str | None = None,
         questions: list[Any] | None = None,
         quiz_id: str | None = None,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> SavedQuizDocumentV2:
         quiz = await self._resolve_or_create_quiz(
             quiz_id=quiz_id,
             title=title,
             question_type=question_type,
             questions=questions,
+            owner_user_id=user_id,
             source="manual",
+            organization_id=organization_id,
+            created_by_user_id=user_id,
         )
+        if not self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            raise ValueError("Canonical quiz is outside the active organization")
         return await self.reference_repository.upsert_saved_quiz(
             SavedQuizDocumentV2(
                 user_id=user_id,
                 quiz_id=str(quiz.id),
+                organization_id=organization_id,
+                created_by_user_id=user_id,
                 display_title=title or quiz.title,
                 saved_at=datetime.utcnow(),
             ),
             revive_deleted=True,
         )
 
-    async def list_saved_quizzes(self, *, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    async def list_saved_quizzes(
+        self,
+        *,
+        user_id: str,
+        limit: int = 100,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict[str, Any]]:
         references = await self.reference_repository.list_saved_quizzes_for_user(user_id, limit=limit)
+        references = [
+            reference
+            for reference in references
+            if self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        ]
         references = sorted(references, key=lambda reference: reference.saved_at, reverse=True)
         quizzes_by_id = await self._get_quizzes_by_ids([reference.quiz_id for reference in references])
         return [
             self._build_saved_payload(reference, quizzes_by_id[reference.quiz_id])
             for reference in references
             if reference.quiz_id in quizzes_by_id
+            and self._is_quiz_in_organization_scope(
+                quizzes_by_id[reference.quiz_id],
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
         ]
 
-    async def get_saved_quiz(self, *, user_id: str, saved_quiz_id: str) -> dict[str, Any] | None:
+    async def get_saved_quiz(
+        self,
+        *,
+        user_id: str,
+        saved_quiz_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any] | None:
         reference = await self.reference_repository.get_saved_quiz_for_user(user_id, saved_quiz_id)
         if reference is None:
             return None
+        if not self._is_in_organization_scope(
+            reference,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return None
         quiz = await self.quiz_repository.find_by_id(reference.quiz_id)
-        if quiz is None:
+        if quiz is None or not self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             return None
         return self._build_saved_payload(reference, quiz)
 
     async def get_saved_quiz_by_id(self, saved_quiz_id: str, user_id: str) -> dict[str, Any] | None:
         return await self.get_saved_quiz(user_id=user_id, saved_quiz_id=saved_quiz_id)
 
-    async def find_saved_quiz_by_title(self, *, user_id: str, title: str, limit: int = 10) -> dict[str, Any]:
+    async def find_saved_quiz_by_title(
+        self,
+        *,
+        user_id: str,
+        title: str,
+        limit: int = 10,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any]:
         normalized_title = title.strip().casefold()
-        saved_quizzes = await self.list_saved_quizzes(user_id=user_id, limit=500)
+        saved_quizzes = await self.list_saved_quizzes(
+            user_id=user_id,
+            limit=500,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         matches: list[dict[str, Any]] = []
         for saved_quiz in saved_quizzes:
             saved_title = str(saved_quiz.get("title") or "")
@@ -247,7 +409,22 @@ class QuizUserLibraryService:
             "matches": matches[:limit],
         }
 
-    async def delete_saved_quiz(self, *, user_id: str, saved_quiz_id: str) -> bool:
+    async def delete_saved_quiz(
+        self,
+        *,
+        user_id: str,
+        saved_quiz_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
+        reference = await self.reference_repository.get_saved_quiz_for_user(user_id, saved_quiz_id)
+        if reference is None or not self._is_in_organization_scope(
+            reference,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return False
         return await self.reference_repository.delete_saved_quiz_for_user(user_id, saved_quiz_id)
 
     async def rename_saved_quiz(
@@ -256,7 +433,17 @@ class QuizUserLibraryService:
         user_id: str,
         saved_quiz_id: str,
         title: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> SavedQuizResponse | None:
+        current = await self.reference_repository.get_saved_quiz_for_user(user_id, saved_quiz_id)
+        if current is None or not self._is_in_organization_scope(
+            current,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return None
         reference = await self.reference_repository.update_saved_quiz_display_title(
             user_id,
             saved_quiz_id,
@@ -273,20 +460,36 @@ class QuizUserLibraryService:
             question_type=self._quiz_type(quiz) if quiz else None,
         )
 
-    async def create_quiz_history(self, quiz_data: dict[str, Any]) -> QuizHistoryDocumentV2:
+    async def create_quiz_history(
+        self,
+        quiz_data: dict[str, Any],
+        *,
+        allow_legacy_personal: bool = False,
+    ) -> QuizHistoryDocumentV2:
         quiz = await self._resolve_or_create_quiz(
             quiz_id=quiz_data.get("canonical_quiz_id") or quiz_data.get("quiz_id"),
             title=quiz_data.get("quiz_name") or quiz_data.get("profession") or "Quiz History",
             description=quiz_data.get("custom_instruction"),
             question_type=quiz_data["question_type"],
             owner_user_id=quiz_data.get("user_id"),
+            organization_id=quiz_data.get("organization_id"),
+            created_by_user_id=quiz_data.get("created_by_user_id") or quiz_data.get("user_id"),
             source="ai",
             questions=quiz_data["questions"],
         )
+        if not self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=quiz_data["user_id"],
+            organization_id=quiz_data.get("organization_id"),
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            raise ValueError("Canonical quiz is outside the active organization")
         return await self.reference_repository.insert_quiz_history(
             QuizHistoryDocumentV2(
                 user_id=quiz_data["user_id"],
                 quiz_id=str(quiz.id),
+                organization_id=quiz_data.get("organization_id"),
+                created_by_user_id=quiz_data.get("created_by_user_id") or quiz_data["user_id"],
                 action="generated",
                 metadata={
                     "quiz_name": quiz_data.get("quiz_name") or quiz.title,
@@ -299,14 +502,36 @@ class QuizUserLibraryService:
             )
         )
 
-    async def list_quiz_history_items(self, *, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    async def list_quiz_history_items(
+        self,
+        *,
+        user_id: str,
+        limit: int = 100,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict[str, Any]]:
         references = await self.reference_repository.list_quiz_history_for_user(user_id, limit=limit)
+        references = [
+            reference
+            for reference in references
+            if self._is_in_organization_scope(
+                reference,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        ]
         references = sorted(references, key=lambda reference: reference.created_at, reverse=True)
         quizzes_by_id = await self._get_quizzes_by_ids([reference.quiz_id for reference in references])
         items: list[dict[str, Any]] = []
         for reference in references:
             quiz = quizzes_by_id.get(reference.quiz_id)
-            if quiz is None:
+            if quiz is None or not self._is_quiz_in_organization_scope(
+                quiz,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            ):
                 continue
             metadata = reference.metadata or {}
             items.append(
@@ -331,12 +556,26 @@ class QuizUserLibraryService:
         *,
         user_id: str,
         history_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> QuizHistoryDetailResponse | None:
         reference = await self.reference_repository.get_quiz_history_for_user(user_id, history_id)
         if reference is None:
             return None
+        if not self._is_in_organization_scope(
+            reference,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return None
         quiz = await self.quiz_repository.find_by_id(reference.quiz_id)
-        if quiz is None:
+        if quiz is None or not self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             return None
         metadata = reference.metadata or {}
         return QuizHistoryDetailResponse(
@@ -358,24 +597,73 @@ class QuizUserLibraryService:
             ],
         )
 
-    async def delete_quiz_history_entry(self, *, user_id: str, history_id: str) -> bool:
+    async def delete_quiz_history_entry(
+        self,
+        *,
+        user_id: str,
+        history_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
+        reference = await self.reference_repository.get_quiz_history_for_user(user_id, history_id)
+        if reference is None or not self._is_in_organization_scope(
+            reference,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return False
         return await self.reference_repository.delete_quiz_history_for_user(user_id, history_id)
 
-    async def create_folder(self, *, user_id: str, name: str) -> FolderDocumentV2:
+    async def create_folder(
+        self,
+        *,
+        user_id: str,
+        name: str,
+        organization_id: str | None = None,
+    ) -> FolderDocumentV2:
         return await self.reference_repository.insert_folder(
             FolderDocumentV2(
                 user_id=user_id,
+                organization_id=organization_id,
+                created_by_user_id=user_id,
                 name=name,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             )
         )
 
-    async def list_folders(self, *, user_id: str) -> list[dict[str, Any]]:
+    async def list_folders(
+        self,
+        *,
+        user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> list[dict[str, Any]]:
         folders = await self.reference_repository.list_folders_for_user(user_id)
+        folders = [
+            folder
+            for folder in folders
+            if self._is_in_organization_scope(
+                folder,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        ]
         payloads: list[dict[str, Any]] = []
         for folder in sorted(folders, key=lambda item: (item.created_at, str(item.id))):
             items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
+            items = [
+                item
+                for item in items
+                if self._is_in_organization_scope(
+                    item,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                )
+            ]
             payloads.append(
                 {
                     "id": str(folder.id),
@@ -389,13 +677,37 @@ class QuizUserLibraryService:
             )
         return payloads
 
-    async def get_folder(self, *, folder_id: str, user_id: str) -> dict[str, Any] | None:
+    async def get_folder(
+        self,
+        *,
+        folder_id: str,
+        user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any] | None:
         folder = await self.reference_repository.get_folder_by_public_id(folder_id)
         if folder is None:
             return None
         if folder.user_id != user_id:
             raise PermissionError("Unauthorized access to folder")
+        if not self._is_in_organization_scope(
+            folder,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
+            return None
         items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
+        items = [
+            item
+            for item in items
+            if self._is_in_organization_scope(
+                item,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+        ]
         quizzes_by_id = await self._get_quizzes_by_ids([item.quiz_id for item in items])
         saved_quizzes_by_id = await self._get_saved_quizzes_by_ids(
             [
@@ -436,20 +748,52 @@ class QuizUserLibraryService:
             "quizzes": quiz_items,
         }
 
-    async def get_folder_by_name(self, *, user_id: str, name: str) -> dict[str, Any] | None:
+    async def get_folder_by_name(
+        self,
+        *,
+        user_id: str,
+        name: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any] | None:
         normalized_name = name.strip().casefold()
-        folders = await self.reference_repository.list_folders_for_user(user_id)
+        folders = await self.list_folders(
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         for folder in folders:
-            if folder.name.strip().casefold() == normalized_name:
-                return await self.get_folder(folder_id=str(folder.id), user_id=user_id)
+            if str(folder["name"]).strip().casefold() == normalized_name:
+                return await self.get_folder(
+                    folder_id=str(folder["id"]),
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                )
         return None
 
-    async def find_quiz_in_folders_by_title(self, *, user_id: str, title: str) -> dict[str, Any]:
+    async def find_quiz_in_folders_by_title(
+        self,
+        *,
+        user_id: str,
+        title: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any]:
         normalized_title = title.strip().casefold()
         matches: list[dict[str, Any]] = []
-        folders = await self.reference_repository.list_folders_for_user(user_id)
+        folders = await self.list_folders(
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         for folder in folders:
-            folder_payload = await self.get_folder(folder_id=str(folder.id), user_id=user_id)
+            folder_payload = await self.get_folder(
+                folder_id=str(folder["id"]),
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
             if not folder_payload:
                 continue
             for quiz in folder_payload.get("quizzes", []):
@@ -481,9 +825,22 @@ class QuizUserLibraryService:
     async def get_folder_by_id(self, folder_id: str, user_id: str) -> dict[str, Any] | None:
         return await self.get_folder(folder_id=folder_id, user_id=user_id)
 
-    async def rename_folder(self, *, folder_id: str, user_id: str, new_name: str) -> FolderDocumentV2 | None:
+    async def rename_folder(
+        self,
+        *,
+        folder_id: str,
+        user_id: str,
+        new_name: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> FolderDocumentV2 | None:
         folder = await self.reference_repository.get_folder_by_public_id(folder_id)
-        if folder is None or folder.user_id != user_id:
+        if folder is None or folder.user_id != user_id or not self._is_in_organization_scope(
+            folder,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             return None
         return await self.reference_repository.update_folder(
             str(folder.id),
@@ -491,9 +848,21 @@ class QuizUserLibraryService:
             updated_at=datetime.utcnow(),
         )
 
-    async def delete_folder(self, *, folder_id: str, user_id: str) -> bool:
+    async def delete_folder(
+        self,
+        *,
+        folder_id: str,
+        user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
         folder = await self.reference_repository.get_folder_by_public_id(folder_id)
-        if folder is None or folder.user_id != user_id:
+        if folder is None or folder.user_id != user_id or not self._is_in_organization_scope(
+            folder,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             return False
         await self.reference_repository.delete_folder_by_id(str(folder.id))
         return True
@@ -504,15 +873,32 @@ class QuizUserLibraryService:
         folder_id: str,
         saved_quiz_id: str,
         user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> tuple[FolderDocumentV2, FolderItemDocumentV2]:
         folder = await self.reference_repository.get_folder_by_public_id(folder_id)
-        if folder is None or folder.user_id != user_id:
+        if folder is None or folder.user_id != user_id or not self._is_in_organization_scope(
+            folder,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             raise PermissionError("Unauthorized access to folder")
         saved_quiz = await self.reference_repository.get_saved_quiz_for_user(user_id, saved_quiz_id)
-        if saved_quiz is None:
+        if saved_quiz is None or not self._is_in_organization_scope(
+            saved_quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             raise ValueError("Saved quiz not found")
         quiz = await self.quiz_repository.find_by_id(saved_quiz.quiz_id)
-        if quiz is None:
+        if quiz is None or not self._is_quiz_in_organization_scope(
+            quiz,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             raise ValueError("Canonical quiz not found")
         existing_items = await self.reference_repository.list_folder_items_for_folder(str(folder.id))
         item = await self.reference_repository.upsert_folder_item(
@@ -521,6 +907,10 @@ class QuizUserLibraryService:
                 quiz_id=str(quiz.id),
                 saved_quiz_id=str(saved_quiz.id),
                 added_by=user_id,
+                # Legacy folders are readable only in their owner's personal
+                # scope. New child writes must still carry that active scope.
+                organization_id=organization_id,
+                created_by_user_id=user_id,
                 position=len(existing_items),
                 display_title=saved_quiz.display_title or quiz.title,
                 created_at=datetime.utcnow(),
@@ -529,9 +919,22 @@ class QuizUserLibraryService:
         )
         return folder, item
 
-    async def remove_folder_item(self, *, folder_id: str, folder_item_id: str, user_id: str) -> bool:
+    async def remove_folder_item(
+        self,
+        *,
+        folder_id: str,
+        folder_item_id: str,
+        user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
         folder = await self.reference_repository.get_folder_by_public_id(folder_id)
-        if folder is None or folder.user_id != user_id:
+        if folder is None or folder.user_id != user_id or not self._is_in_organization_scope(
+            folder,
+            user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        ):
             return False
         item = await self.reference_repository.get_folder_item_by_public_id(folder_item_id)
         if item is None or item.folder_id != str(folder.id):
@@ -546,6 +949,8 @@ class QuizUserLibraryService:
         source_folder_id: str,
         target_folder_id: str,
         user_id: str,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> bool:
         source_folder = await self.reference_repository.get_folder_by_public_id(source_folder_id)
         target_folder = await self.reference_repository.get_folder_by_public_id(target_folder_id)
@@ -554,6 +959,18 @@ class QuizUserLibraryService:
             or target_folder is None
             or source_folder.user_id != user_id
             or target_folder.user_id != user_id
+            or not self._is_in_organization_scope(
+                source_folder,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
+            or not self._is_in_organization_scope(
+                target_folder,
+                user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
+            )
         ):
             return False
         item = await self.reference_repository.get_folder_item_by_public_id(folder_item_id)
@@ -563,6 +980,7 @@ class QuizUserLibraryService:
         updated = await self.reference_repository.update_folder_item(
             str(item.id),
             folder_id=str(target_folder.id),
+            organization_id=organization_id,
             position=len(target_items),
         )
         return updated is not None

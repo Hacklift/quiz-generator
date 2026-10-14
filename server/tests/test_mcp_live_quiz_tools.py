@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -18,6 +19,10 @@ import server.app.mcp.tools.live_quiz_tools as live_quiz_tools
 
 
 ACTIVE_EXPIRES_AT = datetime.now(timezone.utc) + timedelta(hours=2)
+
+
+def _context() -> SimpleNamespace:
+    return SimpleNamespace(user_id="user-1")
 
 
 def active_quiz(**overrides: Any) -> dict[str, Any]:
@@ -70,7 +75,7 @@ async def test_live_quiz_create_access_link_reuses_active_existing_link(monkeypa
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", FailingLiveQuizSessionService)
 
@@ -93,7 +98,7 @@ async def test_live_quiz_create_access_link_creates_when_existing_link_expired(m
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((expired_quiz, "user-1")),
+        lambda _quiz_id: _async_return((expired_quiz, _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", lambda *_args, **_kwargs: service)
@@ -117,7 +122,7 @@ async def test_live_quiz_create_access_link_requires_positive_duration(monkeypat
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(access_code=None, live_quiz_enabled=False), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(access_code=None, live_quiz_enabled=False), _context())),
     )
 
     with pytest.raises(ValueError, match="duration must be positive"):
@@ -132,7 +137,7 @@ async def test_live_quiz_ensure_access_link_reuses_active_without_duration(monke
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", FailingLiveQuizSessionService)
 
@@ -150,7 +155,7 @@ async def test_live_quiz_ensure_access_link_requires_duration_when_no_active_lin
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1")),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
 
     result = await live_quiz_tools.live_quiz_ensure_access_link(quiz_id="quiz-1")
@@ -167,7 +172,7 @@ async def test_live_quiz_ensure_access_link_creates_when_duration_supplied(monke
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1")),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", lambda *_args, **_kwargs: service)
@@ -187,7 +192,7 @@ async def test_live_quiz_send_invites_sends_to_deduped_recipients(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "build_email_service", lambda _background: email_service)
 
@@ -213,7 +218,7 @@ async def test_live_quiz_send_invites_rejects_recipient_cap(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     recipients = [f"user{i}@example.com" for i in range(live_quiz_tools.MAX_LIVE_QUIZ_INVITE_RECIPIENTS + 1)]
 
@@ -229,7 +234,7 @@ async def test_live_quiz_send_invites_rejects_invalid_email(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
 
     with pytest.raises(ValidationError):
@@ -245,7 +250,7 @@ async def test_live_quiz_send_invites_requires_active_live_link(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1")),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
 
     with pytest.raises(ValueError, match="Create a live quiz link"):
@@ -260,7 +265,7 @@ async def test_live_quiz_send_invites_rejects_stale_supplied_link(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1")),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
 
     with pytest.raises(ValueError, match="no longer current"):

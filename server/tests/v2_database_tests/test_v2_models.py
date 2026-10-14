@@ -11,6 +11,7 @@ def test_quiz_create_v2_accepts_valid_payload():
         description="Core backend quiz",
         quiz_type="multichoice",
         source="manual",
+        organization_id="organization-1",
         questions=[
             {
                 "question": "What does HTTP stand for?",
@@ -30,6 +31,7 @@ def test_quiz_create_v2_accepts_optional_category_metadata():
         quiz_type="short-answer",
         source="seed",
         visibility="public",
+        organization_id="platform-library",
         category="Science",
         category_slug="science",
         subcategory="Biology",
@@ -69,6 +71,7 @@ def test_quiz_create_v2_rejects_invalid_quiz_type():
         QuizCreateV2(
             title="Invalid",
             quiz_type="multiple_choice",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Bad type",
@@ -87,6 +90,7 @@ def test_quiz_attempt_document_v2_requires_non_negative_score():
     with pytest.raises(ValidationError):
         QuizAttemptDocumentV2(
             user_id="user-1",
+            organization_id="organization-1",
             quiz_id="quiz-1",
             question_results=[
                 {
@@ -100,4 +104,13 @@ def test_quiz_attempt_document_v2_requires_non_negative_score():
             ],
             score=-1,
             percentage=0,
+        )
+
+
+@pytest.mark.parametrize("organization_id", [None, ""])
+def test_quiz_attempt_document_requires_organization_after_cutover(organization_id):
+    with pytest.raises(ValidationError):
+        QuizAttemptDocumentV2(
+            user_id="user-1", quiz_id="quiz-1", organization_id=organization_id,
+            question_results=[], score=0, percentage=0,
         )

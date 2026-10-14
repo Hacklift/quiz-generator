@@ -6,7 +6,12 @@ services:
       cd server && \
       pip install --upgrade pip && \
       pip install "pipenv==2026.0.3" && \
-      pipenv install --system --skip-lock
+      pipenv install --system --skip-lock && \
+      PYTHONPATH=.. python -m server.scripts.migrations.organizations.backfill_organizations --triggered-by render-build
+    # Free Render services do not support `preDeployCommand`. This build-step
+    # gate runs once per deploy, before startCommand, not on service restarts.
+    # Completion is recorded in Mongo, so later deploys exit after a small
+    # state check instead of scanning users again.
     startCommand: bash server/start_server_and_celery.sh
     envVars:
       - key: PYTHON_VERSION

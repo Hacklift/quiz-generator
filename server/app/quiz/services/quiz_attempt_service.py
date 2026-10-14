@@ -4,9 +4,11 @@ from server.app.db.core.connection import (
     get_quiz_attempts_v2_collection,
     get_quizzes_v2_collection,
 )
+from server.app.organizations.models import OrganizationContext
 from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 from server.app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
+from server.app.quiz.services.quiz_practice_access import QuizPracticeAccess
 
 
 class QuizAttemptService:
@@ -15,11 +17,13 @@ class QuizAttemptService:
         *,
         quiz_repository: QuizV2Repository | None = None,
         attempt_repository: QuizAttemptV2Repository | None = None,
+        quiz_access: QuizPracticeAccess | None = None,
     ):
         self.quiz_repository = quiz_repository or QuizV2Repository(get_quizzes_v2_collection())
         self.attempt_repository = attempt_repository or QuizAttemptV2Repository(
             get_quiz_attempts_v2_collection()
         )
+        self.quiz_access = quiz_access or QuizPracticeAccess()
 
     @staticmethod
     def _question_options_by_text(
@@ -67,23 +71,35 @@ class QuizAttemptService:
             ],
         }
 
-    async def _get_quizzes_by_ids(self, quiz_ids: list[str]) -> dict[str, QuizDocumentV2]:
-        quizzes = await self.quiz_repository.find_many_by_ids(quiz_ids)
-        return {str(quiz.id): quiz for quiz in quizzes}
+    async def _get_quizzes_by_ids(
+        self, quiz_ids: list[str], *, organization_id: str,
+        organization: OrganizationContext | None,
+    ) -> dict[str, QuizDocumentV2]:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            quiz_ids, organization_id=organization_id,
+        )
+        readable = await self.quiz_access.readable_sources(quizzes, organization)
+        return {str(quiz.id): quiz for quiz in readable}
 
     async def list_attempts(
         self,
         *,
         user_id: str,
+        organization_id: str,
+        organization: OrganizationContext | None = None,
         quiz_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         attempts = await self.attempt_repository.list_attempts_for_user(
             user_id,
+            organization_id=organization_id,
             quiz_id=quiz_id,
             limit=limit,
         )
-        quizzes_by_id = await self._get_quizzes_by_ids([attempt.quiz_id for attempt in attempts])
+        quizzes_by_id = await self._get_quizzes_by_ids(
+            [attempt.quiz_id for attempt in attempts],
+            organization_id=organization_id, organization=organization,
+        )
 
         payloads: list[dict[str, Any]] = []
         for attempt in attempts:
@@ -91,20 +107,31 @@ class QuizAttemptService:
             payloads.append(self._attempt_payload(attempt, quiz=quiz))
         return payloads
 
-    async def get_attempt(self, *, user_id: str, attempt_id: str) -> dict[str, Any] | None:
+    async def get_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+        organization: OrganizationContext | None = None,
+    ) -> dict[str, Any] | None:
         attempt = await self.attempt_repository.get_attempt_by_id(
             attempt_id,
             user_id=user_id,
+            organization_id=organization_id,
         )
         if attempt is None:
             return None
-        quiz = await self.quiz_repository.find_by_id(attempt.quiz_id)
+        quizzes = await self._get_quizzes_by_ids(
+            [attempt.quiz_id], organization_id=organization_id,
+            organization=organization,
+        )
+        quiz = quizzes.get(attempt.quiz_id)
         return self._attempt_payload(attempt, quiz=quiz)
 
-    async def delete_attempt(self, *, user_id: str, attempt_id: str) -> bool:
+    async def delete_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+    ) -> bool:
         return (
             await self.attempt_repository.soft_delete_attempt_by_id(
                 attempt_id,
                 user_id=user_id,
+                organization_id=organization_id,
             )
         ) > 0
