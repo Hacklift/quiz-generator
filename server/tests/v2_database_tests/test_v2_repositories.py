@@ -1,3 +1,6 @@
+import asyncio
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2
@@ -59,6 +62,90 @@ async def test_quiz_v2_repository_update_metadata(test_db):
     assert updated is not None
     assert updated.description == "Updated"
     assert updated.visibility == "public"
+
+
+@pytest.mark.asyncio
+async def test_quiz_v2_repository_atomically_claims_live_activation(test_db):
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    created = await repository.insert_quiz(
+        QuizDocumentV2(
+            title="Concurrent activation",
+            quiz_type="multichoice",
+            source="manual",
+            owner_user_id="owner-1",
+            questions=[
+                {
+                    "question": "What is atomicity?",
+                    "options": ["One transition", "Many transitions"],
+                    "correct_answer": "One transition",
+                }
+            ],
+        )
+    )
+    observed_at = datetime.now(timezone.utc)
+
+    first, second = await asyncio.gather(
+        repository.claim_live_quiz_activation(
+            str(created.id),
+            creator_id="owner-1",
+            observed_at=observed_at,
+            access_code="FIRST1",
+            time_limit_minutes=20,
+            access_code_expires_at=observed_at + timedelta(hours=1),
+        ),
+        repository.claim_live_quiz_activation(
+            str(created.id),
+            creator_id="owner-1",
+            observed_at=observed_at,
+            access_code="SECOND",
+            time_limit_minutes=30,
+            access_code_expires_at=observed_at + timedelta(hours=1),
+        ),
+    )
+
+    winners = [result for result in (first, second) if result is not None]
+    assert len(winners) == 1
+    persisted = await repository.find_by_id(str(created.id))
+    assert persisted is not None
+    assert persisted.access_code == winners[0].access_code
+    assert persisted.time_limit_minutes == winners[0].time_limit_minutes
+
+
+@pytest.mark.asyncio
+async def test_quiz_v2_repository_allows_new_activation_after_expiry(test_db):
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    created = await repository.insert_quiz(
+        QuizDocumentV2(
+            title="Expired activation",
+            quiz_type="true-false",
+            source="manual",
+            owner_user_id="owner-1",
+            live_quiz_enabled=True,
+            access_code="OLD123",
+            access_code_expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            time_limit_minutes=10,
+            questions=[
+                {
+                    "question": "Expired codes can be replaced.",
+                    "options": ["True", "False"],
+                    "correct_answer": "True",
+                }
+            ],
+        )
+    )
+    observed_at = datetime.now(timezone.utc)
+
+    replacement = await repository.claim_live_quiz_activation(
+        str(created.id),
+        creator_id="owner-1",
+        observed_at=observed_at,
+        access_code="NEW123",
+        time_limit_minutes=15,
+        access_code_expires_at=observed_at + timedelta(hours=1),
+    )
+
+    assert replacement is not None
+    assert replacement.access_code == "NEW123"
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-from server.app.analytics.product_events import QUIZ_GENERATED, record_product_event
+from server.app.analytics.product_events import QUIZ_GENERATED, record_product_event_safely
 from server.app.db.core.connection import get_product_events_collection
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.quiz.models.quiz_models import QuizRequest
@@ -74,6 +74,7 @@ async def quiz_generate(
         request,
         user_id=context.user_id,
     )
+    result.pop("_access_code_created", None)
     questions = result.get("questions") or []
     history_id = None
     history_quiz_id = None
@@ -98,8 +99,8 @@ async def quiz_generate(
         history_quiz_id = history_reference.quiz_id
 
     quiz_id = result.get("quiz_id") or history_quiz_id
-    await record_product_event(
-        get_product_events_collection(),
+    await record_product_event_safely(
+        get_product_events_collection,
         event_type=QUIZ_GENERATED,
         user_id=context.user_id,
         user=context.user,

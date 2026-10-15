@@ -115,7 +115,7 @@ async def test_unverified_user_can_generate_quiz():
         "server.app.quiz.routes.generation.get_questions",
         new=AsyncMock(return_value={"source": "mock", "questions": []}),
     ) as get_questions_mock, patch(
-        "server.app.quiz.routes.generation.record_product_event",
+        "server.app.quiz.routes.generation.record_product_event_safely",
         new=AsyncMock(),
     ) as record_event_mock, patch(
         "server.app.quiz.routes.generation.get_product_events_collection",
@@ -134,6 +134,51 @@ async def test_unverified_user_can_generate_quiz():
     assert record_event_mock.await_args.kwargs["event_type"] == "quiz_generated"
     assert record_event_mock.await_args.kwargs["user"] is current_user
     assert record_event_mock.await_args.kwargs["origin"] == "rest"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("access_code_created", "expected_event_count"),
+    [(True, 2), (False, 1)],
+)
+async def test_standard_generation_records_live_event_only_for_new_activation(
+    access_code_created, expected_event_count
+):
+    request = QuizRequest(
+        profession="teacher",
+        num_questions=1,
+        question_type="multichoice",
+        difficulty_level="easy",
+        audience_type="students",
+        token=None,
+    )
+    current_user = _user(is_verified=True)
+    generated = {
+        "source": "mock",
+        "questions": [],
+        "quiz_id": "quiz-1",
+        "live_quiz_enabled": True,
+        "_access_code_created": access_code_created,
+    }
+
+    with patch(
+        "server.app.quiz.routes.generation.get_questions",
+        new=AsyncMock(return_value=generated),
+    ), patch(
+        "server.app.quiz.routes.generation.record_product_event_safely",
+        new=AsyncMock(),
+    ) as record_event_mock:
+        result = await get_quiz(
+            MagicMock(), Response(), request, current_user=current_user
+        )
+
+    assert "_access_code_created" not in result
+    assert record_event_mock.await_count == expected_event_count
+    event_types = [
+        call.kwargs["event_type"] for call in record_event_mock.await_args_list
+    ]
+    assert event_types.count("quiz_generated") == 1
+    assert event_types.count("live_quiz_enabled") == int(access_code_created)
 
 
 @pytest.mark.asyncio

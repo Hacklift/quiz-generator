@@ -24,7 +24,7 @@ from server.app.db.core.connection import (
 from server.app.analytics.product_events import (
     LIVE_QUIZ_ENABLED,
     RESULTS_EXPORTED,
-    record_product_event,
+    record_product_event_safely,
 )
 from server.app.core.config import settings
 from server.app.users.models import UserOut
@@ -159,8 +159,8 @@ async def generate_quiz_access_code(
     )
     created = result.pop("_access_code_created", False)
     if created:
-        await record_product_event(
-            get_product_events_collection(),
+        await record_product_event_safely(
+            get_product_events_collection,
             event_type=LIVE_QUIZ_ENABLED,
             user_id=current_user.id,
             user=current_user,
@@ -314,8 +314,8 @@ async def export_live_quiz_results(
     response = StreamingResponse(generator(payload), media_type=media_type)
     filename = build_download_filename(f'{payload["title"]} results', format)
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    await record_product_event(
-        get_product_events_collection(),
+    await record_product_event_safely(
+        get_product_events_collection,
         event_type=RESULTS_EXPORTED,
         user_id=current_user.id,
         user=current_user,

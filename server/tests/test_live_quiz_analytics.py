@@ -8,6 +8,7 @@ Tests cover:
 - score appears after submission
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -19,10 +20,15 @@ from fastapi import HTTPException
 from starlette.websockets import WebSocketDisconnect
 
 import server.app.quiz.services.live_session_service as live_quiz_session_service
+from server.app.mcp.tools import live_quiz_tools
 from server.app.core.config import settings
 from server.app.quiz.routes import live_sessions as live_sessions_routes
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.models import UserOut
+
+
+async def _async_return(value):
+    return value
 
 
 class FakeAnalyticsRepository:
@@ -403,7 +409,7 @@ class FakeAccessCodeRepository:
     async def access_code_exists(self, access_code):
         return False
 
-    async def enable_live_quiz(self, **kwargs):
+    async def claim_live_quiz_activation(self, **kwargs):
         self.enable_calls += 1
         self.updated = kwargs
         self.quiz = {
@@ -438,6 +444,36 @@ class FakeAccessCodeLifecycleRepository(FakeExistingAccessCodeRepository):
         if access_code == self.quiz.get("access_code"):
             return self.quiz
         return None
+
+
+class ConcurrentActivationRepository(FakeAccessCodeRepository):
+    def __init__(self):
+        super().__init__()
+        self._initial_reads = 0
+        self._initial_reads_ready = asyncio.Event()
+        self._claim_lock = asyncio.Lock()
+
+    async def get_quiz_by_id(self, quiz_id):
+        self._initial_reads += 1
+        if self._initial_reads <= 2:
+            snapshot = dict(self.quiz)
+            if self._initial_reads == 2:
+                self._initial_reads_ready.set()
+            await self._initial_reads_ready.wait()
+            return snapshot
+        return dict(self.quiz)
+
+    async def claim_live_quiz_activation(self, **kwargs):
+        async with self._claim_lock:
+            expiration = self.quiz.get("access_code_expires_at")
+            if (
+                self.quiz.get("live_quiz_enabled")
+                and self.quiz.get("access_code")
+                and expiration
+                and expiration > kwargs["observed_at"]
+            ):
+                return None
+            return await super().claim_live_quiz_activation(**kwargs)
 
 
 class FakeCreatorLiveQuizzesRepository:
@@ -766,6 +802,115 @@ async def test_expired_access_code_is_replaced_only_by_explicit_generation(monke
     with pytest.raises(HTTPException) as old_code:
         await service.validate_access_code("KEEP42")
     assert old_code.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_concurrent_activation_has_one_winner_and_returns_persisted_code(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = ConcurrentActivationRepository()
+    service = LiveQuizSessionService(repository)
+
+    first, second = await asyncio.gather(
+        service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(hours=1),
+            creator_id="creator-1",
+            time_limit_minutes=20,
+        ),
+        service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(hours=1),
+            creator_id="creator-1",
+            time_limit_minutes=20,
+        ),
+    )
+
+    assert sorted(
+        [first["_access_code_created"], second["_access_code_created"]]
+    ) == [False, True]
+    assert first["access_code"] == second["access_code"] == repository.quiz["access_code"]
+    assert repository.enable_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "channels",
+    [("rest", "rest"), ("mcp", "mcp"), ("rest", "mcp")],
+)
+async def test_concurrent_entry_points_record_one_activation_event(
+    monkeypatch, channels
+):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = ConcurrentActivationRepository()
+    service = LiveQuizSessionService(repository)
+    events = []
+
+    async def record_event(_provider, **event):
+        events.append(event)
+
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+    monkeypatch.setattr(live_quiz_tools, "record_product_event_safely", record_event)
+    monkeypatch.setattr(
+        live_quiz_tools,
+        "_owned_quiz_for_context",
+        lambda _quiz_id: _async_return(
+            (
+                dict(repository.quiz),
+                "creator-1",
+                SimpleNamespace(
+                    id="creator-1",
+                    persona_category="school",
+                    persona_user_type="teacher",
+                ),
+            )
+        ),
+    )
+    monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: repository)
+    monkeypatch.setattr(
+        live_quiz_tools,
+        "LiveQuizSessionService",
+        lambda *_args, **_kwargs: service,
+    )
+    current_user = UserOut(
+        id="creator-1",
+        username="creator",
+        email="creator@example.com",
+        is_verified=True,
+        status="active",
+    )
+    payload = live_sessions_routes.AccessCodeCreateRequest(
+        time_limit_minutes=20,
+        access_code_expires_at=fixed_now + timedelta(hours=1),
+    )
+
+    async def invoke(channel):
+        if channel == "rest":
+            return await live_sessions_routes.generate_quiz_access_code(
+                quiz_id="quiz-1",
+                payload=payload,
+                current_user=current_user,
+                service=service,
+                invitation_repository=FakeInvitationRepository(),
+                email_service=FakeEmailService(),
+            )
+        return await live_quiz_tools.live_quiz_create_access_link(
+            quiz_id="quiz-1",
+            duration=20,
+            access_code_expires_at=(fixed_now + timedelta(hours=1)).isoformat(),
+        )
+
+    first, second = await asyncio.gather(*(invoke(channel) for channel in channels))
+
+    assert first["access_code"] == second["access_code"] == repository.quiz["access_code"]
+    assert "_access_code_created" not in first
+    assert "_access_code_created" not in second
+    assert repository.enable_calls == 1
+    assert len(events) == 1
+    assert events[0]["event_type"] == "live_quiz_enabled"
 
 
 @pytest.mark.asyncio

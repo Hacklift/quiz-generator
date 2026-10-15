@@ -19,7 +19,7 @@ from server.app.db.core.connection import (
 from server.app.analytics.product_events import (
     LIVE_QUIZ_ENABLED,
     QUIZ_GENERATED,
-    record_product_event,
+    record_product_event_safely,
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.utils.ai_generate import generate_document_quiz_with_rag
@@ -165,6 +165,7 @@ async def generate_document_quiz(
 
     quiz_id = None
     live_access_code = None
+    live_access_code_created = False
     live_access_expires = _to_iso_datetime(access_code_expires_at)
     category_metadata = {
         "category": None,
@@ -226,6 +227,7 @@ async def generate_document_quiz(
             time_limit_minutes=time_limit_minutes,
         )
         live_access_code = live_config["access_code"]
+        live_access_code_created = live_config.pop("_access_code_created", False)
         live_access_expires = _to_iso_datetime(
             live_config.get("access_code_expires_at")
         )
@@ -251,18 +253,17 @@ async def generate_document_quiz(
         **category_metadata,
     )
     if current_user is not None:
-        events = get_product_events_collection()
-        await record_product_event(
-            events,
+        await record_product_event_safely(
+            get_product_events_collection,
             event_type=QUIZ_GENERATED,
             user_id=current_user.id,
             user=current_user,
             quiz_id=quiz_id,
             origin="rest",
         )
-        if live_access_code:
-            await record_product_event(
-                events,
+        if live_access_code_created:
+            await record_product_event_safely(
+                get_product_events_collection,
                 event_type=LIVE_QUIZ_ENABLED,
                 user_id=current_user.id,
                 user=current_user,

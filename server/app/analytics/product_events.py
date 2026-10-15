@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -18,6 +19,10 @@ QUIZ_GENERATED = "quiz_generated"
 LIVE_QUIZ_ENABLED = "live_quiz_enabled"
 RESULTS_EXPORTED = "results_exported"
 PRODUCT_EVENT_TYPES = {QUIZ_GENERATED, LIVE_QUIZ_ENABLED, RESULTS_EXPORTED}
+
+# Historical note: live_quiz_enabled events with origin="mcp" begin with the
+# deployment of MCP activation instrumentation; earlier MCP activations cannot
+# be reconstructed authoritatively and are intentionally not backfilled.
 
 
 async def record_product_event(
@@ -62,3 +67,19 @@ async def record_product_event(
         logger.warning("Failed to record product event %s: %s", event_type, exc)
     except Exception:
         logger.exception("Unexpected failure recording product event %s", event_type)
+
+
+async def record_product_event_safely(
+    collection_provider: Callable[[], AsyncIOMotorCollection],
+    **event_kwargs: Any,
+) -> None:
+    """Resolve the analytics collection without risking the business request."""
+    try:
+        collection = collection_provider()
+    except Exception:
+        logger.exception(
+            "Failed to acquire product events collection for %s",
+            event_kwargs.get("event_type", "unknown"),
+        )
+        return
+    await record_product_event(collection, **event_kwargs)

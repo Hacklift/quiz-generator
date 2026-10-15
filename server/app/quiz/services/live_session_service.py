@@ -111,18 +111,59 @@ class LiveQuizSessionService:
                 detail="Restricted live quizzes require at least one invited email",
             )
 
+        activation_started_at = _utc_now()
         code = await self._generate_unique_code()
-        updated_quiz = await self.repository.enable_live_quiz(
+        updated_quiz = await self.repository.claim_live_quiz_activation(
             quiz_id=quiz_id,
             access_code=code,
             time_limit_minutes=time_limit_minutes,
             access_code_expires_at=_as_utc(access_code_expires_at),
             creator_id=creator_id,
+            observed_at=activation_started_at,
             participant_access_mode=participant_access_mode,
             invited_participant_emails=normalized_invited_emails,
         )
         if not updated_quiz:
-            raise HTTPException(status_code=500, detail="Could not enable live quiz")
+            winning_quiz = await self.repository.get_quiz_by_id(quiz_id)
+            if not winning_quiz:
+                raise HTTPException(status_code=404, detail="Quiz not found")
+            winning_owner_id = (
+                winning_quiz.get("owner_user_id")
+                or winning_quiz.get("created_by")
+                or winning_quiz.get("owner_id")
+            )
+            if not winning_owner_id or str(winning_owner_id) != creator_id:
+                raise HTTPException(status_code=403, detail="Not allowed")
+            winning_code = winning_quiz.get("access_code")
+            winning_expiration = winning_quiz.get("access_code_expires_at")
+            if not (
+                winning_quiz.get("live_quiz_enabled")
+                and winning_code
+                and winning_expiration
+                and _as_utc(winning_expiration) > _utc_now()
+            ):
+                raise HTTPException(status_code=500, detail="Could not enable live quiz")
+            winning_invited = [
+                email.strip().lower()
+                for email in winning_quiz.get("invited_participant_emails", [])
+                if email
+            ]
+            return {
+                "_access_code_created": False,
+                "quiz_id": str(winning_quiz["_id"]),
+                "access_code": winning_code,
+                "live_quiz_enabled": True,
+                "time_limit_minutes": winning_quiz.get("time_limit_minutes")
+                or time_limit_minutes,
+                "access_code_expires_at": _as_utc(winning_expiration),
+                "participant_access_mode": winning_quiz.get(
+                    "participant_access_mode", "public"
+                ),
+                "invited_emails": winning_invited,
+                "invitations_created": len(winning_invited),
+                "invitations_delivered": 0,
+                "invitations_queued": 0,
+            }
 
         invitations_created = 0
         invitations_delivered = 0

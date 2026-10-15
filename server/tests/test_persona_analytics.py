@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from server.app.analytics.product_events import QUIZ_GENERATED, record_product_event
+from server.app.analytics.product_events import (
+    QUIZ_GENERATED,
+    record_product_event,
+    record_product_event_safely,
+)
 from server.app.analytics.reporting import aggregate_persona_events
 from server.app.users.persona import analytics_persona_snapshot
 from server.app.users.repository import record_auth_event
@@ -120,6 +124,21 @@ async def test_product_event_unexpected_exception_does_not_raise(caplog):
 
 
 @pytest.mark.asyncio
+async def test_product_event_collection_acquisition_failure_does_not_raise(caplog):
+    def unavailable_collection():
+        raise RuntimeError("analytics collection unavailable")
+
+    await record_product_event_safely(
+        unavailable_collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    assert "Failed to acquire product events collection for quiz_generated" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_auth_event_merges_persona_without_adding_profile_pii():
     collection = SimpleNamespace(insert_one=AsyncMock())
     user = {
@@ -159,6 +178,7 @@ def test_report_groups_signup_and_generation_and_normalizes_legacy_events():
             "created_at": timestamp,
             "persona_category": "school",
             "persona_user_type": "parent",
+            "origin": "mcp",
         },
         {"created_at": timestamp, "persona_category": "school"},
     ]

@@ -11,7 +11,7 @@ from server.app.db.core.connection import get_product_events_collection
 from server.app.analytics.product_events import (
     LIVE_QUIZ_ENABLED,
     QUIZ_GENERATED,
-    record_product_event,
+    record_product_event_safely,
 )
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
@@ -54,19 +54,19 @@ async def get_quiz(
         invitation_repository=invitation_repository,
         email_service=email_service,
     )
+    access_code_created = result.pop("_access_code_created", False)
     if current_user is not None:
-        events = get_product_events_collection()
-        await record_product_event(
-            events,
+        await record_product_event_safely(
+            get_product_events_collection,
             event_type=QUIZ_GENERATED,
             user_id=current_user.id,
             user=current_user,
             quiz_id=result.get("quiz_id"),
             origin="rest",
         )
-        if result.get("live_quiz_enabled"):
-            await record_product_event(
-                events,
+        if access_code_created:
+            await record_product_event_safely(
+                get_product_events_collection,
                 event_type=LIVE_QUIZ_ENABLED,
                 user_id=current_user.id,
                 user=current_user,

@@ -192,12 +192,8 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
             return payload
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
-    event_collection = object()
     monkeypatch.setattr(
-        live_sessions_routes,
-        "get_product_events_collection",
-        lambda: event_collection,
+        live_sessions_routes, "record_product_event_safely", record_event
     )
     current_user = SimpleNamespace(
         id="teacher-1",
@@ -226,7 +222,7 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
         f'attachment; filename="Class Results results.{export_format}"'
     )
     record_event.assert_awaited_once_with(
-        event_collection,
+        live_sessions_routes.get_product_events_collection,
         event_type="results_exported",
         user_id="teacher-1",
         user=current_user,
@@ -276,7 +272,9 @@ async def test_rejected_export_does_not_record_product_event(monkeypatch, status
             raise HTTPException(status_code=status_code, detail="Rejected")
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(HTTPException) as error:
         await export_live_quiz_results(
@@ -301,7 +299,9 @@ async def test_invalid_export_format_does_not_record_product_event(monkeypatch):
             }
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(KeyError):
         await export_live_quiz_results(
@@ -329,7 +329,9 @@ async def test_failed_export_generation_does_not_record_product_event(monkeypatc
 
     record_event = AsyncMock()
     monkeypatch.setattr(live_sessions_routes, "generate_live_results_csv", fail_generation)
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(RuntimeError, match="export generation failed"):
         await export_live_quiz_results(
