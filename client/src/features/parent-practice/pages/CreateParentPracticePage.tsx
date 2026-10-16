@@ -80,7 +80,7 @@ export default function CreateParentPracticePage() {
       setReady(await createParentPractice(params, durationMinutes));
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not create practice.",
+        error instanceof Error ? error.message : uiText("m464551b5b9148a53"),
       );
     } finally {
       setIsCreating(false);
@@ -131,9 +131,11 @@ export default function CreateParentPracticePage() {
                 {ready.title}
               </h1>
               <p className="mt-[12px] text-[16px] text-ink/70">
-                {ready.questionCount} {uiText("m9f969d819e953b67")}
-                {ready.durationMinutes} {uiText("m55d41a2abc35897e")}
-                {ready.accessCode}
+                {uiText("me1ae3fe7b629c4a7", {
+                  value0: ready.questionCount,
+                  value1: ready.durationMinutes,
+                  value2: ready.accessCode,
+                })}
               </p>
               <div className="mt-[28px] flex flex-wrap gap-[12px]">
                 <button
@@ -228,7 +230,7 @@ export default function CreateParentPracticePage() {
                     >
                       {DURATION_OPTIONS.map((minutes) => (
                         <option key={minutes} value={minutes}>
-                          {minutes} {uiText("m90e63d85fa1ab2c8")}
+                          {uiText("ma1542e3b3232eb95", { value0: minutes })}
                         </option>
                       ))}
                       <option value="custom">

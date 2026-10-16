@@ -8,14 +8,16 @@ import personaEn from "./messages/persona.en.json";
 import personaEs from "./messages/persona.es.json";
 import personaFr from "./messages/persona.fr.json";
 import uiEn from "./messages/ui.en.json";
+import uiEs from "./messages/ui.es.json";
+import uiFr from "./messages/ui.fr.json";
 
 export function createLocaleI18n() {
   const instance = createInstance();
   void instance.init({
     resources: {
       en: { translation: en, persona: personaEn, ui: uiEn },
-      es: { translation: es, persona: personaEs },
-      fr: { translation: fr, persona: personaFr },
+      es: { translation: es, persona: personaEs, ui: uiEs },
+      fr: { translation: fr, persona: personaFr, ui: uiFr },
     },
     lng: DEFAULT_LOCALE,
     fallbackLng: DEFAULT_LOCALE,

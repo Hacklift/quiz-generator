@@ -1,5 +1,13 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { I18nextProvider } from "react-i18next";
+import { createLocaleI18n } from "@features/locale/i18n";
 import DisplayQuiz from "@features/quiz/pages/QuizDisplayPage";
 import publicApi from "@shared/api/publicHttp";
 import toast from "react-hot-toast";
@@ -59,11 +67,19 @@ jest.mock("@features/quiz/components", () => {
     ),
     NewQuizButton: () => <button type="button">New Quiz</button>,
     QuizAnswerField,
-    DownloadQuizButton: () => <div>Download Quiz</div>,
+    DownloadQuizButton: ({ contentLocale }: { contentLocale?: string }) => (
+      <div data-testid="download-quiz" data-locale={contentLocale}>
+        Download Quiz
+      </div>
+    ),
     NavBar: () => <div>NavBar</div>,
     Footer: () => <div>Footer</div>,
     ShareButton: () => <div>Share Quiz</div>,
-    SaveQuizButton: () => <div>Save Quiz</div>,
+    SaveQuizButton: ({ contentLocale }: { contentLocale?: string }) => (
+      <div data-testid="save-quiz" data-locale={contentLocale}>
+        Save Quiz
+      </div>
+    ),
   };
 });
 
@@ -92,6 +108,47 @@ const storedQuiz = {
 };
 
 describe("QuizDisplayPage", () => {
+  test("a saved French quiz retains its content and save/export language after the UI changes", async () => {
+    const i18n = createLocaleI18n();
+    localStorage.setItem(
+      "saved_quiz_view",
+      JSON.stringify({
+        ...storedQuiz,
+        title: "Quiz français",
+        content_locale: "fr",
+        questions: [
+          {
+            question: "Combien font deux plus deux ?",
+            question_type: "true-false",
+            options: ["Vrai", "Faux"],
+            answer: "Vrai",
+            explanation: "Deux et deux font quatre.",
+          },
+        ],
+      }),
+    );
+    render(
+      <I18nextProvider i18n={i18n}>
+        <DisplayQuiz />
+      </I18nextProvider>,
+    );
+    expect(await screen.findByText("Quiz français")).toBeInTheDocument();
+    await act(async () => {
+      await i18n.changeLanguage("es");
+    });
+    expect(screen.getByText("Quiz français")).toBeInTheDocument();
+    expect(screen.getByText(/Combien font deux plus deux/)).toBeInTheDocument();
+    expect(screen.getByText("Vrai")).toBeInTheDocument();
+    expect(screen.getByText("Faux")).toBeInTheDocument();
+    expect(screen.getByTestId("save-quiz")).toHaveAttribute(
+      "data-locale",
+      "fr",
+    );
+    expect(screen.getByTestId("download-quiz")).toHaveAttribute(
+      "data-locale",
+      "fr",
+    );
+  });
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("saved_quiz_view", JSON.stringify(storedQuiz));

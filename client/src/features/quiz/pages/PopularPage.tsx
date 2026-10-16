@@ -362,9 +362,9 @@ export default function PopularQuizzesPage() {
                     </p>
                   </div>
                   <span className="text-xs px-3 py-1 rounded-full bg-[#f2f6ff] text-[#0F2654] font-semibold">
-                    {uiText("m92340695899bd2d8")}
-                    {quiz.lastActiveDays}
-                    {uiText("m738bb7160d3b2cec")}
+                    {uiText("m2259b7dbd8901d9e", {
+                      value0: quiz.lastActiveDays,
+                    })}
                   </span>
                 </div>
 

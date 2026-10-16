@@ -91,16 +91,16 @@ export default function HeroMockup() {
             {uiText("mdceabed9126ff631")}
           </p>
           <div className="mb-[6px] border-[1.5px] border-brand bg-brand-100 px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">A</span>{" "}
-            {uiText("m8f9b03f16dcf105e")}
+            <span className="font-extrabold">A</span>
+            {" " + uiText("m8f9b03f16dcf105e")}
           </div>
           <div className="mb-[6px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">B</span>{" "}
-            {uiText("m4897f6cb5542b28c")}
+            <span className="font-extrabold">B</span>
+            {" " + uiText("m4897f6cb5542b28c")}
           </div>
           <div className="mb-[8px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">C</span>{" "}
-            {uiText("mece9da09a3861708")}
+            <span className="font-extrabold">C</span>
+            {" " + uiText("mece9da09a3861708")}
           </div>
           <div className="bg-brand px-[8px] py-[7px] text-center text-[11px] font-extrabold text-paper">
             {uiText("m155f816c0407310c")}

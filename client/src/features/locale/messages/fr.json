@@ -1,5 +1,10 @@
 {
   "language": {
+    "signupLabel": "Langue préférée",
+    "signupHelp": "L'anglais est la langue par défaut, sauf si vous en choisissez une autre ou rejoignez une organisation. Vous pouvez la modifier lors de la configuration initiale ou plus tard dans votre profil.",
+    "signupOrganization": "Vous rejoignez {{organization}}. Langue par défaut de l'organisation : {{language}}.",
+    "checkingInvitation": "Vérification de l'invitation de l'organisation…",
+    "invitationError": "Cette invitation de l'organisation n'a pas pu être vérifiée. Vérifiez le lien ou demandez une nouvelle invitation.",
     "settings": "Langue",
     "description": "Choisissez la langue utilisée dans Quizwerk.",
     "useOrganizationDefault": "Utiliser la langue par défaut de l’organisation",
@@ -13,6 +18,58 @@
     "welcome": "Choisissez votre langue",
     "continue": "Continuer",
     "loading": "Préparation des traductions…",
-    "unavailable": "Certaines traductions sont indisponibles. L’anglais est affiché si nécessaire."
+    "unavailable": "Certaines traductions sont indisponibles. L’anglais est affiché si nécessaire.",
+    "more": "Afficher plus de langues"
+  },
+  "nav": {
+    "home": "Accueil",
+    "dashboard": "Tableau de bord",
+    "categories": "Catégories",
+    "pricing": "Tarifs",
+    "profile": "Mon profil",
+    "saved": "{{items}} enregistrés",
+    "popular": "{{items}} populaires",
+    "folders": "Dossiers",
+    "history": "Historique des {{items}}"
+  },
+  "auth": {
+    "requiredTitle": "Authentification requise",
+    "requiredDescription": "Connectez-vous pour continuer.",
+    "username": "Le nom d’utilisateur doit comporter au moins 3 caractères.",
+    "fullName": "Le nom complet doit comporter au moins 3 caractères.",
+    "email": "Saisissez une adresse e-mail valide.",
+    "password": "Le mot de passe doit comporter au moins 8 caractères, dont un chiffre, une lettre et un caractère spécial.",
+    "passwordMatch": "Les mots de passe ne correspondent pas.",
+    "registrationFailed": "L’inscription a échoué. Veuillez réessayer.",
+    "Weak": "Faible",
+    "Fair": "Moyen",
+    "Good": "Bon",
+    "Strong": "Fort"
+  },
+  "values": {
+    "multichoice": "Choix multiple",
+    "true-false": "Vrai ou faux",
+    "short-answer": "Réponse courte",
+    "open-ended": "Question ouverte",
+    "easy": "Facile",
+    "medium": "Intermédiaire",
+    "hard": "Difficile",
+    "active": "Actif",
+    "in_progress": "En cours",
+    "completed": "Terminé",
+    "expired": "Expiré",
+    "closed": "Fermé",
+    "open": "Ouvert",
+    "not_started": "Non commencé",
+    "inactive": "Inactif",
+    "trialing": "Essai",
+    "canceled": "Annulé",
+    "past_due": "Paiement en retard",
+    "paid": "Payé",
+    "draft": "Brouillon",
+    "unpaid": "Impayé",
+    "free": "Gratuit",
+    "monthly": "Mensuel",
+    "yearly": "Annuel"
   }
 }

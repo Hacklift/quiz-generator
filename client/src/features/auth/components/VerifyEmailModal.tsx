@@ -34,10 +34,7 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
         onClose();
       }, 1500);
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail ||
-          "OTP verification failed. Please try again.",
-      );
+      setError(err.response?.data?.detail || uiText("m748de674c8df3499"));
     } finally {
       setLoading(false);
     }
@@ -52,9 +49,7 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
       await resendVerification(userEmail);
       setSuccessMessage("Verification email resent! Check your inbox.");
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail || "Failed to resend verification email.",
-      );
+      setError(err.response?.data?.detail || uiText("mdf7531f70e039e48"));
     } finally {
       setResendLoading(false);
     }

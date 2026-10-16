@@ -13,36 +13,35 @@ import {
 import Footer from "@features/quiz/components/Footer";
 import NavBar from "@features/quiz/components/NavBar";
 
-const formatMoney = (amount: number, currency: string) => {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(amount);
-  } catch {
-    return `${currency || "USD"} ${amount.toFixed(2)}`;
-  }
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) {
-    return "N/A";
-  }
-  return new Date(value).toLocaleDateString();
-};
-
-const formatStatus = (status?: string) => {
-  if (!status) {
-    return "Unknown";
-  }
-  return status
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-};
-
 export default function BillingHistoryPage() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+  const formatMoney = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat(i18n.language, {
+        style: "currency",
+        currency: currency || "USD",
+      }).format(amount);
+    } catch {
+      return `${currency || "USD"} ${amount.toFixed(2)}`;
+    }
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) {
+      return "N/A";
+    }
+    return new Date(value).toLocaleDateString(i18n.language);
+  };
+
+  const formatStatus = (status?: string) => {
+    if (!status) {
+      return "Unknown";
+    }
+    return status
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
 
   const [invoices, setInvoices] = useState<BillingHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,7 +148,10 @@ export default function BillingHistoryPage() {
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap">
                           <span className="inline-flex rounded-full bg-[#143E6F]/10 px-3 py-1 font-medium text-[#143E6F]">
-                            {formatStatus(invoice.status)}
+                            {uiText("values." + invoice.status, {
+                              ns: "translation",
+                              defaultValue: formatStatus(invoice.status),
+                            })}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap">

@@ -84,9 +84,14 @@ export default function RecentQuizzes({
                     {row.quiz_name || uiText("mc699951f2ac37aff")}
                   </span>
                   <span className="text-[13px] text-ink/60">
-                    {row.question_type}
+                    {uiText("values." + row.question_type, {
+                      ns: "translation",
+                      defaultValue: row.question_type,
+                    })}
                     {row.num_questions
-                      ? ` · ${row.num_questions} questions`
+                      ? uiText("m847a323814f3a654", {
+                          value0: row.num_questions,
+                        })
                       : ""}
                   </span>
                 </button>

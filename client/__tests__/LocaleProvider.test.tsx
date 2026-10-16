@@ -18,7 +18,7 @@ jest.mock("@features/auth/context/authContext", () => ({
 }));
 
 function Probe() {
-  const { locale, setPreferredLocale } = useLocale();
+  const { locale, setPreferredLocale, previewGuestLocale } = useLocale();
   const { t } = useTranslation();
   const [error, setError] = React.useState(false);
   return (
@@ -26,6 +26,7 @@ function Probe() {
       <p>
         {locale}|{t("language.settings")}
       </p>
+      <button onClick={() => previewGuestLocale?.("fr")}>Preview French</button>
       <button
         onClick={() =>
           void setPreferredLocale("fr").catch(() => setError(true))
@@ -51,6 +52,7 @@ const app = () => (
 );
 
 beforeEach(() => {
+  localStorage.clear();
   jest.clearAllMocks();
   mockUser = {
     id: "a",
@@ -62,6 +64,33 @@ beforeEach(() => {
   };
   mockUpdateLocale.mockResolvedValue({});
   mockRefreshUser.mockResolvedValue(undefined);
+});
+
+test("guests start in English and can choose French without an organization or login", async () => {
+  mockUser = null;
+  render(app());
+  expect(await screen.findByText("en|Language")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "French" }));
+  expect(await screen.findByText("fr|Langue")).toBeInTheDocument();
+  expect(localStorage.getItem("quizwerk.guestLocale")).toBe("fr");
+  expect(mockUpdateLocale).not.toHaveBeenCalled();
+});
+
+test("signup previews do not persist a guest preference", async () => {
+  mockUser = null;
+  render(app());
+  fireEvent.click(screen.getByRole("button", { name: "Preview French" }));
+  expect(await screen.findByText("fr|Langue")).toBeInTheDocument();
+  expect(localStorage.getItem("quizwerk.guestLocale")).toBeNull();
+  expect(mockUpdateLocale).not.toHaveBeenCalled();
+});
+
+test("signup previews cannot change an authenticated user's language", async () => {
+  render(app());
+  expect(await screen.findByText("es|Idioma")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Preview French" }));
+  expect(screen.getByText("es|Idioma")).toBeInTheDocument();
+  expect(mockUpdateLocale).not.toHaveBeenCalled();
 });
 
 test("failed writes preserve the current language and document metadata", async () => {

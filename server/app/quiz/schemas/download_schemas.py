@@ -1,6 +1,7 @@
 from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
+from server.app.i18n.locales import SupportedLocale
 
 
 class DownloadQuizQuestionModel(BaseModel):
@@ -8,6 +9,7 @@ class DownloadQuizQuestionModel(BaseModel):
     options: Optional[list[str]] = None
     answer: Optional[str] = None
     correct_answer: Optional[str] = None
+    explanation: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_answer(self):
@@ -17,6 +19,7 @@ class DownloadQuizQuestionModel(BaseModel):
 
 
 class DownloadQuizRequestModel(BaseModel):
+    content_locale: SupportedLocale = "en"
     format: str = Field(..., description="File format for the quiz data (txt, json, pdf, docx)")
     title: Optional[str] = None
     description: Optional[str] = None

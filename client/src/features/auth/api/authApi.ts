@@ -17,13 +17,18 @@ export const registerUser = async (data: {
   email: string;
   full_name: string;
   password: string;
+  preferred_locale?: string | null;
+  organization_invitation_token?: string;
 }) => {
   try {
-    let preferred_locale: string | null = null;
-    try {
-      const stored = localStorage.getItem("quizwerk.guestLocale");
-      if (isSupportedLocale(stored)) preferred_locale = stored;
-    } catch {}
+    let preferred_locale = data.preferred_locale;
+    if (preferred_locale === undefined) {
+      preferred_locale = null;
+      try {
+        const stored = localStorage.getItem("quizwerk.guestLocale");
+        if (isSupportedLocale(stored)) preferred_locale = stored;
+      } catch {}
+    }
     const response = await api.post("/auth/register/", {
       ...data,
       preferred_locale,

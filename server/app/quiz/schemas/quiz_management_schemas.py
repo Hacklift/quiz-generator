@@ -29,6 +29,8 @@ class QuizHistoryQuestionResponse(BaseModel):
     options: list[str] | None = None
     answer: str
     explanation: Optional[str] = None
+    correct_boolean: Optional[bool] = None
+    correct_option_index: Optional[int] = None
 
 
 class LiveQuizStatsResponse(BaseModel):
@@ -42,6 +44,8 @@ class LiveQuizStatsResponse(BaseModel):
 
 class QuizHistoryDetailResponse(BaseModel):
     content_locale: Optional[str] = None
+    source: Optional[str] = None
+    description: Optional[str] = None
     id: str = Field(alias="_id")
     quiz_id: Optional[str] = None
     created_at: Optional[datetime] = None

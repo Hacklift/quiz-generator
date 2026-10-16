@@ -125,7 +125,7 @@ export default function Footer() {
 
         <div className="mt-8 border-t border-gray-800 pt-6 sm:mt-10 sm:flex sm:items-center sm:justify-between sm:gap-4">
           <p className="text-sm text-gray-400">
-            © {currentYear} {uiText("m85baf7e5f1e79d19")}
+            {uiText("mba12cc910db91e20", { value0: currentYear })}
           </p>
           <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:gap-x-5 sm:mt-0">
             <Link

@@ -13,13 +13,6 @@ import { personaGenerateHref } from "@shared/config/persona";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
 import { ROUTES } from "@shared/config/patterns/routes";
 
-const formatDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleDateString() : "No deadline";
-const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
-    ? `${run.completed_count}/${run.assigned_count} complete`
-    : `${run.completed_count} completed`;
-
 const businessPresetHref = (
   userType: DashboardViewProps["persona"]["userType"],
   preset: "onboarding" | "product-knowledge",
@@ -44,7 +37,19 @@ const businessPresetHref = (
 };
 
 export default function BusinessDashboard({ persona }: DashboardViewProps) {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+
+  const formatDate = (value?: string | null) =>
+    value
+      ? new Date(value).toLocaleDateString(i18n.language)
+      : uiText("trainingStatus.noDue");
+  const completionLabel = (run: TrainingRunSummary) =>
+    run.assigned_count
+      ? uiText("trainingStatus.progress", {
+          completed: run.completed_count,
+          total: run.assigned_count,
+        })
+      : uiText("trainingStatus.completed", { completed: run.completed_count });
 
   const router = useRouter();
   const t = useTerms();
@@ -146,8 +151,7 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
                 }
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
               >
-                {uiText("m4759498ac2a719c6")}
-                {preset.title}
+                {uiText("m37a7e45e1b49df1f", { value0: preset.title })}
               </button>
             </article>
           ))}
@@ -168,8 +172,7 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
               {uiText("m7445a62c0b670145")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              {uiText("me8a534c98d4cf8be")}
-              {t("session")}.
+              {uiText("m7877cd897bbc0398", { value0: t("session") })}
             </p>
           </div>
           <button
@@ -203,23 +206,25 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
                 <span>
                   <strong className="block text-ink">{run.title}</strong>
                   <span className="mt-[3px] block text-[13px] text-ink/65">
-                    {uiText("m74c21a6312ede178")}
-                    {formatDate(run.closes_at)}
+                    {uiText("mdb8084b091623bcc", {
+                      value0: formatDate(run.closes_at),
+                    })}
                   </span>
                 </span>
                 <span className="text-[13px] font-extrabold text-ink">
                   {completionLabel(run)}
                 </span>
                 <span className="text-[13px] text-ink/70">
-                  {run.average_score ?? "-"} {uiText("mb04eecaff03bcdd1")}
+                  {uiText("mfff86921b49f612d", {
+                    value0: run.average_score ?? "-",
+                  })}
                 </span>
               </button>
             ))}
           </div>
         ) : (
           <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
-            {uiText("m10f6e507278345cd")}
-            {t("group", "plural")} {uiText("mc3302962dcfeb27c")}
+            {uiText("med858193fe0bed66", { value0: t("group", "plural") })}
           </p>
         )}
       </section>

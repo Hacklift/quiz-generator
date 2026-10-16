@@ -17,18 +17,30 @@ async def issue_onboarding_token(organization_id, email, user, organizations, me
     }, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-async def accept_onboarding_token(token, user, organizations, memberships, users):
+async def validate_onboarding_token(token, organizations, *, email=None):
+    """Read invitation context without enrolling anyone or exposing the invitee email."""
     try:
         claims = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM], options={"require": ["exp"]})
         org_id = claims["organization_id"]
         if (claims.get("type") != "organization_onboarding"
-            or claims.get("email") != user.email.strip().casefold()
+            or not isinstance(claims.get("email"), str) or not claims["email"].strip()
+            or (email is not None and claims["email"] != email.strip().casefold())
             or not ObjectId.is_valid(org_id)):
             raise ValueError()
-    except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
+    except (jwt.InvalidTokenError, KeyError, ValueError, TypeError) as exc:
         raise HTTPException(400, "Invalid or expired organization invitation") from exc
-    if not await organizations.find_one({"_id": ObjectId(org_id)}):
+    organization = await organizations.find_one({"_id": ObjectId(org_id)})
+    if not organization:
         raise HTTPException(404, "Organization not found")
+    return organization
+
+
+async def enroll_onboarding_user(org_id, user, memberships, users):
+    """Enroll only after the caller validates an email-bound invitation.
+
+    Registration may enroll an unverified account, but does not mark its email
+    verified or bypass verified-user authorization on organization resources.
+    """
     now = datetime.now(timezone.utc)
     await memberships.update_one(
         {"organization_id": org_id, "user_id": user.id},
@@ -41,3 +53,8 @@ async def accept_onboarding_token(token, user, organizations, memberships, users
         {"$set": {"profile.onboarding_organization_id": org_id, "updated_at": now}},
     )
     return {"organization_id": org_id}
+
+
+async def accept_onboarding_token(token, user, organizations, memberships, users):
+    organization = await validate_onboarding_token(token, organizations, email=user.email)
+    return await enroll_onboarding_user(str(organization["_id"]), user, memberships, users)

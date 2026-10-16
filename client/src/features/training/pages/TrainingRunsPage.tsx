@@ -37,23 +37,18 @@ const localDateTime = (daysFromNow: number) => {
 
 const PURPOSES: Record<TrainingKind, Array<[TrainingPurpose, string]>> = {
   business: [
-    ["onboarding", "Employee onboarding"],
-    ["product_knowledge", "Product knowledge"],
-    ["custom", "Custom training"],
+    ["onboarding", "m73f7c68653183f09"],
+    ["product_knowledge", "mbe7077604d1d8f33"],
+    ["custom", "trainingStatus.customTraining"],
   ],
   compliance: [
-    ["harassment_prevention", "Harassment prevention"],
-    ["health_and_safety", "Health & safety"],
-    ["custom", "Custom compliance training"],
+    ["harassment_prevention", "trainingStatus.harassment"],
+    ["health_and_safety", "trainingStatus.safety"],
+    ["custom", "trainingStatus.customCompliance"],
   ],
 };
 
 const DURATIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
-
-const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
-    ? `${run.completed_count}/${run.assigned_count} complete`
-    : `${run.completed_count} completed`;
 
 export default function TrainingRunsPage() {
   return (
@@ -64,7 +59,15 @@ export default function TrainingRunsPage() {
 }
 
 function TrainingRunsContent() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+
+  const completionLabel = (run: TrainingRunSummary) =>
+    run.assigned_count
+      ? uiText("trainingStatus.progress", {
+          completed: run.completed_count,
+          total: run.assigned_count,
+        })
+      : uiText("trainingStatus.completed", { completed: run.completed_count });
 
   const router = useRouter();
   const [kind, setKind] = useState<TrainingKind>("business");
@@ -172,9 +175,7 @@ function TrainingRunsContent() {
       toast.success(uiText("ma461617c75db7511"));
       await router.push(ROUTES.trainingRun(run.id));
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not create training run.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("m43e7c634930360a4"));
     } finally {
       setIsCreating(false);
     }
@@ -186,10 +187,12 @@ function TrainingRunsContent() {
       <main className={`${CONTAINER} flex-1 py-[clamp(32px,5vw,56px)]`}>
         <header className="border-b-2 border-divider pb-[28px]">
           <Kicker>
-            {kind === uiText("m29a3e14798aa2363")
-              ? uiText("m4a109cc49467be33")
-              : uiText("m76f68a75f01ed76f")}{" "}
-            {uiText("mc2fb788c7deedbea")}
+            {uiText("m1a5bf7b3fc13723b", {
+              value0:
+                kind === "compliance"
+                  ? uiText("m4a109cc49467be33")
+                  : uiText("m76f68a75f01ed76f"),
+            })}
           </Kicker>
           <h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">
             {uiText("m78ae22e506dc5fd2")}
@@ -239,13 +242,17 @@ function TrainingRunsContent() {
                     <span>
                       <strong className="block">{run.title}</strong>
                       <span className="mt-[3px] block text-[13px] text-ink/65">
-                        {run.kind === uiText("m29a3e14798aa2363")
+                        {run.kind === "compliance"
                           ? uiText("m4a109cc49467be33")
                           : uiText("m76f68a75f01ed76f")}{" "}
                         ·{" "}
-                        {run.status === uiText("mc3eefb58d7c42440")
+                        {run.status === "closed"
                           ? uiText("mc21ead0614e7e1b7")
-                          : `Closes ${new Date(run.closes_at).toLocaleDateString()}`}
+                          : uiText("mdb8084b091623bcc", {
+                              value0: new Date(
+                                run.closes_at,
+                              ).toLocaleDateString(i18n.language),
+                            })}
                       </span>
                     </span>
                     <span className="text-[13px] font-extrabold">
@@ -298,7 +305,7 @@ function TrainingRunsContent() {
                 >
                   {PURPOSES[kind].map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {uiText(label)}
                     </option>
                   ))}
                 </select>
@@ -348,19 +355,19 @@ function TrainingRunsContent() {
                   <option value="assigned_only">
                     {uiText("m6d31fe05362dec7d")}
                   </option>
-                  {kind === uiText("m11d40417959631d3") && (
+                  {kind === "business" && (
                     <option value="public">
                       {uiText("m8e99b2dff44ebdd4")}
                     </option>
                   )}
                 </select>
               </label>
-              {kind === uiText("m29a3e14798aa2363") && (
+              {kind === "compliance" && (
                 <p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">
                   {uiText("m718ba9d6d369086b")}
                 </p>
               )}
-              {accessMode === uiText("m990770a023d0c0e4") ? (
+              {accessMode === "assigned_only" ? (
                 <>
                   <label className="block text-[13px] font-extrabold">
                     {uiText("m1e8568a82c2620ce")}
@@ -411,7 +418,7 @@ function TrainingRunsContent() {
                 >
                   {DURATIONS.map((minutes) => (
                     <option key={minutes} value={minutes}>
-                      {minutes} {uiText("m90e63d85fa1ab2c8")}
+                      {uiText("ma1542e3b3232eb95", { value0: minutes })}
                     </option>
                   ))}
                 </select>
@@ -433,7 +440,7 @@ function TrainingRunsContent() {
                   </option>
                 </select>
               </label>
-              {accessMode === uiText("m990770a023d0c0e4") && (
+              {accessMode === "assigned_only" && (
                 <label className="flex items-start gap-[10px] text-[13px] leading-[20px]">
                   <input
                     type="checkbox"

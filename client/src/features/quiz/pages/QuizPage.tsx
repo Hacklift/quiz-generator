@@ -1,5 +1,6 @@
+"use client";
+
 import { useTranslation } from "react-i18next";
-("use client"); // Mark this component as a client component
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -78,8 +79,10 @@ export default function Quiz() {
       ) : (
         <div className="text-center">
           <h2 className="text-2xl mb-4">
-            {uiText("m02bad385814e4a5f")}
-            {score} / {parsedQuestions.length}
+            {uiText("m9f2756f42c811185", {
+              value0: score,
+              value1: parsedQuestions.length,
+            })}
           </h2>
           <button
             onClick={() => router.push("/")}

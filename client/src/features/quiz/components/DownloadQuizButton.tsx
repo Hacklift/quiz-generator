@@ -31,6 +31,7 @@ export default function DownloadQuizButton({
   quizData = [],
   title,
   description,
+  contentLocale = "en",
 }: DownloadQuizProps) {
   const { t: uiText } = useTranslation("ui");
 
@@ -51,7 +52,15 @@ export default function DownloadQuizButton({
     contentDisposition?: string,
   ) => {
     const matchedFilename = contentDisposition?.match(/filename=([^;]+)/i)?.[1];
-    const resolvedName = matchedFilename?.replace(/"/g, "") || fallbackName;
+    const encodedFilename = contentDisposition?.match(
+      /filename\*=UTF-8''([^;]+)/i,
+    )?.[1];
+    let resolvedName = matchedFilename?.replace(/"/g, "") || fallbackName;
+    if (encodedFilename) {
+      try {
+        resolvedName = decodeURIComponent(encodedFilename);
+      } catch {}
+    }
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
 
@@ -120,10 +129,12 @@ export default function DownloadQuizButton({
             title,
             description,
             quiz_type: question_type,
+            content_locale: contentLocale,
             questions: quizData.map((question) => ({
               question: question.question,
               options: question.options || null,
               answer: String(question.answer ?? question.correct_answer ?? ""),
+              explanation: question.explanation,
             })),
           },
           {
@@ -153,7 +164,7 @@ export default function DownloadQuizButton({
           window.location.assign("/auth/verify-email-notice");
         }
       } else {
-        toast.error(detail || error?.message || "Failed to download quiz.");
+        toast.error(detail || error?.message || uiText("mb2ad305270562bf5"));
         console.error("Download failed:", error);
       }
     } finally {

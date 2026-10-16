@@ -6,6 +6,10 @@ import type { Persona, PersonaUserType } from "@shared/config/persona";
 const mockPush = jest.fn();
 let mockSearchParams = new URLSearchParams();
 let mockPersona: Persona | null = null;
+let mockAppLocale = "en";
+jest.mock("@features/locale/context/localeContext", () => ({
+  useLocale: () => ({ locale: mockAppLocale }),
+}));
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -52,6 +56,8 @@ describe("QuizForm", () => {
     mockPush.mockClear();
     mockSearchParams = new URLSearchParams();
     mockPersona = null;
+    mockAppLocale = "en";
+    sessionStorage.clear();
     const publicApi = require("@shared/api/publicHttp").default;
     publicApi.post.mockReset();
   });
@@ -76,6 +82,242 @@ describe("QuizForm", () => {
     });
 
     expect(input).toHaveValue("What is your favorite color?");
+  });
+
+  test("quiz language is the final form section and its searchable list collapses without losing selection", () => {
+    render(<QuizForm />);
+    const toggle = screen.getByRole("button", {
+      name: "Quiz language: English (en)",
+    });
+    const panel = document.getElementById(
+      toggle.getAttribute("aria-controls")!,
+    );
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(panel).not.toBeVisible();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+    const form = toggle.closest("form")!;
+    const sections = form.querySelectorAll(":scope > section");
+    expect(sections[sections.length - 1]).toContainElement(toggle);
+    const provider = screen.getByLabelText("AI provider");
+    expect(sections[sections.length - 2]).toContainElement(provider);
+    expect(provider.closest("section")?.nextElementSibling).toBe(
+      toggle.closest("section"),
+    );
+    const generate = screen.getByRole("button", { name: /generate quiz/i });
+    expect(
+      toggle.compareDocumentPosition(generate) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(panel).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "French" },
+    });
+    fireEvent.change(screen.getByLabelText("Quiz language"), {
+      target: { value: "fr" },
+    });
+    expect(toggle).toHaveTextContent("Français (fr)");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(panel).not.toBeVisible();
+    expect(toggle).toHaveTextContent("Français (fr)");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("searchbox")).toHaveValue("French");
+    expect(screen.getByLabelText("Quiz language")).toHaveValue("fr");
+  });
+
+  test("quiz language is independent of later app-language changes and retained in the stored quiz", async () => {
+    const publicApi = require("@shared/api/publicHttp").default;
+    publicApi.post.mockResolvedValue({
+      data: {
+        title: "Quiz français",
+        content_locale: "fr",
+        source: "huggingface",
+        questions: [
+          {
+            question: "Combien font deux plus deux ?",
+            answer: "Quatre",
+            explanation: "Deux et deux font quatre.",
+          },
+        ],
+      },
+    });
+    const view = render(<QuizForm />);
+    fireEvent.click(screen.getByRole("button", { name: /^Quiz language:/ }));
+    fireEvent.change(screen.getByLabelText("Search languages"), {
+      target: { value: "French" },
+    });
+    fireEvent.change(screen.getByLabelText("Quiz language"), {
+      target: { value: "fr" },
+    });
+    mockAppLocale = "es";
+    view.rerender(<QuizForm />);
+    expect(screen.getByLabelText("Quiz language")).toHaveValue("fr");
+    fireEvent.change(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+      { target: { value: "Arithmetic" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+    await waitFor(() =>
+      expect(publicApi.post).toHaveBeenCalledWith(
+        "/api/get-questions",
+        expect.objectContaining({
+          content_locale: "fr",
+          allow_fallback: false,
+        }),
+      ),
+    );
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    const stored = JSON.parse(sessionStorage.getItem("generated_quiz_view")!);
+    expect(stored.content_locale).toBe("fr");
+    expect(stored.title).toBe("Quiz français");
+    expect(stored.questions[0].explanation).toBe("Deux et deux font quatre.");
+  });
+
+  test("sample fallback requires consent and is disabled for unsupported languages", () => {
+    render(<QuizForm />);
+    const checkbox = screen.getByRole("checkbox", {
+      name: /if AI is unavailable/i,
+    });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /^Quiz language:/ }));
+    fireEvent.change(screen.getByLabelText("Search languages"), {
+      target: { value: "German" },
+    });
+    fireEvent.change(screen.getByLabelText("Quiz language"), {
+      target: { value: "de" },
+    });
+    expect(checkbox).toBeDisabled();
+    expect(checkbox).not.toBeChecked();
+  });
+
+  test.each(["huggingface", "gemini"])(
+    "document generation sends its separate quiz language via %s",
+    async (provider) => {
+      const publicApi = require("@shared/api/publicHttp").default;
+      publicApi.post.mockResolvedValue({
+        data: {
+          title: "Quiz español",
+          content_locale: "es",
+          source: "document-rag",
+          source_document_type: "text",
+          questions: [{ question: "Pregunta", answer: "Respuesta" }],
+        },
+      });
+      render(<QuizForm />);
+      fireEvent.change(screen.getByLabelText("AI provider"), {
+        target: { value: provider },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Quiz language:/ }));
+      fireEvent.change(screen.getByLabelText("Search languages"), {
+        target: { value: "Spanish" },
+      });
+      fireEvent.change(screen.getByLabelText("Quiz language"), {
+        target: { value: "es" },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: /document or pasted text/i }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: /paste text/i }));
+      fireEvent.change(
+        screen.getByPlaceholderText(
+          "Paste lecture notes, textbook excerpts, or study material here.",
+        ),
+        { target: { value: "Some learning material." } },
+      );
+      fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+      await waitFor(() => expect(publicApi.post).toHaveBeenCalled());
+      const [path, payload] = publicApi.post.mock.calls[0];
+      expect(path).toBe("/api/document-quizzes/generate");
+      expect(payload.get("content_locale")).toBe("es");
+      expect(payload.get("ai_provider")).toBe(provider);
+      if (provider === "gemini") expect(payload.has("token")).toBe(false);
+      expect(payload.get("allow_fallback")).toBe("false");
+    },
+  );
+
+  test("Gemini generates Latin independently of app language without exposing HF tokens", async () => {
+    const publicApi = require("@shared/api/publicHttp").default;
+    publicApi.post.mockResolvedValue({
+      data: {
+        content_locale: "la",
+        source: "gemini",
+        title: "Exercitatio",
+        questions: [
+          {
+            question: "Quot sunt duo et duo?",
+            answer: "Quattuor",
+            explanation: "Duo et duo quattuor sunt.",
+          },
+        ],
+      },
+    });
+    render(<QuizForm />);
+    expect(screen.getByLabelText("AI provider")).toHaveValue("huggingface");
+    const tokenInput = screen.getByPlaceholderText("Enter your API token");
+    fireEvent.change(tokenInput, {
+      target: { value: "hf_private_test_token" },
+    });
+    fireEvent.change(screen.getByLabelText("AI provider"), {
+      target: { value: "gemini" },
+    });
+    expect(
+      screen.queryByPlaceholderText("Enter your API token"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Quiz language:/ }));
+    fireEvent.change(screen.getByLabelText("Search languages"), {
+      target: { value: "Latin" },
+    });
+    fireEvent.change(screen.getByLabelText("Quiz language"), {
+      target: { value: "la" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+      { target: { value: "Arithmetic" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+    await waitFor(() =>
+      expect(publicApi.post).toHaveBeenCalledWith(
+        "/api/get-questions",
+        expect.objectContaining({
+          ai_provider: "gemini",
+          content_locale: "la",
+          token: undefined,
+        }),
+      ),
+    );
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(mockPush.mock.calls[0][0]).not.toContain("hf_private");
+    const stored = JSON.parse(sessionStorage.getItem("generated_quiz_view")!);
+    expect(stored.content_locale).toBe("la");
+    expect(stored.source).toBe("gemini");
+  });
+
+  test("provider billing errors explain the failure and allow a different provider", async () => {
+    const publicApi = require("@shared/api/publicHttp").default;
+    publicApi.post.mockRejectedValue({
+      response: {
+        data: { detail: { code: "billing", provider: "Hugging Face" } },
+      },
+    });
+    render(<QuizForm />);
+    fireEvent.change(
+      screen.getByPlaceholderText("Enter the concept/context here"),
+      { target: { value: "Arithmetic" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /generate quiz/i }));
+    expect(
+      await screen.findByText(/Hugging Face requires payment or credits/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("AI provider")).not.toBeDisabled();
+    fireEvent.change(screen.getByLabelText("AI provider"), {
+      target: { value: "gemini" },
+    });
+    expect(screen.getByLabelText("AI provider")).toHaveValue("gemini");
   });
 
   test("generates quiz and redirects to quiz display", async () => {
@@ -458,4 +700,3 @@ describe("QuizForm", () => {
     );
   });
 });
-

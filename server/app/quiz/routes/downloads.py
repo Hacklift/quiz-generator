@@ -58,4 +58,5 @@ async def download_quiz_from_payload_handler(
             for question in payload.questions
         ],
         file_format=payload.format,
+        content_locale=payload.content_locale,
     )

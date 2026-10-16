@@ -39,8 +39,9 @@ const FolderCard: React.FC<FolderCardProps> = ({
         <div>
           <h3 className="font-semibold text-navy-800">{folder.name}</h3>
           <p className="text-sm text-gray-500">
-            {folder.quizzes?.length ?? folder.quiz_count ?? 0}{" "}
-            {uiText("m26bf5c6c71e457df")}
+            {uiText("m55b18220390f39e3", {
+              value0: folder.quizzes?.length ?? folder.quiz_count ?? 0,
+            })}
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-gray-600">

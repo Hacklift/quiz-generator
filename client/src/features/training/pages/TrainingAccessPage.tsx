@@ -10,7 +10,7 @@ import { trainingAccessApi } from "@features/training/api/trainingAccessApi";
 import type { TrainingAccessPreview } from "@features/training/api/trainingRunApi";
 
 export default function TrainingAccessPage({ code }: { code: string }) {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const [preview, setPreview] = useState<TrainingAccessPreview | null>(null);
@@ -24,7 +24,7 @@ export default function TrainingAccessPage({ code }: { code: string }) {
       .then(setPreview)
       .catch(async (error) => {
         toast.error(
-          error?.response?.data?.detail || "Training link unavailable.",
+          error?.response?.data?.detail || uiText("m88b92c7bb40582ca"),
         );
         await router.replace("/");
       });
@@ -46,7 +46,7 @@ export default function TrainingAccessPage({ code }: { code: string }) {
       saveParticipantToken(session.session_id, session.participant_token);
       await router.push(session.redirect_url);
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not start training.");
+      toast.error(error?.response?.data?.detail || uiText("m79ee7655a0b5694c"));
     } finally {
       setIsStarting(false);
     }
@@ -89,7 +89,7 @@ export default function TrainingAccessPage({ code }: { code: string }) {
               <span className="block font-semibold">
                 {uiText("m74c21a6312ede178")}
               </span>
-              {new Date(preview.closes_at).toLocaleDateString()}
+              {new Date(preview.closes_at).toLocaleDateString(i18n.language)}
             </div>
           </div>
           <label className="mt-6 block text-sm font-semibold text-slate-700">

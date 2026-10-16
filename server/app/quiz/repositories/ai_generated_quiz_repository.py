@@ -16,7 +16,11 @@ async def save_ai_generated_quiz(quiz_data: dict):
     try:
         quiz_type = normalize_quiz_type(quiz_data.get("question_type", "multichoice"))
         classification_token = quiz_data.get("token")
-        if not classification_token and quiz_data.get("user_id"):
+        is_sample = quiz_data.get("source") == "seed"
+        # Gemini requests must not depend on HF credentials or send their content
+        # to a second AI service during optional taxonomy classification.
+        use_ai_taxonomy = not is_sample and quiz_data.get("ai_provider") != "gemini"
+        if use_ai_taxonomy and not classification_token and quiz_data.get("user_id"):
             classification_token = await get_user_token(quiz_data["user_id"])
         classification = await classify_quiz_taxonomy(
             quiz_type=quiz_type,
@@ -25,7 +29,7 @@ async def save_ai_generated_quiz(quiz_data: dict):
             custom_instruction=quiz_data.get("custom_instruction"),
             questions=quiz_data.get("questions", []),
             token=classification_token,
-            use_ai=True,
+            use_ai=use_ai_taxonomy,
         )
         taxonomy_fields = classification.to_quiz_fields() if classification else {}
         quiz_document = canonical_service.build_quiz_document(
@@ -33,7 +37,7 @@ async def save_ai_generated_quiz(quiz_data: dict):
             description=quiz_data.get("description"),
             quiz_type=quiz_type,
             owner_user_id=quiz_data.get("user_id"),
-            source="ai",
+            source="seed" if is_sample else "ai",
             questions=quiz_data["questions"],
             tags=taxonomy_fields.get("tags"),
             category=taxonomy_fields.get("category"),

@@ -43,9 +43,10 @@ export default function ParentDashboard() {
             {uiText("me01e39a0c5482ffd")}
           </h2>
           <p className="mt-[7px] text-[14px] text-ink/70">
-            {uiText("mb80e7fa0db25d9f1")}
-            {t("assignment")} {uiText("m75b99b5e3a11e30b")}
-            {t("learner")}.
+            {uiText("mb624bc7bf33cde17", {
+              value0: t("assignment"),
+              value1: t("learner"),
+            })}
           </p>
         </div>
         <Link href="/parent-practice/new" className={BTN_PRIMARY}>
@@ -79,13 +80,17 @@ export default function ParentDashboard() {
                 <div>
                   <p className="font-extrabold">{practice.title}</p>
                   <p className="mt-[4px] text-[13px] text-ink/65">
-                    {practice.completed_count} {uiText("m4ddb3e96801a1ee2")}
-                    {practice.completed_count === 1
-                      ? uiText("mc7ce66d0fb14e3c2")
-                      : uiText("m1ac7d61d1d29fc2e")}
-                    {practice.latest_score != null
-                      ? ` · Latest: ${practice.latest_score}${practice.latest_percentage != null ? ` (${practice.latest_percentage}%)` : ""}`
-                      : ""}
+                    {uiText("m333381569a8afcef", {
+                      value0: practice.completed_count,
+                      value1:
+                        practice.completed_count === 1
+                          ? uiText("mc7ce66d0fb14e3c2")
+                          : uiText("m1ac7d61d1d29fc2e"),
+                      value2:
+                        practice.latest_score != null
+                          ? ` · Latest: ${practice.latest_score}${practice.latest_percentage != null ? ` (${practice.latest_percentage}%)` : ""}`
+                          : "",
+                    })}
                   </p>
                 </div>
                 <Link

@@ -6,6 +6,7 @@ from pydantic import AfterValidator
 
 LANGUAGES = json.loads(Path(__file__).with_name("languages.json").read_text())
 SUPPORTED_LOCALES = frozenset(item["code"] for item in LANGUAGES)
+LANGUAGE_NAMES = {item["code"]: item["name"] for item in LANGUAGES}
 FALLBACK_LOCALES = ("en", "es", "fr")
 DEFAULT_LOCALE = "en"
 

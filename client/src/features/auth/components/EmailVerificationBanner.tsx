@@ -48,7 +48,7 @@ export default function EmailVerificationBanner() {
       // 🔥 IMPORTANT: open modal after resend
       setShowModal(true);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to resend verification email");
+      toast.error(error?.message || uiText("mdfdf0fa4a9f62181"));
     } finally {
       setIsSending(false);
     }
@@ -62,7 +62,7 @@ export default function EmailVerificationBanner() {
       await resendVerification(user.email);
       setShowModal(true);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to send verification email");
+      toast.error(error?.message || uiText("mefda09d8f45d1228"));
     }
   };
 
@@ -84,7 +84,7 @@ export default function EmailVerificationBanner() {
               className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {cooldown > 0
-                ? `Resend (${cooldown}s)`
+                ? uiText("m7a12bdae3df95a90", { value0: cooldown })
                 : isSending
                   ? uiText("m286a3af7348e8312")
                   : uiText("m7c0d0df78303a31d")}

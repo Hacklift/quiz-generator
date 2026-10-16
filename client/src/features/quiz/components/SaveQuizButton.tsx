@@ -12,9 +12,15 @@ import { TokenService } from "@shared/auth/tokenService";
 export default function SaveQuizButton({
   quizData,
   quizId,
+  contentLocale = "en",
+  description,
+  isSample = false,
 }: {
   quizData: any[];
   quizId?: string;
+  contentLocale?: string;
+  description?: string;
+  isSample?: boolean;
 }) {
   const { t: uiText } = useTranslation("ui");
 
@@ -54,6 +60,7 @@ export default function SaveQuizButton({
 
     try {
       const formattedQuestions = quizData.map((q) => ({
+        ...q,
         question: q.question,
         options: q.options || null,
         question_type: q.question_type || q.type || questionType,
@@ -65,6 +72,9 @@ export default function SaveQuizButton({
         formattedQuestions,
         token,
         quizId,
+        contentLocale,
+        description,
+        isSample,
       );
 
       toast.success(uiText("mb0a5634981d45ccf"));

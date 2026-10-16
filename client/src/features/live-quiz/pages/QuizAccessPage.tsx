@@ -25,7 +25,7 @@ const QuizAccessPage = () => {
       await liveQuizService.validateAccessCode(normalizedCode);
       router.push(`/quiz-access/${encodeURIComponent(normalizedCode)}`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Invalid access code.");
+      toast.error(error?.response?.data?.detail || uiText("mff99d07d58ddee45"));
     } finally {
       setIsLoading(false);
     }

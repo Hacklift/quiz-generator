@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from types import SimpleNamespace
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 
@@ -16,7 +18,9 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
-from server.app.quiz.utils.ai_generate import generate_document_quiz_with_rag
+from server.app.quiz.utils.ai_generate import generate_document_quiz_with_rag, generate_document_quiz_with_gemini
+from server.app.quiz.utils.generation_errors import generation_http_error
+from server.app.quiz.mock_data.localized_samples import get_sample_quiz
 from server.app.quiz.utils.chunk_text import split_text_into_chunks
 from server.app.quiz.utils.extract_text import (
     extract_text_from_bytes,
@@ -53,6 +57,7 @@ async def generate_document_quiz(
     audience_type: str = Form(...),
     custom_instruction: str | None = Form(default=None),
     token: str | None = Form(default=None),
+    ai_provider: Literal["huggingface", "gemini"] = Form(default="huggingface"),
     document_title: str | None = Form(default=None),
     document_text: str | None = Form(default=None),
     focus_topic: str | None = Form(default=None),
@@ -61,6 +66,7 @@ async def generate_document_quiz(
     access_code_expires_at: datetime | None = Form(default=None),
     document_file: UploadFile | None = File(default=None),
     content_locale: SupportedLocale | None = Form(default=None),
+    allow_fallback: bool = Form(default=False),
     current_user=Depends(get_current_user_optional),
 ):
     if not document_file and not (document_text and document_text.strip()):
@@ -139,20 +145,22 @@ async def generate_document_quiz(
         )
 
     user_id = str(current_user.id) if current_user else None
-    if current_user:
+    if content_locale is None and current_user:
         content_locale = await resolve_user_effective_locale(
             current_user,
             request.app.state.organizations_collection,
             request.app.state.organization_memberships_collection,
         )
-    else:
-        content_locale = content_locale or DEFAULT_LOCALE
-    if not settings.MULTILINGUAL_ENABLED:
-        content_locale = DEFAULT_LOCALE
+    content_locale = content_locale or DEFAULT_LOCALE
+    if not settings.MULTILINGUAL_ENABLED and content_locale != DEFAULT_LOCALE:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Multilingual generation is temporarily disabled")
     if content_locale != DEFAULT_LOCALE and not settings.MULTILINGUAL_GENERATION_ENABLED:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Multilingual generation is temporarily disabled")
+    is_sample = False
     try:
-        rag_result = await generate_document_quiz_with_rag(
+        generator = generate_document_quiz_with_gemini if ai_provider == "gemini" else generate_document_quiz_with_rag
+        provider_args = {} if ai_provider == "gemini" else {"user_id": user_id, "token": token}
+        rag_result = await generator(
             document=document,
             chunks=chunks,
             question_type=question_type,
@@ -161,17 +169,21 @@ async def generate_document_quiz(
             audience_type=audience_type,
             custom_instruction=custom_instruction,
             focus_topic=focus_topic,
-            user_id=user_id,
-            token=token,
+            **provider_args,
             content_locale=content_locale,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Document quiz generation failed: {str(exc)}",
-        ) from exc
+        if not allow_fallback:
+            raise generation_http_error(exc, ai_provider, status_code=502) from exc
+        sample_quiz = get_sample_quiz(content_locale, question_type, num_questions)
+        is_sample = True
+        rag_result = SimpleNamespace(
+            **{key: sample_quiz[key] for key in ("title", "description", "questions")},
+            retrieved_chunks=[], retrieval_query="", rag_strategy="saved_sample",
+            embedding_cache_hit=False,
+        )
 
     quiz_id = None
     live_access_code = None
@@ -193,12 +205,14 @@ async def generate_document_quiz(
         "difficulty_level": difficulty_level,
         "num_questions": num_questions,
         "audience_type": audience_type,
-        "custom_instruction": custom_instruction
-        or f"Generated from {document.source_document_type.upper()} material.",
-        "token": token,
+        "custom_instruction": None if is_sample else (custom_instruction
+        or f"Generated from {document.source_document_type.upper()} material."),
+        "token": token if ai_provider == "huggingface" else None,
+        "ai_provider": ai_provider,
         "questions": rag_result.questions,
         "user_id": user_id,
         "content_locale": content_locale,
+        "source": "seed" if is_sample else "ai",
     }
 
     try:
@@ -244,7 +258,9 @@ async def generate_document_quiz(
         )
 
     return DocumentQuizResponse(
-        source="document-rag",
+        source="mock" if is_sample else "document-rag",
+        ai_down=is_sample,
+        notification_message=rag_result.description if is_sample else None,
         questions=rag_result.questions,
         title=rag_result.title,
         description=rag_result.description,
@@ -254,9 +270,9 @@ async def generate_document_quiz(
         time_limit_minutes=time_limit_minutes,
         access_code_expires_at=live_access_expires,
         source_document_type=document.source_document_type,
-        source_document_name=document.source_document_name,
-        source_characters=document.source_characters,
-        total_source_chunks=len(chunks),
+        source_document_name="" if is_sample else document.source_document_name,
+        source_characters=0 if is_sample else document.source_characters,
+        total_source_chunks=0 if is_sample else len(chunks),
         retrieved_chunks=len(rag_result.retrieved_chunks),
         retrieval_query=rag_result.retrieval_query,
         rag_strategy=rag_result.rag_strategy,

@@ -292,8 +292,7 @@ export const LiveQuizCreatorDashboard: React.FC<
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {userType === uiText("m1057a9604e04b274") ||
-            userType === uiText("m1ca7aaa322fbe8cd") ? (
+            {userType === "teacher" || userType === "lecturer" ? (
               <div className="flex items-center gap-2">
                 <label htmlFor="results-export-format" className="sr-only">
                   {uiText("mdf339cb8da14714c")}
@@ -430,30 +429,42 @@ export const LiveQuizCreatorDashboard: React.FC<
                           "bg-gray-100 text-gray-700"
                         }`}
                       >
-                        {statusLabel[p.status] || p.status}
+                        {uiText("values." + p.status, {
+                          ns: "translation",
+                          defaultValue: statusLabel[p.status] || p.status,
+                        })}
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                       {p.score != null
-                        ? `${p.score} / ${p.total_questions}${
-                            p.percentage != null
-                              ? ` (${p.percentage.toFixed(1)}%)`
-                              : ""
-                          }`
+                        ? uiText("madaa9869250125f5", {
+                            value0: p.score,
+                            value1: p.total_questions,
+                            value2:
+                              p.percentage != null
+                                ? ` (${p.percentage.toFixed(1)}%)`
+                                : "",
+                          })
                         : "—"}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       {p.progress != null
-                        ? `${p.progress} / ${p.total_questions}${
-                            p.progress_percentage != null
-                              ? ` (${p.progress_percentage.toFixed(1)}%)`
-                              : ""
-                          }`
+                        ? uiText("madaa9869250125f5", {
+                            value0: p.progress,
+                            value1: p.total_questions,
+                            value2:
+                              p.progress_percentage != null
+                                ? ` (${p.progress_percentage.toFixed(1)}%)`
+                                : "",
+                          })
                         : "—"}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                       {p.current_question_number
-                        ? `${p.current_question_number} / ${p.total_questions}`
+                        ? uiText("m1aa16f37888d0a55", {
+                            value0: p.current_question_number,
+                            value1: p.total_questions,
+                          })
                         : "—"}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">

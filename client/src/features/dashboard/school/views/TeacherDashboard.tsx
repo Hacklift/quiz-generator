@@ -71,8 +71,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
           {uiText("mc79ebb88be61c53c")}
         </h2>
         <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-          {uiText("ma5c48069f1c00808")}
-          {t("learner", "plural")} {uiText("ma1dc833185effade")}
+          {uiText("m602e2db461b0cb47", { value0: t("learner", "plural") })}
         </p>
 
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">
@@ -101,8 +100,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
                   value0: preset.title,
                 })}
               >
-                {uiText("m4759498ac2a719c6")}
-                {preset.title}
+                {uiText("m37a7e45e1b49df1f", { value0: preset.title })}
               </button>
             </article>
           ))}
@@ -114,7 +112,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
         aria-labelledby="teacher-results-heading"
       >
         <Kicker>
-          {titleCaseTerm(t("group"))} {uiText("m89c08f7a02989db8")}
+          {uiText("m14ab1f4d77826881", { value0: titleCaseTerm(t("group")) })}
         </Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
@@ -122,11 +120,12 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
               id="teacher-results-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              {titleCaseTerm(t("group"))} {uiText("mf38cdc51b183ae32")}
+              {uiText("mcb1d989e57c3ec8b", {
+                value0: titleCaseTerm(t("group")),
+              })}
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
-              {uiText("m45a3d7f7810b705a")}
-              {t("session", "plural")}.
+              {uiText("md2fec2e9ea36748b", { value0: t("session", "plural") })}
             </p>
           </div>
 
@@ -137,8 +136,7 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
               className={BTN_PRIMARY}
               aria-label={uiText("mc6728d026c2fc4b5", { value0: t("session") })}
             >
-              {uiText("mfbe9628a9380f412")}
-              {t("session")} {uiText("mc099142bc3186ded")}
+              {uiText("mc6728d026c2fc4b5", { value0: t("session") })}
             </button>
             <button
               type="button"
@@ -148,8 +146,9 @@ export default function TeacherDashboard({ persona }: DashboardViewProps) {
                 value0: t("assignment"),
               })}
             >
-              {uiText("ma52ace420f2175d0")}
-              {t("assignment", "plural")}
+              {uiText("mb2899a619eb1f4bb", {
+                value0: t("assignment", "plural"),
+              })}
             </button>
           </div>
         </div>

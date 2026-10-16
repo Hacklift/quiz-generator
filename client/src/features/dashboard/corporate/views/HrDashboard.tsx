@@ -13,11 +13,6 @@ import { personaGenerateHref } from "@shared/config/persona";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
 import { ROUTES } from "@shared/config/patterns/routes";
 
-const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
-    ? `${run.completed_count}/${run.assigned_count} complete`
-    : `${run.completed_count} completed`;
-
 const compliancePresetHref = (
   userType: DashboardViewProps["persona"]["userType"],
   preset: "harassment-prevention" | "health-and-safety",
@@ -42,7 +37,15 @@ const compliancePresetHref = (
 };
 
 export default function HrDashboard({ persona }: DashboardViewProps) {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+
+  const completionLabel = (run: TrainingRunSummary) =>
+    run.assigned_count
+      ? uiText("trainingStatus.progress", {
+          completed: run.completed_count,
+          total: run.assigned_count,
+        })
+      : uiText("trainingStatus.completed", { completed: run.completed_count });
 
   const router = useRouter();
   const t = useTerms();
@@ -71,8 +74,8 @@ export default function HrDashboard({ persona }: DashboardViewProps) {
   }, []);
 
   const presets = [
-    ["harassment-prevention", "Harassment prevention"],
-    ["health-and-safety", "Health & safety"],
+    ["harassment-prevention", uiText("trainingStatus.harassment")],
+    ["health-and-safety", uiText("trainingStatus.safety")],
   ];
 
   return (
@@ -91,9 +94,7 @@ export default function HrDashboard({ persona }: DashboardViewProps) {
               {uiText("me21e2e7fd7635c1c")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              {uiText("mfe47845b26872544")}
-              {t("group", "plural")}
-              {uiText("m585741e0c91e5c69")}
+              {uiText("m7515715d63e370ff", { value0: t("group", "plural") })}
             </p>
           </div>
           <button
@@ -120,8 +121,7 @@ export default function HrDashboard({ persona }: DashboardViewProps) {
                   {title}
                 </h3>
                 <p className="mt-[8px] text-[13.5px] leading-[22px] text-ink/70">
-                  {uiText("ma5c1cd1c9827955c")}
-                  {t("quiz")} {uiText("m3d0dbbe4ab111235")}
+                  {uiText("m30753c8aac022ff3", { value0: t("quiz") })}
                 </p>
               </div>
               <button
@@ -136,8 +136,7 @@ export default function HrDashboard({ persona }: DashboardViewProps) {
                 }
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
               >
-                {uiText("m4759498ac2a719c6")}
-                {title}
+                {uiText("m37a7e45e1b49df1f", { value0: title })}
               </button>
             </article>
           ))}
@@ -196,23 +195,30 @@ export default function HrDashboard({ persona }: DashboardViewProps) {
                   <span className="mt-[3px] block text-[13px] text-ink/65">
                     {run.status === "closed"
                       ? uiText("mca6acc608c0f03c0")
-                      : `Closes ${new Date(run.closes_at).toLocaleDateString()}`}
+                      : uiText("mdb8084b091623bcc", {
+                          value0: new Date(run.closes_at).toLocaleDateString(
+                            i18n.language,
+                          ),
+                        })}
                   </span>
                 </span>
                 <span className="text-[13px] font-extrabold text-ink">
                   {completionLabel(run)}
                 </span>
                 <span className="text-[13px] text-ink/70">
-                  {run.average_score ?? "-"} {uiText("mb04eecaff03bcdd1")}
+                  {uiText("mfff86921b49f612d", {
+                    value0: run.average_score ?? "-",
+                  })}
                 </span>
               </button>
             ))}
           </div>
         ) : (
           <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
-            {uiText("mab071976b5d8b9ee")}
-            {t("quiz")} {uiText("mc16c14aafee426c5")}
-            {t("group", "plural")}.
+            {uiText("ma8efb06992552503", {
+              value0: t("quiz"),
+              value1: t("group", "plural"),
+            })}
           </p>
         )}
       </section>

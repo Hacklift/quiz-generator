@@ -29,7 +29,7 @@ const UpgradePlanButton: React.FC = () => {
         <div className="flex items-center gap-1">
           <span className="text-xl">👑</span>
           <span className="whitespace-nowrap font-semibold">
-            {activePlanConfig.plan} {uiText("mfa8ed0bdabdd6bcb")}
+            {uiText("m3e0e44cf0338ceb7", { value0: activePlanConfig.plan })}
           </span>
         </div>
         <span className="text-[10px] uppercase bg-[#0F6BFF] mx-1 px-1.5 py-0.5 rounded font-bold tracking-wider animate-pulse">

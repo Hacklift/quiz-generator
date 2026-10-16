@@ -44,8 +44,7 @@ const FolderView: React.FC<FolderViewProps> = ({ folder }) => {
 
       {quizzes.length === 0 ? (
         <p className="text-gray-500 text-sm">
-          {uiText("m1ea442a134b2a184")}
-          {t("quiz", "plural")} {uiText("ma6929558a2437d3d")}
+          {uiText("m87aed73466c07f75", { value0: t("quiz", "plural") })}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

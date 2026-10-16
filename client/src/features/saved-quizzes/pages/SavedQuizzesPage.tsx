@@ -55,7 +55,7 @@ const AddToFolderModal = ({
   onClose: () => void;
   selectedQuizIds: string[];
 }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,7 +245,7 @@ const DisplaySavedQuizzesPage: React.FC<{
   onRenameClick: (quizId: string, title: string) => void;
   token: string;
 }> = ({ savedQuizzes, onDeleteClick, onRenameClick, token }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedQuizIds, setSelectedQuizIds] = useState<string[]>([]);
@@ -319,8 +319,7 @@ const DisplaySavedQuizzesPage: React.FC<{
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
-              {uiText("mb5c120b316c237a0")}
-              {t("quiz", "plural")}
+              {uiText("mce0983f3577f5ce9", { value0: t("quiz", "plural") })}
             </h1>
 
             {selectedQuizIds.length > 0 && (
@@ -328,16 +327,16 @@ const DisplaySavedQuizzesPage: React.FC<{
                 onClick={() => setShowAddModal(true)}
                 className="bg-[#0a3264] text-white px-4 py-2 rounded-lg text-sm hover:bg-[#082952]"
               >
-                {uiText("m854dc42e313384c0")}
-                {selectedQuizIds.length})
+                {uiText("m3e84bd33e9ee0e4b", {
+                  value0: selectedQuizIds.length,
+                })}
               </button>
             )}
           </div>
 
           {savedQuizzes.length === 0 ? (
             <p className="text-center text-gray-600">
-              {uiText("m6eebf2005a9f85f1")}
-              {t("quiz", "plural")} {uiText("mf55f49c47f7f8461")}
+              {uiText("m2fa492d6198bfb12", { value0: t("quiz", "plural") })}
             </p>
           ) : (
             savedQuizzes.map((quiz) => (
@@ -356,10 +355,13 @@ const DisplaySavedQuizzesPage: React.FC<{
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <p className="text-sm text-gray-500 mb-2">
-                        {uiText("mc718c27b2007c9fb")}{" "}
-                        {quiz.created_at
-                          ? new Date(quiz.created_at).toLocaleString()
-                          : uiText("mad224bb89c8a3fb6")}
+                        {uiText("m34dcaa4300172f3b", {
+                          value0: quiz.created_at
+                            ? new Date(quiz.created_at).toLocaleString(
+                                i18n.language,
+                              )
+                            : uiText("mad224bb89c8a3fb6"),
+                        })}
                       </p>
                       <h2 className="text-xl font-bold text-[#0F2654]">
                         {quiz.title}
@@ -494,7 +496,7 @@ const DisplaySavedQuizzesPage: React.FC<{
 };
 
 export default function SavedQuizzes() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const { token, isAuthenticated } = useAuth();
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);

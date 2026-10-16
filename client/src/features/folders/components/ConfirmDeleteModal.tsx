@@ -54,7 +54,10 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
         <p className="text-gray-700 mb-6">
           {uiText("m3a57bb9fb3bf7756")}{" "}
           <span className="font-semibold">{selectedItems.length}</span>{" "}
-          {selectedItems.length === 1 ? type : `${type}s`}?
+          {selectedItems.length === 1
+            ? type
+            : uiText("m852fe3718c6cfd72", { value0: type })}
+          ?
         </p>
 
         <div className="flex justify-end space-x-3">

@@ -60,7 +60,7 @@ const DisplayQuizHistoryPage = ({
   quizHistory: QuizHistoryItem[];
   onDelete: (historyId: string) => Promise<void>;
 }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const t = useTerms();
@@ -86,14 +86,14 @@ const DisplayQuizHistoryPage = ({
       <main className="flex-1 px-4 sm:px-6 md:px-8 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
-            {t("quiz").charAt(0).toUpperCase() + t("quiz").slice(1)}{" "}
-            {uiText("m259aa8ef98a8b91d")}
+            {uiText("m0d6eb040a81b42bb", {
+              value0: t("quiz").charAt(0).toUpperCase() + t("quiz").slice(1),
+            })}
           </h1>
 
           {quizHistory.length === 0 ? (
             <p className="text-center text-gray-600">
-              {uiText("m1ea442a134b2a184")}
-              {t("quiz")} {uiText("m3cc26b3aab26708f")}
+              {uiText("m2f0921cb1113e80c", { value0: t("quiz") })}
             </p>
           ) : (
             quizHistory.map((quizItem, idx) => (
@@ -105,10 +105,13 @@ const DisplayQuizHistoryPage = ({
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-500 mb-2">
-                      {uiText("m85f153f51e721d34")}{" "}
-                      {quizItem.created_at
-                        ? new Date(quizItem.created_at).toLocaleString()
-                        : uiText("mad224bb89c8a3fb6")}
+                      {uiText("m9c6202d152243a60", {
+                        value0: quizItem.created_at
+                          ? new Date(quizItem.created_at).toLocaleString(
+                              i18n.language,
+                            )
+                          : uiText("mad224bb89c8a3fb6"),
+                      })}
                     </p>
                     <h2 className="text-lg font-semibold text-[#0F2654]">
                       {quizItem.profession ||
@@ -116,8 +119,11 @@ const DisplayQuizHistoryPage = ({
                         uiText("m7f220de11c1f7c38")}
                     </h2>
                     <p className="text-sm text-gray-600">
-                      {quizItem.question_type} ·{" "}
-                      {quizItem.difficulty_level || "N/A"}
+                      {uiText("values." + quizItem.question_type, {
+                        ns: "translation",
+                        defaultValue: quizItem.question_type,
+                      })}{" "}
+                      · {quizItem.difficulty_level || "N/A"}
                     </p>
                   </div>
 
@@ -280,7 +286,7 @@ export default function DisplayQuizHistory({
 }: {
   openLoginModal: () => void;
 }) {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const { isAuthenticated, isLoading } = useAuth();
   const t = useTerms();
@@ -329,8 +335,7 @@ export default function DisplayQuizHistory({
       <Suspense
         fallback={
           <div className="p-8 text-center">
-            {uiText("mdc380888c4e2c776")}
-            {t("quiz")} {uiText("mc58d3e9d07e97b86")}
+            {uiText("m69df56807e7a5fdc", { value0: t("quiz") })}
           </div>
         }
       >

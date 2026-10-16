@@ -31,7 +31,7 @@ import { useTranslation } from "react-i18next";
 import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 
 export default function ProfilePage() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const { user, isLoading, logout, refreshUser } = useAuth();
   const { persona, definition, categoryDefinition } = usePersona();
@@ -223,7 +223,7 @@ export default function ProfilePage() {
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
-      setSaveError(error.message || "Failed to update profile");
+      setSaveError(error.message || uiText("meeb7276dab30a337"));
     } finally {
       setIsSaving(false);
     }
@@ -243,7 +243,7 @@ export default function ProfilePage() {
       setEmailChangePending(true);
       toast.success(uiText("ma4cfdc73bfcb2671"));
     } catch (error: any) {
-      toast.error(error?.message || "Failed to send verification email.");
+      toast.error(error?.message || uiText("mb780699d95333157"));
     }
   };
 
@@ -260,7 +260,7 @@ export default function ProfilePage() {
       await refreshUser();
       toast.success(uiText("mcad80028698178d3"));
     } catch (error: any) {
-      toast.error(error?.message || "Failed to verify email.");
+      toast.error(error?.message || uiText("m8062a0d1f9c034d9"));
     }
   };
 
@@ -270,7 +270,7 @@ export default function ProfilePage() {
       setShowDeleteConfirm(false);
       await logout();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete account.");
+      toast.error(error?.message || uiText("m83326cc97ff9fac2"));
     }
   };
 
@@ -686,19 +686,27 @@ export default function ProfilePage() {
                           {uiText("m3ac8bbca9a74cfbd")}
                         </p>
                         <h4 className="mt-2 text-lg font-semibold text-[#102347]">
-                          {formatPlanLabel(billingPlan)}{" "}
-                          {uiText("m64879f7d6b960a01")}
+                          {uiText("mb1a74beb41988ef5", {
+                            value0: formatPlanLabel(billingPlan),
+                          })}
                         </h4>
                         <div className="mt-3">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
                           >
-                            {formatStatusLabel(billingStatus)}
+                            {uiText("values." + billingStatus, {
+                              ns: "translation",
+                              defaultValue: formatStatusLabel(billingStatus),
+                            })}
                           </span>
                         </div>
                         <p className="mt-3 text-sm text-gray-600">
                           {billingRenewalDate
-                            ? `Renews on ${new Date(billingRenewalDate).toLocaleDateString()}`
+                            ? uiText("mdad47b1ee9673d16", {
+                                value0: new Date(
+                                  billingRenewalDate,
+                                ).toLocaleDateString(i18n.language),
+                              })
                             : billingPlan === "free"
                               ? uiText("m1d6022df68d719ff")
                               : uiText("m29835dc37c881570")}
@@ -798,22 +806,27 @@ export default function ProfilePage() {
                               {formatPlanLabel(billingPlan)}
                             </h5>
                             <p className="mt-2 text-sm text-gray-600">
-                              {uiText("m755c8b2a9fb11446")}
-                              {formatStatusLabel(billingStatus)}
+                              {uiText("md617370d57781737", {
+                                value0: formatStatusLabel(billingStatus),
+                              })}
                             </p>
                             {billingRenewalDate ? (
                               <p className="mt-1 text-sm text-gray-600">
-                                {uiText("ma59c4e8b7b095f0e")}{" "}
-                                {new Date(
-                                  billingRenewalDate,
-                                ).toLocaleDateString()}
+                                {uiText("mdbafd6547ce2790a", {
+                                  value0: new Date(
+                                    billingRenewalDate,
+                                  ).toLocaleDateString(i18n.language),
+                                })}
                               </p>
                             ) : null}
                           </div>
                           <span
                             className={`inline-flex self-start rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
                           >
-                            {formatStatusLabel(billingStatus)}
+                            {uiText("values." + billingStatus, {
+                              ns: "translation",
+                              defaultValue: formatStatusLabel(billingStatus),
+                            })}
                           </span>
                         </div>
                       </div>

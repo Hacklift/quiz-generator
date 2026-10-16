@@ -14,30 +14,36 @@ import {
 } from "@features/training/api/trainingRunApi";
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 
-const stateLabel = (assignment: TrainingAssignment) => {
-  if (assignment.status === "completed")
-    return `Completed${assignment.latest_percentage != null ? ` · ${assignment.latest_percentage}%` : ""}`;
-  if (!assignment.can_retry && assignment.status === "in_progress")
-    return "Attempt in progress";
-  if (
-    !assignment.can_retry &&
-    new Date(assignment.latest_start_at) < new Date()
-  )
-    return "Start window closed";
-  if (
-    !assignment.can_retry &&
-    assignment.max_attempts != null &&
-    assignment.attempts_used >= assignment.max_attempts
-  )
-    return "Attempts used";
-  if (assignment.is_overdue) return "Overdue";
-  return assignment.due_at
-    ? `Due ${new Date(assignment.due_at).toLocaleString()}`
-    : "No due date";
-};
-
 export default function AssignedTrainingPage() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+
+  const stateLabel = (assignment: TrainingAssignment) => {
+    if (assignment.status === "completed")
+      return assignment.latest_percentage != null
+        ? uiText("trainingStatus.completedScore", {
+            score: assignment.latest_percentage,
+          })
+        : uiText("m22a970d2e5b1cc23");
+    if (!assignment.can_retry && assignment.status === "in_progress")
+      return uiText("trainingStatus.inProgress");
+    if (
+      !assignment.can_retry &&
+      new Date(assignment.latest_start_at) < new Date()
+    )
+      return uiText("trainingStatus.closed");
+    if (
+      !assignment.can_retry &&
+      assignment.max_attempts != null &&
+      assignment.attempts_used >= assignment.max_attempts
+    )
+      return uiText("trainingStatus.used");
+    if (assignment.is_overdue) return uiText("trainingStatus.overdue");
+    return assignment.due_at
+      ? uiText("trainingStatus.due", {
+          date: new Date(assignment.due_at).toLocaleString(i18n.language),
+        })
+      : uiText("trainingStatus.noDue");
+  };
 
   const router = useRouter();
   const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
@@ -49,9 +55,7 @@ export default function AssignedTrainingPage() {
       setIsLoading(true);
       setAssignments(await trainingRunApi.listMyAssignments());
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not load assigned training.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("m97748a727a81fecb"));
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +71,7 @@ export default function AssignedTrainingPage() {
       saveParticipantToken(session.session_id, session.participant_token);
       await router.push(session.redirect_url);
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not start training.");
+      toast.error(error?.response?.data?.detail || uiText("m79ee7655a0b5694c"));
     } finally {
       setStartingId(null);
     }
@@ -127,9 +131,11 @@ export default function AssignedTrainingPage() {
                           {assignment.title}
                         </h2>
                         <p className="mt-[5px] text-[14px] text-ink/70">
-                          {stateLabel(assignment)} · {assignment.attempts_used}/
-                          {assignment.max_attempts ?? "∞"}{" "}
-                          {uiText("mbc99fa508af3e8ba")}
+                          {uiText("m4f181861d0c28630", {
+                            value0: stateLabel(assignment),
+                            value1: assignment.attempts_used,
+                            value2: assignment.max_attempts ?? "∞",
+                          })}
                         </p>
                       </div>
                       {assignment.can_retry ? (

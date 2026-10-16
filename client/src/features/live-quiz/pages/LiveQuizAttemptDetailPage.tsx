@@ -103,7 +103,9 @@ export default function LiveQuizAttemptDetailPage({
                       <div className="flex items-start gap-[12px]">
                         <span
                           aria-label={
-                            answer.is_correct ? "Correct" : "Incorrect"
+                            answer.is_correct
+                              ? uiText("maca01a1a3a27d35c")
+                              : uiText("ma8a57dbc076774bf")
                           }
                           className={`text-[20px] font-extrabold ${answer.is_correct ? "text-green-700" : "text-red-700"}`}
                         >
@@ -111,18 +113,22 @@ export default function LiveQuizAttemptDetailPage({
                         </span>
                         <div>
                           <h3 className="font-extrabold">
-                            {uiText("m289aff12b04274cb")}
-                            {answer.question_index + 1}
+                            {uiText("m11119c8dd099483a", {
+                              value0: answer.question_index + 1,
+                            })}
                           </h3>
                           <p className="mt-[5px]">{answer.question}</p>
                           <p className="mt-[8px] text-[14px] text-ink/70">
-                            {uiText("m23451c00f3856491")}
-                            {answer.selected_answer ||
-                              uiText("m7e49c68db30e39dc")}
+                            {uiText("m730c8df9d6c5f2c6", {
+                              value0:
+                                answer.selected_answer ||
+                                uiText("m7e49c68db30e39dc"),
+                            })}
                           </p>
                           <p className="mt-[3px] text-[14px] text-ink/70">
-                            {uiText("m4d659fb1085d715b")}
-                            {answer.correct_answer}
+                            {uiText("ma76e0be3582eecca", {
+                              value0: answer.correct_answer,
+                            })}
                           </p>
                         </div>
                       </div>

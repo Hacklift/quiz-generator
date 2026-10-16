@@ -5,6 +5,7 @@ import {
   useState,
   useEffect,
   useRef,
+  useId,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -25,6 +26,8 @@ import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
 import { useTerms } from "@features/persona/hooks/useTerms";
 import { useLocale } from "@features/locale/context/localeContext";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
+import { LOCALE_DISPLAY_NAMES } from "@shared/config/locale";
 import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 import {
@@ -37,7 +40,7 @@ import {
 type ApiErrorLike = {
   response?: {
     data?: {
-      detail?: string;
+      detail?: string | { code?: string; provider?: string; message?: string };
     };
   };
   message?: string;
@@ -182,6 +185,9 @@ export default function QuizForm() {
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
   const [token, setToken] = useState("");
+  const [aiProvider, setAiProvider] = useState<"huggingface" | "gemini">(
+    "huggingface",
+  );
   const [previousToken, setPreviousToken] = useState("");
   const [enableLiveQuiz, setEnableLiveQuiz] = useState(false);
   const [liveDurationMinutes, setLiveDurationMinutes] = useState(20);
@@ -201,6 +207,15 @@ export default function QuizForm() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const { locale } = useLocale();
+  const [quizLocaleOverride, setQuizLocaleOverride] = useState<string | null>(
+    null,
+  );
+  const quizLocale = quizLocaleOverride ?? locale;
+  const [languageExpanded, setLanguageExpanded] = useState(false);
+  const languageOptionsId = useId();
+  const [allowSampleFallback, setAllowSampleFallback] = useState(false);
+  const sampleAvailable =
+    ["en", "es", "fr"].includes(quizLocale) && numQuestions <= 10;
   const { roles } = usePersonaCopy();
   const appliedPresetRef = useRef<string | null>(null);
   const touchedGenerationFieldsRef = useRef({
@@ -502,7 +517,7 @@ export default function QuizForm() {
     setLoading(true);
 
     try {
-      if (user && token.trim()) {
+      if (aiProvider === "huggingface" && user && token.trim()) {
         const accessToken = TokenService.getAccessToken();
 
         await api.post(
@@ -526,11 +541,16 @@ export default function QuizForm() {
         payload.append("difficulty_level", difficultyLevel);
         payload.append("audience_type", resolvedAudienceType);
         payload.append("custom_instruction", customInstruction);
-        payload.append("token", token);
+        payload.append("ai_provider", aiProvider);
+        if (aiProvider === "huggingface") payload.append("token", token);
         payload.append("document_title", documentTitle);
         payload.append("focus_topic", profession);
         payload.append("live_quiz_enabled", enableLiveQuiz ? "true" : "false");
-        payload.append("content_locale", locale);
+        payload.append("content_locale", quizLocale);
+        payload.append(
+          "allow_fallback",
+          String(allowSampleFallback && sampleAvailable),
+        );
 
         if (enableLiveQuiz) {
           payload.append("time_limit_minutes", liveDurationMinutes.toString());
@@ -561,6 +581,10 @@ export default function QuizForm() {
           JSON.stringify({
             ...response,
             historyMeta: {
+              content_locale: response.content_locale || quizLocale,
+              title: response.title,
+              description: response.description,
+              is_sample: response.source === "mock",
               quiz_id: response.quiz_id,
               question_type: questionType,
               num_questions: numQuestions,
@@ -605,7 +629,8 @@ export default function QuizForm() {
         custom_instruction: customInstruction,
         audience_type: resolvedAudienceType,
         difficulty_level: difficultyLevel,
-        token,
+        token: aiProvider === "huggingface" ? token : undefined,
+        ai_provider: aiProvider,
         live_quiz_enabled: enableLiveQuiz,
         time_limit_minutes: enableLiveQuiz ? liveDurationMinutes : undefined,
         access_code_expires_at: enableLiveQuiz
@@ -618,7 +643,8 @@ export default function QuizForm() {
         send_email_invitations: enableLiveQuiz
           ? sendEmailInvitations
           : undefined,
-        content_locale: locale,
+        content_locale: quizLocale,
+        allow_fallback: allowSampleFallback && sampleAvailable,
       };
 
       const client =
@@ -635,10 +661,14 @@ export default function QuizForm() {
           const historyResponse = await saveQuizToHistory(
             {
               quiz_id: canonicalQuizId || undefined,
+              content_locale: data?.content_locale || quizLocale,
+              title: data?.title || profession,
+              description: data?.description,
+              is_sample: data?.source === "mock",
               question_type: questionType,
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
-              profession,
+              profession: data?.title || profession,
               audience_type: resolvedAudienceType,
               custom_instruction: customInstruction,
             },
@@ -654,8 +684,11 @@ export default function QuizForm() {
       const generatedQuizView = {
         id: canonicalQuizId || undefined,
         quiz_id: canonicalQuizId || undefined,
-        title: profession || `${questionType} Quiz`,
+        title: data?.title || profession || `${questionType} Quiz`,
+        content_locale: data?.content_locale || quizLocale,
+        source: data?.source,
         description:
+          data?.description ||
           customInstruction ||
           `A ${difficultyLevel} ${questionType} quiz for ${resolvedAudienceType}.`,
         question_type: questionType,
@@ -677,7 +710,6 @@ export default function QuizForm() {
         customInstruction,
         audienceType: resolvedAudienceType,
         difficultyLevel,
-        token,
         liveQuiz: enableLiveQuiz ? "true" : "false",
         liveDurationMinutes: liveDurationMinutes.toString(),
         liveAccessExpiresAt: enableLiveQuiz
@@ -696,10 +728,28 @@ export default function QuizForm() {
       router.push(`/quiz_display?${queryParams}`);
     } catch (error: unknown) {
       const typedError = error as ApiErrorLike;
+      const detail = typedError?.response?.data?.detail;
+      const providerErrorKeys: Record<string, string> = {
+        notConfigured: "quizProvider.notConfigured",
+        credentials: "quizProvider.credentials",
+        billing: "quizProvider.billing",
+        quota: "quizProvider.quota",
+        model: "quizProvider.model",
+        invalidOutput: "quizProvider.invalidOutput",
+        blocked: "quizProvider.blocked",
+        timeout: "quizProvider.timeout",
+        unavailable: "quizProvider.unavailable",
+      };
       setErrorMessage(
-        typedError?.response?.data?.detail ||
+        (typeof detail === "string"
+          ? detail
+          : detail?.code && providerErrorKeys[detail.code]
+            ? uiText(providerErrorKeys[detail.code], {
+                provider: detail.provider || aiProvider,
+              })
+            : detail?.message) ||
           typedError?.message ||
-          "Failed to generate quiz. Please try again.",
+          uiText("m0aacbdeb5c3065b8"),
       );
     } finally {
       setLoading(false);
@@ -765,6 +815,7 @@ export default function QuizForm() {
             setDifficultyLevel,
           )}
           token={token}
+          showTokenInput={aiProvider === "huggingface"}
           setToken={setToken}
           previousToken={previousToken}
         />
@@ -859,6 +910,86 @@ export default function QuizForm() {
               </label>
             </div>
           )}
+        </section>
+
+        <section className="mt-6 rounded-md border border-slate-200 bg-white p-5">
+          <label className="mb-2 block font-medium" htmlFor="quiz-ai-provider">
+            {uiText("quizProvider.title")}
+          </label>
+          <select
+            id="quiz-ai-provider"
+            value={aiProvider}
+            disabled={loading}
+            onChange={(event) =>
+              setAiProvider(event.target.value as "huggingface" | "gemini")
+            }
+            className="mb-2 w-full rounded border border-gray-300 bg-white p-2 text-gray-900"
+          >
+            <option value="huggingface">
+              {uiText("quizProvider.huggingface")}
+            </option>
+            <option value="gemini">{uiText("quizProvider.gemini")}</option>
+          </select>
+          <p className="text-sm text-gray-600">
+            {uiText(
+              aiProvider === "gemini"
+                ? "quizProvider.geminiHelp"
+                : "quizProvider.huggingfaceHelp",
+            )}
+          </p>
+        </section>
+
+        <section className="my-6 rounded-md border border-slate-200 bg-white p-5">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={allowSampleFallback && sampleAvailable}
+              disabled={loading || !sampleAvailable}
+              onChange={(event) => setAllowSampleFallback(event.target.checked)}
+            />
+            <span>{uiText("quizLanguage.allowSample")}</span>
+          </label>
+          <p className="mt-2 text-xs text-gray-600">
+            {uiText("quizLanguage.sampleLimit")}
+          </p>
+          <button
+            type="button"
+            aria-expanded={languageExpanded}
+            aria-controls={languageOptionsId}
+            disabled={loading}
+            onClick={() => setLanguageExpanded((expanded) => !expanded)}
+            className="mt-4 flex w-full items-center justify-between gap-3 rounded border border-slate-300 p-3 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+          >
+            <span>
+              {uiText("quizLanguage.title")}:{" "}
+              {LOCALE_DISPLAY_NAMES[quizLocale] || quizLocale} ({quizLocale})
+            </span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className={`h-5 w-5 shrink-0 transition-transform ${languageExpanded ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <p className="mt-2 text-sm text-gray-600">
+            {uiText("quizLanguage.help")}
+          </p>
+          <div
+            id={languageOptionsId}
+            hidden={!languageExpanded}
+            className="mt-4"
+          >
+            <LanguagePicker
+              value={quizLocale}
+              onChange={setQuizLocaleOverride}
+              disabled={loading}
+              label={uiText("quizLanguage.title")}
+            />
+          </div>
         </section>
 
         {errorMessage && (

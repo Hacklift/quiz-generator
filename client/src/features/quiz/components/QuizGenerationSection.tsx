@@ -37,10 +37,12 @@ export default function QuizGenerationSection({
   token,
   setToken,
   previousToken = "",
+  showTokenInput = true,
 }: QuizGenerationSectionProps & {
   token: string;
   setToken: (val: string) => void;
   previousToken?: string;
+  showTokenInput?: boolean;
 }) {
   const { t: uiText } = useTranslation("ui");
 
@@ -225,14 +227,18 @@ export default function QuizGenerationSection({
                     className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-[#0F2654] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#0a3264]"
                   />
                   <p className="mt-3 text-xs text-gray-500">
-                    {uiText("m1ffa64707f0066b9")}{" "}
-                    {documentUploadMaxBytes.toLocaleString()}{" "}
-                    {uiText("mc40c17fb5a78b29e")}
-                    {formatBytes(documentUploadMaxBytes)}).
+                    {uiText("m240dde20dd3976b1", {
+                      value0: documentUploadMaxBytes.toLocaleString(),
+                      value1: formatBytes(documentUploadMaxBytes),
+                    })}
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
                     {documentFileName
-                      ? `Selected file: ${documentFileName} (${documentFileSizeBytes.toLocaleString()} bytes / ${formatBytes(documentFileSizeBytes)})`
+                      ? uiText("m2d564fc57fa60a92", {
+                          value0: documentFileName,
+                          value1: documentFileSizeBytes.toLocaleString(),
+                          value2: formatBytes(documentFileSizeBytes),
+                        })
                       : uiText("medeb5926f8115ab1")}
                   </p>
                 </div>
@@ -251,9 +257,9 @@ export default function QuizGenerationSection({
                   />
                   <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
                     <span>
-                      {uiText("ma1a5936d3b0f8a69")}
-                      {documentTextLimit.toLocaleString()}{" "}
-                      {uiText("m789ec2b3e81da8c9")}
+                      {uiText("mb3e9ed39ed208a66", {
+                        value0: documentTextLimit.toLocaleString(),
+                      })}
                     </span>
                     <span
                       className={
@@ -288,39 +294,41 @@ export default function QuizGenerationSection({
           )}
         </div>
 
-        <div className="md:col-span-2 relative">
-          <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
-            {uiText("m52e85ebf5fc86938")}
-          </label>
-          <input
-            type="text"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            onFocus={() => setShowSuggestion(true)}
-            onBlur={() => setTimeout(() => setShowSuggestion(false), 150)}
-            placeholder={uiText("maf61075931655199")}
-            className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
-          />
-          {showSuggestion && previousToken && (
-            <div
-              className="absolute w-full mt-1 bg-white border rounded-md shadow z-10 cursor-pointer"
-              onMouseDown={() => {
-                setToken(previousToken);
-                setShowSuggestion(false);
-              }}
-            >
-              <div className="px-4 py-2 hover:bg-gray-100">
-                <p className="text-xs text-gray-500">
-                  {uiText("m488bf65bb224734c")}
-                </p>
-                <p className="text-sm text-gray-700">{previousToken}</p>
+        {showTokenInput && (
+          <div className="md:col-span-2 relative">
+            <label className="block text-sm font-semibold text-[#2C3E50] mb-1">
+              {uiText("m52e85ebf5fc86938")}
+            </label>
+            <input
+              type="text"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              onFocus={() => setShowSuggestion(true)}
+              onBlur={() => setTimeout(() => setShowSuggestion(false), 150)}
+              placeholder={uiText("maf61075931655199")}
+              className="w-full border border-gray-300 rounded-md px-4 py-2 placeholder-gray-400 focus:outline-none focus:ring focus:ring-blue-500"
+            />
+            {showSuggestion && previousToken && (
+              <div
+                className="absolute w-full mt-1 bg-white border rounded-md shadow z-10 cursor-pointer"
+                onMouseDown={() => {
+                  setToken(previousToken);
+                  setShowSuggestion(false);
+                }}
+              >
+                <div className="px-4 py-2 hover:bg-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {uiText("m488bf65bb224734c")}
+                  </p>
+                  <p className="text-sm text-gray-700">{previousToken}</p>
+                </div>
               </div>
-            </div>
-          )}
-          <p className="text-xs text-gray-500 mt-1">
-            {uiText("md1ea04648b55a84b")}
-          </p>
-        </div>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              {uiText("md1ea04648b55a84b")}
+            </p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div>

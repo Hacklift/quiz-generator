@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   LANGUAGES,
@@ -18,30 +18,44 @@ export default function LanguagePicker({
   onChange,
   disabled = false,
   allowOrganizationDefault = false,
+  label,
 }: {
   value: SupportedLocale | null;
   onChange: (locale: SupportedLocale | null) => void;
   disabled?: boolean;
   allowOrganizationDefault?: boolean;
+  label?: string;
 }) {
   const { t, i18n } = useTranslation();
   const id = useId();
   const [query, setQuery] = useState("");
+  const [limit, setLimit] = useState(100);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const names = useMemo(() => {
+    // Node and browsers may ship different Intl/ICU language data. Keep SSR
+    // and the first browser render identical; enrich labels only after mount.
     let display: Intl.DisplayNames | undefined;
-    try {
-      display = new Intl.DisplayNames([i18n.language || "en"], {
-        type: "language",
-      });
-    } catch {}
+    if (hydrated) {
+      try {
+        display = new Intl.DisplayNames([i18n.language || "en"], {
+          type: "language",
+          fallback: "none",
+        });
+      } catch {}
+    }
     return LANGUAGES.map(({ code, name }) => {
       let localized = name;
       let native = LOCALE_DISPLAY_NAMES[code];
       try {
         localized = display?.of(code) || name;
-        native =
-          new Intl.DisplayNames([code], { type: "language" }).of(code) ||
-          native;
+        if (hydrated && code.length === 2) {
+          native =
+            new Intl.DisplayNames([code], {
+              type: "language",
+              fallback: "none",
+            }).of(code) || native;
+        }
       } catch {}
       return {
         code,
@@ -49,14 +63,17 @@ export default function LanguagePicker({
         label: Array.from(new Set([native, localized, name])).join(" · "),
       };
     });
-  }, [i18n.language]);
+  }, [hydrated, i18n.language]);
   const matches = names.filter(({ code, name, label }) =>
     fold(code + " " + name + " " + label).includes(fold(query)),
   );
   const selected = value || "en";
-  const visible = matches.some((x) => x.code === selected)
-    ? matches
-    : [...names.filter((x) => x.code === selected), ...matches];
+  // Keep every registry entry searchable without mounting thousands of DOM
+  // options on every page. More results remain available through pagination.
+  const page = matches.slice(0, limit);
+  const visible = page.some((x) => x.code === selected)
+    ? page
+    : [...names.filter((x) => x.code === selected), ...page];
   return (
     <div className="space-y-2">
       <label className="block font-medium" htmlFor={id + "-search"}>
@@ -67,13 +84,16 @@ export default function LanguagePicker({
         type="search"
         autoComplete="off"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setLimit(100);
+        }}
         disabled={disabled}
         placeholder={t("language.searchPlaceholder")}
         className="w-full rounded border border-gray-300 bg-white p-2 text-gray-900"
       />
       <label className="block font-medium" htmlFor={id}>
-        {t("language.settings")}
+        {label || t("language.settings")}
       </label>
       <select
         id={id}
@@ -98,6 +118,16 @@ export default function LanguagePicker({
           </option>
         ))}
       </select>
+      {matches.length > limit && (
+        <button
+          type="button"
+          disabled={disabled}
+          className="text-sm underline"
+          onClick={() => setLimit((previous) => previous + 100)}
+        >
+          {t("language.more")}
+        </button>
+      )}
       {matches.length === 0 && <p role="status">{t("language.noMatches")}</p>}
       <p className="text-sm text-gray-600">{t("language.coverage")}</p>
     </div>

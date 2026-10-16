@@ -19,17 +19,16 @@ type Filter = "all" | "unread" | "read";
 
 const PAGE_SIZE = 20;
 
-const formatDate = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
 export default function NotificationsPage() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+  const formatDate = (value: string) =>
+    new Date(value).toLocaleString(i18n.language, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -85,7 +84,7 @@ export default function NotificationsPage() {
       );
       setUnreadCount((count) => Math.max(0, count - 1));
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update notification");
+      toast.error(error?.message || uiText("m37d2050c30c759cd"));
     }
   };
 
@@ -97,7 +96,7 @@ export default function NotificationsPage() {
       );
       setUnreadCount(0);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update notifications");
+      toast.error(error?.message || uiText("m1b2dfddce0a20278"));
     }
   };
 
@@ -110,7 +109,7 @@ export default function NotificationsPage() {
       const data = await getNotifications({ limit: 1, skip: 0 });
       setUnreadCount(data.unread_count);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete notification");
+      toast.error(error?.message || uiText("m9e1b899111485aea"));
     }
   };
 
@@ -119,7 +118,7 @@ export default function NotificationsPage() {
       setIsLoadingMore(true);
       await loadNotifications(notifications.length);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to load more notifications");
+      toast.error(error?.message || uiText("m651427484b4b6b05"));
     } finally {
       setIsLoadingMore(false);
     }
@@ -141,8 +140,10 @@ export default function NotificationsPage() {
                   {uiText("m788011833a5a0f22")}
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  {unreadCount} {uiText("m197674f294c4feca")}
-                  {unreadCount === 1 ? "" : "s"}
+                  {uiText("m6767c3f240fd64b6", {
+                    value0: unreadCount,
+                    value1: unreadCount === 1 ? "" : "s",
+                  })}
                 </p>
               </div>
               <button

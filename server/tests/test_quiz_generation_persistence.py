@@ -40,6 +40,7 @@ async def test_authenticated_get_questions_persists_fallback_quiz(monkeypatch):
             difficulty_level="medium",
             audience_type="students",
             custom_instruction="",
+            allow_fallback=True,
         ),
         user_id="user-1",
     )
@@ -173,7 +174,7 @@ async def test_identical_generated_content_is_scoped_to_owner():
 
 
 @pytest.mark.asyncio
-async def test_content_fingerprint_remains_compatible_with_content_only_algorithm():
+async def test_content_fingerprint_includes_content_language_not_owner():
     service = CanonicalQuizWriteService(FingerprintRepository())
     common = {
         "title": "Compatibility Quiz",
@@ -189,6 +190,7 @@ async def test_content_fingerprint_remains_compatible_with_content_only_algorith
     }
     document = service.build_quiz_document(**common, owner_user_id="parent-1")
     expected_payload = {
+        "content_locale": "en",
         "title": "Compatibility Quiz",
         "description": "Existing fingerprint format",
         "quiz_type": "multichoice",

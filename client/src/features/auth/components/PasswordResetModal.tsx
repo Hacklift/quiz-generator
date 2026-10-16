@@ -262,7 +262,9 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                         {resendLoading
                           ? uiText("m286a3af7348e8312")
                           : resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
+                            ? uiText("me209a9f157acf253", {
+                                value0: resendCooldown,
+                              })
                             : uiText("m6747ac5ba6564a3e")}
                       </button>
                     </div>

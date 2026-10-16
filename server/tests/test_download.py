@@ -15,7 +15,7 @@ from io import BytesIO
 
 from server.app.quiz.routes.downloads import download_quiz_handler
 from server.app.quiz.routes.downloads import download_quiz_from_payload_handler
-from server.main import limiter
+from server.app.core.rate_limiter import limiter
 from server.app.quiz.schemas.download_schemas import DownloadQuizRequestModel
 from server.app.quiz.schemas.download_query import DownloadQuizQuery
 

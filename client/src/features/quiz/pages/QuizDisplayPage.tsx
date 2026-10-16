@@ -58,6 +58,8 @@ const QuizDisplayPage: React.FC = () => {
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
+  const [contentLocale, setContentLocale] = useState("en");
+  const [isSample, setIsSample] = useState(false);
   const [activeQuestionType, setActiveQuestionType] = useState(questionType);
   const [documentContext, setDocumentContext] =
     useState<DocumentContext | null>(null);
@@ -114,6 +116,12 @@ const QuizDisplayPage: React.FC = () => {
             `${resolvedQuestionType.charAt(0).toUpperCase() + resolvedQuestionType.slice(1)} Quiz`,
         );
         setQuizDescription(quizData?.description || "");
+        setContentLocale(quizData?.content_locale || "en");
+        setIsSample(
+          quizData?.source === "mock" ||
+            quizData?.source === "seed" ||
+            Boolean(quizData?.is_sample),
+        );
         setActiveQuestionType(resolvedQuestionType);
         setQuizQuestions(normalizedQuestions);
         setUserAnswers(Array(normalizedQuestions.length).fill(""));
@@ -173,7 +181,7 @@ const QuizDisplayPage: React.FC = () => {
               quiz_id: parsedGeneratedQuiz?.quiz_id || canonicalQuizId || "",
             },
             {
-              successMessage: "Loaded generated quiz successfully!",
+              successMessage: uiText("m32f1e027de0581d1"),
             },
           );
 
@@ -225,7 +233,7 @@ const QuizDisplayPage: React.FC = () => {
             throw new Error("Generated quiz data is unavailable.");
           }
           applyQuizData(JSON.parse(generatedQuiz), {
-            successMessage: "Loaded generated quiz successfully!",
+            successMessage: uiText("m32f1e027de0581d1"),
           });
           setIsLoading(false);
           return;
@@ -235,7 +243,9 @@ const QuizDisplayPage: React.FC = () => {
         if (storedQuiz) {
           const parsedQuiz = JSON.parse(storedQuiz);
           applyQuizData(parsedQuiz, {
-            successMessage: `Loaded saved quiz: ${parsedQuiz.title || "Quiz"}`,
+            successMessage: uiText("m76b3f66d1734c81c", {
+              value0: parsedQuiz.title || "Quiz",
+            }),
             clearSavedLocal: true,
           });
           setIsLoading(false);
@@ -245,7 +255,7 @@ const QuizDisplayPage: React.FC = () => {
         if (savedQuizId) {
           const { data } = await api.get(`/api/saved-quizzes/${savedQuizId}`);
           applyQuizData(data, {
-            successMessage: "Loaded saved quiz successfully!",
+            successMessage: uiText("m41ffeb4437dbf378"),
           });
           setIsLoading(false);
           return;
@@ -254,7 +264,7 @@ const QuizDisplayPage: React.FC = () => {
         if (canonicalQuizId) {
           const { data } = await api.get(`/api/quizzes/${canonicalQuizId}`);
           applyQuizData(data, {
-            successMessage: "Loaded quiz successfully!",
+            successMessage: uiText("ma292cb6f259baec8"),
           });
           setIsLoading(false);
           return;
@@ -263,7 +273,7 @@ const QuizDisplayPage: React.FC = () => {
         throw new Error("Quiz data is unavailable.");
       } catch (error: any) {
         console.error("Failed to fetch quiz questions:", error);
-        toast.error(error.message || "Failed to load quiz questions.");
+        toast.error(error.message || uiText("me0e03c8d1ea999f1"));
         setQuizQuestions([]);
         setUserAnswers([]);
       } finally {
@@ -362,7 +372,11 @@ const QuizDisplayPage: React.FC = () => {
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
               {quizTitle ||
-                `${activeQuestionType.charAt(0).toUpperCase() + activeQuestionType.slice(1)} Quiz`}
+                uiText("ma116d0610309824c", {
+                  value0:
+                    activeQuestionType.charAt(0).toUpperCase() +
+                    activeQuestionType.slice(1),
+                })}
             </h1>
             {quizDescription && (
               <p className="mb-6 text-sm leading-6 text-slate-600">
@@ -416,7 +430,15 @@ const QuizDisplayPage: React.FC = () => {
               </div>
             )}
 
-            <div className="space-y-6">
+            {isSample && (
+              <p
+                role="status"
+                className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-amber-900"
+              >
+                {uiText("quizLanguage.sampleNotice")}
+              </p>
+            )}
+            <div className="space-y-6" lang={contentLocale}>
               {quizQuestions.map((q, i) => (
                 <div
                   key={i}
@@ -439,7 +461,13 @@ const QuizDisplayPage: React.FC = () => {
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
               {!isQuizChecked && <CheckButton onClick={checkAnswers} />}
-              <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
+              <SaveQuizButton
+                quizData={quizQuestions}
+                quizId={quizId}
+                contentLocale={contentLocale}
+                description={quizDescription}
+                isSample={isSample}
+              />
               <DownloadQuizButton
                 quizId={quizId}
                 question_type={activeQuestionType}
@@ -447,6 +475,7 @@ const QuizDisplayPage: React.FC = () => {
                 quizData={quizQuestions}
                 title={quizTitle}
                 description={quizDescription}
+                contentLocale={contentLocale}
               />
               <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}

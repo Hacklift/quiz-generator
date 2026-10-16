@@ -14,13 +14,6 @@ import {
 import { BTN_GHOST, BTN_PRIMARY, CONTAINER, Kicker } from "@shared/ui/quizwerk";
 import { ROUTES } from "@shared/config/patterns/routes";
 
-const displayDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleString() : "-";
-const completionLabel = (run: TrainingRunDetail) =>
-  run.assigned_count
-    ? `${run.completed_count}/${run.assigned_count} recipients`
-    : `${run.completed_count} completed`;
-
 export default function TrainingRunDetailPage({ runId }: { runId: string }) {
   return (
     <RequireTrainingManager>
@@ -30,7 +23,16 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
 }
 
 function TrainingRunDetailContent({ runId }: { runId: string }) {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+  const displayDate = (value?: string | null) =>
+    value ? new Date(value).toLocaleString(i18n.language) : "-";
+  const completionLabel = (run: TrainingRunDetail) =>
+    run.assigned_count
+      ? uiText("trainingStatus.progress", {
+          completed: run.completed_count,
+          total: run.assigned_count,
+        })
+      : uiText("trainingStatus.completed", { completed: run.completed_count });
 
   const router = useRouter();
   const [run, setRun] = useState<TrainingRunDetail | null>(null);
@@ -43,9 +45,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
       setIsLoading(true);
       setRun(await trainingRunApi.getRun(runId));
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not load training run.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("mefceef08ef8afec1"));
       await router.replace(ROUTES.TRAINING_RUNS);
     } finally {
       setIsLoading(false);
@@ -64,9 +64,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
       toast.success(uiText("m439630ff2e802e9b"));
       await load();
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not close training run.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("mb76c8a0f87a68e1f"));
     } finally {
       setIsClosing(false);
     }
@@ -94,7 +92,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
           <>
             <header className="border-b-2 border-divider pb-[28px]">
               <Kicker>
-                {run.kind === uiText("m29a3e14798aa2363")
+                {run.kind === "compliance"
                   ? uiText("md2ceb6861bc8f61a")
                   : uiText("m81759aa27185516e")}
               </Kicker>
@@ -104,9 +102,13 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
                     {run.title}
                   </h1>
                   <p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">
-                    {run.status === uiText("mc3eefb58d7c42440")
-                      ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.`
-                      : `Open until ${displayDate(run.closes_at)}.`}
+                    {run.status === "closed"
+                      ? uiText("me9b5c6f6798d1823", {
+                          value0: displayDate(run.closed_at),
+                        })
+                      : uiText("m2218f697e1af1a91", {
+                          value0: displayDate(run.closes_at),
+                        })}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-[12px]">
@@ -117,7 +119,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
                   >
                     {uiText("m33866ac35e69f8f5")}
                   </button>
-                  {run.status === uiText("m2348f99874421257") && (
+                  {run.status === "open" && (
                     <button
                       type="button"
                       disabled={isClosing}
@@ -176,7 +178,9 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
                           </td>
                           <td className="px-[14px] py-[12px]">
                             {row.latest_percentage != null
-                              ? `${row.latest_percentage}%`
+                              ? uiText("mcdffc1a8fa98567b", {
+                                  value0: row.latest_percentage,
+                                })
                               : "-"}
                           </td>
                           <td className="px-[14px] py-[12px]">
@@ -214,7 +218,9 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
                       {uiText("m4fc52a3c4c558b51")}
                     </dt>
                     <dd className="mt-[3px] text-ink/70">
-                      {run.time_limit_minutes} {uiText("m90e63d85fa1ab2c8")}
+                      {uiText("ma1542e3b3232eb95", {
+                        value0: run.time_limit_minutes,
+                      })}
                     </dd>
                   </div>
                   <div>
@@ -238,13 +244,13 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
                       {uiText("mec5ba0abb717da87")}
                     </dt>
                     <dd className="mt-[3px] text-ink/70">
-                      {run.access_mode === uiText("mefa1f375d76194fa")
+                      {run.access_mode === "public"
                         ? uiText("m8e99b2dff44ebdd4")
                         : uiText("m6d31fe05362dec7d")}
                     </dd>
                   </div>
                 </dl>
-                {run.access_mode === uiText("mefa1f375d76194fa") && (
+                {run.access_mode === "public" && (
                   <button
                     type="button"
                     onClick={() => void copyLink()}

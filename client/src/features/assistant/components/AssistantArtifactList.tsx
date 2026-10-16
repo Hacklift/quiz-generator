@@ -131,7 +131,9 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
         }
         className="text-xs font-semibold text-blue-700 transition hover:text-blue-900"
       >
-        {isExpanded ? uiText("m94ea9b1d33a02975") : `Show all ${total}`}
+        {isExpanded
+          ? uiText("m94ea9b1d33a02975")
+          : uiText("m923d54ae6cdd3b7c", { value0: total })}
       </button>
     );
   };
@@ -228,7 +230,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
       toast.error(
         typedError?.response?.data?.detail ||
           typedError?.message ||
-          "Failed to download quiz.",
+          uiText("mb2ad305270562bf5"),
       );
       setDownloadState(artifactKey, {
         status: "failed",
@@ -382,7 +384,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
               {isDownloading
                 ? uiText("m757726036c1c068c")
                 : downloadState?.status === "failed"
-                  ? `Retry download (${attempts}/${maxRetries})`
+                  ? uiText("mf8df14d6bd2d226f", {
+                      value0: attempts,
+                      value1: maxRetries,
+                    })
                   : label}
             </button>
           );

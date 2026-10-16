@@ -21,6 +21,7 @@ from server.app.quiz.repositories.document_rag_repository import (
 from server.app.quiz.repositories.token_repository import get_user_token
 from server.app.quiz.utils.chunk_text import TextChunk
 from server.app.quiz.utils.extract_text import ExtractedDocument
+from server.app.quiz.utils.gemini_generation import generate_gemini_quiz
 
 
 @dataclass
@@ -427,3 +428,22 @@ async def generate_document_quiz_with_rag(
         rag_strategy="persistent_embedding_mmr",
         embedding_cache_hit=embedding_cache_hit,
     )
+
+
+async def generate_document_quiz_with_gemini(
+    *, document: ExtractedDocument, chunks: list[TextChunk], question_type: str,
+    num_questions: int, difficulty_level: str, audience_type: str,
+    custom_instruction: str | None, focus_topic: str | None, content_locale: str,
+) -> DocumentQuizGenerationResult:
+    # Bounded source context requires no HF embedding API/key. Report this
+    # strategy accurately rather than claiming embedding retrieval was used.
+    selected = [RetrievedChunk(chunk=chunk, score=1.0) for chunk in chunks[:settings.DOCUMENT_RAG_MAX_CHUNKS]]
+    prompt = _build_generation_prompt(document=document, retrieved_chunks=selected,
+        question_type=question_type, num_questions=num_questions, difficulty_level=difficulty_level,
+        audience_type=audience_type, custom_instruction=custom_instruction, content_locale=content_locale)
+    prompt += "\nFocus topic (data): " + json.dumps(focus_topic or "")
+    payload = await generate_gemini_quiz(prompt, locale=content_locale,
+        question_type=_normalize_question_type(question_type), count=num_questions)
+    return DocumentQuizGenerationResult(title=payload["title"], description=payload["description"],
+        retrieval_query=focus_topic or "", retrieved_chunks=selected, questions=payload["questions"],
+        rag_strategy="bounded_document_context", embedding_cache_hit=False)

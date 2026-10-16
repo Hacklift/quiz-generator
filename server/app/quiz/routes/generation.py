@@ -39,17 +39,16 @@ async def get_quiz(
 
     payload.num_questions = validate_generation_question_count(payload.num_questions)
 
-    if not settings.MULTILINGUAL_ENABLED:
-        payload.content_locale = DEFAULT_LOCALE
-
-    if current_user:
+    if payload.content_locale is None and current_user:
         payload.content_locale = await resolve_user_effective_locale(
             current_user,
             request.app.state.organizations_collection,
             request.app.state.organization_memberships_collection,
         )
-    else:
-        payload.content_locale = payload.content_locale or DEFAULT_LOCALE
+    payload.content_locale = payload.content_locale or DEFAULT_LOCALE
+
+    if not settings.MULTILINGUAL_ENABLED and payload.content_locale != DEFAULT_LOCALE:
+        raise HTTPException(status_code=503, detail="Multilingual generation is temporarily disabled")
 
     if payload.content_locale != DEFAULT_LOCALE and not settings.MULTILINGUAL_GENERATION_ENABLED:
         raise HTTPException(status_code=503, detail="Multilingual generation is temporarily disabled")

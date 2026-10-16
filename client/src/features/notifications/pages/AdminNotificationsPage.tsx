@@ -89,7 +89,7 @@ export default function AdminNotificationsPage() {
       toast.error(
         error?.response?.data?.detail ||
           error?.message ||
-          "Failed to create notification",
+          uiText("m4ccbe37d857fd13c"),
       );
     } finally {
       setIsSubmitting(false);

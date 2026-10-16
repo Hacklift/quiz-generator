@@ -1,11 +1,12 @@
-"""Optional translation-provider adapter used by review workers, never page renders."""
+"""Server-side provider for registered UI catalogs and reviewer drafts."""
 from typing import Any
 import json
+import asyncio
 
 import httpx
 
 from server.app.core.config import settings
-from server.app.i18n.locales import SupportedLocale
+from server.app.i18n.locales import SupportedLocale, LANGUAGE_NAMES
 
 
 class TranslationProviderError(RuntimeError):
@@ -15,7 +16,7 @@ class TranslationProviderError(RuntimeError):
 async def translate_messages(messages: dict[str, str], *, locale: str) -> dict[str, str]:
     """Translate registered public UI messages as a batch, preserving machine keys."""
     instruction = (
-        "Translate the following JSON object's string VALUES into language code " + locale + ". "
+        "Translate the following JSON object's string VALUES into " + LANGUAGE_NAMES.get(locale, locale) + " (language code " + locale + "). "
         "Return ONLY a JSON object with exactly the same keys. Preserve every {{placeholder}} "
         "verbatim. Use a friendly, clear educational tone, suitable for school and workplace learners. "
         "Keep Quizwerk, product names, URLs, file formats, code and numbers unchanged. "
@@ -82,8 +83,12 @@ async def _generate(context: str, *, target_locale: str, json_output: bool = Fal
         headers = {"Authorization": f"Bearer {api_key}"}
     try:
         async with httpx.AsyncClient(timeout=settings.TRANSLATION_PROVIDER_TIMEOUT_SECONDS) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
+            for attempt in range(3):
+                response = await client.post(url, json=payload, headers=headers)
+                if response.status_code not in {429, 502, 503, 504} or attempt == 2:
+                    response.raise_for_status()
+                    break
+                await asyncio.sleep(2 ** attempt)
             result = response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise TranslationProviderError("Translation provider request failed") from exc

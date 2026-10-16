@@ -24,6 +24,7 @@ interface LocaleContextValue {
   preferredLocale: SupportedLocale | null;
   translationStatus?: "loading" | "ready" | "unavailable";
   setPreferredLocale: (locale: SupportedLocale | null) => Promise<void>;
+  previewGuestLocale?: (locale: SupportedLocale) => void;
 }
 
 const LocaleContext = createContext<LocaleContextValue | undefined>(undefined);
@@ -94,14 +95,30 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     [refreshUser, user],
   );
 
+  // Signup previews must not turn an organization default into an explicit
+  // personal preference or write to an already signed-in user's profile.
+  const previewGuestLocale = useCallback(
+    (next: SupportedLocale) => {
+      if (!user && isSupportedLocale(next)) setGuestLocale(next);
+    },
+    [user],
+  );
+
   const value = useMemo(
     () => ({
       locale,
       translationStatus,
       preferredLocale: user?.preferred_locale ?? null,
       setPreferredLocale,
+      previewGuestLocale,
     }),
-    [locale, translationStatus, setPreferredLocale, user?.preferred_locale],
+    [
+      locale,
+      translationStatus,
+      setPreferredLocale,
+      previewGuestLocale,
+      user?.preferred_locale,
+    ],
   );
 
   return (

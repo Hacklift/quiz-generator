@@ -7,6 +7,9 @@ import { EMAIL_REGEX, PASSWORD_REGEX } from "@shared/config/patterns/patterns";
 import { useRouter } from "next/router";
 import { ROUTES } from "@shared/config/patterns/routes";
 import VerifyEmailModal from "./VerifyEmailModal";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
+import { useSignupLanguage } from "@features/auth/hooks/useSignupLanguage";
+import { LANGUAGES, LOCALE_DISPLAY_NAMES } from "@shared/config/locale";
 
 interface ExtendedSignUpModalProps extends SignUpModalProps {
   onSuccess?: () => void;
@@ -19,8 +22,10 @@ export default function SignUpModal({
   onSuccess,
 }: ExtendedSignUpModalProps) {
   const { t: uiText } = useTranslation("ui");
+  const { t: authText } = useTranslation();
 
   const router = useRouter();
+  const signupLanguage = useSignupLanguage(isOpen);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -52,18 +57,17 @@ export default function SignUpModal({
   useEffect(() => {
     const newErrors: Record<string, string> = {};
     if (username && username.length < 3)
-      newErrors.username = "Username must be at least 3 characters.";
+      newErrors.username = authText("auth.username");
     if (fullName && fullName.length < 3)
-      newErrors.fullName = "Full name must be at least 3 characters.";
+      newErrors.fullName = authText("auth.fullName");
     if (email && !EMAIL_REGEX.test(email))
-      newErrors.email = "Please enter a valid email address.";
+      newErrors.email = authText("auth.email");
     if (password && !PASSWORD_REGEX.test(password))
-      newErrors.password =
-        "Password must be at least 8 characters long, include a number, a letter, and a special character.";
+      newErrors.password = authText("auth.password");
     if (confirmPassword && password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match.";
+      newErrors.confirmPassword = authText("auth.passwordMatch");
     setErrors(newErrors);
-  }, [username, fullName, email, password, confirmPassword]);
+  }, [username, fullName, email, password, confirmPassword, authText]);
 
   useEffect(() => {
     if (!password) {
@@ -85,7 +89,12 @@ export default function SignUpModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (Object.keys(errors).length > 0) return;
+    if (
+      Object.keys(errors).length > 0 ||
+      signupLanguage.checkingInvitation ||
+      signupLanguage.invitationError
+    )
+      return;
     try {
       setLoading(true);
       await registerUser({
@@ -93,6 +102,9 @@ export default function SignUpModal({
         email,
         full_name: fullName,
         password,
+        preferred_locale: signupLanguage.preference,
+        organization_invitation_token:
+          signupLanguage.invitationToken || undefined,
       });
       setRegisteredEmail(email);
       setShowVerifyModal(true);
@@ -105,7 +117,7 @@ export default function SignUpModal({
       setPasswordStrength("");
     } catch (error: any) {
       setErrors({
-        global: error?.message || "Registration failed. Please try again.",
+        global: error?.message || authText("auth.registrationFailed"),
       });
     } finally {
       setLoading(false);
@@ -162,6 +174,51 @@ export default function SignUpModal({
           )}
 
           <form onSubmit={handleSubmit}>
+            <section className="mb-6 rounded border border-gray-200 p-3">
+              {signupLanguage.invitation && (
+                <p className="mb-3 text-sm">
+                  {authText("language.signupOrganization", {
+                    organization: signupLanguage.invitation.name,
+                    language:
+                      LOCALE_DISPLAY_NAMES[
+                        signupLanguage.invitation.default_locale
+                      ] ||
+                      LANGUAGES.find(
+                        (item) =>
+                          item.code ===
+                          signupLanguage.invitation?.default_locale,
+                      )?.name ||
+                      signupLanguage.invitation.default_locale,
+                  })}
+                </p>
+              )}
+              {signupLanguage.checkingInvitation && (
+                <p role="status">{authText("language.checkingInvitation")}</p>
+              )}
+              {signupLanguage.invitationError && (
+                <p role="alert" className="text-red-600">
+                  {authText("language.invitationError")}
+                </p>
+              )}
+              <LanguagePicker
+                value={
+                  signupLanguage.invitation
+                    ? signupLanguage.preference
+                    : signupLanguage.preference || "en"
+                }
+                onChange={signupLanguage.chooseLanguage}
+                allowOrganizationDefault={Boolean(signupLanguage.invitation)}
+                disabled={
+                  loading ||
+                  signupLanguage.checkingInvitation ||
+                  signupLanguage.invitationError
+                }
+                label={authText("language.signupLabel")}
+              />
+              <p className="mt-2 text-xs text-gray-600">
+                {authText("language.signupHelp")}
+              </p>
+            </section>
             <div className="mb-4">
               <label
                 className="block text-sm font-medium mb-2"
@@ -258,8 +315,11 @@ export default function SignUpModal({
               )}
               {password && (
                 <p className={`text-sm mt-1 ${getStrengthColor()}`}>
-                  {uiText("m6b456dc799c1b057")}
-                  {passwordStrength}
+                  {uiText("md7c97ff70026de77", {
+                    value0: passwordStrength
+                      ? authText("auth." + passwordStrength)
+                      : "",
+                  })}
                 </p>
               )}
             </div>
@@ -298,7 +358,12 @@ export default function SignUpModal({
 
             <button
               type="submit"
-              disabled={loading || Object.keys(errors).length > 0}
+              disabled={
+                loading ||
+                signupLanguage.checkingInvitation ||
+                signupLanguage.invitationError ||
+                Object.keys(errors).length > 0
+              }
               className="w-full bg-[#143E6F] text-white py-2 rounded-md font-medium mb-6 disabled:opacity-50 hover:bg-[#0f2f54] transition-colors"
             >
               {loading

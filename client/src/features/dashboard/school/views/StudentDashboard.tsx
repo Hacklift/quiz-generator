@@ -55,9 +55,10 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
               {uiText("me57c11eda5f86c44")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              {uiText("m548df4d924484b2e")}
-              {t("assignment")} {uiText("me4b9b1a66a4d2b8c")}
-              {t("report")} {uiText("m32aa8e95de5cd4fe")}
+              {uiText("mdc742e72c239c50f", {
+                value0: t("assignment"),
+                value1: t("report"),
+              })}
             </p>
           </div>
 
@@ -82,12 +83,10 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
               {uiText("m0e76960093379060")}
             </p>
             <p className="text-[15px] font-extrabold text-ink">
-              {uiText("m8ed6791bdf3d61a1")}
-              {t("report")} {uiText("m259aa8ef98a8b91d")}
+              {uiText("mb71c498fac1d5339", { value0: t("report") })}
             </p>
             <p className="text-[13.5px] leading-[20px] text-ink/70">
-              {uiText("md1a6b2216eee1350")}
-              {t("assignment")} {uiText("m27a1718736f75bf6")}
+              {uiText("m081d71b1aa17d679", { value0: t("assignment") })}
             </p>
           </button>
 
@@ -151,8 +150,7 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
                   value0: preset.title,
                 })}
               >
-                {uiText("m4759498ac2a719c6")}
-                {preset.title}
+                {uiText("m37a7e45e1b49df1f", { value0: preset.title })}
               </button>
             </article>
           ))}
@@ -170,12 +168,10 @@ export default function StudentDashboard({ persona }: DashboardViewProps) {
               id="student-live-heading"
               className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
             >
-              {uiText("me7a4b61ebfd289ed")}
-              {t("session")}?
+              {uiText("m685866fd1f176bb7", { value0: t("session") })}
             </h2>
             <p className="mt-[6px] max-w-[56ch] text-[14.5px] leading-[24px] text-ink/70">
-              {uiText("mf0fb6ea0a110a927")}
-              {t("session")} {uiText("mf718aee0b49bbf2b")}
+              {uiText("m42df97b56efda9c8", { value0: t("session") })}
             </p>
           </div>
 

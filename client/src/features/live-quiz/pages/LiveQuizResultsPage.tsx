@@ -16,7 +16,7 @@ interface LiveQuizResultsPageProps {
 const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
   sessionId,
 }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const [session, setSession] = useState<LiveQuizSessionState | null>(null);
@@ -33,7 +33,9 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
           data.status === "submitted" && router.query.completed === "1",
         );
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Could not load results.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mce260d10b53215d0"),
+        );
       } finally {
         setIsLoading(false);
       }
@@ -97,7 +99,7 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
                   {uiText("m2290bea1f250b3fc")}
                 </span>
                 <span className="text-right text-slate-900">
-                  {new Date(session.submitted_at).toLocaleString()}
+                  {new Date(session.submitted_at).toLocaleString(i18n.language)}
                 </span>
               </div>
             )}

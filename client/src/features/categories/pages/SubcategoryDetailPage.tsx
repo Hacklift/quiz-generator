@@ -117,8 +117,7 @@ export default function SubcategoryDetailPage() {
           href={`/categories/${encodeURIComponent(categorySlug)}`}
           className="text-sm font-semibold text-blue-700 hover:text-blue-900"
         >
-          {uiText("mcd9182ceab27df65")}
-          {categoryLabel}
+          {uiText("m65b66ce0636cdba4", { value0: categoryLabel })}
         </Link>
         <div className="mb-8 mt-4">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
@@ -190,8 +189,7 @@ export default function SubcategoryDetailPage() {
                 {uiText("ma57b08a480b822a0")}
               </button>
               <span className="text-sm text-slate-500">
-                {uiText("m0a30a815d67d7dd2")}
-                {page}
+                {uiText("ma371c8ce7255a8c1", { value0: page })}
               </span>
               <button
                 type="button"

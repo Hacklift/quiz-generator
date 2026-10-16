@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@features/auth/context/authContext";
 import { useLocale } from "@features/locale/context/localeContext";
@@ -10,6 +10,13 @@ export default function LanguageOnboarding() {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [selection, setSelection] = useState<string | null | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    setSelection(undefined);
+    setError(false);
+  }, [user?.id]);
   if (isLoading || !user || user.language_selected || user.preferred_locale)
     return null;
   const save = async (next: string | null) => {
@@ -35,8 +42,14 @@ export default function LanguageOnboarding() {
           {t("language.welcome")}
         </h1>
         <LanguagePicker
-          value={preferredLocale ?? locale}
-          onChange={(next) => void save(next)}
+          value={
+            selection === undefined
+              ? user.onboarding_organization_id
+                ? preferredLocale
+                : (preferredLocale ?? locale)
+              : selection
+          }
+          onChange={setSelection}
           disabled={busy}
           allowOrganizationDefault={Boolean(user.onboarding_organization_id)}
         />
@@ -45,7 +58,13 @@ export default function LanguageOnboarding() {
           disabled={busy}
           className="rounded bg-blue-900 px-4 py-2 text-white"
           onClick={() =>
-            void save(user.onboarding_organization_id ? null : locale)
+            void save(
+              selection === undefined
+                ? user.onboarding_organization_id
+                  ? null
+                  : locale
+                : selection,
+            )
           }
         >
           {t("language.continue")}

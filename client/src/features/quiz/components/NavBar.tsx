@@ -1,5 +1,7 @@
 "use client";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import fallbackI18n from "@features/locale/i18n";
 
 import React, { useState } from "react";
 import { useRouter } from "next/router";
@@ -35,27 +37,48 @@ type NavItem = {
   authOnly?: boolean;
 };
 
-export function navigationItems(): NavItem[] {
+export function navigationItems(
+  translate: (key: string) => string = (key) => fallbackI18n.t(key),
+): NavItem[] {
   return [
-    { kind: "link", label: "Home", href: "/" },
-    { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "link", label: "Categories", href: ROUTES.CATEGORIES },
-    { kind: "link", label: "Pricing", href: "/#pricing" },
+    { kind: "link", label: translate("nav.home"), href: "/" },
+    {
+      kind: "link",
+      label: translate("nav.dashboard"),
+      href: "/dashboard",
+      authOnly: true,
+    },
+    {
+      kind: "link",
+      label: translate("nav.categories"),
+      href: ROUTES.CATEGORIES,
+    },
+    { kind: "link", label: translate("nav.pricing"), href: "/#pricing" },
   ];
 }
 
-function mobileWorkspaceLinks(t: TerminologyResolver) {
+function mobileWorkspaceLinks(t: TerminologyResolver, translate: TFunction) {
   return [
-    { label: "My Profile", href: "/profile" },
-    { label: `Saved ${t("quiz", "plural")}`, href: "/saved_quiz" },
-    { label: `Popular ${t("quiz", "plural")}`, href: "/popular" },
-    { label: "Folders", href: "/folders" },
-    { label: `${titleCaseTerm(t("quiz"))} history`, href: "/quiz_history" },
+    { label: translate("nav.profile"), href: "/profile" },
+    {
+      label: translate("nav.saved", { items: t("quiz", "plural") }),
+      href: "/saved_quiz",
+    },
+    {
+      label: translate("nav.popular", { items: t("quiz", "plural") }),
+      href: "/popular",
+    },
+    { label: translate("nav.folders"), href: "/folders" },
+    {
+      label: translate("nav.history", { items: titleCaseTerm(t("quiz")) }),
+      href: "/quiz_history",
+    },
   ];
 }
 
 const NavBar: React.FC = () => {
   const { t: uiText } = useTranslation("ui");
+  const { t: navText } = useTranslation();
 
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -87,10 +110,10 @@ const NavBar: React.FC = () => {
     return router.pathname === href;
   };
 
-  const visibleItems = navigationItems().filter(
+  const visibleItems = navigationItems(navText).filter(
     (item) => !("authOnly" in item && item.authOnly) || isAuthenticated,
   );
-  const workspaceLinks = mobileWorkspaceLinks(t);
+  const workspaceLinks = mobileWorkspaceLinks(t, navText);
 
   return (
     <div className={archivo.className}>
@@ -228,8 +251,9 @@ const NavBar: React.FC = () => {
                 {isAuthenticated ? (
                   <>
                     <span className="text-center text-[15px] text-ink">
-                      {uiText("mbc50944723f01460")}
-                      {user?.username || uiText("mb512d97e7cbf97c2")}
+                      {uiText("m4d075782cd3c2a6d", {
+                        value0: user?.username || uiText("mb512d97e7cbf97c2"),
+                      })}
                     </span>
                     <div className="flex justify-center">
                       <NotificationBell />

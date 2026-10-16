@@ -31,7 +31,7 @@ const ShareEmailModal = ({
         recipient_email: recipientEmail,
       });
       setStatus({ message: response.data.message, success: true });
-      toast.success(response.data.message || "Email sent successfully.");
+      toast.success(response.data.message || uiText("m9806937bdad8a8fc"));
       setRecipientEmail("");
     } catch (error: any) {
       const errorMessage =

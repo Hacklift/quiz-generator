@@ -14,16 +14,15 @@ import {
   NotificationItem,
 } from "@features/notifications/api/notificationsApi";
 
-const formatNotificationDate = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
 const NotificationBell = () => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
+  const formatNotificationDate = (value: string) =>
+    new Date(value).toLocaleString(i18n.language, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
 
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -96,7 +95,7 @@ const NotificationBell = () => {
       );
       await loadNotifications();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete notification");
+      toast.error(error?.message || uiText("m9e1b899111485aea"));
     }
   };
 
@@ -108,7 +107,7 @@ const NotificationBell = () => {
       );
       setUnreadCount(0);
     } catch (error: any) {
-      toast.error(error?.message || "Failed to update notifications");
+      toast.error(error?.message || uiText("m1b2dfddce0a20278"));
     }
   };
 

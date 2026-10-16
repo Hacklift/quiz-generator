@@ -94,7 +94,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         setIsLoading(true);
         await loadSession();
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Could not load session.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mfe89c934c84a3eec"),
+        );
         router.replace("/quiz-access");
       } finally {
         setIsLoading(false);
@@ -141,7 +143,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
           return;
         }
         setIsTimerStopped(false);
-        toast.error(error?.response?.data?.detail || "Could not submit quiz.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mb95377e1b3efea6d"),
+        );
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
@@ -199,7 +203,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
       await saveCurrentAnswer(nextQuestionIndex);
       await loadSession();
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not save answer.");
+      toast.error(error?.response?.data?.detail || uiText("m11608bfcd31e86bb"));
     }
   };
 
@@ -214,9 +218,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         answer,
       );
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not autosave answer.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("me2bb7b5228eb6a86"));
     }
   };
 

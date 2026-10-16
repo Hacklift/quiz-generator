@@ -23,7 +23,7 @@ const LiveQuizLayout: React.FC<LiveQuizLayoutProps> = ({
   remainingSeconds,
   children,
 }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8">
       <div className="mx-auto max-w-3xl">
@@ -32,26 +32,28 @@ const LiveQuizLayout: React.FC<LiveQuizLayoutProps> = ({
             <div>
               <h1 className="text-2xl font-bold text-[#0F2654]">{title}</h1>
               <p className="mt-2 text-sm text-slate-600">
-                {uiText("m289aff12b04274cb")}
-                {currentQuestion} {uiText("m28391d3bc64ec15c")}
-                {totalQuestions}
+                {uiText("md2e1ff01ef5ae201", {
+                  value0: currentQuestion,
+                  value1: totalQuestions,
+                })}
               </p>
               {participantName && (
                 <p className="mt-1 text-sm text-slate-500">
-                  {uiText("m94bb7f748e8e6dc8")}
-                  {participantName}
+                  {uiText("m741bdf58a758dc01", { value0: participantName })}
                 </p>
               )}
               {startedAt && (
                 <p className="mt-1 text-xs text-slate-500">
-                  {uiText("mc1c86661d27f92f7")}
-                  {new Date(startedAt).toLocaleTimeString()}
+                  {uiText("ma32cf4f0849fc1f4", {
+                    value0: new Date(startedAt).toLocaleTimeString(
+                      i18n.language,
+                    ),
+                  })}
                 </p>
               )}
               {timeLimitMinutes && (
                 <p className="mt-1 text-xs text-slate-500">
-                  {uiText("ma0447166be423d1a")}
-                  {timeLimitMinutes} {uiText("m90e63d85fa1ab2c8")}
+                  {uiText("m64843b676fb4950a", { value0: timeLimitMinutes })}
                 </p>
               )}
             </div>

@@ -1,10 +1,11 @@
 import logging
-import random
 from fastapi import HTTPException
 from typing import Dict
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.utils.huggingface_utils import generate_quiz_with_huggingface
-from server.app.quiz.utils.mock_quiz_generator import get_mock_questions_by_type
+from server.app.quiz.utils.gemini_generation import generate_topic_quiz_with_gemini
+from server.app.quiz.utils.generation_errors import generation_http_error
+from server.app.quiz.mock_data.localized_samples import get_sample_quiz
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
 from server.app.db.core.connection import (
     get_live_quiz_invitations_collection,
@@ -56,7 +57,8 @@ async def get_questions(
         "num_questions": request.num_questions,
         "audience_type": request.audience_type,
         "custom_instruction": request.custom_instruction,
-        "token": request.token,
+        "token": request.token if request.ai_provider == "huggingface" else None,
+        "ai_provider": request.ai_provider,
         "user_id": user_id,
         "content_locale": request.content_locale or "en",
     }
@@ -66,21 +68,24 @@ async def get_questions(
         if user_id:
             ai_payload["user_id"] = user_id
 
-        response = await generate_quiz_with_huggingface(ai_payload)
+        if request.ai_provider == "gemini":
+            response = await generate_topic_quiz_with_gemini(ai_payload)
+        else:
+            response = await generate_quiz_with_huggingface(ai_payload)
         questions = response.get("questions") if response else None
 
         if not questions or (isinstance(questions, dict) and "error" in questions):
 
-            raise ValueError("Invalid Hugging Face response")
+            raise ValueError("Invalid quiz provider response")
 
         if len(questions) < request.num_questions:
-            raise ValueError("Not enough questions returned by Hugging Face")
+            raise ValueError("Not enough questions returned by the quiz provider")
 
         final_questions = questions[:request.num_questions]
 
         for q in final_questions:
             q["question_type"] = request.question_type
-        source = "huggingface"
+        source = request.ai_provider
         generated_title = response.get("title") or request.profession
         generated_description = response.get("description")
 
@@ -93,33 +98,16 @@ async def get_questions(
         }
 
     except Exception as e:
-        if not request.allow_fallback or (request.content_locale or "en") != "en":
-            logging.warning(f"Quiz generation failed with fallback disabled: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail="Practice generation is temporarily unavailable. Please try again.",
-            )
+        if not request.allow_fallback:
+            logging.warning("Quiz generation failed with fallback disabled: %s", type(e).__name__)
+            raise generation_http_error(e, request.ai_provider) from e
         ai_down = True
-        notification_message = "AI model is currently unavailable. Using mock questions instead."
-        logging.warning(f"Hugging Face fallback triggered: {e}")
-
-        mock_data = get_mock_questions_by_type(request.question_type, request.num_questions)
-
-        if not mock_data:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No mock data for question type: {request.question_type}"
-            )
-
-        if request.num_questions > len(mock_data):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Requested {request.num_questions} but only {len(mock_data)} available."
-            )
-
-        final_questions = random.sample(mock_data, request.num_questions)
-        for q in final_questions:
-            q["question_type"] = request.question_type
+        sample_quiz = get_sample_quiz(request.content_locale or "en", request.question_type, request.num_questions)
+        generated_title = sample_quiz["title"]
+        generated_description = sample_quiz["description"]
+        notification_message = generated_description
+        final_questions = sample_quiz["questions"]
+        ai_quiz_payload = {**base_quiz_payload, **sample_quiz, "source": "seed", "profession": generated_title, "custom_instruction": None}
         source = "mock"
 
     if user_id:
@@ -239,5 +227,5 @@ async def get_questions(
         "content_locale": request.content_locale or "en",
     }
 
-    logging.warning(f"Final API Response: {result}")
+    logging.info("Quiz response locale=%s source=%s count=%s", result["content_locale"], source, len(final_questions))
     return result

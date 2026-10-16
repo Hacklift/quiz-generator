@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import ts from 'typescript';
 const messages = JSON.parse(fs.readFileSync('src/features/locale/messages/ui.en.json', 'utf8'));
 const changes = {};
-const props = new Set(['label','title','description','subtitle','heading','copy','quote','who','cta','microlabel','unit','emptyMessage','loadingText','placeholder','aria-label','alt','helperText']);
+const props = new Set(['label','title','description','subtitle','heading','copy','quote','who','cta','microlabel','unit','emptyMessage','loadingText','placeholder','aria-label','alt','helperText','successMessage']);
 const isText = s => /[a-zA-Z]{2}/.test(s) && !/^(https?:|\/[^ ]|#|@)/.test(s);
 const walk = (n, f) => { f(n); ts.forEachChild(n, c => walk(c,f)); };
 const owner = n => { for(let p=n.parent;p;p=p.parent) if(ts.isFunctionDeclaration(p)||ts.isArrowFunction(p)||ts.isFunctionExpression(p)) {
@@ -58,6 +58,11 @@ for(const file of [...files('src'),...files('pages')]) {
    if(!ts.isStringLiteral(n)&&!ts.isNoSubstitutionTemplateLiteral(n)&&!ts.isTemplateExpression(n))return;
    const p=n.parent;
    let display=ts.isPropertyAssignment(p)&&props.has(p.name.getText(ast).replaceAll('"',''));
+   let ancestor=p;
+   while(ancestor&&(ts.isConditionalExpression(ancestor)||ts.isParenthesizedExpression(ancestor)||
+     (ts.isBinaryExpression(ancestor)&&['||','??'].includes(ancestor.operatorToken.getText(ast)))))ancestor=ancestor.parent;
+   if(ancestor&&ts.isJsxExpression(ancestor)&&(!ts.isJsxAttribute(ancestor.parent)||props.has(ancestor.parent.name.text)))display=true;
+   if(ancestor&&ts.isCallExpression(ancestor)&&/^(setError|setSaveError|setBillingError|setErrorMessage|toast\.(success|error|loading))$/.test(ancestor.expression.getText(ast)))display=true;
    if(ts.isArrayLiteralExpression(p)&&ts.isPropertyAssignment(p.parent)&&['features','benefits'].includes(p.parent.name.getText(ast)))display=true;
    if(ts.isJsxExpression(p)&&ts.isJsxAttribute(p.parent)&&props.has(p.parent.name.text))display=true;
    if(ts.isCallExpression(p)&&/^(setError|setSaveError|setBillingError|setErrorMessage|toast\.(success|error|loading))$/.test(p.expression.getText(ast)))display=true;

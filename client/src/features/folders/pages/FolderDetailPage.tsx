@@ -19,7 +19,7 @@ import RequireAuth from "@features/auth/components/RequireAuth";
 const getFolderItemId = (quiz: any) => quiz?.id || "";
 
 const FolderView = () => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const { folderId } = router.query;
@@ -99,14 +99,14 @@ const FolderView = () => {
   };
 
   const formatDate = (date: string) => {
-    if (!date) return "Date unavailable";
+    if (!date) return uiText("mad224bb89c8a3fb6");
     const parsed = new Date(date);
     return isNaN(parsed.getTime())
-      ? "Date unavailable"
-      : parsed.toLocaleDateString();
+      ? uiText("mad224bb89c8a3fb6")
+      : parsed.toLocaleDateString(i18n.language);
   };
 
-  const getQuizTitle = (quiz: any) => quiz.title || "Untitled Quiz";
+  const getQuizTitle = (quiz: any) => quiz.title || uiText("m96c2c6ca09471b4d");
   const getQuizQuestions = (quiz: any) =>
     quiz.questions || quiz.quiz_data?.questions || [];
 
@@ -142,8 +142,10 @@ const FolderView = () => {
                 {folder.name}
               </h2>
               <p className="text-sm text-gray-500">
-                {folder.quizzes?.length || 0} {uiText("m5f8786de01ef878f")}{" "}
-                {formatDate(folder.created_at)}
+                {uiText("mb6cc77afda6a9d8f", {
+                  value0: folder.quizzes?.length || 0,
+                  value1: formatDate(folder.created_at),
+                })}
               </p>
             </header>
 
@@ -163,8 +165,9 @@ const FolderView = () => {
                         {getQuizTitle(quiz)}
                       </h3>
                       <p className="text-sm text-gray-500 mb-2">
-                        {uiText("m9d1b90f8d8566816")}
-                        {formatDate(quiz.added_on || quiz.created_at)}
+                        {uiText("me17e189f84ccfd31", {
+                          value0: formatDate(quiz.added_on || quiz.created_at),
+                        })}
                       </p>
 
                       <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md border">

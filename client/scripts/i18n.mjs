@@ -11,7 +11,7 @@ import ts from "typescript";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const directory = path.join(root, "src/features/locale/messages");
-const namespaces = { translation: "", persona: "persona." };
+const namespaces = { translation: "", persona: "persona.", ui: "ui." };
 const locales = ["en", "es", "fr"];
 const errors = [];
 const flatten = (object, prefix = "") =>
@@ -148,7 +148,10 @@ if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
-if (process.argv.includes("--extract")) {
+if (process.argv.includes("--server-catalogs")) {
+  const [namespace, locale] = (process.argv[3] || "").split(":");
+  console.log(JSON.stringify(namespace ? catalogs[namespace][locale] : catalogs));
+} else if (process.argv.includes("--extract")) {
   const messages = Object.entries(catalogs).flatMap(
     ([namespace, translations]) =>
       Object.entries(translations.en).map(([key, source]) => ({

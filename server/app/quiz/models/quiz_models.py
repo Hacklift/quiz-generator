@@ -23,13 +23,14 @@ class QuizRequest(BaseModel):
 
     custom_instruction: Optional[str] = None
     token: Optional[str] = None
+    ai_provider: Literal["huggingface", "gemini"] = "huggingface"
     live_quiz_enabled: bool = False
     time_limit_minutes: Optional[int] = Field(default=None, gt=0, le=1440)
     access_code_expires_at: Optional[datetime] = None
     participant_access_mode: Literal["public", "restricted", "invited_only"] = "public"
     invited_emails: List[str] = []
     send_email_invitations: bool = False
-    allow_fallback: bool = True
+    allow_fallback: bool = False
     content_locale: Optional[SupportedLocale] = None
 
 

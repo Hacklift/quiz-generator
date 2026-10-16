@@ -16,7 +16,7 @@ interface QuizAccessPreviewPageProps {
 const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
   code,
 }) => {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const [preview, setPreview] = useState<LiveQuizPreview | null>(null);
@@ -32,7 +32,7 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
         setPreview(await liveQuizService.validateAccessCode(code));
       } catch (error: any) {
         toast.error(
-          error?.response?.data?.detail || "Access code unavailable.",
+          error?.response?.data?.detail || uiText("m2fc2cdbdf512778e"),
         );
         router.replace("/quiz-access");
       } finally {
@@ -58,7 +58,7 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
       });
       router.push(session.redirect_url);
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not start quiz.");
+      toast.error(error?.response?.data?.detail || uiText("m0ede35f0530479d8"));
     } finally {
       setIsStarting(false);
     }
@@ -103,7 +103,9 @@ const QuizAccessPreviewPage: React.FC<QuizAccessPreviewPageProps> = ({
               <span className="block font-semibold">
                 {uiText("m40a35cf6c6bf5fdc")}
               </span>
-              {new Date(preview.access_code_expires_at).toLocaleDateString()}
+              {new Date(preview.access_code_expires_at).toLocaleDateString(
+                i18n.language,
+              )}
             </div>
           </div>
 

@@ -109,8 +109,7 @@ const FoldersPage = () => {
             <div className="text-center text-gray-500 mt-20">
               <p>{uiText("md890b00a67442bf0")}</p>
               <p className="text-sm">
-                {uiText("ma8963583bf4f8d4b")}
-                {t("quiz", "plural")}.
+                {uiText("m928dc722df5c09ea", { value0: t("quiz", "plural") })}
               </p>
             </div>
           ) : (

@@ -62,15 +62,14 @@ const LiveQuizAccessCodePanel: React.FC<LiveQuizAccessCodePanelProps> = ({
         response.invitations_queued || response.invitations_delivered;
       toast.success(
         response.invitations_created
-          ? `Live quiz ready. ${sentCount} invitation email(s) ${
-              response.invitations_queued ? "queued" : "delivered"
-            }.`
-          : "Live quiz access code generated.",
+          ? uiText("m468dfa9c2346e729", {
+              value0: sentCount,
+              value1: response.invitations_queued ? "queued" : "delivered",
+            })
+          : uiText("m6ed7dfe45a7f1573"),
       );
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not generate access code.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("m1a351ea3a241cfd5"));
     } finally {
       setIsLoading(false);
     }

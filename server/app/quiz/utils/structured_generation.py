@@ -6,7 +6,7 @@ Invalid model output fails closed instead of silently changing an answer.
 import json
 from typing import Any
 
-from server.app.i18n.locales import SUPPORTED_LOCALES
+from server.app.i18n.locales import SUPPORTED_LOCALES, LANGUAGE_NAMES
 
 BOOLEAN_LABELS = {"en": ("True", "False"), "es": ("Verdadero", "Falso"), "fr": ("Vrai", "Faux")}
 QUESTION_TYPES = {"multichoice", "true-false", "short-answer", "open-ended"}
@@ -15,7 +15,7 @@ QUESTION_TYPES = {"multichoice", "true-false", "short-answer", "open-ended"}
 def output_instructions(locale: str, question_type: str, count: int) -> str:
     if locale not in SUPPORTED_LOCALES or question_type not in QUESTION_TYPES:
         raise ValueError("Unsupported generation locale or question type")
-    return f"""Write the title, description, question text, option text, answer text, and explanations in locale `{locale}`.
+    return f"""Write the title, description, question text, option text, answer text, and explanations in locale `{locale}` ({LANGUAGE_NAMES[locale]}).
 Return ONLY a JSON object, never Markdown. Keep JSON keys in English.
 Schema: {{"content_locale": "{locale}", "title": "localized title", "description": "localized summary",
 "questions": [{{"question": "localized text", "explanation": "localized explanation",

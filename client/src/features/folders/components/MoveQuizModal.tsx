@@ -128,8 +128,9 @@ const MoveQuizModal: React.FC<MoveQuizModalProps> = ({
                   >
                     <p className="font-medium text-navy-700">{folder.name}</p>
                     <p className="text-xs text-gray-500">
-                      {folder.quizzes?.length || 0}{" "}
-                      {uiText("m26bf5c6c71e457df")}
+                      {uiText("m55b18220390f39e3", {
+                        value0: folder.quizzes?.length || 0,
+                      })}
                     </p>
                   </div>
                 ))}

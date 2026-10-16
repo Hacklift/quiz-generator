@@ -41,7 +41,7 @@ interface QuizHistoryItem {
 }
 
 export default function QuizHistoryDetailsPage() {
-  const { t: uiText } = useTranslation("ui");
+  const { t: uiText, i18n } = useTranslation("ui");
 
   const router = useRouter();
   const { historyId } = router.query;
@@ -98,22 +98,24 @@ export default function QuizHistoryDetailsPage() {
                     uiText("m7f220de11c1f7c38")}
                 </h1>
                 <p className="text-sm text-gray-500 mb-1">
-                  {uiText("m85f153f51e721d34")}{" "}
-                  {item.created_at
-                    ? new Date(item.created_at).toLocaleString()
-                    : uiText("mad224bb89c8a3fb6")}
+                  {uiText("m9c6202d152243a60", {
+                    value0: item.created_at
+                      ? new Date(item.created_at).toLocaleString(i18n.language)
+                      : uiText("mad224bb89c8a3fb6"),
+                  })}
                 </p>
                 <p className="text-sm text-gray-600 mb-1">
-                  {uiText("m00a459a7be7f506d")}
-                  {item.question_type}
+                  {uiText("mdc464c09652e9cfa", { value0: item.question_type })}
                 </p>
                 <p className="text-sm text-gray-600 mb-1">
-                  {uiText("m0554e44e82a9708d")}
-                  {item.difficulty_level || "N/A"}
+                  {uiText("m267b4ad34fab6998", {
+                    value0: item.difficulty_level || "N/A",
+                  })}
                 </p>
                 <p className="text-sm text-gray-600 mb-4">
-                  {uiText("m08a4cca03a3c53bb")}
-                  {item.audience_type || "N/A"}
+                  {uiText("m51a72b670a0103e3", {
+                    value0: item.audience_type || "N/A",
+                  })}
                 </p>
                 {item.live_quiz_enabled && item.quiz_id && (
                   <div className="mb-6">

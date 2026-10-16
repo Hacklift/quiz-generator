@@ -1,5 +1,6 @@
 import logging
 import re
+from urllib.parse import quote
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -14,6 +15,7 @@ from server.app.quiz.utils.generate_docx import generate_docx
 from server.app.quiz.utils.generate_json import generate_json
 from server.app.quiz.utils.generate_pdf import generate_pdf
 from server.app.quiz.utils.generate_txt import generate_txt
+from server.app.quiz.utils.export_labels import LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,13 @@ def build_download_filename(title: str | None, file_format: str) -> str:
     safe_name = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", base_name)
     safe_name = re.sub(r"\s+", " ", safe_name).strip() or "Quiz"
     return f"{safe_name}.{file_format}"
+
+
+def _content_disposition(filename: str) -> str:
+    if filename.isascii():
+        return f'attachment; filename="{filename}"'
+    fallback = filename.encode("ascii", "ignore").decode() or "quiz"
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename)}'
 
 
 def _build_default_title(question_type: str | None) -> str:
@@ -55,6 +64,7 @@ def _normalize_questions_for_download(questions: list[dict]) -> list[dict]:
                 "question": question.get("question"),
                 "options": normalized_options,
                 "answer": question.get("answer") or question.get("correct_answer"),
+                "explanation": question.get("explanation"),
             }
         )
     return normalized_questions
@@ -66,9 +76,11 @@ def _build_download_payload(
     description: str | None,
     quiz_type: str | None,
     questions: list[dict],
+    content_locale: str = "en",
 ) -> dict:
     return {
-        "title": title or _build_default_title(quiz_type),
+        "title": title or (LABELS[content_locale]["title"] if content_locale in {"es", "fr"} else _build_default_title(quiz_type)),
+        "content_locale": content_locale,
         "description": description,
         "quiz_type": quiz_type,
         "questions": _normalize_questions_for_download(questions),
@@ -116,7 +128,7 @@ def download_mock_quiz(format: str, question_type: str, num_question: int) -> St
 
     response.headers.update(
         {
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": _content_disposition(filename)
         }
     )
     return response
@@ -129,6 +141,7 @@ def download_quiz_from_payload(
     quiz_type: str | None,
     questions: list[dict],
     file_format: str,
+    content_locale: str = "en",
 ) -> StreamingResponse:
     if not questions:
         raise HTTPException(status_code=400, detail="Quiz payload contains no questions")
@@ -138,12 +151,13 @@ def download_quiz_from_payload(
         description=description,
         quiz_type=quiz_type,
         questions=questions,
+        content_locale=content_locale,
     )
     response = _render_download_stream(payload, file_format)
     filename = build_download_filename(payload["title"], file_format)
     response.headers.update(
         {
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": _content_disposition(filename)
         }
     )
     return response
@@ -176,6 +190,7 @@ async def download_quiz_by_id(
             description=quiz_doc.get("description"),
             quiz_type=quiz_doc.get("quiz_type"),
             questions=quiz_doc.get("questions", []),
+            content_locale=quiz_doc.get("content_locale") or "en",
         )
 
     if not quiz_doc:
@@ -204,7 +219,7 @@ async def download_quiz_by_id(
     filename = build_download_filename(payload["title"], file_format)
     response.headers.update(
         {
-            "Content-Disposition": f'attachment; filename="{filename}"'
+            "Content-Disposition": _content_disposition(filename)
         }
     )
     return response

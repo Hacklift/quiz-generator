@@ -67,9 +67,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
       const data = await liveQuizService.listLiveQuizzes();
       setQuizzes(data);
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not load live quizzes.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("mde02d96b3b3b172b"));
     } finally {
       setIsLoading(false);
     }
@@ -101,11 +99,11 @@ export const MyLiveQuizzesPage: React.FC = () => {
       });
       setQuizToGenerateFor(null);
       await loadLiveQuizzes();
-      toast.success(`Access code ${response.access_code} generated.`);
-    } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not generate access code.",
+      toast.success(
+        uiText("me69e4744cb001c89", { value0: response.access_code }),
       );
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || uiText("m1a351ea3a241cfd5"));
     } finally {
       setIsGenerating(false);
     }
@@ -218,8 +216,11 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                 {quiz.access_code}
                               </p>
                               <p className="text-xs text-slate-500">
-                                {uiText("mf6725f3af08a06a2")}{" "}
-                                {formatDateTime(quiz.access_code_expires_at)}
+                                {uiText("m8d16138f121d6ee8", {
+                                  value0: formatDateTime(
+                                    quiz.access_code_expires_at,
+                                  ),
+                                })}
                               </p>
                               {isExpired(quiz.access_code_expires_at) && (
                                 <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
@@ -240,7 +241,11 @@ export const MyLiveQuizzesPage: React.FC = () => {
                               "bg-slate-100 text-slate-700"
                             }`}
                           >
-                            {statusLabel[quiz.status] || quiz.status}
+                            {uiText("values." + quiz.status, {
+                              ns: "translation",
+                              defaultValue:
+                                statusLabel[quiz.status] || quiz.status,
+                            })}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-sm text-slate-600">
@@ -281,7 +286,9 @@ export const MyLiveQuizzesPage: React.FC = () => {
                             <div className="relative">
                               <button
                                 type="button"
-                                aria-label={`More actions for ${quiz.title}`}
+                                aria-label={uiText("m7025f2de2cf460e7", {
+                                  value0: quiz.title,
+                                })}
                                 aria-expanded={
                                   openActionsQuizId === quiz.quiz_id
                                 }
@@ -312,7 +319,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                         }
                                         className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                                       >
-                                        {format === uiText("m486b9a6fc855abf4")
+                                        {format === "txt"
                                           ? uiText("m71988c4d8e0803ba")
                                           : format.toUpperCase()}
                                       </button>
