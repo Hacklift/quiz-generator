@@ -797,11 +797,14 @@ class LiveQuizSessionService:
         if not run_id or not self.assignment_repository:
             return
         run = await self.assignment_repository.get_run(run_id)
+        if not run:
+            raise HTTPException(status_code=409, detail="Training run is closed")
+        closes_at_raw = run.get("closes_at")
+        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
         if (
-            not run
-            or run.get("status") != "open"
+            run.get("status") != "open"
             or run.get("closure_in_progress")
-            or _as_utc(run["closes_at"]) <= _utc_now()
+            or (closes_at and closes_at <= _utc_now())
         ):
             raise HTTPException(status_code=409, detail="Training run is closed")
 

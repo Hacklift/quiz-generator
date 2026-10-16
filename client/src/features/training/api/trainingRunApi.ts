@@ -106,6 +106,7 @@ export interface CreateTrainingRunPayload {
   recipient_emails: string[];
   max_attempts: number | null;
   send_email_invitations: boolean;
+  release_answers?: "immediate" | "after_close";
 }
 
 export const trainingRunApi = {

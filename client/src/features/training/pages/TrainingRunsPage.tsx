@@ -69,6 +69,7 @@ function TrainingRunsContent() {
   const [dueAt, setDueAt] = useState(localDateTime(7));
   const [closesAt, setClosesAt] = useState(localDateTime(14));
   const [maxAttempts, setMaxAttempts] = useState("1");
+  const [releaseAnswers, setReleaseAnswers] = useState<"immediate" | "after_close">("immediate");
   const [sendEmails, setSendEmails] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -146,6 +147,7 @@ function TrainingRunsContent() {
         recipient_emails: recipientEmails,
         max_attempts: maxAttempts === "unlimited" ? null : Number(maxAttempts),
         send_email_invitations: sendEmails && recipientEmails.length > 0,
+        release_answers: releaseAnswers,
       };
       const idempotencyKey = idempotencyKeyForTrainingRun(
         pendingCreateKeys.current,
@@ -206,6 +208,8 @@ function TrainingRunsContent() {
                 <label className="block text-[13px] font-extrabold">Quiz duration<select value={timeLimitMinutes} onChange={(event) => setTimeLimitMinutes(Number(event.target.value))} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium">{DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</select></label>
                 <p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">Participants can only start when enough time remains to finish before the run closes.</p>
                 <label className="block text-[13px] font-extrabold">Attempts<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium"><option value="1">One attempt</option><option value="2">Two attempts</option><option value="unlimited">Unlimited attempts</option></select></label>
+                <label className="block text-[13px] font-extrabold">Release answers<select value={releaseAnswers} onChange={(event) => setReleaseAnswers(event.target.value as "immediate" | "after_close")} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium"><option value="immediate">Immediately upon submission</option><option value="after_close">Withhold until assignment window closes</option></select></label>
+                <p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">{releaseAnswers === "after_close" ? "Participants see their submission confirmation, but per-question answers and explanations are hidden until the closing deadline." : "Participants see full scores, correct answers, and explanations as soon as they submit."}</p>
                 {accessMode === "assigned_only" && <label className="flex items-start gap-[10px] text-[13px] leading-[20px]"><input type="checkbox" checked={sendEmails} onChange={(event) => setSendEmails(event.target.checked)} className="mt-[3px] h-[16px] w-[16px]" />Email assignment invitations to recipients.</label>}
                 <button type="submit" disabled={isCreating || !quizId} className={`${BTN_PRIMARY} w-full disabled:cursor-not-allowed disabled:opacity-50`}>{isCreating ? "Creating run..." : "Create training run"}</button>
               </form>

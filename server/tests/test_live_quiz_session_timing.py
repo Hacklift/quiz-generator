@@ -452,3 +452,39 @@ async def test_participant_cannot_access_creator_attempt_detail(monkeypatch):
     assert exc_info.value.status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_session_state_withholds_when_run_has_no_closes_at_until_manually_closed(monkeypatch):
+    """When an open-ended run has closes_at=None and release_answers='after_close', answers are withheld until manually closed."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": None,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # While run is open with no closes_at, answers are withheld with release_answers_at=None
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is False
+    assert state["release_answers_at"] is None
+    assert state["graded_answers"][0]["correct_answer"] is None
+    assert state["graded_answers"][0]["explanation"] is None
+
+    # After creator closes the open-ended run, answers are released
+    assignment_repo.run["status"] = "closed"
+    state_closed = await service.get_session_state("session-1", start["participant_token"])
+    assert state_closed["answers_released"] is True
+    assert state_closed["graded_answers"][0]["correct_answer"] == "A"
+    assert state_closed["graded_answers"][0]["explanation"] == "Secret explanation."
+
+

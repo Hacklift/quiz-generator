@@ -99,11 +99,11 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
           <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900">
             <h2 className="font-bold text-amber-950">Answers Withheld Until Deadline</h2>
             <p className="mt-1 text-sm leading-relaxed text-amber-800">
-              Your submission has been recorded. Per assignment settings, detailed answers and explanations will be released after the assignment window closes
+              Your submission has been recorded. Per assignment settings, detailed answers and explanations will be released{" "}
               {session.release_answers_at ? (
-                <> on <strong>{new Date(session.release_answers_at).toLocaleString()}</strong>.</>
+                <>after the assignment window closes on <strong>{new Date(session.release_answers_at).toLocaleString()}</strong>.</>
               ) : (
-                "."
+                "when the assignment closes."
               )}
             </p>
           </div>
