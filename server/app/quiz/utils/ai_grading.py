@@ -55,7 +55,8 @@ def grade_with_ai(user_answers):
 
                     "is_correct": False,
 
-                    "result": "Invalid format"
+                    "result": "Invalid format",
+                    "explanation": answer.get("explanation"),
 
                 })
 
@@ -63,73 +64,127 @@ def grade_with_ai(user_answers):
 
 
             is_correct = user_answer == correct_answer
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
+
             })
+
             continue
 
         user_answer = normalize_answer(answer.get("user_answer", ""))
+
         correct_answer = normalize_answer(answer.get("correct_answer", ""))
 
+
         if not correct_answer:
+
             continue
 
+
         if question_type == "open-ended":
+
             accuracy = fuzzy_similarity(user_answer, correct_answer)
+
             is_correct = accuracy >= 50
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "accuracy_percentage": accuracy,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
+
 
         elif question_type == "short-answer":
+
             accuracy = fuzzy_similarity(user_answer, correct_answer)
+
             is_correct = accuracy >= 80
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "accuracy_percentage": accuracy,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
+
 
         elif question_type == "multichoice":
+
             is_correct = user_answer.lower() == correct_answer.lower()
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
 
+
         else:
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "is_correct": False,
+
                 "result": "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
 
 

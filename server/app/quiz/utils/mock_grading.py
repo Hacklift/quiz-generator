@@ -25,54 +25,96 @@ def grade_mock_answers(user_answers):
 
 
         if question_type == "open-ended":
+
             accuracy = fuzzy_similarity(user_answer, correct_answer)
+
             is_correct = accuracy >= 50
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "accuracy_percentage": accuracy,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
+
 
         elif question_type == "short-answer":
+
             accuracy = fuzzy_similarity(user_answer, correct_answer)
+
             is_correct = accuracy >= 80
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "accuracy_percentage": accuracy,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
 
+
+
         elif question_type in ["multichoice", "true-false"]:
+
             is_correct = (user_answer.lower() == correct_answer.lower())
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "is_correct": is_correct,
+
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
 
         else:
+
             result.append({
+
                 "question": answer.get("question", ""),
+
                 "user_answer": user_answer,
+
                 "correct_answer": correct_answer,
+
                 "question_type": question_type,
+
                 "is_correct": False,
+
                 "result": "Incorrect",
                 "explanation": answer.get("explanation"),
+
             })
 
 

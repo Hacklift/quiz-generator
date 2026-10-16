@@ -408,3 +408,47 @@ async def test_session_state_releases_when_closure_in_progress_even_if_closes_at
     assert state["graded_answers"][0]["is_correct"] is True
     assert state["graded_answers"][0]["explanation"] == "Secret explanation."
 
+
+@pytest.mark.asyncio
+async def test_session_state_grades_legacy_session_without_persisted_graded_answers(monkeypatch):
+    """When a legacy submitted session has no stored graded_answers, session state computes it on the fly with explanations."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Legacy quiz explanation."
+    service = LiveQuizSessionService(repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # Simulate legacy session where graded_answers was not persisted
+    repo.session["graded_answers"] = None
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is True
+    assert len(state["graded_answers"]) == 1
+    assert state["graded_answers"][0]["correct_answer"] == "A"
+    assert state["graded_answers"][0]["is_correct"] is True
+    assert state["graded_answers"][0]["explanation"] == "Legacy quiz explanation."
+
+
+@pytest.mark.asyncio
+async def test_participant_cannot_access_creator_attempt_detail(monkeypatch):
+    """Participants cannot access creator-scoped attempt detail endpoint."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    service = LiveQuizSessionService(repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    await service.submit_session("session-1", start["participant_token"])
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.get_attempt_detail("quiz-1", "session-1", requester_id="participant-intruder")
+    assert exc_info.value.status_code == 403
+
+

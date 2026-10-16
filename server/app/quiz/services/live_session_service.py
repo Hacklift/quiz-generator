@@ -937,6 +937,51 @@ class LiveQuizSessionService:
     ) -> Dict[str, Any]:
         return grade_live_session(session, quiz)
 
+    def _mask_graded_answers(
+        self,
+        raw_graded: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Mask correct answers and explanations for withheld participant view."""
+        return [
+            {
+                "question_index": item.get("question_index", idx),
+                "question": item.get("question", ""),
+                "selected_answer": str(item.get("selected_answer", "")),
+                "correct_answer": None,
+                "question_type": str(item.get("question_type", "")),
+                "is_correct": None,
+                "explanation": None,
+            }
+            for idx, item in enumerate(raw_graded)
+        ]
+
+    def _determine_answers_released(
+        self,
+        session: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]],
+        server_now: datetime,
+    ) -> tuple[bool, Optional[datetime]]:
+        """Determine whether answers and explanations may be released to participants."""
+        if not session.get("training_run_id"):
+            return True, None
+
+        if not training_run:
+            # Fail-closed: session has a training_run_id but the run could not be resolved
+            return False, None
+
+        closes_at_raw = training_run.get("closes_at")
+        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
+        # Match _ensure_training_run_open:
+        # A run is open if status is 'open', closure is not in progress, and deadline has not passed.
+        is_open = (
+            training_run.get("status") == "open"
+            and not bool(training_run.get("closure_in_progress"))
+            and (closes_at is None or closes_at > server_now)
+        )
+        if training_run.get("release_answers") == "after_close" and is_open:
+            return False, closes_at
+        return True, None
+
     def _build_session_state(
         self,
         session: Dict[str, Any],
@@ -977,46 +1022,12 @@ class LiveQuizSessionService:
             if not isinstance(raw_graded, list):
                 raw_graded = self._grade_session(session, quiz).get("graded_answers", [])
 
-            has_training_run = bool(session.get("training_run_id"))
-            if has_training_run:
-                if training_run:
-                    closes_at_raw = training_run.get("closes_at")
-                    closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
-                    # Use the same open/closed definition as _ensure_training_run_open:
-                    # A run is open if status is 'open', closure is not in progress, and deadline has not passed.
-                    is_open = (
-                        training_run.get("status") == "open"
-                        and not bool(training_run.get("closure_in_progress"))
-                        and (closes_at is None or closes_at > server_now)
-                    )
-                    if training_run.get("release_answers") == "after_close" and is_open:
-                        answers_released = False
-                        release_answers_at = closes_at
-                    else:
-                        answers_released = True
-                else:
-                    # Fail-closed: session belongs to an assignment but run cannot be verified
-                    answers_released = False
-                    release_answers_at = None
-
-                if not answers_released:
-                    # Mask correct answers and explanations until the submission window closes
-                    graded_answers = [
-                        {
-                            "question_index": item.get("question_index", idx),
-                            "question": item.get("question", ""),
-                            "selected_answer": str(item.get("selected_answer", "")),
-                            "correct_answer": None,
-                            "question_type": str(item.get("question_type", "")),
-                            "is_correct": None,
-                            "explanation": None,
-                        }
-                        for idx, item in enumerate(raw_graded)
-                    ]
-                else:
-                    graded_answers = raw_graded
+            answers_released, release_answers_at = self._determine_answers_released(
+                session, training_run, server_now
+            )
+            if not answers_released:
+                graded_answers = self._mask_graded_answers(raw_graded)
             else:
-                answers_released = True
                 graded_answers = raw_graded
 
         return {
