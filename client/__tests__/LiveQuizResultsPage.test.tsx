@@ -122,6 +122,7 @@ describe("LiveQuizResultsPage", () => {
     render(<LiveQuizResultsPage sessionId="session-2" />);
 
     expect(await screen.findByText("Quiz result")).toBeInTheDocument();
+    expect(screen.getAllByText("Pending release").length).toBe(2);
     expect(screen.getByText("Answers Withheld Until Deadline")).toBeInTheDocument();
     expect(
       screen.getByText(/detailed answers and explanations will be released after the assignment window closes/i),

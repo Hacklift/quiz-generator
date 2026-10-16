@@ -104,7 +104,6 @@ def grade_against_stored_questions(
                 "correct_answer": correct_answer,
                 "question_type": quiz_type,
                 "explanation": stored.get("explanation"),
-                "options": stored.get("options"),
             }
         )
 
@@ -177,7 +176,7 @@ class QuizGradingService:
                 quiz_id=quiz_id,
                 question_results=[
                     QuizAttemptQuestionResultV2(
-                        **{k: v for k, v in graded_result.items() if k != "options"},
+                        **graded_result,
                         options=self._history_options(
                             options_by_text[graded_result["question"]].popleft(),
                             question_type=str(

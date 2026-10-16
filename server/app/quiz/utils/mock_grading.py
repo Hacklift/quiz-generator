@@ -36,7 +36,6 @@ def grade_mock_answers(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         elif question_type == "short-answer":
@@ -51,7 +50,6 @@ def grade_mock_answers(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         elif question_type in ["multichoice", "true-false"]:
@@ -64,7 +62,6 @@ def grade_mock_answers(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         else:
@@ -76,7 +73,6 @@ def grade_mock_answers(user_answers):
                 "is_correct": False,
                 "result": "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
 

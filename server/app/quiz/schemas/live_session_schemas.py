@@ -39,9 +39,9 @@ class LiveQuizGradedAnswer(BaseModel):
     question_index: int
     question: str
     selected_answer: str
-    correct_answer: str
+    correct_answer: Optional[str] = None
     question_type: str
-    is_correct: bool
+    is_correct: Optional[bool] = None
     explanation: Optional[str] = None
 
 
@@ -108,7 +108,6 @@ class LiveQuizAnalyticsRow(BaseModel):
     progress_percentage: Optional[float] = None
     status: str
     auto_submitted: bool = False
-
 
 
 class LiveQuizAttemptDetail(BaseModel):

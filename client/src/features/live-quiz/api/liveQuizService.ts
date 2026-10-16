@@ -125,9 +125,9 @@ export interface GradedAnswer {
   question_index: number;
   question: string;
   selected_answer: string;
-  correct_answer: string;
+  correct_answer?: string | null;
   question_type: string;
-  is_correct: boolean;
+  is_correct?: boolean | null;
   explanation?: string | null;
 }
 

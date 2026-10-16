@@ -93,7 +93,6 @@ def grade_with_ai(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         elif question_type == "short-answer":
@@ -108,7 +107,6 @@ def grade_with_ai(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         elif question_type == "multichoice":
@@ -121,7 +119,6 @@ def grade_with_ai(user_answers):
                 "is_correct": is_correct,
                 "result": "Correct" if is_correct else "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
         else:
@@ -133,7 +130,6 @@ def grade_with_ai(user_answers):
                 "is_correct": False,
                 "result": "Incorrect",
                 "explanation": answer.get("explanation"),
-                "options": answer.get("options"),
             })
 
 

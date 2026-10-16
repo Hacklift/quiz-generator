@@ -976,27 +976,44 @@ class LiveQuizSessionService:
             raw_graded = session.get("graded_answers")
             if not isinstance(raw_graded, list):
                 raw_graded = self._grade_session(session, quiz).get("graded_answers", [])
-            if training_run:
-                closes_at = _as_utc(training_run["closes_at"])
-                is_closed = training_run.get("status") == "closed" or closes_at <= server_now
-                if training_run.get("release_answers") == "after_close" and not is_closed:
+
+            has_training_run = bool(session.get("training_run_id"))
+            if has_training_run:
+                if training_run:
+                    closes_at_raw = training_run.get("closes_at")
+                    closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
+                    # Use the same open/closed definition as _ensure_training_run_open:
+                    # A run is open if status is 'open', closure is not in progress, and deadline has not passed.
+                    is_open = (
+                        training_run.get("status") == "open"
+                        and not bool(training_run.get("closure_in_progress"))
+                        and (closes_at is None or closes_at > server_now)
+                    )
+                    if training_run.get("release_answers") == "after_close" and is_open:
+                        answers_released = False
+                        release_answers_at = closes_at
+                    else:
+                        answers_released = True
+                else:
+                    # Fail-closed: session belongs to an assignment but run cannot be verified
                     answers_released = False
-                    release_answers_at = closes_at
+                    release_answers_at = None
+
+                if not answers_released:
                     # Mask correct answers and explanations until the submission window closes
                     graded_answers = [
                         {
                             "question_index": item.get("question_index", idx),
                             "question": item.get("question", ""),
                             "selected_answer": str(item.get("selected_answer", "")),
-                            "correct_answer": "",
+                            "correct_answer": None,
                             "question_type": str(item.get("question_type", "")),
-                            "is_correct": False,
+                            "is_correct": None,
                             "explanation": None,
                         }
                         for idx, item in enumerate(raw_graded)
                     ]
                 else:
-                    answers_released = True
                     graded_answers = raw_graded
             else:
                 answers_released = True

@@ -273,7 +273,138 @@ async def test_session_state_withholds_answers_when_assignment_window_is_open(mo
     assert state["answers_released"] is False
     assert state["release_answers_at"] == window_close
     assert len(state["graded_answers"]) == 1
-    # Answers and explanations are withheld
-    assert state["graded_answers"][0]["correct_answer"] == ""
+    # Answers and explanations are withheld with None
+    assert state["graded_answers"][0]["correct_answer"] is None
+    assert state["graded_answers"][0]["is_correct"] is None
     assert state["graded_answers"][0]["explanation"] is None
+
+
+@pytest.mark.asyncio
+async def test_session_state_withholds_when_training_run_missing_fail_closed(monkeypatch):
+    """When a session has a training_run_id but the run document is missing on get_session_state, it must fail closed."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    future_close = datetime(2025, 5, 14, 14, 00, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": future_close,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # Simulate run document being deleted / missing from DB
+    assignment_repo.run = None
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is False
+    assert state["release_answers_at"] is None
+    assert state["graded_answers"][0]["correct_answer"] is None
+    assert state["graded_answers"][0]["is_correct"] is None
+    assert state["graded_answers"][0]["explanation"] is None
+
+
+@pytest.mark.asyncio
+async def test_session_state_withholds_when_assignment_repo_not_configured_fail_closed(monkeypatch):
+    """When a session has a training_run_id but assignment_repository is None on get_session_state, it must fail closed."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    future_close = datetime(2025, 5, 14, 14, 00, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": future_close,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # Repository reference unconfigured / lost
+    service.assignment_repository = None
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is False
+    assert state["release_answers_at"] is None
+    assert state["graded_answers"][0]["correct_answer"] is None
+    assert state["graded_answers"][0]["is_correct"] is None
+    assert state["graded_answers"][0]["explanation"] is None
+
+
+@pytest.mark.asyncio
+async def test_session_state_releases_when_run_status_closed_even_if_closes_at_in_future(monkeypatch):
+    """When a training run status is closed (e.g. manually ended), answers are released even if closes_at is in future."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    future_close = datetime(2025, 5, 14, 14, 00, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": future_close,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # Creator manually closed the run early
+    assignment_repo.run["status"] = "closed"
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is True
+    assert state["graded_answers"][0]["correct_answer"] == "A"
+    assert state["graded_answers"][0]["is_correct"] is True
+    assert state["graded_answers"][0]["explanation"] == "Secret explanation."
+
+
+@pytest.mark.asyncio
+async def test_session_state_releases_when_closure_in_progress_even_if_closes_at_in_future(monkeypatch):
+    """When a training run is closing (closure_in_progress=True), answers are released."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    future_close = datetime(2025, 5, 14, 14, 00, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": future_close,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    # Background worker starts closing the run
+    assignment_repo.run["closure_in_progress"] = True
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is True
+    assert state["graded_answers"][0]["correct_answer"] == "A"
+    assert state["graded_answers"][0]["is_correct"] is True
+    assert state["graded_answers"][0]["explanation"] == "Secret explanation."
 
