@@ -6,8 +6,16 @@ from typing import Any
 
 from pydantic import EmailStr, TypeAdapter
 
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    record_product_event_safely,
+)
 from server.app.core.config import settings
-from server.app.db.core.connection import get_live_quiz_sessions_collection, get_quizzes_v2_collection
+from server.app.db.core.connection import (
+    get_live_quiz_sessions_collection,
+    get_product_events_collection,
+    get_quizzes_v2_collection,
+)
 from server.app.email_platform.service import build_email_service
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.quiz.repositories.live_session_repository import LiveQuizSessionRepository
@@ -67,7 +75,7 @@ def _live_quiz_repository() -> LiveQuizSessionRepository:
     )
 
 
-async def _owned_quiz_for_context(quiz_id: str) -> tuple[dict[str, Any], str]:
+async def _owned_quiz_for_context(quiz_id: str) -> tuple[dict[str, Any], str, Any]:
     context = await get_mcp_request_context(require_auth=True, require_verified=True)
     repository = _live_quiz_repository()
     quiz = await repository.get_quiz_by_id(quiz_id)
@@ -83,7 +91,7 @@ async def _owned_quiz_for_context(quiz_id: str) -> tuple[dict[str, Any], str]:
     owner_id = _quiz_owner_id(quiz)
     if owner_id and owner_id != context.user_id:
         raise PermissionError("Quiz ownership is required to manage live quiz links.")
-    return quiz, context.user_id or ""
+    return quiz, context.user_id or "", context.user
 
 
 def _parse_expiration(access_code_expires_at: str | None, expires_in_hours: int | None) -> datetime:
@@ -118,7 +126,7 @@ def _validate_recipients(recipient_emails: list[str]) -> list[str]:
 
 
 async def live_quiz_get_access_link(quiz_id: str) -> dict[str, Any]:
-    quiz, _user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, _user_id, _user = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if not existing:
         return {
@@ -139,7 +147,7 @@ async def live_quiz_create_access_link(
 ) -> dict[str, Any]:
     if int(duration) <= 0:
         raise ValueError("duration must be positive.")
-    quiz, user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, user_id, user = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if existing and not regenerate:
         return {"found": True, **existing}
@@ -152,6 +160,16 @@ async def live_quiz_create_access_link(
         creator_id=user_id,
         time_limit_minutes=int(duration),
     )
+    access_code_created = response.pop("_access_code_created", False)
+    if access_code_created:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=LIVE_QUIZ_ENABLED,
+            user_id=user_id,
+            user=user,
+            quiz_id=response["quiz_id"],
+            origin="mcp",
+        )
     return {
         "found": True,
         "quiz_id": response["quiz_id"],
@@ -161,7 +179,7 @@ async def live_quiz_create_access_link(
         "duration": response["time_limit_minutes"],
         "time_limit_minutes": response["time_limit_minutes"],
         "access_code_expires_at": _serialize_datetime(response["access_code_expires_at"]),
-        "reused_existing": False,
+        "reused_existing": not access_code_created,
     }
 
 
@@ -172,7 +190,7 @@ async def live_quiz_ensure_access_link(
     expires_in_hours: int | None = 24,
     regenerate: bool = False,
 ) -> dict[str, Any]:
-    quiz, user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, user_id, user = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if existing and not regenerate:
         return {"found": True, "requires_duration": False, **existing}
@@ -197,6 +215,16 @@ async def live_quiz_ensure_access_link(
         creator_id=user_id,
         time_limit_minutes=int(duration),
     )
+    access_code_created = response.pop("_access_code_created", False)
+    if access_code_created:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=LIVE_QUIZ_ENABLED,
+            user_id=user_id,
+            user=user,
+            quiz_id=response["quiz_id"],
+            origin="mcp",
+        )
     return {
         "found": True,
         "requires_duration": False,
@@ -207,7 +235,7 @@ async def live_quiz_ensure_access_link(
         "duration": response["time_limit_minutes"],
         "time_limit_minutes": response["time_limit_minutes"],
         "access_code_expires_at": _serialize_datetime(response["access_code_expires_at"]),
-        "reused_existing": False,
+        "reused_existing": not access_code_created,
     }
 
 
@@ -217,7 +245,7 @@ async def live_quiz_send_invites(
     live_quiz_link: str | None = None,
     message: str | None = None,
 ) -> dict[str, Any]:
-    quiz, _user_id = await _owned_quiz_for_context(quiz_id)
+    quiz, _user_id, _user = await _owned_quiz_for_context(quiz_id)
     existing = _valid_existing_live_link(quiz)
     if not existing:
         raise ValueError("Create a live quiz link before sending invites.")

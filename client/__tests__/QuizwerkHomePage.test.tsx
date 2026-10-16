@@ -31,9 +31,7 @@ describe("QuizwerkHomePage", () => {
     mockRouterPush.mockClear();
   });
 
-  // Guards the design-system extraction: this snapshot is taken before the
-  // Quizwerk primitives move to @shared/ui/quizwerk, so the refactor has to
-  // leave the rendered markup byte-identical.
+  // Guards the shared Quizwerk design-system markup and typography class.
   test("renders the full page markup", () => {
     const { container } = render(<QuizwerkHomePage />);
     expect(container).toMatchSnapshot();
@@ -45,12 +43,18 @@ describe("QuizwerkHomePage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: /Type a topic\./ }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Pick the seat you're sitting in")).toBeInTheDocument();
-    expect(screen.getByText("Pick a plan that fits how you train")).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick the seat you're sitting in"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick a plan that fits how you train"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Built for the room, not the browser tab"),
     ).toBeInTheDocument();
-    expect(screen.getByText("The next quiz writes itself.")).toBeInTheDocument();
+    expect(
+      screen.getByText("The next quiz writes itself."),
+    ).toBeInTheDocument();
   });
 
   test("lists all seven personas", () => {

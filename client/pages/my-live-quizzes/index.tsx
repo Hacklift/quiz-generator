@@ -1,7 +1,13 @@
 "use client";
 import { useTranslation } from "react-i18next";
 
-import React, { FormEvent, useCallback, useEffect, useState } from "react";
+import React, {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import RequireAuth from "@features/auth/components/RequireAuth";
@@ -60,6 +66,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
   const [openActionsQuizId, setOpenActionsQuizId] = useState<string | null>(
     null,
   );
+  const openActionsRef = useRef<HTMLDivElement | null>(null);
 
   const loadLiveQuizzes = useCallback(async () => {
     try {
@@ -76,6 +83,31 @@ export const MyLiveQuizzesPage: React.FC = () => {
   useEffect(() => {
     void loadLiveQuizzes();
   }, [loadLiveQuizzes]);
+
+  useEffect(() => {
+    if (!openActionsQuizId) return;
+
+    const dismissOnOutsideClick = (event: MouseEvent) => {
+      if (
+        openActionsRef.current &&
+        !openActionsRef.current.contains(event.target as Node)
+      ) {
+        setOpenActionsQuizId(null);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenActionsQuizId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", dismissOnOutsideClick);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", dismissOnOutsideClick);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [openActionsQuizId]);
 
   const openGenerationDialog = (quiz: LiveQuizSummary) => {
     setQuizToGenerateFor(quiz);
@@ -283,7 +315,14 @@ export const MyLiveQuizzesPage: React.FC = () => {
                             >
                               {uiText("m90789c12d0731b44")}
                             </button>
-                            <div className="relative">
+                            <div
+                              className="relative"
+                              ref={
+                                openActionsQuizId === quiz.quiz_id
+                                  ? openActionsRef
+                                  : undefined
+                              }
+                            >
                               <button
                                 type="button"
                                 aria-label={uiText("m7025f2de2cf460e7", {
@@ -292,6 +331,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                 aria-expanded={
                                   openActionsQuizId === quiz.quiz_id
                                 }
+                                aria-haspopup="menu"
                                 onClick={() =>
                                   setOpenActionsQuizId((current) =>
                                     current === quiz.quiz_id
@@ -305,7 +345,13 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                 &#8942;
                               </button>
                               {openActionsQuizId === quiz.quiz_id && (
-                                <div className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg">
+                                <div
+                                  role="menu"
+                                  aria-label={uiText("live.exportResultsFor", {
+                                    title: quiz.title,
+                                  })}
+                                  className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg"
+                                >
                                   <p className="px-3 py-1.5 text-xs font-semibold uppercase text-slate-500">
                                     {uiText("m97df6c79050ddf07")}
                                   </p>
@@ -314,6 +360,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                       <button
                                         key={format}
                                         type="button"
+                                        role="menuitem"
                                         onClick={() =>
                                           exportResults(quiz, format)
                                         }

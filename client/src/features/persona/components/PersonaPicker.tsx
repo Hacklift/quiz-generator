@@ -50,12 +50,12 @@ export default function PersonaPicker({
 
   if (!category) {
     return (
-      <div>
+      <div className="w-full max-w-full">
         <Kicker>{t("picker.setup")}</Kicker>
-        <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
+        <h2 className="text-lg sm:text-xl font-extrabold leading-snug tracking-[-0.015em]">
           {heading ?? t("picker.heading")}
         </h2>
-        <div className="mt-[32px] grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-[28px]">
+        <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 w-full max-w-full">
           {PERSONA_CATEGORIES.map((slug) => {
             const group = categories[slug];
             return (
@@ -63,19 +63,22 @@ export default function PersonaPicker({
                 key={slug}
                 type="button"
                 onClick={() => setCategory(slug)}
-                className="border-t-2 border-divider px-[6px] py-[20px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                className="border-t-2 border-divider px-2 sm:px-3 py-4 sm:py-5 text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand w-full"
               >
-                <span className="flex items-center gap-[14px]">
-                  <span className="h-[8px] w-[8px] flex-none bg-brand" />
-                  <span className="flex-1">
-                    <span className="block text-[20px] font-extrabold leading-[1.2]">
+                <span className="flex items-center gap-3 sm:gap-[14px]">
+                  <span className="h-2 w-2 flex-none bg-brand" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block break-words text-base font-extrabold leading-[1.2] sm:text-[18px]">
                       {group.label}
                     </span>
-                    <span className="mt-[4px] block text-[14px] text-ink/70">
+                    <span className="mt-1 block text-xs sm:text-[14px] text-ink/70">
                       {group.description}
                     </span>
                   </span>
-                  <span aria-hidden="true" className="text-[18px]">
+                  <span
+                    aria-hidden="true"
+                    className="text-base sm:text-[18px] flex-none"
+                  >
                     →
                   </span>
                 </span>
@@ -90,38 +93,41 @@ export default function PersonaPicker({
   const group = categories[category];
 
   return (
-    <div>
+    <div className="w-full max-w-full">
       <Kicker>{group.label}</Kicker>
-      <h2 className="text-[32px] font-extrabold leading-[42px] tracking-[-0.015em]">
+      <h2 className="text-lg sm:text-xl font-extrabold leading-snug tracking-[-0.015em]">
         {t("picker.role")}
       </h2>
-      <div className="mt-[28px] max-w-[560px]">
+      <div className="mt-4 sm:mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-none">
         {group.userTypes.map((definition) => (
           <button
             key={definition.slug}
             type="button"
             disabled={isSaving}
             onClick={() => choose({ category, userType: definition.slug })}
-            className="block w-full border-t-2 border-divider px-[6px] py-[16px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full border-t-2 border-divider px-2 sm:px-3 py-3.5 sm:py-4 text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span className="flex items-center gap-[14px]">
-              <span className="h-[8px] w-[8px] flex-none bg-brand" />
-              <span className="flex-1">
-                <span className="block text-[17px] font-extrabold leading-[1.2]">
+            <span className="flex items-center gap-3 sm:gap-[14px]">
+              <span className="h-2 w-2 flex-none bg-brand" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-base sm:text-[17px] font-extrabold leading-[1.2]">
                   {definition.label}
                 </span>
-                <span className="mt-[3px] block text-[13.5px] text-ink/70">
+                <span className="mt-1 block text-xs sm:text-[13.5px] text-ink/70">
                   {definition.description}
                 </span>
               </span>
-              <span aria-hidden="true" className="text-[18px]">
+              <span
+                aria-hidden="true"
+                className="text-base sm:text-[18px] flex-none"
+              >
                 →
               </span>
             </span>
           </button>
         ))}
       </div>
-      <div className="mt-[28px] flex gap-[14px]">
+      <div className="mt-6 sm:mt-8 flex gap-3">
         <button
           type="button"
           onClick={() => setCategory(null)}

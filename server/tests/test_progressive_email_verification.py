@@ -1,4 +1,6 @@
+import asyncio
 import inspect
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
@@ -112,10 +114,14 @@ async def test_unverified_user_can_generate_quiz():
     with patch(
         "server.app.quiz.routes.generation.get_questions",
         new=AsyncMock(return_value={"source": "mock", "questions": []}),
-    ) as get_questions_mock:
-        result = await get_quiz(
-            MagicMock(), Response(), request, current_user=current_user
-        )
+    ) as get_questions_mock, patch(
+        "server.app.quiz.routes.generation.record_product_event_safely",
+        new=AsyncMock(),
+    ) as record_event_mock, patch(
+        "server.app.quiz.routes.generation.get_product_events_collection",
+        return_value=MagicMock(),
+    ):
+        result = await get_quiz(MagicMock(), Response(), request, current_user=current_user)
 
     assert result == {"source": "mock", "questions": []}
     get_questions_mock.assert_awaited_once_with(
@@ -124,6 +130,94 @@ async def test_unverified_user_can_generate_quiz():
         invitation_repository=ANY,
         email_service=ANY,
     )
+    record_event_mock.assert_awaited_once()
+    assert record_event_mock.await_args.kwargs["event_type"] == "quiz_generated"
+    assert record_event_mock.await_args.kwargs["user"] is current_user
+    assert record_event_mock.await_args.kwargs["origin"] == "rest"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("access_code_created", "expected_event_count"),
+    [(True, 2), (False, 1)],
+)
+async def test_standard_generation_records_live_event_only_for_new_activation(
+    access_code_created, expected_event_count
+):
+    request = QuizRequest(
+        profession="teacher",
+        num_questions=1,
+        question_type="multichoice",
+        difficulty_level="easy",
+        audience_type="students",
+        token=None,
+    )
+    current_user = _user(is_verified=True)
+    generated = {
+        "source": "mock",
+        "questions": [],
+        "quiz_id": "quiz-1",
+        "live_quiz_enabled": True,
+        "_access_code_created": access_code_created,
+    }
+
+    with patch(
+        "server.app.quiz.routes.generation.get_questions",
+        new=AsyncMock(return_value=generated),
+    ), patch(
+        "server.app.quiz.routes.generation.record_product_event_safely",
+        new=AsyncMock(),
+    ) as record_event_mock:
+        result = await get_quiz(
+            MagicMock(), Response(), request, current_user=current_user
+        )
+
+    assert "_access_code_created" not in result
+    assert record_event_mock.await_count == expected_event_count
+    event_types = [
+        call.kwargs["event_type"] for call in record_event_mock.await_args_list
+    ]
+    assert event_types.count("quiz_generated") == 1
+    assert event_types.count("live_quiz_enabled") == int(access_code_created)
+
+
+@pytest.mark.asyncio
+async def test_quiz_generation_response_is_not_delayed_by_slow_telemetry(monkeypatch):
+    async def slow_insert(_event):
+        await asyncio.sleep(1)
+
+    request = QuizRequest(
+        profession="teacher",
+        num_questions=1,
+        question_type="multichoice",
+        difficulty_level="easy",
+        audience_type="students",
+        token=None,
+    )
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        "server.app.quiz.routes.generation.get_questions",
+        AsyncMock(return_value={"source": "mock", "questions": []}),
+    )
+    monkeypatch.setattr(
+        "server.app.quiz.routes.generation.get_product_events_collection",
+        lambda: SimpleNamespace(insert_one=slow_insert),
+    )
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    result = await get_quiz(
+        MagicMock(),
+        Response(),
+        request,
+        current_user=_user(is_verified=True),
+    )
+
+    assert result == {"source": "mock", "questions": []}
+    assert loop.time() - started_at < 0.2
 
 
 @pytest.mark.asyncio

@@ -106,6 +106,7 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
         event_type="register",
         status="success",
         user_id=created_user.id,
+        user=created_user,
     )
    
     redis_client = await get_redis_client()
@@ -206,6 +207,7 @@ async def verify_otp_service(email: str,
         event_type="email_verification_completed",
         status="success",
         user_id=str(user["_id"]),
+        user=user,
     )
 
     await redis_client.delete(f"otp:{normalized_email}")
@@ -249,6 +251,7 @@ async def verify_link_service(
         event_type="email_verification_completed",
         status="success",
         user_id=str(user["_id"]),
+        user=user,
     )
 
   
@@ -284,6 +287,7 @@ async def login_service(
             metadata={"identifier": identifier},
             ip_address=ip_address,
             user_agent=user_agent,
+            user=user,
         )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -297,6 +301,7 @@ async def login_service(
             metadata={"account_status": status_value},
             ip_address=ip_address,
             user_agent=user_agent,
+            user=user,
         )
         raise HTTPException(status_code=403, detail="Account is not active")
     
@@ -337,6 +342,7 @@ async def login_service(
         metadata={"session_id": session_id},
         ip_address=ip_address,
         user_agent=user_agent,
+        user=user,
     )
     
     return {
@@ -397,6 +403,7 @@ async def refresh_token_service(
             status="failed",
             user_id=user_id,
             metadata={"session_id": session_id},
+            user=user,
         )
         raise HTTPException(status_code=401, detail="Invalid refresh token")
     
@@ -412,6 +419,7 @@ async def refresh_token_service(
             status="failed",
             user_id=user_id,
             metadata={"session_id": session_id},
+            user=user,
         )
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -458,6 +466,7 @@ async def request_password_reset_service(request: RequestPasswordReset, email_sv
         event_type="password_reset_requested",
         status="success",
         user_id=str(user["_id"]),
+        user=user,
     )
 
     await email_svc.send_email(
@@ -528,6 +537,7 @@ async def reset_password_service(request: PasswordResetRequest):
         event_type="password_reset_completed",
         status="success",
         user_id=str(user["_id"]),
+        user=user,
     )
 
    
@@ -552,6 +562,7 @@ async def logout_service(
             raise HTTPException(status_code=400, detail="Invalid token or missing subject")
 
         if user_id:
+            user = await users_collection.find_one({"_id": ObjectId(user_id)})
             if session_id:
                 await revoke_user_session(
                     get_user_sessions_collection(),
@@ -570,6 +581,7 @@ async def logout_service(
                 status="success",
                 user_id=user_id,
                 metadata={"session_id": session_id},
+                user=user,
             )
 
         return {"message": "Logged out successfully"}

@@ -38,6 +38,7 @@ async def get_mcp_request_context(
         role=user.role,
         effective_locale=user.effective_locale,
         scopes=required_scopes or set(),
+        user=user,
     )
 
     if require_verified and not context.is_verified:

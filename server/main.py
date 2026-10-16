@@ -76,7 +76,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
+    expose_headers=["Content-Disposition", "X-Quiz-Attempt-Status"],
 )
 app.include_router(app_router)
 app.mount("/internal", McpAuthorizationHeaderMiddleware(mcp_server.streamable_http_app()))

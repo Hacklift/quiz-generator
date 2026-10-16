@@ -1,5 +1,11 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import { LiveQuizCreatorDashboard } from "../pages/my-live-quizzes/[quizId]";
 import { MyLiveQuizzesPage } from "../pages/my-live-quizzes";
@@ -40,6 +46,14 @@ jest.mock("@features/live-quiz/api/liveQuizService", () => ({
 const mockedPersona = usePersona as jest.Mock;
 const mockedService = liveQuizService as jest.Mocked<typeof liveQuizService>;
 
+const liveQuiz = (quizId: string, title: string) => ({
+  quiz_id: quizId,
+  title,
+  status: "completed",
+  participant_count: 2,
+  completed_count: 2,
+});
+
 describe("live quiz results export", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -48,7 +62,9 @@ describe("live quiz results export", () => {
       close: jest.fn(),
     } as unknown as WebSocket);
     mockedPersona.mockReturnValue({ userType: "teacher" });
-    jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    jest
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
   });
 
   test("teacher can request a server-generated format", async () => {
@@ -73,7 +89,10 @@ describe("live quiz results export", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export results" }));
 
     await waitFor(() =>
-      expect(mockedService.downloadResults).toHaveBeenCalledWith("quiz-1", "pdf"),
+      expect(mockedService.downloadResults).toHaveBeenCalledWith(
+        "quiz-1",
+        "pdf",
+      ),
     );
   });
 
@@ -86,13 +105,7 @@ describe("live quiz results export", () => {
 
   test("creator can export each quiz directly from Live Quizzes history", async () => {
     mockedService.listLiveQuizzes.mockResolvedValue([
-      {
-        quiz_id: "quiz-1",
-        title: "Biology Session",
-        status: "completed",
-        participant_count: 2,
-        completed_count: 2,
-      },
+      liveQuiz("quiz-1", "Biology Session"),
     ]);
     mockedService.downloadResults.mockResolvedValue({
       blob: new Blob(["results"]),
@@ -112,10 +125,130 @@ describe("live quiz results export", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "More actions for Biology Session" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "CSV" }));
+    expect(
+      screen.getByRole("menu", { name: "Export results for Biology Session" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "CSV" }));
 
     await waitFor(() =>
-      expect(mockedService.downloadResults).toHaveBeenCalledWith("quiz-1", "csv"),
+      expect(mockedService.downloadResults).toHaveBeenCalledWith(
+        "quiz-1",
+        "csv",
+      ),
     );
+    expect(
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking outside an open actions menu closes it", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      liveQuiz("quiz-1", "Biology Session"),
+    ]);
+    render(<MyLiveQuizzesPage />);
+    await screen.findByText("Biology Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Biology Session" }),
+    );
+    fireEvent.mouseDown(screen.getByRole("heading", { name: "Live Quizzes" }));
+
+    expect(
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("pressing Escape closes an open actions menu", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      liveQuiz("quiz-1", "Biology Session"),
+    ]);
+    render(<MyLiveQuizzesPage />);
+    await screen.findByText("Biology Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Biology Session" }),
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("clicking inside an actions menu keeps it open", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      liveQuiz("quiz-1", "Biology Session"),
+    ]);
+    render(<MyLiveQuizzesPage />);
+    await screen.findByText("Biology Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Biology Session" }),
+    );
+    const menu = screen.getByRole("menu", {
+      name: "Export results for Biology Session",
+    });
+    fireEvent.mouseDown(menu);
+
+    expect(
+      within(menu).getByRole("menuitem", { name: "CSV" }),
+    ).toBeInTheDocument();
+  });
+
+  test("clicking the open actions trigger again closes it", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      liveQuiz("quiz-1", "Biology Session"),
+    ]);
+    render(<MyLiveQuizzesPage />);
+    await screen.findByText("Biology Session");
+    const trigger = screen.getByRole("button", {
+      name: "More actions for Biology Session",
+    });
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("opening another quiz actions menu replaces the open menu", async () => {
+    mockedService.listLiveQuizzes.mockResolvedValue([
+      liveQuiz("quiz-1", "Biology Session"),
+      liveQuiz("quiz-2", "Chemistry Session"),
+    ]);
+    render(<MyLiveQuizzesPage />);
+    await screen.findByText("Biology Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Biology Session" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "More actions for Chemistry Session",
+      }),
+    );
+
+    expect(
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("menu", {
+        name: "Export results for Chemistry Session",
+      }),
+    ).toBeInTheDocument();
   });
 });

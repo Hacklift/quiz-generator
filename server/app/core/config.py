@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     TRANSLATION_PROVIDER_URL: Optional[str] = None
     TRANSLATION_PROVIDER_API_KEY: Optional[str] = None
     TRANSLATION_PROVIDER_TIMEOUT_SECONDS: float = Field(default=45.0, gt=0, le=120)
+    PRODUCT_EVENT_TIMEOUT_SECONDS: float = 0.25
 
     @property
     def resolved_assistant_internal_mcp_secret(self) -> str:
@@ -84,6 +85,8 @@ class Settings(BaseSettings):
             raise ValueError("ASSISTANT_INTERNAL_MCP_SECRET must be set")
         if self.QUIZ_GENERATION_MAX_QUESTIONS < 1:
             raise ValueError("QUIZ_GENERATION_MAX_QUESTIONS must be at least 1")
+        if self.PRODUCT_EVENT_TIMEOUT_SECONDS <= 0:
+            raise ValueError("PRODUCT_EVENT_TIMEOUT_SECONDS must be greater than 0")
         if not self.ASSISTANT_INTERNAL_MCP_URL:
             port = os.getenv("PORT", "8000")
             self.ASSISTANT_INTERNAL_MCP_URL = f"http://127.0.0.1:{port}/internal/mcp"

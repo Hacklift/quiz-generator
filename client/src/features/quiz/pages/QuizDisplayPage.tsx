@@ -54,6 +54,7 @@ const QuizDisplayPage: React.FC = () => {
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
+  const [isGrading, setIsGrading] = useState(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
@@ -67,6 +68,7 @@ const QuizDisplayPage: React.FC = () => {
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const lastFetchKeyRef = useRef<string | null>(null);
+  const gradingInFlightRef = useRef(false);
 
   useEffect(() => {
     const fetchKey = JSON.stringify({
@@ -294,7 +296,7 @@ const QuizDisplayPage: React.FC = () => {
   ]);
 
   const handleAnswerChange = (index: number, answer: string | number) => {
-    if (isQuizChecked) {
+    if (isQuizChecked || gradingInFlightRef.current) {
       return;
     }
 
@@ -304,6 +306,7 @@ const QuizDisplayPage: React.FC = () => {
   };
 
   const checkAnswers = async () => {
+    if (isQuizChecked || gradingInFlightRef.current) return;
     const unansweredQuestions = quizQuestions
       .map((_, index) => index)
       .filter((index) => !isAnswerProvided(userAnswers[index]));
@@ -322,6 +325,8 @@ const QuizDisplayPage: React.FC = () => {
       return;
     }
 
+    gradingInFlightRef.current = true;
+    setIsGrading(true);
     try {
       // Grading is authoritative on the server: only the user's answers are
       // sent, and correct answers come back in the grading response.
@@ -332,16 +337,27 @@ const QuizDisplayPage: React.FC = () => {
         })),
       };
 
-      const { data: report } = await publicApi.post(
+      const authenticated = TokenService.hasTokens();
+      const httpClient = authenticated ? api : publicApi;
+      const { data: report, headers } = await httpClient.post(
         `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
         payload,
       );
 
       setQuizReport(report);
       setIsQuizChecked(true);
+      const attemptStatus = headers?.["x-quiz-attempt-status"];
+      if (authenticated && attemptStatus === "failed") {
+        toast.error(uiText("attempts.saveFailed"));
+      } else if (authenticated && attemptStatus === "not-requested") {
+        toast.error(uiText("attempts.notRequested"));
+      }
     } catch (err) {
       console.error("Error checking answers:", err);
       toast.error(uiText("m7f0e09f9915d1863"));
+    } finally {
+      gradingInFlightRef.current = false;
+      setIsGrading(false);
     }
   };
 
@@ -453,14 +469,17 @@ const QuizDisplayPage: React.FC = () => {
                     onAnswerChange={handleAnswerChange}
                     options={q.options || []}
                     value={userAnswers[i]}
-                    disabled={isQuizChecked}
+                    disabled={isQuizChecked || isGrading}
                   />
                 </div>
               ))}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-              {!isQuizChecked && <CheckButton onClick={checkAnswers} />}
+              {!isQuizChecked && !isGrading && (
+                <CheckButton onClick={checkAnswers} />
+              )}
+              {isGrading && <p role="status">{uiText("attempts.grading")}</p>}
               <SaveQuizButton
                 quizData={quizQuestions}
                 quizId={quizId}

@@ -1,7 +1,24 @@
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
-import { Settings } from "lucide-react";
+import {
+  User,
+  Shield,
+  CreditCard,
+  UserCheck,
+  Mail,
+  KeyRound,
+  Trash2,
+  ExternalLink,
+  Check,
+  Edit3,
+  AlertTriangle,
+  Globe,
+  MapPin,
+  LogOut,
+  ChevronRight,
+} from "lucide-react";
 import { useAuth } from "@features/auth/context/authContext";
 import {
   updateProfile,
@@ -22,44 +39,48 @@ import PersonaPicker from "@features/persona/components/PersonaPicker";
 import { usePersona } from "@features/persona/context/personaContext";
 import LanguagePicker from "@features/locale/components/LanguagePicker";
 import { useLocale } from "@features/locale/context/localeContext";
-import {
-  LOCALE_DISPLAY_NAMES,
-  SUPPORTED_LOCALES,
-  type SupportedLocale,
-} from "@shared/config/locale";
-import { useTranslation } from "react-i18next";
+import { type SupportedLocale } from "@shared/config/locale";
 import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
+import {
+  archivo,
+  Kicker,
+  BTN_PRIMARY,
+  BTN_GHOST,
+  BTN_BASE,
+} from "@shared/ui/quizwerk";
+
+type ProfileTab = "overview" | "persona" | "billing" | "security" | "language";
 
 export default function ProfilePage() {
   const { t: uiText, i18n } = useTranslation("ui");
+  const { t } = useTranslation();
+  const { t: personaText } = usePersonaCopy();
+  const { preferredLocale, setPreferredLocale } = useLocale();
+  const [isSavingLocale, setIsSavingLocale] = useState(false);
 
   const { user, isLoading, logout, refreshUser } = useAuth();
   const { persona, definition, categoryDefinition } = usePersona();
-  const { preferredLocale, setPreferredLocale } = useLocale();
-  const { t } = useTranslation();
-  const { t: personaText } = usePersonaCopy();
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+
   const [newEmail, setNewEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
   const [emailChangePending, setEmailChangePending] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
-  const [activeSettingSection, setActiveSettingSection] = useState<
-    "account" | "billing" | "language" | "profile" | "persona" | null
-  >(null);
+
   const [paymentNotice, setPaymentNotice] = useState<{
     type: "cancelled" | "success";
     message: string;
   } | null>(null);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
-  const [isSavingLocale, setIsSavingLocale] = useState(false);
   const [billingSummary, setBillingSummary] =
     useState<SubscriptionSummary | null>(null);
 
@@ -71,8 +92,10 @@ export default function ProfilePage() {
     avatar_color: "#143E6F",
   });
 
+  // Skip syncing while editing so a background refreshUser() doesn't
+  // overwrite unsaved changes.
   useEffect(() => {
-    if (user) {
+    if (user && !isEditing) {
       setFormData({
         full_name: user.full_name || "",
         bio: user.bio || "",
@@ -81,7 +104,7 @@ export default function ProfilePage() {
         avatar_color: user.avatar_color || "#143E6F",
       });
     }
-  }, [user]);
+  }, [user, isEditing]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -107,6 +130,13 @@ export default function ProfilePage() {
   }, [user]);
 
   useEffect(() => {
+    if (!user?.stripe_customer_id || user.current_period_end) return;
+    void getSubscriptionSummary()
+      .then(setBillingSummary)
+      .catch(() => {});
+  }, [user?.current_period_end, user?.stripe_customer_id]);
+
+  useEffect(() => {
     if (!router.isReady) {
       return;
     }
@@ -118,8 +148,7 @@ export default function ProfilePage() {
     if (paymentState === "success") {
       setPaymentNotice({
         type: "success",
-        message:
-          "Payment completed. Your subscription status has been refreshed.",
+        message: uiText("profile.paymentSuccess"),
       });
 
       void (async () => {
@@ -145,7 +174,7 @@ export default function ProfilePage() {
           toast.error(
             getBillingErrorMessage(
               error,
-              "Payment succeeded, but the profile refresh failed.",
+              uiText("profile.paymentRefreshFailed"),
             ),
           );
         } finally {
@@ -158,35 +187,11 @@ export default function ProfilePage() {
     if (paymentState === "cancelled") {
       setPaymentNotice({
         type: "cancelled",
-        message: "Checkout was cancelled. No changes were made to your plan.",
+        message: uiText("profile.paymentCancelled"),
       });
       void router.replace("/profile", undefined, { shallow: true });
     }
   }, [refreshUser, router, router.isReady, router.query.payment]);
-
-  useEffect(() => {
-    if (!user?.stripe_customer_id || user.current_period_end) {
-      return;
-    }
-
-    void getSubscriptionSummary()
-      .then((summary) => {
-        setBillingSummary(summary);
-      })
-      .catch(() => {
-        // Keep the current profile snapshot if reconciliation fails.
-      });
-  }, [user?.current_period_end, user?.stripe_customer_id]);
-
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-    } finally {
-      setIsLoggingOut(false);
-      setShowLogoutConfirm(false);
-    }
-  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -196,23 +201,39 @@ export default function ProfilePage() {
     setSaveError("");
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setShowLogoutConfirm(false);
+      router.push("/");
+    } catch {
+      toast.error(uiText("md64206ce225f573b"));
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
-    if (user && user.is_verified === false) {
+    if (user?.is_verified === false) {
       toast.error(uiText("m10cf11c897a08692"));
       return;
     }
-
     setIsSaving(true);
     setSaveError("");
-    setSaveSuccess(false);
-
     try {
-      await updateProfile(formData);
-      setSaveSuccess(true);
-      setIsEditing(false);
-
-      if (refreshUser) {
+      if (user) {
+        await updateProfile({
+          full_name: formData.full_name,
+          bio: formData.bio,
+          location: formData.location,
+          website: formData.website,
+          avatar_color: formData.avatar_color,
+        });
         await refreshUser();
+        setSaveSuccess(true);
+        setIsEditing(false);
+        toast.success(uiText("me71daf5f6cf7b62d"));
       }
       if (typeof window !== "undefined") {
         localStorage.setItem(
@@ -224,6 +245,7 @@ export default function ProfilePage() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
       setSaveError(error.message || uiText("meeb7276dab30a337"));
+      toast.error(error.message || uiText("meeb7276dab30a337"));
     } finally {
       setIsSaving(false);
     }
@@ -241,7 +263,7 @@ export default function ProfilePage() {
     try {
       await requestEmailChange(newEmail.trim());
       setEmailChangePending(true);
-      toast.success(uiText("ma4cfdc73bfcb2671"));
+      toast.success(uiText("m30746b43a4e1a262"));
     } catch (error: any) {
       toast.error(error?.message || uiText("mb780699d95333157"));
     }
@@ -268,9 +290,24 @@ export default function ProfilePage() {
     try {
       await deleteAccount();
       setShowDeleteConfirm(false);
+      toast.success(uiText("mf65c2dd173fc5063"));
       await logout();
     } catch (error: any) {
       toast.error(error?.message || uiText("m83326cc97ff9fac2"));
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setIsOpeningPortal(true);
+      const { portal_url } = await createPortalSession();
+      window.location.assign(portal_url);
+    } catch (error: any) {
+      toast.error(
+        getBillingErrorMessage(error, uiText("profile.portalFailed")),
+      );
+    } finally {
+      setIsOpeningPortal(false);
     }
   };
 
@@ -283,20 +320,6 @@ export default function ProfilePage() {
       toast.error(error?.message || t("language.saveError"));
     } finally {
       setIsSavingLocale(false);
-    }
-  };
-
-  const handleManageSubscription = async () => {
-    try {
-      setIsOpeningPortal(true);
-      const { portal_url } = await createPortalSession();
-      window.location.assign(portal_url);
-    } catch (error: any) {
-      toast.error(
-        getBillingErrorMessage(error, "Unable to open the billing portal."),
-      );
-    } finally {
-      setIsOpeningPortal(false);
     }
   };
 
@@ -340,28 +363,29 @@ export default function ProfilePage() {
   );
 
   const formatPlanLabel = (plan?: string) => {
-    if (!plan || plan === "free") {
-      return "Free";
-    }
-    return plan.charAt(0).toUpperCase() + plan.slice(1);
+    const value = plan || "free";
+    return t(`values.${value}`, {
+      defaultValue: value.charAt(0).toUpperCase() + value.slice(1),
+    });
   };
 
   const formatStatusLabel = (status?: string) => {
-    if (!status || status === "inactive") {
-      return "Inactive";
-    }
-    return status
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
+    const value = status || "inactive";
+    return t(`values.${value}`, {
+      defaultValue: value
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" "),
+    });
   };
 
   const subscriptionStatusClassName =
     billingStatus === "active"
-      ? "bg-green-100 text-green-800"
+      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
       : billingStatus === "past_due"
-        ? "bg-amber-100 text-amber-800"
-        : "bg-gray-100 text-gray-700";
+        ? "bg-amber-100 text-amber-800 border-amber-300"
+        : "bg-slate-100 text-slate-700 border-slate-300";
+
   const personaLabel =
     categoryDefinition && definition
       ? `${categoryDefinition.label} · ${definition.label}`
@@ -369,105 +393,245 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-paper flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#143E6F]"></div>
-          <p className="mt-4 text-gray-600">{uiText("m47d2a515ef2f05b8")}</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+          <p className="mt-4 text-sm font-bold text-ink/70">
+            {uiText("m4a47f12d23c4a6bf")}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div
+      className={`flex min-h-screen flex-col overflow-x-hidden bg-paper text-ink ${archivo.className}`}
+    >
       <NavBar />
 
       <RequireAuth
         title={uiText("m991bfa015514f9d5")}
         description={uiText("m0bbb194809df9769")}
       >
-        <main className="flex-grow mx-auto px-4 py-8 w-full max-w-6xl">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-[#143E6F]">
-              {uiText("m991bfa015514f9d5")}
+        <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 flex-1 py-[clamp(24px,5vw,48px)]">
+          {/* Header */}
+          <div>
+            <Kicker>{uiText("m939eccfb6dd7133a")}</Kicker>
+            <h1 className="text-[clamp(28px,6vw,40px)] font-extrabold leading-tight tracking-[-0.025em] text-ink">
+              {uiText("m4f1063c95669d708")}
             </h1>
-            <button
-              onClick={() => {
-                setIsSettingsOpen((prev) => !prev);
-                setActiveSettingSection(null);
-              }}
-              className="p-2 rounded-full border border-gray-200 text-[#143E6F] hover:bg-gray-50 transition-colors"
-              aria-label={uiText("mca381c1e76e681b6")}
-            >
-              <Settings size={20} />
-            </button>
+            <p className="mt-1.5 max-w-2xl text-[clamp(13px,2vw,15px)] leading-relaxed text-ink/70">
+              {uiText("m9c012bb430e8a983")}
+            </p>
           </div>
 
+          {/* Feedback Notices */}
+          {paymentNotice && (
+            <div
+              className={`mt-4 sm:mt-6 border-l-4 p-3 sm:p-4 ${
+                paymentNotice.type === "success"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+                  : "border-amber-500 bg-amber-50 text-amber-900"
+              }`}
+            >
+              <p className="text-xs sm:text-sm font-semibold">
+                {paymentNotice.message}
+              </p>
+            </div>
+          )}
+
           {saveSuccess && (
-            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-              <svg
-                className="w-5 h-5 text-green-600 mr-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <span className="text-green-800">
-                {uiText("m5d76b99b7f954c20")}
-              </span>
+            <div className="mt-4 sm:mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-3 sm:p-4 text-emerald-900">
+              <p className="text-xs sm:text-sm font-semibold">
+                {uiText("m6ccf8b7d69b8b021")}
+              </p>
             </div>
           )}
 
           {saveError && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
-              <svg
-                className="w-5 h-5 text-red-600 mr-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-              <span className="text-red-800">{saveError}</span>
+            <div className="mt-4 sm:mt-6 border-l-4 border-rose-600 bg-rose-50 p-3 sm:p-4 text-rose-900">
+              <p className="text-xs sm:text-sm font-semibold">{saveError}</p>
             </div>
           )}
 
-          {paymentNotice && (
-            <div
-              className={`mb-6 rounded-lg border p-4 ${
-                paymentNotice.type === "success"
-                  ? "border-green-200 bg-green-50 text-green-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
-              }`}
-            >
-              {paymentNotice.message}
-            </div>
-          )}
+          {/* Identity Hero Banner */}
+          <div className="mt-6 sm:mt-8 border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 w-full max-w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
+              <div className="flex items-start sm:items-center gap-3.5 sm:gap-5 min-w-0">
+                <div
+                  className="flex h-12 w-12 sm:h-20 sm:w-20 flex-shrink-0 items-center justify-center text-white text-xl sm:text-3xl font-black"
+                  style={{ backgroundColor: formData.avatar_color }}
+                  data-testid="profile-avatar"
+                >
+                  {user?.username?.charAt(0).toUpperCase() || "U"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2.5">
+                    <h2 className="min-w-0 break-words text-[clamp(18px,4vw,24px)] font-extrabold text-ink">
+                      {formData.full_name ||
+                        user?.username ||
+                        uiText("mb512d97e7cbf97c2")}
+                    </h2>
+                    {user?.is_verified ? (
+                      <span className="inline-flex items-center gap-1 border border-emerald-300 bg-emerald-50 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                        <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" />{" "}
+                        {uiText("m4f7838402f37674e")}
+                      </span>
+                    ) : null}
+                  </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-8 mb-6 max-w-3xl mx-auto w-full">
-            <div className="flex items-start mb-6">
-              <div
-                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold flex-shrink-0"
-                style={{ backgroundColor: formData.avatar_color }}
-              >
-                {user?.username?.charAt(0).toUpperCase() || "U"}
+                  <p className="mt-0.5 text-xs sm:text-sm font-mono text-ink/60 break-all">
+                    @{user?.username || uiText("m04f8996da763b7a9")} ·{" "}
+                    {user?.email}
+                  </p>
+
+                  <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("persona")}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1.5 border border-brand/20 bg-brand-50/60 px-2 py-1 text-[11px] font-bold text-brand-700 transition-colors hover:bg-brand-100 sm:px-2.5 sm:text-xs"
+                    >
+                      <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 bg-brand flex-shrink-0" />
+                      <span className="min-w-0 truncate">
+                        {uiText("profile.roleSummary", { role: personaLabel })}
+                      </span>
+                      <ChevronRight className="h-3 w-3 text-brand flex-shrink-0" />
+                    </button>
+
+                    <span
+                      className={`inline-flex max-w-full items-center border px-2 py-1 text-[11px] font-bold sm:px-2.5 sm:text-xs ${subscriptionStatusClassName}`}
+                    >
+                      {uiText("profile.planSummary", {
+                        plan: formatPlanLabel(billingPlan),
+                        status: formatStatusLabel(billingStatus),
+                      })}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="ml-6 flex-grow">
+
+              <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-2 sm:gap-3 mt-2 sm:mt-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("overview");
+                    if (isEditing) {
+                      handleCancelEdit();
+                    } else {
+                      setIsEditing(true);
+                    }
+                  }}
+                  className={`w-full sm:w-auto justify-center min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2 ${
+                    isEditing ? BTN_GHOST : BTN_PRIMARY
+                  }`}
+                >
+                  <Edit3 className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  {isEditing
+                    ? uiText("mfddcfdf8d5f404e1")
+                    : uiText("mfec2ac0f4cf167e3")}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className={`w-full sm:w-auto justify-center min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2 ${BTN_GHOST} text-rose-700 hover:bg-rose-50`}
+                  aria-label={uiText("m48f0d3d397d49f13")}
+                >
+                  <LogOut className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  {uiText("m0b184bc5d5341998")}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation: 2-Column Responsive Grid on Mobile, Flex on Desktop */}
+          <div className="mt-6 sm:mt-8 border-b-0 sm:border-b-2 sm:border-divider">
+            <nav
+              className="grid grid-cols-2 gap-2 sm:flex sm:space-x-4 md:space-x-8"
+              aria-label={uiText("m8e5ea509893e6dfd")}
+            >
+              {[
+                {
+                  id: "overview",
+                  label: uiText("mb863a343d85adb8f"),
+                  icon: User,
+                },
+                {
+                  id: "persona",
+                  label: uiText("m75dafd90c38333f0"),
+                  icon: UserCheck,
+                },
+                {
+                  id: "billing",
+                  label: uiText("m9e47ba56d3c4c003"),
+                  icon: CreditCard,
+                },
+                {
+                  id: "security",
+                  label: uiText("m528396ce9399d0e9"),
+                  icon: Shield,
+                },
+                { id: "language", label: t("language.settings"), icon: Globe },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as ProfileTab)}
+                    className={`inline-flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 p-2.5 sm:px-3 sm:py-3 text-[11px] min-[360px]:text-xs sm:text-sm font-extrabold transition-colors border-2 sm:border-0 sm:border-b-2 ${
+                      isActive
+                        ? "border-brand bg-brand-50/60 text-brand sm:bg-transparent sm:border-brand"
+                        : "border-divider bg-white text-ink/70 hover:bg-ink/[0.03] hover:text-ink sm:border-transparent sm:bg-transparent sm:hover:border-ink/20"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <span className="truncate sm:whitespace-nowrap">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Tab Content Areas */}
+          <div className="mt-6 sm:mt-8">
+            {/* TAB 1: OVERVIEW & DETAILS */}
+            {activeTab === "overview" && (
+              <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 w-full max-w-full">
+                <div className="flex flex-wrap items-center justify-between border-b-2 border-divider pb-3 sm:pb-4 mb-4 sm:mb-6 gap-2">
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                      {uiText("mc4b37e84b553d29b")}
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                      {uiText("m131a59ae0aaedf15")}
+                    </p>
+                  </div>
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className={`${BTN_GHOST} text-xs sm:text-sm min-h-[36px] sm:min-h-[44px] px-3 py-1.5`}
+                    >
+                      <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                      {uiText("m8cfa48f3b9db69e9")}
+                    </button>
+                  )}
+                </div>
+
                 {isEditing ? (
-                  <div className="space-y-4">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSaveProfile();
+                    }}
+                    className="space-y-4 sm:space-y-6 max-w-5xl w-full"
+                  >
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
                         {uiText("m8e00cdf71fa7cc76")}
                       </label>
                       <input
@@ -475,15 +639,16 @@ export default function ProfilePage() {
                         name="full_name"
                         value={formData.full_name}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        placeholder={uiText("mb3627016e7e783ec")}
+                        placeholder={uiText("mb087835b98c385df")}
+                        className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                       />
                     </div>
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {uiText("m7c73323031d48c70")}
+                      <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1.5">
+                        {uiText("me068ba27a3cff081")}
                       </label>
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex flex-wrap gap-2 sm:gap-2.5">
                         {avatarColors.map((color) => (
                           <button
                             key={color}
@@ -494,702 +659,558 @@ export default function ProfilePage() {
                                 avatar_color: color,
                               }))
                             }
-                            className={`w-10 h-10 rounded-full transition-transform ${
+                            className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full transition-transform ${
                               formData.avatar_color === color
-                                ? "ring-2 ring-offset-2 ring-[#143E6F] scale-110"
+                                ? "ring-2 ring-brand ring-offset-2 scale-110"
                                 : "hover:scale-105"
                             }`}
                             style={{ backgroundColor: color }}
+                            aria-label={uiText("m02a34b8afdf4e11e", {
+                              value0: color,
+                            })}
                           />
                         ))}
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div>
-                    <h2 className="text-2xl font-semibold text-gray-900">
-                      {formData.full_name ||
-                        user?.username ||
-                        uiText("mb512d97e7cbf97c2")}
-                    </h2>
-                    <p className="text-gray-500 mt-1">
-                      @{user?.username || uiText("m04f8996da763b7a9")}
-                    </p>
-                    <p className="text-gray-600 mt-2">
-                      {user?.email || uiText("mc7e5603e095c22e4")}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <div className="border-t pt-6 mb-6">
-              {isEditing ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {uiText("m3933b1802161254f")}
-                  </label>
-                  <textarea
-                    name="bio"
-                    value={formData.bio}
-                    onChange={handleInputChange}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                    placeholder={uiText("m697f10251d5bd2ed")}
-                    maxLength={500}
-                  />
-                  <p className="text-sm text-gray-500 mt-1">
-                    {formData.bio.length}/500 characters
-                  </p>
-                </div>
-              ) : (
-                formData.bio && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {uiText("m3933b1802161254f")}
-                    </h3>
-                    <p className="text-gray-700">{formData.bio}</p>
-                  </div>
-                )
-              )}
-            </div>
-
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {isEditing
-                  ? uiText("m9fd84fecd300b57c")
-                  : uiText("m1cb0ba125f84c982")}
-              </h3>
-              <div className="space-y-4">
-                {isEditing ? (
-                  <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {uiText("m15b61974b2707a7b")}
+                      <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
+                        {uiText("m3933b1802161254f")}
                       </label>
-                      <input
-                        type="text"
-                        name="location"
-                        value={formData.location}
+                      <textarea
+                        name="bio"
+                        rows={3}
+                        value={formData.bio}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        placeholder={uiText("ma7bc8816f26258d2")}
+                        maxLength={500}
+                        placeholder={uiText("mddf4e9ad78bea56c")}
+                        className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {uiText("mb5a229ac8becc603")}
-                      </label>
-                      <input
-                        type="url"
-                        name="website"
-                        value={formData.website}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        placeholder="https://yourwebsite.com"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {formData.location && (
-                      <div className="flex items-center">
-                        <svg
-                          className="w-5 h-5 text-gray-400 mr-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
-                        <span className="text-gray-700">
-                          {formData.location}
-                        </span>
-                      </div>
-                    )}
-                    {formData.website && (
-                      <div className="flex items-center">
-                        <svg
-                          className="w-5 h-5 text-gray-400 mr-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                          />
-                        </svg>
-                        <a
-                          href={formData.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#143E6F] hover:underline"
-                        >
-                          {formData.website}
-                        </a>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">
-                    {uiText("me3b89e9d33f88e52")}
-                  </span>
-                  <span className="font-medium text-gray-900">
-                    {user?.username || "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">
-                    {uiText("m969ccbd3cf6300ec")}
-                  </span>
-                  <span className="font-medium text-gray-900">
-                    {user?.email || "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center gap-4 py-3 border-t">
-                  <span className="text-gray-600">
-                    {uiText("m31bdeef94e7d9a9c")}
-                  </span>
-                  <span className="text-right font-medium text-gray-900">
-                    {personaLabel}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-3 border-t">
-                  <span className="text-gray-600">
-                    {uiText("mdafb01abaf3dd0c7")}
-                  </span>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                    {uiText("m92340695899bd2d8")}
-                  </span>
-                </div>
-                <div className="border-t pt-4">
-                  <div className="rounded-2xl border border-[#143E6F]/10 bg-[#f8fbff] p-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#143E6F]/70">
-                          {uiText("m3ac8bbca9a74cfbd")}
-                        </p>
-                        <h4 className="mt-2 text-lg font-semibold text-[#102347]">
-                          {uiText("mb1a74beb41988ef5", {
-                            value0: formatPlanLabel(billingPlan),
-                          })}
-                        </h4>
-                        <div className="mt-3">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
-                          >
-                            {uiText("values." + billingStatus, {
-                              ns: "translation",
-                              defaultValue: formatStatusLabel(billingStatus),
-                            })}
-                          </span>
-                        </div>
-                        <p className="mt-3 text-sm text-gray-600">
-                          {billingRenewalDate
-                            ? uiText("mdad47b1ee9673d16", {
-                                value0: new Date(
-                                  billingRenewalDate,
-                                ).toLocaleDateString(i18n.language),
-                              })
-                            : billingPlan === "free"
-                              ? uiText("m1d6022df68d719ff")
-                              : uiText("m29835dc37c881570")}
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        {hasBillingPortalAccess ? (
-                          <button
-                            onClick={handleManageSubscription}
-                            disabled={isOpeningPortal}
-                            className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isOpeningPortal
-                              ? uiText("maa987d702e9696af")
-                              : uiText("m9041c6aa2c3d4670")}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => router.push("/#pricing")}
-                            className="rounded-lg bg-[#143E6F] px-4 py-2 text-sm font-medium text-white hover:bg-[#0f2f54]"
-                          >
-                            {uiText("ma72e2bd3e148c05e")}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => router.push("/billing_history")}
-                          className="rounded-lg border border-[#143E6F]/20 px-4 py-2 text-sm font-medium text-[#143E6F] hover:bg-[#143E6F]/5"
-                        >
-                          {uiText("m9aa99a0fb494e1a8")}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {isEditing && (
-              <div className="border-t pt-6 mt-6 flex gap-3">
-                <button
-                  onClick={handleCancelEdit}
-                  disabled={isSaving}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {uiText("m19766ed6ccb2f4a3")}
-                </button>
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={isSaving}
-                  className="flex-1 bg-[#143E6F] text-white py-2.5 rounded-lg font-medium hover:bg-[#0f2f54] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isSaving
-                    ? uiText("mdc85af8f2b1d0d67")
-                    : uiText("m35322b5bb5a218a1")}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {isSettingsOpen && (
-            <div className="bg-white rounded-2xl shadow-sm p-8 max-w-4xl mx-auto w-full space-y-8">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {uiText("m74a883a037bc227f")}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  {uiText("m4e62cb99b2d7421c")}
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="border border-[#143E6F]/20 rounded-xl">
-                  <button
-                    onClick={() =>
-                      setActiveSettingSection((prev) =>
-                        prev === "billing" ? null : "billing",
-                      )
-                    }
-                    className="w-full px-5 py-4 flex items-center justify-between text-left"
-                  >
-                    <h4 className="text-lg font-semibold text-[#143E6F]">
-                      {uiText("m3ac8bbca9a74cfbd")}
-                    </h4>
-                    <span className="text-[#143E6F]">
-                      {activeSettingSection === "billing" ? "-" : "+"}
-                    </span>
-                  </button>
-                  {activeSettingSection === "billing" && (
-                    <div className="border-t border-[#143E6F]/10 p-5 space-y-4">
-                      <div className="rounded-xl border border-[#143E6F]/10 bg-[#f8fbff] p-4">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              {uiText("m37ca715f53b6bb83")}
-                            </p>
-                            <h5 className="mt-1 text-xl font-semibold text-[#102347]">
-                              {formatPlanLabel(billingPlan)}
-                            </h5>
-                            <p className="mt-2 text-sm text-gray-600">
-                              {uiText("md617370d57781737", {
-                                value0: formatStatusLabel(billingStatus),
-                              })}
-                            </p>
-                            {billingRenewalDate ? (
-                              <p className="mt-1 text-sm text-gray-600">
-                                {uiText("mdbafd6547ce2790a", {
-                                  value0: new Date(
-                                    billingRenewalDate,
-                                  ).toLocaleDateString(i18n.language),
-                                })}
-                              </p>
-                            ) : null}
-                          </div>
-                          <span
-                            className={`inline-flex self-start rounded-full px-3 py-1 text-sm font-medium ${subscriptionStatusClassName}`}
-                          >
-                            {uiText("values." + billingStatus, {
-                              ns: "translation",
-                              defaultValue: formatStatusLabel(billingStatus),
-                            })}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {hasBillingPortalAccess ? (
-                          <button
-                            onClick={handleManageSubscription}
-                            disabled={isOpeningPortal}
-                            className="rounded-lg bg-[#143E6F] px-4 py-3 text-left text-white hover:bg-[#0f2f54] disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <p className="font-medium">
-                              {isOpeningPortal
-                                ? uiText("maa987d702e9696af")
-                                : uiText("m9041c6aa2c3d4670")}
-                            </p>
-                            <p className="mt-1 text-sm text-white/80">
-                              {uiText("m1d382a8ab4e5c436")}
-                            </p>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => router.push("/#pricing")}
-                            className="rounded-lg bg-[#143E6F] px-4 py-3 text-left text-white hover:bg-[#0f2f54]"
-                          >
-                            <p className="font-medium">
-                              {uiText("m39b7ec1e84022198")}
-                            </p>
-                            <p className="mt-1 text-sm text-white/80">
-                              {uiText("m77f18dd9902e47cf")}
-                            </p>
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => router.push("/billing_history")}
-                          className="rounded-lg border border-gray-200 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                        >
-                          <p className="font-medium text-gray-900">
-                            {uiText("m9aa99a0fb494e1a8")}
-                          </p>
-                          <p className="mt-1 text-sm text-gray-500">
-                            {uiText("m4d0ecb2353213fad")}
-                          </p>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="border border-[#143E6F]/20 rounded-xl">
-                  <button
-                    onClick={() =>
-                      setActiveSettingSection((prev) =>
-                        prev === "persona" ? null : "persona",
-                      )
-                    }
-                    className="w-full px-5 py-4 flex items-center justify-between text-left"
-                  >
-                    <div>
-                      <h4 className="text-lg font-semibold text-[#143E6F]">
-                        {personaText("profile.title")}
-                      </h4>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {personaText("profile.current", {
-                          persona: personaLabel,
-                        })}
+                      <p className="mt-1 text-right text-[11px] text-ink/50">
+                        {formData.bio.length}/500 characters
                       </p>
                     </div>
-                    <span className="text-[#143E6F]">
-                      {activeSettingSection === "persona" ? "-" : "+"}
-                    </span>
-                  </button>
-                  {activeSettingSection === "persona" && (
-                    <div className="border-t border-[#143E6F]/10 p-5">
-                      <PersonaPicker
-                        heading={personaText("profile.heading")}
-                        initialCategory={persona?.category ?? null}
-                        source="profile"
-                        onPicked={() => {
-                          toast.success(personaText("profile.saved"));
-                          setActiveSettingSection(null);
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
 
-                <div className="border border-[#143E6F]/20 rounded-xl">
-                  <button
-                    onClick={() =>
-                      setActiveSettingSection((prev) =>
-                        prev === "language" ? null : "language",
-                      )
-                    }
-                    className="w-full px-5 py-4 flex items-center justify-between text-left"
-                  >
-                    <div>
-                      <h4 className="text-lg font-semibold text-[#143E6F]">
-                        {t("language.settings")}
-                      </h4>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {t("language.description")}
-                      </p>
-                    </div>
-                    <span className="text-[#143E6F]">
-                      {activeSettingSection === "language" ? "-" : "+"}
-                    </span>
-                  </button>
-                  {activeSettingSection === "language" && (
-                    <div className="border-t border-[#143E6F]/10 p-5 space-y-3">
-                      <LanguagePicker
-                        value={
-                          preferredLocale ??
-                          (user?.onboarding_organization_id ? null : "en")
-                        }
-                        onChange={(next) => void handleLocaleChange(next)}
-                        disabled={isSavingLocale}
-                        allowOrganizationDefault={Boolean(
-                          user?.onboarding_organization_id,
-                        )}
-                      />
-                      {isSavingLocale && (
-                        <p className="text-sm text-gray-500">
-                          {t("language.saving")}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border border-[#143E6F]/20 rounded-xl">
-                  <button
-                    onClick={() =>
-                      setActiveSettingSection((prev) =>
-                        prev === "profile" ? null : "profile",
-                      )
-                    }
-                    className="w-full px-5 py-4 flex items-center justify-between text-left"
-                  >
-                    <h4 className="text-lg font-semibold text-[#143E6F]">
-                      {uiText("mfec2ac0f4cf167e3")}
-                    </h4>
-                    <span className="text-[#143E6F]">
-                      {activeSettingSection === "profile" ? "-" : "+"}
-                    </span>
-                  </button>
-                  {activeSettingSection === "profile" && (
-                    <div className="border-t border-[#143E6F]/10 p-5 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {uiText("mdcd1d5223f73b3a9")}
+                        <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
+                          {uiText("m15b61974b2707a7b")}
                         </label>
                         <input
                           type="text"
-                          name="full_name"
-                          value={formData.full_name}
+                          name="location"
+                          value={formData.location}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
+                          placeholder={uiText("ma7bc8816f26258d2")}
+                          className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {uiText("m3933b1802161254f")}
-                        </label>
-                        <textarea
-                          name="bio"
-                          value={formData.bio}
-                          onChange={handleInputChange}
-                          rows={4}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {uiText("m003d1aeefd3feda6")}
-                        </label>
-                        <div className="flex gap-2 flex-wrap">
-                          {avatarColors.map((color) => (
-                            <button
-                              key={color}
-                              type="button"
-                              onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  avatar_color: color,
-                                }))
-                              }
-                              className={`w-9 h-9 rounded-full border-2 ${
-                                formData.avatar_color === color
-                                  ? "border-[#143E6F]"
-                                  : "border-transparent"
-                              }`}
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleSaveProfile}
-                        disabled={isSaving}
-                        className="w-full bg-[#143E6F] text-white py-2 rounded-lg hover:bg-[#0f2f54] transition-colors disabled:opacity-50"
-                      >
-                        {isSaving
-                          ? uiText("mdc85af8f2b1d0d67")
-                          : saveSuccess
-                            ? uiText("mb5c120b316c237a0")
-                            : uiText("m09d0725ba3e9d186")}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="border border-[#143E6F]/20 rounded-xl">
-                  <button
-                    onClick={() =>
-                      setActiveSettingSection((prev) =>
-                        prev === "account" ? null : "account",
-                      )
-                    }
-                    className="w-full px-5 py-4 flex items-center justify-between text-left"
-                  >
-                    <h4 className="text-lg font-semibold text-[#143E6F]">
-                      {uiText("m7e1b0d5641f2640c")}
-                    </h4>
-                    <span className="text-[#143E6F]">
-                      {activeSettingSection === "account" ? "-" : "+"}
-                    </span>
-                  </button>
-                  {activeSettingSection === "account" && (
-                    <div className="border-t border-[#143E6F]/10 p-5 space-y-4">
-                      <button
-                        onClick={handleRequestPasswordReset}
-                        className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                      >
-                        <p className="font-medium text-gray-900">
-                          {uiText("m3f9c991f63a9a376")}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {uiText("med9b989fde608b9b")}
-                        </p>
-                      </button>
-
-                      <div className="border border-gray-200 rounded-lg p-4 space-y-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          {uiText("m5f8ce4b504c93564")}
+                        <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
+                          {uiText("mb5a229ac8becc603")}
                         </label>
                         <input
-                          type="email"
-                          value={newEmail}
-                          onChange={(event) => setNewEmail(event.target.value)}
-                          placeholder={uiText("m8a77fe02a1966fdb")}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
+                          type="url"
+                          name="website"
+                          value={formData.website}
+                          onChange={handleInputChange}
+                          placeholder="https://example.com"
+                          className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                         />
-                        <button
-                          onClick={handleUpdateEmail}
-                          className="w-full bg-[#143E6F] text-white py-2 rounded-lg hover:bg-[#0f2f54] transition-colors"
-                        >
-                          {uiText("meb42487f94ff995b")}
-                        </button>
-                        {emailChangePending && (
-                          <div className="space-y-2">
-                            <input
-                              type="text"
-                              value={emailOtp}
-                              onChange={(event) =>
-                                setEmailOtp(event.target.value)
-                              }
-                              placeholder={uiText("m78d5714a87cb6948")}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
-                            />
-                            <button
-                              onClick={handleVerifyEmailChange}
-                              className="w-full border border-[#143E6F] text-[#143E6F] py-2 rounded-lg hover:bg-[#143E6F]/10 transition-colors"
-                            >
-                              {uiText("me89a77e7fe58a6d1")}
-                            </button>
-                          </div>
-                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t-2 border-divider pt-3 sm:pt-4">
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={publicProfile}
+                          onChange={(e) => setPublicProfile(e.target.checked)}
+                          className="h-4 w-4 accent-brand flex-shrink-0"
+                        />
+                        <span className="text-xs sm:text-sm font-bold text-ink">
+                          {uiText("me7d0707625d617cd")}
+                        </span>
+                      </label>
+                      <p className="mt-1 text-[11px] sm:text-xs text-ink/60 pl-6">
+                        {uiText("ma2c8c5485b5e3706")}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-3 sm:pt-4 border-t-2 border-divider">
+                      <button
+                        type="submit"
+                        disabled={isSaving}
+                        className={`${BTN_PRIMARY} w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
+                      >
+                        {isSaving
+                          ? uiText("m86c6e0d74cc948c0")
+                          : uiText("m35322b5bb5a218a1")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={isSaving}
+                        className={`${BTN_GHOST} w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
+                      >
+                        {uiText("m19766ed6ccb2f4a3")}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-4 sm:space-y-6 max-w-5xl w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+                      <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                          {uiText("m8e00cdf71fa7cc76")}
+                        </span>
+                        <p className="mt-1 break-words text-sm font-extrabold text-ink sm:text-base">
+                          {formData.full_name || uiText("m4895f73177ab5d67")}
+                        </p>
                       </div>
 
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        className="w-full text-left px-4 py-3 rounded-lg border border-red-300 hover:bg-red-50 transition-colors"
-                      >
-                        <p className="font-medium text-red-600">
-                          {uiText("ma2e20a33570001ae")}
+                      <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                          {uiText("me3b89e9d33f88e52")}
+                        </span>
+                        <p className="mt-1 break-all font-mono text-sm font-bold text-ink sm:text-base">
+                          @{user?.username || "N/A"}
                         </p>
-                        <p className="text-sm text-red-500">
-                          {uiText("mf551c1f211804b74")}
+                      </div>
+
+                      <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                          {uiText("m09bf25ef30833633")}
+                        </span>
+                        <p className="mt-1 text-xs sm:text-base font-mono text-ink break-all">
+                          {user?.email || "N/A"}
                         </p>
-                      </button>
+                      </div>
+
+                      <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                        <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                          {uiText("m15b61974b2707a7b")}
+                        </span>
+                        <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-ink sm:text-base">
+                          <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ink/40 flex-shrink-0" />
+                          <span className="min-w-0 break-words">
+                            {formData.location || uiText("m4895f73177ab5d67")}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                        {uiText("m3933b1802161254f")}
+                      </span>
+                      <p className="mt-1 text-xs sm:text-sm text-ink leading-relaxed break-words">
+                        {formData.bio || uiText("mecdab25ab8ace098")}
+                      </p>
+                    </div>
+
+                    <div className="border border-divider p-3 sm:p-4 bg-paper/40">
+                      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                        {uiText("m9a3dd7f603c2f4fe")}
+                      </span>
+                      <div className="mt-1 flex items-center gap-2 text-xs sm:text-sm break-all">
+                        <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ink/40 flex-shrink-0" />
+                        {formData.website ? (
+                          <a
+                            href={formData.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-w-0 items-center gap-1 font-bold text-brand hover:underline"
+                          >
+                            <span className="min-w-0 break-all">
+                              {formData.website}
+                            </span>
+                            <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                          </a>
+                        ) : (
+                          <span className="text-ink/60">
+                            {uiText("m89ce7824f4f4022c")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "language" && (
+              <section className="border-2 border-divider bg-white p-4 sm:p-6 space-y-4">
+                <h3 className="text-lg font-extrabold">
+                  {t("language.settings")}
+                </h3>
+                <p className="text-sm text-ink/70">
+                  {t("language.description")}
+                </p>
+                <LanguagePicker
+                  value={
+                    preferredLocale ??
+                    (user?.onboarding_organization_id ? null : "en")
+                  }
+                  onChange={(next) => void handleLocaleChange(next)}
+                  disabled={isSavingLocale}
+                  allowOrganizationDefault={Boolean(
+                    user?.onboarding_organization_id,
+                  )}
+                />
+                {isSavingLocale && <p role="status">{t("language.saving")}</p>}
+              </section>
+            )}
+
+            {/* TAB 2: ROLE & PERSONA */}
+            {activeTab === "persona" && (
+              <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-6 sm:space-y-8 w-full max-w-full">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("ma57809d16ce7c487")}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                    {uiText("md8a72dbc4510cebb")}
+                  </p>
+                </div>
+
+                {/* Current Persona Summary Card */}
+                <div className="border-2 border-brand/30 bg-brand-50/40 p-3.5 sm:p-5 w-full max-w-full">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-widest text-brand-700">
+                        {uiText("me330395f7a37f8dd")}
+                      </span>
+                      <h4 className="mt-0.5 break-words text-xl font-black text-ink sm:mt-1 sm:text-2xl">
+                        {personaLabel}
+                      </h4>
+                    </div>
+                    <span className="inline-flex items-center gap-1 bg-brand px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-paper flex-shrink-0">
+                      <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />{" "}
+                      {uiText("m4a6bf58744a593ee")}
+                    </span>
+                  </div>
+
+                  {definition && (
+                    <div className="mt-3 sm:mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 border-t-2 border-brand/20 pt-3 sm:pt-4 text-xs">
+                      <div className="break-words">
+                        <span className="font-bold text-ink/60">
+                          {uiText("m26c67fd6b21830dc")}
+                        </span>
+                        <p className="mt-0.5 font-medium text-ink">
+                          {definition.description}
+                        </p>
+                      </div>
+                      <div className="break-words">
+                        <span className="font-bold text-ink/60">
+                          {uiText("m0c97d771aad5d18a")}
+                        </span>
+                        <p className="mt-0.5 font-medium text-ink">
+                          {definition.defaultTopic}
+                        </p>
+                      </div>
+                      <div className="break-words">
+                        <span className="font-bold text-ink/60">
+                          {uiText("m2c143f33031c4431")}
+                        </span>
+                        <p className="mt-0.5 font-medium text-ink">
+                          {uiText("profile.generationPreset", {
+                            audience: personaText(
+                              `audiences.${definition.generationDefaults.audienceType}`,
+                            ),
+                            difficulty: personaText(
+                              `difficulty.${definition.generationDefaults.difficultyLevel}`,
+                            ),
+                          })}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
+
+                {/* Switch Persona Picker */}
+                <div className="border-t-2 border-divider pt-4 sm:pt-6 w-full max-w-full">
+                  <div className="mb-4 sm:mb-6">
+                    <h4 className="text-base sm:text-lg font-extrabold text-ink">
+                      {uiText("m54331fcf1227f45f")}
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                      {uiText("m46c6a1161b996753")}
+                    </p>
+                  </div>
+                  <PersonaPicker
+                    heading={uiText("m245e8c9089ecddc6")}
+                    onPicked={() => {
+                      toast.success(uiText("m1d4d5ccd57d1d120"));
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* TAB 3: SUBSCRIPTION & BILLING */}
+            {activeTab === "billing" && (
+              <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-6 w-full max-w-full">
+                <div className="border-b-2 border-divider pb-3 sm:pb-4">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("m9e47ba56d3c4c003")}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                    {uiText("mf8fb4e09276ef0d2")}
+                  </p>
+                </div>
+
+                <div className="border-2 border-divider p-4 sm:p-6 bg-paper/30 w-full max-w-full">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
+                        {uiText("ma8fd423db9423196")}
+                      </span>
+                      <h4 className="text-xl sm:text-2xl font-black text-ink mt-0.5">
+                        {uiText("m3e0e44cf0338ceb7", {
+                          value0: formatPlanLabel(billingPlan),
+                        })}
+                      </h4>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span
+                          className={`inline-flex border px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-xs font-extrabold uppercase tracking-wide ${subscriptionStatusClassName}`}
+                        >
+                          {uiText("md617370d57781737", {
+                            value0: formatStatusLabel(billingStatus),
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                      {hasBillingPortalAccess ? (
+                        <button
+                          type="button"
+                          onClick={handleManageSubscription}
+                          disabled={isOpeningPortal}
+                          className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                        >
+                          {isOpeningPortal
+                            ? uiText("maa987d702e9696af")
+                            : uiText("mcbc4ef9225a090f7")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => router.push("/#pricing")}
+                          className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                        >
+                          {uiText("m1f033eb27e6cf7a7")}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => router.push("/billing_history")}
+                        className={`${BTN_GHOST} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                      >
+                        {uiText("m5ade08611d1f4322")}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 text-xs text-ink/70 border-t-2 border-divider pt-3 sm:pt-4 leading-relaxed">
+                    {billingRenewalDate
+                      ? uiText("mfcbd7e978aaefbb2", {
+                          value0: new Date(
+                            billingRenewalDate,
+                          ).toLocaleDateString(i18n.language),
+                        })
+                      : billingPlan === "free"
+                        ? uiText("mf999260a1a3cfca7")
+                        : uiText("m5ef7fe9fe48fb720")}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: SECURITY & ACCOUNT */}
+            {activeTab === "security" && (
+              <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-6 sm:space-y-8 w-full max-w-full">
+                <div className="border-b-2 border-divider pb-3 sm:pb-4">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("m12b039a331fe85eb")}
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                    {uiText("m5043da30e1031a74")}
+                  </p>
+                </div>
+
+                {/* Password Reset */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b-2 border-divider pb-4 sm:pb-6">
+                  <div>
+                    <h4 className="text-sm sm:text-base font-extrabold text-ink flex items-center gap-2">
+                      <KeyRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" />{" "}
+                      {uiText("mb852fe243f49516a")}
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
+                      {uiText("m55cb89fc3f08c4cb")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRequestPasswordReset}
+                    className={`${BTN_GHOST} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                  >
+                    {uiText("m4e70f1fd24babdea")}
+                  </button>
+                </div>
+
+                {/* Email Update */}
+                <div className="border-b-2 border-divider pb-4 sm:pb-6 space-y-3 sm:space-y-4">
+                  <div>
+                    <h4 className="text-sm sm:text-base font-extrabold text-ink flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" />{" "}
+                      {uiText("m7ad9e11955b60c01")}
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5 break-all">
+                      {uiText("m3669515a2cc33fd9")}
+                      <strong className="font-mono text-ink">
+                        {user?.email}
+                      </strong>
+                    </p>
+                  </div>
+
+                  <div className="max-w-md space-y-3 w-full">
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder={uiText("m51e6ebc2f5fdcc13")}
+                      className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUpdateEmail}
+                      className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                    >
+                      {uiText("m2bd7bfd7b3314b9b")}
+                    </button>
+
+                    {emailChangePending && (
+                      <div className="mt-3 sm:mt-4 p-3 sm:p-4 border-2 border-brand/30 bg-brand-50/50 space-y-3">
+                        <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-brand-900">
+                          {uiText("m6635da66ff0ead5e")}
+                        </label>
+                        <input
+                          type="text"
+                          value={emailOtp}
+                          onChange={(e) => setEmailOtp(e.target.value)}
+                          placeholder={uiText("m3ee75029c70e284c")}
+                          className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyEmailChange}
+                          className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
+                        >
+                          {uiText("mb93bce9696eee559")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Danger Zone */}
+                <div className="border-2 border-rose-200 bg-rose-50/40 p-3.5 sm:p-5 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-extrabold text-rose-800 flex items-center gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-700" />{" "}
+                    {uiText("m60245e93718bc0c9")}
+                  </h4>
+                  <p className="mt-1 text-[11px] sm:text-xs text-rose-700 leading-relaxed max-w-2xl">
+                    {uiText("m1677438c268ed2a4")}
+                  </p>
+                  <div className="mt-3 sm:mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className={`${BTN_BASE} border-2 border-rose-700 bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2`}
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      {uiText("mc031bf992e172f57")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </main>
 
+        {/* Confirmation Modals */}
         {showLogoutConfirm && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
             onClick={() => !isLoggingOut && setShowLogoutConfirm(false)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-md p-8"
+              className="w-full max-w-md border-2 border-ink bg-white p-4 sm:p-8"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-semibold text-center mb-4 text-gray-900">
-                {uiText("m01fb32f707d76eec")}
-              </h2>
-              <p className="text-gray-600 text-center mb-6">
-                {uiText("m067f10b734111433")}
+              <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                {uiText("mcc39c00b51a876a1")}
+              </h3>
+              <p className="mt-2 text-xs sm:text-sm text-ink/70">
+                {uiText("ma03ea8ce539bb718")}
               </p>
-              <div className="flex gap-3">
+              <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowLogoutConfirm(false)}
                   disabled={isLoggingOut}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={`${BTN_GHOST} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
                   {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
+                  type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className="flex-1 bg-[#143E6F] text-white py-2.5 rounded-lg font-medium hover:bg-[#0f2f54] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={`${BTN_PRIMARY} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
                   {isLoggingOut
-                    ? uiText("md0c59d736b1322a3")
-                    : uiText("md0527e4b3d658351")}
+                    ? uiText("m0436231679a0cb2b")
+                    : uiText("m0b184bc5d5341998")}
                 </button>
               </div>
             </div>
           </div>
         )}
+
         {showDeleteConfirm && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
             onClick={() => setShowDeleteConfirm(false)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-md p-8"
+              className="w-full max-w-md border-2 border-rose-600 bg-white p-4 sm:p-8"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-semibold text-center mb-4 text-gray-900">
-                {uiText("mc031bf992e172f57")}
-              </h2>
-              <p className="text-gray-600 text-center mb-6">
-                {uiText("mf0ba927c8e57c2cb")}
+              <h3 className="text-lg sm:text-xl font-extrabold text-rose-900 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600" />
+                {uiText("m22b957a6205bc259")}
+              </h3>
+              <p className="mt-2 text-xs sm:text-sm text-ink/70">
+                {uiText("meddf32a686ec5ba1")}
               </p>
-              <div className="flex gap-3">
+              <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className={`${BTN_GHOST} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  {uiText("m19766ed6ccb2f4a3")}
+                  {uiText("m409890f3c4df8037")}
                 </button>
                 <button
+                  type="button"
                   onClick={handleDeleteAccount}
-                  className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 transition-colors"
+                  className={`${BTN_BASE} flex-1 border-2 border-rose-700 bg-rose-600 text-white hover:bg-rose-700 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  {uiText("me2d0a54968ead24e")}
+                  {uiText("ma7f54311a3e625f5")}
                 </button>
               </div>
             </div>

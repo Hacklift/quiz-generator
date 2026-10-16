@@ -41,6 +41,7 @@ def build_request(question_type: str, num_questions: int) -> QuizRequest:
         difficulty_level="medium",
         audience_type="students",
         custom_instruction="",
+        allow_fallback=True,
     )
 
 
@@ -84,8 +85,8 @@ async def test_get_questions_invalid_type():
     with pytest.raises(HTTPException) as exc:
         await get_quiz(MagicMock(), Response(), build_request("invalid-type", 2), current_user=None)
 
-    assert exc.value.status_code == 400
-    assert "No mock data for question type" in exc.value.detail
+    assert exc.value.status_code == 422
+    assert "Unsupported question type" in exc.value.detail
 
 
 @pytest.mark.asyncio
@@ -130,7 +131,8 @@ def test_grade_against_stored_questions_true_false_normalizes_formats():
 
     assert len(data) == 2
     assert all(item["is_correct"] is True for item in data)
-    assert data[0]["correct_answer"] == "false"
+    # Normalize only for comparison; display the stored answer unchanged.
+    assert data[0]["correct_answer"] == "False"
 
 
 def test_grade_against_stored_questions_open_ended():
@@ -163,6 +165,45 @@ def test_grade_against_stored_questions_rejects_unknown_question():
 
     with pytest.raises(SubmissionMismatchError):
         grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
+
+
+def test_grade_against_stored_questions_rejects_incomplete_submission():
+    stored = [
+        {"question": "First question?", "correct_answer": "Yes"},
+        {"question": "Second question?", "correct_answer": "No"},
+    ]
+    submitted = [{"question": "First question?", "user_answer": "Yes"}]
+
+    with pytest.raises(SubmissionMismatchError):
+        grade_against_stored_questions(stored, submitted, quiz_type="multichoice")
+
+
+@pytest.mark.parametrize("source", ["mock", "ai"])
+def test_true_false_grading_handles_string_and_numeric_answers(source):
+    results = grade_against_stored_questions(
+        [{"question": "Q1", "correct_answer": "True"}, {"question": "Q2", "correct_answer": "False"}],
+        [{"question": "Q1", "user_answer": 1}, {"question": "Q2", "user_answer": "False"}],
+        quiz_type="true-false", source=source,
+    )
+    assert [result["is_correct"] for result in results] == [True, True]
+
+
+def test_repeated_question_text_uses_each_stored_answer_in_order():
+    results = grade_against_stored_questions(
+        [{"question": "Q", "correct_answer": "A"}, {"question": "Q", "correct_answer": "B"}],
+        [{"question": "Q", "user_answer": "A"}, {"question": "Q", "user_answer": "B"}],
+        quiz_type="multichoice",
+    )
+    assert [result["is_correct"] for result in results] == [True, True]
+
+
+def test_duplicate_submissions_cannot_replace_an_unanswered_question():
+    with pytest.raises(SubmissionMismatchError):
+        grade_against_stored_questions(
+            [{"question": "Q1", "correct_answer": "A"}, {"question": "Q2", "correct_answer": "B"}],
+            [{"question": "Q1", "user_answer": "A"}, {"question": "Q1", "user_answer": "A"}],
+            quiz_type="multichoice",
+        )
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,7 @@ async def get_questions(
     final_questions = []
     quiz_id = None  
     live_access_code = None
+    live_access_code_created = False
     live_access_code_expires_at = None
     live_time_limit_minutes = None
     category_metadata = {
@@ -191,6 +192,7 @@ async def get_questions(
             email_service=email_service,
         )
         live_access_code = live_config["access_code"]
+        live_access_code_created = live_config.pop("_access_code_created", False)
         live_access_code_expires_at = live_config["access_code_expires_at"]
         live_time_limit_minutes = live_config["time_limit_minutes"]
         live_participant_access_mode = live_config["participant_access_mode"]
@@ -226,6 +228,8 @@ async def get_questions(
         "invitations_queued": live_invitations_queued,
         "content_locale": request.content_locale or "en",
     }
+    if request.live_quiz_enabled:
+        result["_access_code_created"] = live_access_code_created
 
     logging.info("Quiz response locale=%s source=%s count=%s", result["content_locale"], source, len(final_questions))
     return result
