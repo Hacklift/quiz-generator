@@ -47,18 +47,21 @@ class LiveQuizSessionRepository:
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def enable_live_quiz(
+    async def claim_live_quiz_activation(
         self,
         quiz_id: str,
         access_code: str,
         time_limit_minutes: int,
         access_code_expires_at: datetime,
         creator_id: str,
+        observed_at: datetime,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        updated = await self.quiz_repository.enable_live_quiz(
+        updated = await self.quiz_repository.claim_live_quiz_activation(
             quiz_id,
+            creator_id=creator_id,
+            observed_at=observed_at,
             access_code=access_code,
             time_limit_minutes=time_limit_minutes,
             access_code_expires_at=access_code_expires_at,
@@ -92,6 +95,49 @@ class LiveQuizSessionRepository:
         except InvalidId:
             return None
 
+    async def update_active_session(
+        self,
+        session_id: str,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Write only while the participant session remains mutable.
+
+        Training-run closure transitions active sessions to ``abandoned``. This
+        status predicate prevents a request that read the old state just before
+        closure from reviving or changing that terminal session afterwards.
+        """
+        try:
+            updates["updated_at"] = datetime.now(timezone.utc)
+            return await self.sessions_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(session_id),
+                    "status": {"$in": ["active", "joined", "disconnected"]},
+                },
+                {"$set": updates},
+                return_document=ReturnDocument.AFTER,
+            )
+        except InvalidId:
+            return None
+
+    async def finalize_session(
+        self,
+        session_id: str,
+        updates: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Finalize once so concurrent polling cannot duplicate completion side effects."""
+        try:
+            updates["updated_at"] = datetime.now(timezone.utc)
+            return await self.sessions_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(session_id),
+                    "status": {"$in": ["active", "joined", "disconnected"]},
+                },
+                {"$set": updates},
+                return_document=ReturnDocument.AFTER,
+            )
+        except InvalidId:
+            return None
+
     async def save_answer(
         self,
         session_id: str,
@@ -117,7 +163,7 @@ class LiveQuizSessionRepository:
             }
         )
         answers.sort(key=lambda answer: answer["question_index"])
-        return await self.update_session(
+        return await self.update_active_session(
             session_id,
             {
                 "answers": answers,

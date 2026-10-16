@@ -60,6 +60,7 @@ class CanonicalQuizWriteService:
         category_slug: str | None = None,
         subcategory: str | None = None,
         subcategory_slug: str | None = None,
+        persona_category: str | None = None,
         classification: dict[str, Any] | QuizClassificationV2 | None = None,
         legacy_source_collection: str | None = None,
         legacy_quiz_id: str | None = None,
@@ -78,6 +79,7 @@ class CanonicalQuizWriteService:
             category_slug=category_slug,
             subcategory=subcategory,
             subcategory_slug=subcategory_slug,
+            persona_category=persona_category,
             classification=classification,
             questions=normalized_questions,
         )
@@ -112,6 +114,7 @@ class CanonicalQuizWriteService:
             category=quiz_create.category,
             category_slug=quiz_create.category_slug,
             subcategory=quiz_create.subcategory,
+            persona_category=quiz_create.persona_category,
             subcategory_slug=quiz_create.subcategory_slug,
             classification=quiz_create.classification,
             legacy_source_collection=legacy_source_collection,
@@ -139,6 +142,7 @@ class CanonicalQuizWriteService:
             subcategory=quiz_data.subcategory,
             subcategory_slug=quiz_data.subcategory_slug,
             classification=quiz_data.classification,
+            persona_category=quiz_data.persona_category,
         )
         return await self.repository.insert_quiz(quiz_document)
 

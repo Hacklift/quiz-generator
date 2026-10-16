@@ -70,3 +70,44 @@ async def test_category_seed_service_upserts_categorized_v2_quiz(test_db):
             "question_type": "short answer",
         }
     ]
+
+@pytest.mark.asyncio
+async def test_list_categories_persona_filter_includes_untagged_quizzes(test_db):
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    service = CategorySeedService(CanonicalQuizWriteService(repository))
+
+    school_entry = get_taxonomy_entry("Science", "Biology")
+    corporate_entry = get_taxonomy_entry("Onboarding", "New Hire Basics")
+    assert school_entry is not None
+    assert corporate_entry is not None
+
+    await service.seed_group(
+        school_entry,
+        "short-answer",
+        [{"question": "School Q", "answer": "A", "question_type": "short-answer"}],
+    )
+    await service.seed_group(
+        corporate_entry,
+        "short-answer",
+        [{"question": "Corporate Q", "answer": "A", "question_type": "short-answer"}],
+    )
+
+    # Simulate a legacy/untagged quiz that predates persona_category existing.
+    await test_db["quizzes_v2"].update_one(
+        {"category_slug": "science", "subcategory_slug": "biology"},
+        {"$unset": {"persona_category": ""}},
+    )
+
+    category_service = CategoryService(repository)
+
+    school_view = await category_service.list_categories(persona_category="school")
+    corporate_view = await category_service.list_categories(persona_category="corporate")
+
+    # Untagged (legacy) quizzes must still surface under any persona filter.
+    assert "Science" in school_view
+    assert "Onboarding" not in school_view
+
+    assert "Onboarding" in corporate_view
+    # The untagged (legacy) Science quiz is intentionally ambiguous and
+    # surfaces under both persona filters, not just its original category.
+    assert "Science" in corporate_view

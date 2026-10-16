@@ -12,8 +12,10 @@ export interface CategoryQuestion {
   title?: string;
 }
 
-export const getCategories = async (): Promise<string[]> => {
-  const { data } = await publicApi.get("/api/categories");
+export const getCategories = async (personaCategory?: string): Promise<string[]> => {
+  const { data } = await publicApi.get("/api/categories", {
+    params: personaCategory ? { persona_category: personaCategory } : undefined,
+  });
   return data;
 };
 

@@ -64,16 +64,18 @@ class QuizV2Repository:
         documents = await cursor.to_list(length=20)
         return [QuizDocumentV2(**document) for document in documents]
 
-    async def list_category_values(self) -> list[str]:
-        values = await self.collection.distinct(
-            "category",
-            {
-                "category": {"$type": "string", "$ne": ""},
-                "category_slug": {"$type": "string", "$ne": ""},
-                "status": "active",
-                "visibility": "public",
-            },
-        )
+    async def list_category_values(self, persona_category: str | None = None) -> list[str]:
+        query: dict = {
+            "category": {"$type": "string", "$ne": ""},
+            "category_slug": {"$type": "string", "$ne": ""},
+            "status": "active",
+            "visibility": "public",
+        }
+        if persona_category:
+            # MongoDB matches both an explicit null and a missing field here,
+            # so pre-existing/untagged quizzes still surface under a persona filter.
+            query["persona_category"] = {"$in": [persona_category, None]}
+        values = await self.collection.distinct("category", query)
         return sorted(value for value in values if value)
 
     async def list_subcategory_values(self, category_slug: str) -> list[str]:
@@ -262,10 +264,12 @@ class QuizV2Repository:
             return None
         return QuizDocumentV2(**updated) if updated else None
 
-    async def enable_live_quiz(
+    async def claim_live_quiz_activation(
         self,
         quiz_id: str,
         *,
+        creator_id: str,
+        observed_at: datetime,
         access_code: str,
         time_limit_minutes: int,
         access_code_expires_at: datetime,
@@ -274,7 +278,18 @@ class QuizV2Repository:
     ) -> Optional[QuizDocumentV2]:
         try:
             updated = await self.collection.find_one_and_update(
-                {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}},
+                {
+                    "_id": ObjectId(quiz_id),
+                    "status": {"$ne": "deleted"},
+                    "owner_user_id": creator_id,
+                    "$or": [
+                        {"live_quiz_enabled": {"$ne": True}},
+                        {"access_code": None},
+                        {"access_code": ""},
+                        {"access_code_expires_at": None},
+                        {"access_code_expires_at": {"$lte": observed_at}},
+                    ],
+                },
                 {
                     "$set": {
                         "live_quiz_enabled": True,

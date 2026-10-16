@@ -1,6 +1,12 @@
 "use client";
 
-import React, { FormEvent, useCallback, useEffect, useState } from "react";
+import React, {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import RequireAuth from "@features/auth/components/RequireAuth";
@@ -9,6 +15,7 @@ import Footer from "@features/quiz/components/Footer";
 import {
   LiveQuizSummary,
   liveQuizService,
+  type LiveResultsExportFormat,
 } from "@features/live-quiz/api/liveQuizService";
 
 const formatDateTime = (isoString: string | null | undefined): string => {
@@ -43,7 +50,7 @@ const statusClass: Record<string, string> = {
   expired: "bg-red-100 text-red-700",
 };
 
-const MyLiveQuizzesPage: React.FC = () => {
+export const MyLiveQuizzesPage: React.FC = () => {
   const router = useRouter();
   const [quizzes, setQuizzes] = useState<LiveQuizSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +61,9 @@ const MyLiveQuizzesPage: React.FC = () => {
   const [expiresAt, setExpiresAt] = useState(tomorrowLocalValue());
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingThreshold, setIsLoadingThreshold] = useState(false);
+  const [exportingQuizId, setExportingQuizId] = useState<string | null>(null);
+  const [openActionsQuizId, setOpenActionsQuizId] = useState<string | null>(null);
+  const openActionsRef = useRef<HTMLDivElement | null>(null);
 
   const loadLiveQuizzes = useCallback(async () => {
     try {
@@ -73,15 +83,46 @@ const MyLiveQuizzesPage: React.FC = () => {
     void loadLiveQuizzes();
   }, [loadLiveQuizzes]);
 
+  
+  useEffect(() => {
+    if (!openActionsQuizId) return;
+
+    const dismissOnOutsideClick = (event: MouseEvent) => {
+      if (
+        openActionsRef.current &&
+        !openActionsRef.current.contains(event.target as Node)
+      ) {
+        setOpenActionsQuizId(null);
+      }
+    };
+
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenActionsQuizId(null);
+      }
+    };
+
+    document.addEventListener("mousedown", dismissOnOutsideClick);
+    document.addEventListener("keydown", dismissOnEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", dismissOnOutsideClick);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [openActionsQuizId]);
+
   const openGenerationDialog = async (quiz: LiveQuizSummary) => {
     setQuizToGenerateFor(quiz);
     setDuration(quiz.time_limit_minutes || 20);
     setPassingThreshold(80);
     setExpiresAt(tomorrowLocalValue());
     setIsLoadingThreshold(true);
+
     try {
       const latestRun = await liveQuizService.getLatestRun(quiz.quiz_id);
-      setPassingThreshold(latestRun.passing_threshold_percentage ?? 80);
+      setPassingThreshold(
+        latestRun.passing_threshold_percentage ?? 80
+      );
     } catch (error: any) {
       if (error?.response?.status !== 404) {
         toast.error("Could not load the current passing threshold.");
@@ -121,6 +162,34 @@ const MyLiveQuizzesPage: React.FC = () => {
       }
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const exportResults = async (
+    quiz: LiveQuizSummary,
+    format: LiveResultsExportFormat,
+  ) => {
+    setOpenActionsQuizId(null);
+    setExportingQuizId(quiz.quiz_id);
+    try {
+      const { blob, contentDisposition } =
+        await liveQuizService.downloadResults(quiz.quiz_id, format);
+      const filename =
+        contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ||
+        `${quiz.title || "live-quiz"}-results.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Session results downloaded.");
+    } catch {
+      toast.error("Could not export session results.");
+    } finally {
+      setExportingQuizId(null);
     }
   };
 
@@ -186,7 +255,7 @@ const MyLiveQuizzesPage: React.FC = () => {
                         Avg Score
                       </th>
                       <th className="px-5 py-3 text-right text-xs font-semibold uppercase text-slate-500">
-                        Details
+                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -261,6 +330,52 @@ const MyLiveQuizzesPage: React.FC = () => {
                             >
                               View Details
                             </button>
+                            <div
+                              className="relative"
+                              ref={
+                                openActionsQuizId === quiz.quiz_id
+                                  ? openActionsRef
+                                  : undefined
+                              }
+                            >
+                              <button
+                                type="button"
+                                aria-label={`More actions for ${quiz.title}`}
+                                aria-haspopup="menu"
+                                aria-expanded={openActionsQuizId === quiz.quiz_id}
+                                onClick={() =>
+                                  setOpenActionsQuizId((current) =>
+                                    current === quiz.quiz_id ? null : quiz.quiz_id,
+                                  )
+                                }
+                                disabled={exportingQuizId === quiz.quiz_id}
+                                className="rounded-md border border-slate-300 px-3 py-1.5 text-lg font-bold leading-none text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                              >
+                                &#8942;
+                              </button>
+                              {openActionsQuizId === quiz.quiz_id && (
+                                <div
+                                  role="menu"
+                                  aria-label={`Export results for ${quiz.title}`}
+                                  className="absolute right-0 z-20 mt-2 w-44 rounded-md border border-slate-200 bg-white py-1 text-left shadow-lg"
+                                >
+                                  <p className="px-3 py-1.5 text-xs font-semibold uppercase text-slate-500">
+                                    Export Results
+                                  </p>
+                                  {(["csv", "pdf", "txt"] as const).map((format) => (
+                                    <button
+                                      key={format}
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => exportResults(quiz, format)}
+                                      className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                    >
+                                      {format === "txt" ? "Text" : format.toUpperCase()}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

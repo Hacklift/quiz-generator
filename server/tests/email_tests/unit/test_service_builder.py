@@ -1,4 +1,8 @@
-from server.app.email_platform.service import build_email_service, EmailService
+from server.app.email_platform.service import (
+    build_email_service,
+    build_worker_email_service,
+    EmailService,
+)
 from server.app.email_platform.deps import get_email_service
 
 
@@ -23,3 +27,10 @@ def test_get_email_service_includes_background():
     service = get_email_service(FakeBackgroundTasks())
     assert isinstance(service, EmailService)
     assert "background" in service.chain.adapters
+
+
+def test_build_worker_email_service_uses_only_real_providers():
+    service = build_worker_email_service()
+
+    assert isinstance(service, EmailService)
+    assert set(service.chain.adapters.keys()) == {"direct", "mailgun"}
