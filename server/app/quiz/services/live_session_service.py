@@ -969,6 +969,11 @@ class LiveQuizSessionService:
             return True, None
 
         if not training_run:
+            logger.warning(
+                "Training run %s could not be loaded for session %s; withholding answers fail-closed",
+                session.get("training_run_id"),
+                session.get("_id"),
+            )
             # Fail-closed: session has a training_run_id but the run could not be resolved
             return False, None
 

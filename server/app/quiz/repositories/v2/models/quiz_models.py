@@ -55,7 +55,7 @@ class QuizQuestionV2(BaseModel):
     question: str
     correct_answer: str
     options: Optional[List[str]] = None
-    explanation: Optional[str] = None
+    explanation: Optional[str] = Field(default=None, max_length=5000)
 
     model_config = ConfigDict(extra="forbid")
 

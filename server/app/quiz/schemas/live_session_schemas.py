@@ -42,7 +42,7 @@ class LiveQuizGradedAnswer(BaseModel):
     correct_answer: Optional[str] = None
     question_type: str
     is_correct: Optional[bool] = None
-    explanation: Optional[str] = None
+    explanation: Optional[str] = Field(default=None, max_length=5000)
 
 
 class LiveQuizSessionState(BaseModel):
