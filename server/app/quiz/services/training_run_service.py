@@ -138,6 +138,7 @@ class TrainingRunService:
             "recipient_user_ids": recipient_user_ids,
             "max_attempts": payload.max_attempts,
             "send_email_invitations": payload.send_email_invitations,
+            "release_answers": payload.release_answers,
             "created_at": now,
             "updated_at": now,
         }
@@ -562,6 +563,7 @@ class TrainingRunService:
             "started_count": len(started) + len(shared_sessions),
             "completed_count": len(completed) + len(shared_completed),
             "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "release_answers": run.get("release_answers", "immediate"),
         }
 
     def _assignment_summary(self, assignment: dict, run: dict) -> dict:
@@ -588,6 +590,7 @@ class TrainingRunService:
             "latest_score": assignment.get("latest_score"),
             "latest_percentage": assignment.get("latest_percentage"),
             "completed_at": assignment.get("completed_at"),
+            "release_answers": run.get("release_answers", "immediate"),
         }
 
     @staticmethod

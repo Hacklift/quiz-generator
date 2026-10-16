@@ -58,6 +58,9 @@ export interface LiveQuizSessionState {
   score?: number | null;
   percentage?: number | null;
   auto_submitted: boolean;
+  graded_answers?: GradedAnswer[] | null;
+  answers_released?: boolean;
+  release_answers_at?: string | null;
 }
 
 export interface LiveQuizResult {
@@ -125,6 +128,7 @@ export interface GradedAnswer {
   correct_answer: string;
   question_type: string;
   is_correct: boolean;
+  explanation?: string | null;
 }
 
 export interface LiveQuizAttemptDetail {

@@ -450,7 +450,11 @@ class LiveQuizSessionService:
         elif session.get("status") != "submitted":
             await self._ensure_training_run_open(session)
 
-        return self._build_session_state(session, quiz)
+        training_run = None
+        if session.get("status") == "submitted" and session.get("training_run_id") and self.assignment_repository:
+            training_run = await self.assignment_repository.get_run(session["training_run_id"])
+
+        return self._build_session_state(session, quiz, training_run=training_run)
 
     async def save_answer(
         self,
@@ -937,6 +941,7 @@ class LiveQuizSessionService:
         self,
         session: Dict[str, Any],
         quiz: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         current_index = session.get("current_question_index", 0)
         questions = quiz.get("questions") or []
@@ -963,6 +968,40 @@ class LiveQuizSessionService:
             _as_utc(session["submitted_at"]) if session.get("submitted_at") else None
         )
 
+        answers_released = True
+        release_answers_at = None
+        graded_answers = None
+
+        if session.get("status") == "submitted":
+            raw_graded = session.get("graded_answers")
+            if not isinstance(raw_graded, list):
+                raw_graded = self._grade_session(session, quiz).get("graded_answers", [])
+            if training_run:
+                closes_at = _as_utc(training_run["closes_at"])
+                is_closed = training_run.get("status") == "closed" or closes_at <= server_now
+                if training_run.get("release_answers") == "after_close" and not is_closed:
+                    answers_released = False
+                    release_answers_at = closes_at
+                    # Mask correct answers and explanations until the submission window closes
+                    graded_answers = [
+                        {
+                            "question_index": item.get("question_index", idx),
+                            "question": item.get("question", ""),
+                            "selected_answer": str(item.get("selected_answer", "")),
+                            "correct_answer": "",
+                            "question_type": str(item.get("question_type", "")),
+                            "is_correct": False,
+                            "explanation": None,
+                        }
+                        for idx, item in enumerate(raw_graded)
+                    ]
+                else:
+                    answers_released = True
+                    graded_answers = raw_graded
+            else:
+                answers_released = True
+                graded_answers = raw_graded
+
         return {
             "session_id": str(session["_id"]),
             "quiz_id": session["quiz_id"],
@@ -987,6 +1026,9 @@ class LiveQuizSessionService:
             "score": session.get("score"),
             "percentage": session.get("percentage"),
             "auto_submitted": session.get("auto_submitted", False),
+            "graded_answers": graded_answers,
+            "answers_released": answers_released,
+            "release_answers_at": release_answers_at,
         }
 
     def _public_question(

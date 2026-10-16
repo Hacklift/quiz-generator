@@ -119,6 +119,7 @@ class QuizAttemptQuestionResultV2(BaseModel):
     accuracy_percentage: float | None = None
     is_correct: bool
     result: str
+    explanation: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")
 

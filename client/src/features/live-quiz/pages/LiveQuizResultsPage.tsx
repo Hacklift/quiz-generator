@@ -90,6 +90,65 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
         ) : (
           <p className="mt-4 text-sm text-slate-600">Result unavailable.</p>
         )}
+
+        {session && session.answers_released === false && session.release_answers_at && (
+          <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900">
+            <h2 className="font-bold text-amber-950">Answers Withheld Until Deadline</h2>
+            <p className="mt-1 text-sm leading-relaxed text-amber-800">
+              Your submission has been recorded. Per assignment settings, detailed answers and explanations will be released after the assignment window closes on{" "}
+              <strong>{new Date(session.release_answers_at).toLocaleString()}</strong>.
+            </p>
+          </div>
+        )}
+
+        {session && session.answers_released !== false && session.graded_answers && session.graded_answers.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xl font-bold text-[#0F2654]">Question Results & Explanations</h2>
+            <div className="mt-4 space-y-4">
+              {session.graded_answers.map((answer) => (
+                <div
+                  key={answer.question_index}
+                  className={`rounded-lg border p-4 text-sm transition ${
+                    answer.is_correct
+                      ? "border-emerald-200 bg-emerald-50/50"
+                      : "border-rose-200 bg-rose-50/50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-slate-900">
+                      {answer.question_index + 1}. {answer.question}
+                    </h3>
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        answer.is_correct
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-rose-100 text-rose-800"
+                      }`}
+                    >
+                      {answer.is_correct ? "✓ Correct" : "✗ Incorrect"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-1 text-slate-700">
+                    <p>
+                      <strong>Your answer:</strong> {answer.selected_answer || "No answer"}
+                    </p>
+                    <p className={answer.is_correct ? "text-emerald-900 font-medium" : "text-[#0F2654] font-medium"}>
+                      <strong>Correct answer:</strong> {answer.correct_answer}
+                    </p>
+                  </div>
+
+                  {answer.explanation ? (
+                    <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-800 shadow-sm">
+                      <strong className="block text-slate-900 mb-1">💡 Explanation:</strong>
+                      {answer.explanation}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
       <GuestSignupPopup
         isOpen={showSignup}

@@ -43,6 +43,14 @@ class FakeLiveQuizRepository:
         self.session = {**self.session, **updates}
         return self.session
 
+    async def save_answer(self, session_id, question_index, selected_answer, next_question_index=None):
+        answers = [a for a in self.session.get("answers", []) if a["question_index"] != question_index]
+        answers.append({"question_index": question_index, "selected_answer": selected_answer, "answered_at": datetime.now(timezone.utc)})
+        self.session["answers"] = answers
+        if next_question_index is not None:
+            self.session["current_question_index"] = next_question_index
+        return self.session
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -207,3 +215,65 @@ async def test_duplicate_submit_returns_idempotent_response(monkeypatch):
 
     assert response["status"] == "already_submitted"
     assert response["submitted_at"] == current_time["value"]
+
+
+class FakeAssignmentRepository:
+    def __init__(self, run: dict):
+        self.run = run
+
+    async def get_run(self, run_id: str):
+        return self.run
+
+
+@pytest.mark.asyncio
+async def test_session_state_releases_answers_and_explanations_immediately_by_default(monkeypatch):
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Because A is the premier option."
+    service = LiveQuizSessionService(repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
+    await service.submit_session("session-1", start["participant_token"])
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is True
+    assert state["release_answers_at"] is None
+    assert len(state["graded_answers"]) == 1
+    assert state["graded_answers"][0]["is_correct"] is True
+    assert state["graded_answers"][0]["correct_answer"] == "A"
+    assert state["graded_answers"][0]["explanation"] == "Because A is the premier option."
+
+
+@pytest.mark.asyncio
+async def test_session_state_withholds_answers_when_assignment_window_is_open(monkeypatch):
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    window_close = datetime(2025, 5, 14, 12, 00, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    assignment_repo = FakeAssignmentRepository({
+        "status": "open",
+        "closes_at": window_close,
+        "release_answers": "after_close",
+    })
+    service = LiveQuizSessionService(repo, assignment_repository=assignment_repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    repo.session["training_run_id"] = "run-1"
+    await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="B")
+    await service.submit_session("session-1", start["participant_token"])
+
+    state = await service.get_session_state("session-1", start["participant_token"])
+    assert state["status"] == "submitted"
+    assert state["answers_released"] is False
+    assert state["release_answers_at"] == window_close
+    assert len(state["graded_answers"]) == 1
+    # Answers and explanations are withheld
+    assert state["graded_answers"][0]["correct_answer"] == ""
+    assert state["graded_answers"][0]["explanation"] is None
+
