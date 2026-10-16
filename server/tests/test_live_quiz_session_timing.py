@@ -509,8 +509,9 @@ async def test_started_unsubmitted_session_state_leaks_no_explanation_or_correct
     assert active_question is not None
     assert "explanation" not in active_question
     assert "correct_answer" not in active_question
-    assert active_question["question"] == "What is 2 + 2?"
-    assert active_question["options"] == ["3", "4", "5"]
+    assert "answer" not in active_question
+    assert active_question["question"] == "Question 1"
+    assert active_question["options"] == ["A", "B"]
 
 
 
