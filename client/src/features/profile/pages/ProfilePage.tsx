@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
@@ -36,6 +37,10 @@ import Footer from "@features/quiz/components/Footer";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import PersonaPicker from "@features/persona/components/PersonaPicker";
 import { usePersona } from "@features/persona/context/personaContext";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
+import { useLocale } from "@features/locale/context/localeContext";
+import { type SupportedLocale } from "@shared/config/locale";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 import {
   archivo,
   Kicker,
@@ -44,9 +49,15 @@ import {
   BTN_BASE,
 } from "@shared/ui/quizwerk";
 
-type ProfileTab = "overview" | "persona" | "billing" | "security";
+type ProfileTab = "overview" | "persona" | "billing" | "security" | "language";
 
 export default function ProfilePage() {
+  const { t: uiText, i18n } = useTranslation("ui");
+  const { t } = useTranslation();
+  const { t: personaText } = usePersonaCopy();
+  const { preferredLocale, setPreferredLocale } = useLocale();
+  const [isSavingLocale, setIsSavingLocale] = useState(false);
+
   const { user, isLoading, logout, refreshUser } = useAuth();
   const { persona, definition, categoryDefinition } = usePersona();
   const router = useRouter();
@@ -120,7 +131,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user?.stripe_customer_id || user.current_period_end) return;
-    void getSubscriptionSummary().then(setBillingSummary).catch(() => {});
+    void getSubscriptionSummary()
+      .then(setBillingSummary)
+      .catch(() => {});
   }, [user?.current_period_end, user?.stripe_customer_id]);
 
   useEffect(() => {
@@ -135,8 +148,7 @@ export default function ProfilePage() {
     if (paymentState === "success") {
       setPaymentNotice({
         type: "success",
-        message:
-          "Payment completed. Your subscription status has been refreshed.",
+        message: uiText("profile.paymentSuccess"),
       });
 
       void (async () => {
@@ -162,7 +174,7 @@ export default function ProfilePage() {
           toast.error(
             getBillingErrorMessage(
               error,
-              "Payment succeeded, but the profile refresh failed.",
+              uiText("profile.paymentRefreshFailed"),
             ),
           );
         } finally {
@@ -175,7 +187,7 @@ export default function ProfilePage() {
     if (paymentState === "cancelled") {
       setPaymentNotice({
         type: "cancelled",
-        message: "Checkout was cancelled. No changes were made to your plan.",
+        message: uiText("profile.paymentCancelled"),
       });
       void router.replace("/profile", undefined, { shallow: true });
     }
@@ -196,7 +208,7 @@ export default function ProfilePage() {
       setShowLogoutConfirm(false);
       router.push("/");
     } catch {
-      toast.error("Failed to log out. Please try again.");
+      toast.error(uiText("md64206ce225f573b"));
     } finally {
       setIsLoggingOut(false);
     }
@@ -204,7 +216,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     if (user?.is_verified === false) {
-      toast.error("Verify your email before editing your profile");
+      toast.error(uiText("m10cf11c897a08692"));
       return;
     }
     setIsSaving(true);
@@ -221,7 +233,7 @@ export default function ProfilePage() {
         await refreshUser();
         setSaveSuccess(true);
         setIsEditing(false);
-        toast.success("Profile saved successfully.");
+        toast.success(uiText("me71daf5f6cf7b62d"));
       }
       if (typeof window !== "undefined") {
         localStorage.setItem(
@@ -232,8 +244,8 @@ export default function ProfilePage() {
 
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
-      setSaveError(error.message || "Failed to update profile");
-      toast.error(error.message || "Failed to update profile");
+      setSaveError(error.message || uiText("meeb7276dab30a337"));
+      toast.error(error.message || uiText("meeb7276dab30a337"));
     } finally {
       setIsSaving(false);
     }
@@ -245,21 +257,21 @@ export default function ProfilePage() {
 
   const handleUpdateEmail = async () => {
     if (!newEmail.trim()) {
-      toast.error("Please enter a new email.");
+      toast.error(uiText("md0cb54952d33cbfc"));
       return;
     }
     try {
       await requestEmailChange(newEmail.trim());
       setEmailChangePending(true);
-      toast.success("Verification code sent to your new email.");
+      toast.success(uiText("m30746b43a4e1a262"));
     } catch (error: any) {
-      toast.error(error?.message || "Failed to send verification email.");
+      toast.error(error?.message || uiText("mb780699d95333157"));
     }
   };
 
   const handleVerifyEmailChange = async () => {
     if (!emailOtp.trim()) {
-      toast.error("Enter the verification code.");
+      toast.error(uiText("medadbd5aa4f49cc8"));
       return;
     }
     try {
@@ -268,9 +280,9 @@ export default function ProfilePage() {
       setEmailOtp("");
       setNewEmail("");
       await refreshUser();
-      toast.success("Email updated successfully.");
+      toast.success(uiText("mcad80028698178d3"));
     } catch (error: any) {
-      toast.error(error?.message || "Failed to verify email.");
+      toast.error(error?.message || uiText("m8062a0d1f9c034d9"));
     }
   };
 
@@ -278,10 +290,10 @@ export default function ProfilePage() {
     try {
       await deleteAccount();
       setShowDeleteConfirm(false);
-      toast.success("Your account has been deleted.");
+      toast.success(uiText("mf65c2dd173fc5063"));
       await logout();
     } catch (error: any) {
-      toast.error(error?.message || "Failed to delete account.");
+      toast.error(error?.message || uiText("m83326cc97ff9fac2"));
     }
   };
 
@@ -292,10 +304,22 @@ export default function ProfilePage() {
       window.location.assign(portal_url);
     } catch (error: any) {
       toast.error(
-        getBillingErrorMessage(error, "Unable to open the billing portal."),
+        getBillingErrorMessage(error, uiText("profile.portalFailed")),
       );
     } finally {
       setIsOpeningPortal(false);
+    }
+  };
+
+  const handleLocaleChange = async (locale: SupportedLocale | null) => {
+    setIsSavingLocale(true);
+    try {
+      await setPreferredLocale(locale);
+      toast.success(t("language.saved"));
+    } catch (error: any) {
+      toast.error(error?.message || t("language.saveError"));
+    } finally {
+      setIsSavingLocale(false);
     }
   };
 
@@ -329,7 +353,9 @@ export default function ProfilePage() {
   const billingPlan =
     billingSummary?.subscription_plan || user?.subscription_plan || "free";
   const billingStatus =
-    billingSummary?.subscription_status || user?.subscription_status || "inactive";
+    billingSummary?.subscription_status ||
+    user?.subscription_status ||
+    "inactive";
   const billingRenewalDate =
     billingSummary?.current_period_end || user?.current_period_end || null;
   const hasBillingPortalAccess = Boolean(
@@ -337,16 +363,20 @@ export default function ProfilePage() {
   );
 
   const formatPlanLabel = (plan?: string) => {
-    if (!plan || plan === "free") return "Free";
-    return plan.charAt(0).toUpperCase() + plan.slice(1);
+    const value = plan || "free";
+    return t(`values.${value}`, {
+      defaultValue: value.charAt(0).toUpperCase() + value.slice(1),
+    });
   };
 
   const formatStatusLabel = (status?: string) => {
-    if (!status || status === "inactive") return "Inactive";
-    return status
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
+    const value = status || "inactive";
+    return t(`values.${value}`, {
+      defaultValue: value
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" "),
+    });
   };
 
   const subscriptionStatusClassName =
@@ -359,37 +389,40 @@ export default function ProfilePage() {
   const personaLabel =
     categoryDefinition && definition
       ? `${categoryDefinition.label} · ${definition.label}`
-      : "Not set";
+      : personaText("profile.unset");
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-paper flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-          <p className="mt-4 text-sm font-bold text-ink/70">Loading profile...</p>
+          <p className="mt-4 text-sm font-bold text-ink/70">
+            {uiText("m4a47f12d23c4a6bf")}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`flex min-h-screen flex-col overflow-x-hidden bg-paper text-ink ${archivo.className}`}>
+    <div
+      className={`flex min-h-screen flex-col overflow-x-hidden bg-paper text-ink ${archivo.className}`}
+    >
       <NavBar />
 
       <RequireAuth
-        title="My Profile"
-        description="Sign in to view and manage your profile."
+        title={uiText("m991bfa015514f9d5")}
+        description={uiText("m0bbb194809df9769")}
       >
         <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 flex-1 py-[clamp(24px,5vw,48px)]">
           {/* Header */}
           <div>
-            <Kicker>ACCOUNT & PROFILE</Kicker>
+            <Kicker>{uiText("m939eccfb6dd7133a")}</Kicker>
             <h1 className="text-[clamp(28px,6vw,40px)] font-extrabold leading-tight tracking-[-0.025em] text-ink">
-              Profile Settings
+              {uiText("m4f1063c95669d708")}
             </h1>
             <p className="mt-1.5 max-w-2xl text-[clamp(13px,2vw,15px)] leading-relaxed text-ink/70">
-              Manage your personal information, role persona, subscription plan,
-              and account security settings.
+              {uiText("m9c012bb430e8a983")}
             </p>
           </div>
 
@@ -402,13 +435,17 @@ export default function ProfilePage() {
                   : "border-amber-500 bg-amber-50 text-amber-900"
               }`}
             >
-              <p className="text-xs sm:text-sm font-semibold">{paymentNotice.message}</p>
+              <p className="text-xs sm:text-sm font-semibold">
+                {paymentNotice.message}
+              </p>
             </div>
           )}
 
           {saveSuccess && (
             <div className="mt-4 sm:mt-6 border-l-4 border-emerald-600 bg-emerald-50 p-3 sm:p-4 text-emerald-900">
-              <p className="text-xs sm:text-sm font-semibold">Profile updated successfully.</p>
+              <p className="text-xs sm:text-sm font-semibold">
+                {uiText("m6ccf8b7d69b8b021")}
+              </p>
             </div>
           )}
 
@@ -432,17 +469,21 @@ export default function ProfilePage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2.5">
                     <h2 className="min-w-0 break-words text-[clamp(18px,4vw,24px)] font-extrabold text-ink">
-                      {formData.full_name || user?.username || "User"}
+                      {formData.full_name ||
+                        user?.username ||
+                        uiText("mb512d97e7cbf97c2")}
                     </h2>
                     {user?.is_verified ? (
                       <span className="inline-flex items-center gap-1 border border-emerald-300 bg-emerald-50 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                        <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> Verified
+                        <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3" />{" "}
+                        {uiText("m4f7838402f37674e")}
                       </span>
                     ) : null}
                   </div>
 
                   <p className="mt-0.5 text-xs sm:text-sm font-mono text-ink/60 break-all">
-                    @{user?.username || "user"} · {user?.email}
+                    @{user?.username || uiText("m04f8996da763b7a9")} ·{" "}
+                    {user?.email}
                   </p>
 
                   <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -452,14 +493,19 @@ export default function ProfilePage() {
                       className="inline-flex min-w-0 max-w-full items-center gap-1.5 border border-brand/20 bg-brand-50/60 px-2 py-1 text-[11px] font-bold text-brand-700 transition-colors hover:bg-brand-100 sm:px-2.5 sm:text-xs"
                     >
                       <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 bg-brand flex-shrink-0" />
-                      <span className="min-w-0 truncate">Role: {personaLabel}</span>
+                      <span className="min-w-0 truncate">
+                        {uiText("profile.roleSummary", { role: personaLabel })}
+                      </span>
                       <ChevronRight className="h-3 w-3 text-brand flex-shrink-0" />
                     </button>
 
                     <span
                       className={`inline-flex max-w-full items-center border px-2 py-1 text-[11px] font-bold sm:px-2.5 sm:text-xs ${subscriptionStatusClassName}`}
                     >
-                      {formatPlanLabel(billingPlan)} Plan ({formatStatusLabel(billingStatus)})
+                      {uiText("profile.planSummary", {
+                        plan: formatPlanLabel(billingPlan),
+                        status: formatStatusLabel(billingStatus),
+                      })}
                     </span>
                   </div>
                 </div>
@@ -481,17 +527,19 @@ export default function ProfilePage() {
                   }`}
                 >
                   <Edit3 className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  {isEditing ? "Cancel Edit" : "Edit Profile"}
+                  {isEditing
+                    ? uiText("mfddcfdf8d5f404e1")
+                    : uiText("mfec2ac0f4cf167e3")}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowLogoutConfirm(true)}
                   className={`w-full sm:w-auto justify-center min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2 ${BTN_GHOST} text-rose-700 hover:bg-rose-50`}
-                  aria-label="Sign out"
+                  aria-label={uiText("m48f0d3d397d49f13")}
                 >
                   <LogOut className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  Sign Out
+                  {uiText("m0b184bc5d5341998")}
                 </button>
               </div>
             </div>
@@ -499,12 +547,32 @@ export default function ProfilePage() {
 
           {/* Tab Navigation: 2-Column Responsive Grid on Mobile, Flex on Desktop */}
           <div className="mt-6 sm:mt-8 border-b-0 sm:border-b-2 sm:border-divider">
-            <nav className="grid grid-cols-2 gap-2 sm:flex sm:space-x-4 md:space-x-8" aria-label="Tabs">
+            <nav
+              className="grid grid-cols-2 gap-2 sm:flex sm:space-x-4 md:space-x-8"
+              aria-label={uiText("m8e5ea509893e6dfd")}
+            >
               {[
-                { id: "overview", label: "Overview & Details", icon: User },
-                { id: "persona", label: "Role & Persona", icon: UserCheck },
-                { id: "billing", label: "Subscription & Billing", icon: CreditCard },
-                { id: "security", label: "Security & Account", icon: Shield },
+                {
+                  id: "overview",
+                  label: uiText("mb863a343d85adb8f"),
+                  icon: User,
+                },
+                {
+                  id: "persona",
+                  label: uiText("m75dafd90c38333f0"),
+                  icon: UserCheck,
+                },
+                {
+                  id: "billing",
+                  label: uiText("m9e47ba56d3c4c003"),
+                  icon: CreditCard,
+                },
+                {
+                  id: "security",
+                  label: uiText("m528396ce9399d0e9"),
+                  icon: Shield,
+                },
+                { id: "language", label: t("language.settings"), icon: Globe },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -519,7 +587,9 @@ export default function ProfilePage() {
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                    <span className="truncate sm:whitespace-nowrap">{tab.label}</span>
+                    <span className="truncate sm:whitespace-nowrap">
+                      {tab.label}
+                    </span>
                   </button>
                 );
               })}
@@ -533,9 +603,11 @@ export default function ProfilePage() {
               <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 w-full max-w-full">
                 <div className="flex flex-wrap items-center justify-between border-b-2 border-divider pb-3 sm:pb-4 mb-4 sm:mb-6 gap-2">
                   <div>
-                    <h3 className="text-lg sm:text-xl font-extrabold text-ink">Personal Information</h3>
+                    <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                      {uiText("mc4b37e84b553d29b")}
+                    </h3>
                     <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                      Your identity and public profile presentation.
+                      {uiText("m131a59ae0aaedf15")}
                     </p>
                   </div>
                   {!isEditing && (
@@ -545,7 +617,7 @@ export default function ProfilePage() {
                       className={`${BTN_GHOST} text-xs sm:text-sm min-h-[36px] sm:min-h-[44px] px-3 py-1.5`}
                     >
                       <Edit3 className="mr-1.5 h-3.5 w-3.5" />
-                      Edit Details
+                      {uiText("m8cfa48f3b9db69e9")}
                     </button>
                   )}
                 </div>
@@ -560,21 +632,21 @@ export default function ProfilePage() {
                   >
                     <div>
                       <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
-                        Full Name
+                        {uiText("m8e00cdf71fa7cc76")}
                       </label>
                       <input
                         type="text"
                         name="full_name"
                         value={formData.full_name}
                         onChange={handleInputChange}
-                        placeholder="e.g. Dr. Alex Morgan"
+                        placeholder={uiText("mb087835b98c385df")}
                         className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                       />
                     </div>
 
                     <div>
                       <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1.5">
-                        Avatar Color Accent
+                        {uiText("me068ba27a3cff081")}
                       </label>
                       <div className="flex flex-wrap gap-2 sm:gap-2.5">
                         {avatarColors.map((color) => (
@@ -593,7 +665,9 @@ export default function ProfilePage() {
                                 : "hover:scale-105"
                             }`}
                             style={{ backgroundColor: color }}
-                            aria-label={`Select avatar color ${color}`}
+                            aria-label={uiText("m02a34b8afdf4e11e", {
+                              value0: color,
+                            })}
                           />
                         ))}
                       </div>
@@ -601,7 +675,7 @@ export default function ProfilePage() {
 
                     <div>
                       <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
-                        Bio
+                        {uiText("m3933b1802161254f")}
                       </label>
                       <textarea
                         name="bio"
@@ -609,7 +683,7 @@ export default function ProfilePage() {
                         value={formData.bio}
                         onChange={handleInputChange}
                         maxLength={500}
-                        placeholder="A brief summary of your background, teaching interests, or team focus..."
+                        placeholder={uiText("mddf4e9ad78bea56c")}
                         className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                       />
                       <p className="mt-1 text-right text-[11px] text-ink/50">
@@ -620,20 +694,20 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
-                          Location
+                          {uiText("m15b61974b2707a7b")}
                         </label>
                         <input
                           type="text"
                           name="location"
                           value={formData.location}
                           onChange={handleInputChange}
-                          placeholder="City, Country"
+                          placeholder={uiText("ma7bc8816f26258d2")}
                           className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                         />
                       </div>
                       <div>
                         <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/70 mb-1">
-                          Website
+                          {uiText("mb5a229ac8becc603")}
                         </label>
                         <input
                           type="url"
@@ -655,11 +729,11 @@ export default function ProfilePage() {
                           className="h-4 w-4 accent-brand flex-shrink-0"
                         />
                         <span className="text-xs sm:text-sm font-bold text-ink">
-                          Enable public profile page
+                          {uiText("me7d0707625d617cd")}
                         </span>
                       </label>
                       <p className="mt-1 text-[11px] sm:text-xs text-ink/60 pl-6">
-                        Allow learners or colleagues to view your public educator card.
+                        {uiText("ma2c8c5485b5e3706")}
                       </p>
                     </div>
 
@@ -669,7 +743,9 @@ export default function ProfilePage() {
                         disabled={isSaving}
                         className={`${BTN_PRIMARY} w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                       >
-                        {isSaving ? "Saving changes..." : "Save Changes"}
+                        {isSaving
+                          ? uiText("m86c6e0d74cc948c0")
+                          : uiText("m35322b5bb5a218a1")}
                       </button>
                       <button
                         type="button"
@@ -677,7 +753,7 @@ export default function ProfilePage() {
                         disabled={isSaving}
                         className={`${BTN_GHOST} w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                       >
-                        Cancel
+                        {uiText("m19766ed6ccb2f4a3")}
                       </button>
                     </div>
                   </form>
@@ -686,16 +762,16 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                       <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                         <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                          Full Name
+                          {uiText("m8e00cdf71fa7cc76")}
                         </span>
                         <p className="mt-1 break-words text-sm font-extrabold text-ink sm:text-base">
-                          {formData.full_name || "Not set"}
+                          {formData.full_name || uiText("m4895f73177ab5d67")}
                         </p>
                       </div>
 
                       <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                         <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                          Username
+                          {uiText("me3b89e9d33f88e52")}
                         </span>
                         <p className="mt-1 break-all font-mono text-sm font-bold text-ink sm:text-base">
                           @{user?.username || "N/A"}
@@ -704,7 +780,7 @@ export default function ProfilePage() {
 
                       <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                         <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                          Email Address
+                          {uiText("m09bf25ef30833633")}
                         </span>
                         <p className="mt-1 text-xs sm:text-base font-mono text-ink break-all">
                           {user?.email || "N/A"}
@@ -713,27 +789,29 @@ export default function ProfilePage() {
 
                       <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                         <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                          Location
+                          {uiText("m15b61974b2707a7b")}
                         </span>
                         <p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-ink sm:text-base">
                           <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ink/40 flex-shrink-0" />
-                          <span className="min-w-0 break-words">{formData.location || "Not set"}</span>
+                          <span className="min-w-0 break-words">
+                            {formData.location || uiText("m4895f73177ab5d67")}
+                          </span>
                         </p>
                       </div>
                     </div>
 
                     <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                       <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                        Bio
+                        {uiText("m3933b1802161254f")}
                       </span>
                       <p className="mt-1 text-xs sm:text-sm text-ink leading-relaxed break-words">
-                        {formData.bio || "No bio added yet. Click 'Edit Details' to share your background."}
+                        {formData.bio || uiText("mecdab25ab8ace098")}
                       </p>
                     </div>
 
                     <div className="border border-divider p-3 sm:p-4 bg-paper/40">
                       <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                        Website & Links
+                        {uiText("m9a3dd7f603c2f4fe")}
                       </span>
                       <div className="mt-1 flex items-center gap-2 text-xs sm:text-sm break-all">
                         <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ink/40 flex-shrink-0" />
@@ -744,11 +822,15 @@ export default function ProfilePage() {
                             rel="noopener noreferrer"
                             className="inline-flex min-w-0 items-center gap-1 font-bold text-brand hover:underline"
                           >
-                            <span className="min-w-0 break-all">{formData.website}</span>
+                            <span className="min-w-0 break-all">
+                              {formData.website}
+                            </span>
                             <ExternalLink className="h-3 w-3 flex-shrink-0" />
                           </a>
                         ) : (
-                          <span className="text-ink/60">No website provided</span>
+                          <span className="text-ink/60">
+                            {uiText("m89ce7824f4f4022c")}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -757,13 +839,38 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {activeTab === "language" && (
+              <section className="border-2 border-divider bg-white p-4 sm:p-6 space-y-4">
+                <h3 className="text-lg font-extrabold">
+                  {t("language.settings")}
+                </h3>
+                <p className="text-sm text-ink/70">
+                  {t("language.description")}
+                </p>
+                <LanguagePicker
+                  value={
+                    preferredLocale ??
+                    (user?.onboarding_organization_id ? null : "en")
+                  }
+                  onChange={(next) => void handleLocaleChange(next)}
+                  disabled={isSavingLocale}
+                  allowOrganizationDefault={Boolean(
+                    user?.onboarding_organization_id,
+                  )}
+                />
+                {isSavingLocale && <p role="status">{t("language.saving")}</p>}
+              </section>
+            )}
+
             {/* TAB 2: ROLE & PERSONA */}
             {activeTab === "persona" && (
               <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-6 sm:space-y-8 w-full max-w-full">
                 <div>
-                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">Role & Persona Configuration</h3>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("ma57809d16ce7c487")}
+                  </h3>
                   <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                    Your persona shapes your dashboard presets, terminology, and AI quiz generation defaults.
+                    {uiText("md8a72dbc4510cebb")}
                   </p>
                 </div>
 
@@ -772,31 +879,49 @@ export default function ProfilePage() {
                   <div className="flex flex-wrap items-center justify-between gap-2.5">
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] sm:text-xs font-extrabold uppercase tracking-widest text-brand-700">
-                        Current Active Persona
+                        {uiText("me330395f7a37f8dd")}
                       </span>
                       <h4 className="mt-0.5 break-words text-xl font-black text-ink sm:mt-1 sm:text-2xl">
                         {personaLabel}
                       </h4>
                     </div>
                     <span className="inline-flex items-center gap-1 bg-brand px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-paper flex-shrink-0">
-                      <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Active in Session
+                      <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />{" "}
+                      {uiText("m4a6bf58744a593ee")}
                     </span>
                   </div>
 
                   {definition && (
                     <div className="mt-3 sm:mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 border-t-2 border-brand/20 pt-3 sm:pt-4 text-xs">
                       <div className="break-words">
-                        <span className="font-bold text-ink/60">Workflow Purpose:</span>
-                        <p className="mt-0.5 font-medium text-ink">{definition.description}</p>
-                      </div>
-                      <div className="break-words">
-                        <span className="font-bold text-ink/60">Default Topic:</span>
-                        <p className="mt-0.5 font-medium text-ink">{definition.defaultTopic}</p>
-                      </div>
-                      <div className="break-words">
-                        <span className="font-bold text-ink/60">Generation Preset:</span>
+                        <span className="font-bold text-ink/60">
+                          {uiText("m26c67fd6b21830dc")}
+                        </span>
                         <p className="mt-0.5 font-medium text-ink">
-                          {definition.generationDefaults.audienceType} · {definition.generationDefaults.difficultyLevel} difficulty
+                          {definition.description}
+                        </p>
+                      </div>
+                      <div className="break-words">
+                        <span className="font-bold text-ink/60">
+                          {uiText("m0c97d771aad5d18a")}
+                        </span>
+                        <p className="mt-0.5 font-medium text-ink">
+                          {definition.defaultTopic}
+                        </p>
+                      </div>
+                      <div className="break-words">
+                        <span className="font-bold text-ink/60">
+                          {uiText("m2c143f33031c4431")}
+                        </span>
+                        <p className="mt-0.5 font-medium text-ink">
+                          {uiText("profile.generationPreset", {
+                            audience: personaText(
+                              `audiences.${definition.generationDefaults.audienceType}`,
+                            ),
+                            difficulty: personaText(
+                              `difficulty.${definition.generationDefaults.difficultyLevel}`,
+                            ),
+                          })}
                         </p>
                       </div>
                     </div>
@@ -807,16 +932,16 @@ export default function ProfilePage() {
                 <div className="border-t-2 border-divider pt-4 sm:pt-6 w-full max-w-full">
                   <div className="mb-4 sm:mb-6">
                     <h4 className="text-base sm:text-lg font-extrabold text-ink">
-                      Switch Your Role
+                      {uiText("m54331fcf1227f45f")}
                     </h4>
                     <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                      Select below to change your persona across Quiz Generator.
+                      {uiText("m46c6a1161b996753")}
                     </p>
                   </div>
                   <PersonaPicker
-                    heading="Select your target persona"
+                    heading={uiText("m245e8c9089ecddc6")}
                     onPicked={() => {
-                      toast.success("Persona updated successfully.");
+                      toast.success(uiText("m1d4d5ccd57d1d120"));
                     }}
                   />
                 </div>
@@ -827,9 +952,11 @@ export default function ProfilePage() {
             {activeTab === "billing" && (
               <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-6 w-full max-w-full">
                 <div className="border-b-2 border-divider pb-3 sm:pb-4">
-                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">Subscription & Billing</h3>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("m9e47ba56d3c4c003")}
+                  </h3>
                   <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                    Manage your current plan, invoice history, and billing credentials.
+                    {uiText("mf8fb4e09276ef0d2")}
                   </p>
                 </div>
 
@@ -837,16 +964,20 @@ export default function ProfilePage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-ink/60">
-                        Current Tier
+                        {uiText("ma8fd423db9423196")}
                       </span>
                       <h4 className="text-xl sm:text-2xl font-black text-ink mt-0.5">
-                        {formatPlanLabel(billingPlan)} Plan
+                        {uiText("m3e0e44cf0338ceb7", {
+                          value0: formatPlanLabel(billingPlan),
+                        })}
                       </h4>
                       <div className="mt-2 flex items-center gap-2">
                         <span
                           className={`inline-flex border px-2 sm:px-2.5 py-0.5 text-[11px] sm:text-xs font-extrabold uppercase tracking-wide ${subscriptionStatusClassName}`}
                         >
-                          Status: {formatStatusLabel(billingStatus)}
+                          {uiText("md617370d57781737", {
+                            value0: formatStatusLabel(billingStatus),
+                          })}
                         </span>
                       </div>
                     </div>
@@ -859,7 +990,9 @@ export default function ProfilePage() {
                           disabled={isOpeningPortal}
                           className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                         >
-                          {isOpeningPortal ? "Opening portal..." : "Manage Subscription"}
+                          {isOpeningPortal
+                            ? uiText("maa987d702e9696af")
+                            : uiText("mcbc4ef9225a090f7")}
                         </button>
                       ) : (
                         <button
@@ -867,7 +1000,7 @@ export default function ProfilePage() {
                           onClick={() => router.push("/#pricing")}
                           className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                         >
-                          View Upgrade Plans
+                          {uiText("m1f033eb27e6cf7a7")}
                         </button>
                       )}
 
@@ -876,17 +1009,21 @@ export default function ProfilePage() {
                         onClick={() => router.push("/billing_history")}
                         className={`${BTN_GHOST} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                       >
-                        Billing History
+                        {uiText("m5ade08611d1f4322")}
                       </button>
                     </div>
                   </div>
 
                   <p className="mt-4 text-xs text-ink/70 border-t-2 border-divider pt-3 sm:pt-4 leading-relaxed">
                     {billingRenewalDate
-                      ? `Your subscription is scheduled to renew on ${new Date(billingRenewalDate).toLocaleDateString()}.`
+                      ? uiText("mfcbd7e978aaefbb2", {
+                          value0: new Date(
+                            billingRenewalDate,
+                          ).toLocaleDateString(i18n.language),
+                        })
                       : billingPlan === "free"
-                        ? "You are on the free starter plan. Upgrade anytime for unlimited generation and team features."
-                        : "Renewal details will appear once confirmed by Stripe."}
+                        ? uiText("mf999260a1a3cfca7")
+                        : uiText("m5ef7fe9fe48fb720")}
                   </p>
                 </div>
               </div>
@@ -896,9 +1033,11 @@ export default function ProfilePage() {
             {activeTab === "security" && (
               <div className="border-2 border-divider bg-white p-3.5 sm:p-6 md:p-8 space-y-6 sm:space-y-8 w-full max-w-full">
                 <div className="border-b-2 border-divider pb-3 sm:pb-4">
-                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">Security & Credentials</h3>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                    {uiText("m12b039a331fe85eb")}
+                  </h3>
                   <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                    Manage password reset links, email address verification, and account removal.
+                    {uiText("m5043da30e1031a74")}
                   </p>
                 </div>
 
@@ -906,10 +1045,11 @@ export default function ProfilePage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b-2 border-divider pb-4 sm:pb-6">
                   <div>
                     <h4 className="text-sm sm:text-base font-extrabold text-ink flex items-center gap-2">
-                      <KeyRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" /> Password & Login
+                      <KeyRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" />{" "}
+                      {uiText("mb852fe243f49516a")}
                     </h4>
                     <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5">
-                      Request a secure password reset link sent to your registered email.
+                      {uiText("m55cb89fc3f08c4cb")}
                     </p>
                   </div>
                   <button
@@ -917,7 +1057,7 @@ export default function ProfilePage() {
                     onClick={handleRequestPasswordReset}
                     className={`${BTN_GHOST} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                   >
-                    Reset Password
+                    {uiText("m4e70f1fd24babdea")}
                   </button>
                 </div>
 
@@ -925,10 +1065,14 @@ export default function ProfilePage() {
                 <div className="border-b-2 border-divider pb-4 sm:pb-6 space-y-3 sm:space-y-4">
                   <div>
                     <h4 className="text-sm sm:text-base font-extrabold text-ink flex items-center gap-2">
-                      <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" /> Change Email Address
+                      <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand" />{" "}
+                      {uiText("m7ad9e11955b60c01")}
                     </h4>
                     <p className="text-[11px] sm:text-xs text-ink/60 mt-0.5 break-all">
-                      Current address: <strong className="font-mono text-ink">{user?.email}</strong>
+                      {uiText("m3669515a2cc33fd9")}
+                      <strong className="font-mono text-ink">
+                        {user?.email}
+                      </strong>
                     </p>
                   </div>
 
@@ -937,7 +1081,7 @@ export default function ProfilePage() {
                       type="email"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="Enter new email address"
+                      placeholder={uiText("m51e6ebc2f5fdcc13")}
                       className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                     />
                     <button
@@ -945,19 +1089,19 @@ export default function ProfilePage() {
                       onClick={handleUpdateEmail}
                       className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                     >
-                      Send Verification Code
+                      {uiText("m2bd7bfd7b3314b9b")}
                     </button>
 
                     {emailChangePending && (
                       <div className="mt-3 sm:mt-4 p-3 sm:p-4 border-2 border-brand/30 bg-brand-50/50 space-y-3">
                         <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-brand-900">
-                          Enter 6-Digit Verification Code
+                          {uiText("m6635da66ff0ead5e")}
                         </label>
                         <input
                           type="text"
                           value={emailOtp}
                           onChange={(e) => setEmailOtp(e.target.value)}
-                          placeholder="Verification code"
+                          placeholder={uiText("m3ee75029c70e284c")}
                           className="w-full border-2 border-divider px-3 py-2 text-xs sm:text-sm text-ink focus:border-brand focus:outline-none"
                         />
                         <button
@@ -965,7 +1109,7 @@ export default function ProfilePage() {
                           onClick={handleVerifyEmailChange}
                           className={`${BTN_PRIMARY} w-full sm:w-auto text-xs sm:text-sm min-h-[38px] sm:min-h-[44px]`}
                         >
-                          Verify & Update Email
+                          {uiText("mb93bce9696eee559")}
                         </button>
                       </div>
                     )}
@@ -975,11 +1119,11 @@ export default function ProfilePage() {
                 {/* Danger Zone */}
                 <div className="border-2 border-rose-200 bg-rose-50/40 p-3.5 sm:p-5 w-full max-w-full">
                   <h4 className="text-sm sm:text-base font-extrabold text-rose-800 flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-700" /> Danger Zone: Delete Account
+                    <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-700" />{" "}
+                    {uiText("m60245e93718bc0c9")}
                   </h4>
                   <p className="mt-1 text-[11px] sm:text-xs text-rose-700 leading-relaxed max-w-2xl">
-                    Permanently delete your user account, generated quizzes, score records, and persona history.
-                    This action cannot be undone.
+                    {uiText("m1677438c268ed2a4")}
                   </p>
                   <div className="mt-3 sm:mt-4">
                     <button
@@ -988,7 +1132,7 @@ export default function ProfilePage() {
                       className={`${BTN_BASE} border-2 border-rose-700 bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm px-3 py-2`}
                     >
                       <Trash2 className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                      Delete Account
+                      {uiText("mc031bf992e172f57")}
                     </button>
                   </div>
                 </div>
@@ -1007,9 +1151,11 @@ export default function ProfilePage() {
               className="w-full max-w-md border-2 border-ink bg-white p-4 sm:p-8"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg sm:text-xl font-extrabold text-ink">Confirm Sign Out</h3>
+              <h3 className="text-lg sm:text-xl font-extrabold text-ink">
+                {uiText("mcc39c00b51a876a1")}
+              </h3>
               <p className="mt-2 text-xs sm:text-sm text-ink/70">
-                Are you sure you want to end your current session?
+                {uiText("ma03ea8ce539bb718")}
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
@@ -1018,7 +1164,7 @@ export default function ProfilePage() {
                   disabled={isLoggingOut}
                   className={`${BTN_GHOST} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   type="button"
@@ -1026,7 +1172,9 @@ export default function ProfilePage() {
                   disabled={isLoggingOut}
                   className={`${BTN_PRIMARY} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  {isLoggingOut ? "Signing out..." : "Sign Out"}
+                  {isLoggingOut
+                    ? uiText("m0436231679a0cb2b")
+                    : uiText("m0b184bc5d5341998")}
                 </button>
               </div>
             </div>
@@ -1044,10 +1192,10 @@ export default function ProfilePage() {
             >
               <h3 className="text-lg sm:text-xl font-extrabold text-rose-900 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600" />
-                Permanently Delete Account?
+                {uiText("m22b957a6205bc259")}
               </h3>
               <p className="mt-2 text-xs sm:text-sm text-ink/70">
-                This will delete all your quizzes, live results, and saved account data. This action is irreversible.
+                {uiText("meddf32a686ec5ba1")}
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
@@ -1055,14 +1203,14 @@ export default function ProfilePage() {
                   onClick={() => setShowDeleteConfirm(false)}
                   className={`${BTN_GHOST} flex-1 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  Keep Account
+                  {uiText("m409890f3c4df8037")}
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
                   className={`${BTN_BASE} flex-1 border-2 border-rose-700 bg-rose-600 text-white hover:bg-rose-700 min-h-[38px] sm:min-h-[44px] text-xs sm:text-sm`}
                 >
-                  Confirm Delete
+                  {uiText("ma7f54311a3e625f5")}
                 </button>
               </div>
             </div>

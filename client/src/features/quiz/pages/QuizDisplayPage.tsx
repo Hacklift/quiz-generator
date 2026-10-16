@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -38,6 +39,8 @@ const isAnswerProvided = (answer: string | number | undefined) => {
 };
 
 const QuizDisplayPage: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const searchParams = useSearchParams();
   const isDocumentGenerated = searchParams?.get("generated") === "document";
   const generatedQuizKey = searchParams?.get("generatedQuizKey") || "";
@@ -56,6 +59,8 @@ const QuizDisplayPage: React.FC = () => {
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
   const [quizDescription, setQuizDescription] = useState("");
+  const [contentLocale, setContentLocale] = useState("en");
+  const [isSample, setIsSample] = useState(false);
   const [activeQuestionType, setActiveQuestionType] = useState(questionType);
   const [documentContext, setDocumentContext] =
     useState<DocumentContext | null>(null);
@@ -113,6 +118,12 @@ const QuizDisplayPage: React.FC = () => {
             `${resolvedQuestionType.charAt(0).toUpperCase() + resolvedQuestionType.slice(1)} Quiz`,
         );
         setQuizDescription(quizData?.description || "");
+        setContentLocale(quizData?.content_locale || "en");
+        setIsSample(
+          quizData?.source === "mock" ||
+            quizData?.source === "seed" ||
+            Boolean(quizData?.is_sample),
+        );
         setActiveQuestionType(resolvedQuestionType);
         setQuizQuestions(normalizedQuestions);
         setUserAnswers(Array(normalizedQuestions.length).fill(""));
@@ -172,7 +183,7 @@ const QuizDisplayPage: React.FC = () => {
               quiz_id: parsedGeneratedQuiz?.quiz_id || canonicalQuizId || "",
             },
             {
-              successMessage: "Loaded generated quiz successfully!",
+              successMessage: uiText("m32f1e027de0581d1"),
             },
           );
 
@@ -224,7 +235,7 @@ const QuizDisplayPage: React.FC = () => {
             throw new Error("Generated quiz data is unavailable.");
           }
           applyQuizData(JSON.parse(generatedQuiz), {
-            successMessage: "Loaded generated quiz successfully!",
+            successMessage: uiText("m32f1e027de0581d1"),
           });
           setIsLoading(false);
           return;
@@ -234,7 +245,9 @@ const QuizDisplayPage: React.FC = () => {
         if (storedQuiz) {
           const parsedQuiz = JSON.parse(storedQuiz);
           applyQuizData(parsedQuiz, {
-            successMessage: `Loaded saved quiz: ${parsedQuiz.title || "Quiz"}`,
+            successMessage: uiText("m76b3f66d1734c81c", {
+              value0: parsedQuiz.title || "Quiz",
+            }),
             clearSavedLocal: true,
           });
           setIsLoading(false);
@@ -244,7 +257,7 @@ const QuizDisplayPage: React.FC = () => {
         if (savedQuizId) {
           const { data } = await api.get(`/api/saved-quizzes/${savedQuizId}`);
           applyQuizData(data, {
-            successMessage: "Loaded saved quiz successfully!",
+            successMessage: uiText("m41ffeb4437dbf378"),
           });
           setIsLoading(false);
           return;
@@ -253,7 +266,7 @@ const QuizDisplayPage: React.FC = () => {
         if (canonicalQuizId) {
           const { data } = await api.get(`/api/quizzes/${canonicalQuizId}`);
           applyQuizData(data, {
-            successMessage: "Loaded quiz successfully!",
+            successMessage: uiText("ma292cb6f259baec8"),
           });
           setIsLoading(false);
           return;
@@ -262,7 +275,7 @@ const QuizDisplayPage: React.FC = () => {
         throw new Error("Quiz data is unavailable.");
       } catch (error: any) {
         console.error("Failed to fetch quiz questions:", error);
-        toast.error(error.message || "Failed to load quiz questions.");
+        toast.error(error.message || uiText("me0e03c8d1ea999f1"));
         setQuizQuestions([]);
         setUserAnswers([]);
       } finally {
@@ -308,9 +321,7 @@ const QuizDisplayPage: React.FC = () => {
     }
 
     if (!quizId) {
-      toast.error(
-        "This quiz can no longer be graded. Generate or reload it and try again.",
-      );
+      toast.error(uiText("mc1fd27717d778ab4"));
       return;
     }
 
@@ -337,13 +348,13 @@ const QuizDisplayPage: React.FC = () => {
       setIsQuizChecked(true);
       const attemptStatus = headers?.["x-quiz-attempt-status"];
       if (authenticated && attemptStatus === "failed") {
-        toast.error("Your quiz was graded, but this attempt could not be saved to history.");
+        toast.error(uiText("attempts.saveFailed"));
       } else if (authenticated && attemptStatus === "not-requested") {
-        toast.error("Your quiz was graded without saving an attempt. Sign in again before your next attempt.");
+        toast.error(uiText("attempts.notRequested"));
       }
     } catch (err) {
       console.error("Error checking answers:", err);
-      toast.error("Failed to grade your quiz. Please try again.");
+      toast.error(uiText("m7f0e09f9915d1863"));
     } finally {
       gradingInFlightRef.current = false;
       setIsGrading(false);
@@ -362,7 +373,7 @@ const QuizDisplayPage: React.FC = () => {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <p className="text-gray-600 text-center text-lg">
-          No quiz questions found.
+          {uiText("m72d457f3e0648b52")}
         </p>
       </div>
     );
@@ -377,7 +388,11 @@ const QuizDisplayPage: React.FC = () => {
           <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-6">
               {quizTitle ||
-                `${activeQuestionType.charAt(0).toUpperCase() + activeQuestionType.slice(1)} Quiz`}
+                uiText("ma116d0610309824c", {
+                  value0:
+                    activeQuestionType.charAt(0).toUpperCase() +
+                    activeQuestionType.slice(1),
+                })}
             </h1>
             {quizDescription && (
               <p className="mb-6 text-sm leading-6 text-slate-600">
@@ -387,40 +402,59 @@ const QuizDisplayPage: React.FC = () => {
             {documentContext && (
               <div className="mb-6 grid gap-3 rounded-xl border border-[#0F2654]/10 bg-[#f8fbff] p-4 text-sm text-slate-700 md:grid-cols-2">
                 <p>
-                  <span className="font-semibold text-[#0F2654]">Source:</span>{" "}
+                  <span className="font-semibold text-[#0F2654]">
+                    {uiText("mc707ee4ecc240442")}
+                  </span>{" "}
                   {documentContext.sourceDocumentName}
                 </p>
                 <p>
-                  <span className="font-semibold text-[#0F2654]">Type:</span>{" "}
+                  <span className="font-semibold text-[#0F2654]">
+                    {uiText("m6cc5ad2e47e3be35")}
+                  </span>{" "}
                   {documentContext.sourceDocumentType.toUpperCase()}
                 </p>
                 <p>
-                  <span className="font-semibold text-[#0F2654]">RAG:</span>{" "}
-                  {documentContext.retrievedChunks} of{" "}
-                  {documentContext.totalSourceChunks} chunks retrieved
-                </p>
-                <p>
-                  <span className="font-semibold text-[#0F2654]">Cache:</span>{" "}
-                  {documentContext.embeddingCacheHit
-                    ? "Reused stored document embeddings"
-                    : "Generated fresh document embeddings"}
+                  <span className="font-semibold text-[#0F2654]">
+                    {uiText("m488c05fadfd1cfde")}
+                  </span>{" "}
+                  {documentContext.retrievedChunks}{" "}
+                  {uiText("m28391d3bc64ec15c")}{" "}
+                  {documentContext.totalSourceChunks}{" "}
+                  {uiText("mda2ac6799d428ebf")}
                 </p>
                 <p>
                   <span className="font-semibold text-[#0F2654]">
-                    Strategy:
+                    {uiText("m96bdf31bfe2af309")}
+                  </span>{" "}
+                  {documentContext.embeddingCacheHit
+                    ? uiText("m349d1336a2d865bf")
+                    : uiText("m593c2ac13be5d8b9")}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F2654]">
+                    {uiText("m8132ec6be3946f2e")}
                   </span>{" "}
                   {documentContext.ragStrategy}
                 </p>
                 <p>
                   <span className="font-semibold text-[#0F2654]">
-                    Content size:
+                    {uiText("mec742423ab719ad6")}
                   </span>{" "}
-                  {documentContext.sourceCharacters.toLocaleString()} characters
+                  {documentContext.sourceCharacters.toLocaleString()}{" "}
+                  {uiText("m25d939ffd0d79b73")}
                 </p>
               </div>
             )}
 
-            <div className="space-y-6">
+            {isSample && (
+              <p
+                role="status"
+                className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-amber-900"
+              >
+                {uiText("quizLanguage.sampleNotice")}
+              </p>
+            )}
+            <div className="space-y-6" lang={contentLocale}>
               {quizQuestions.map((q, i) => (
                 <div
                   key={i}
@@ -442,9 +476,17 @@ const QuizDisplayPage: React.FC = () => {
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-              {!isQuizChecked && !isGrading && <CheckButton onClick={checkAnswers} />}
-              {isGrading && <p role="status">Grading your answers...</p>}
-              <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
+              {!isQuizChecked && !isGrading && (
+                <CheckButton onClick={checkAnswers} />
+              )}
+              {isGrading && <p role="status">{uiText("attempts.grading")}</p>}
+              <SaveQuizButton
+                quizData={quizQuestions}
+                quizId={quizId}
+                contentLocale={contentLocale}
+                description={quizDescription}
+                isSample={isSample}
+              />
               <DownloadQuizButton
                 quizId={quizId}
                 question_type={activeQuestionType}
@@ -452,13 +494,14 @@ const QuizDisplayPage: React.FC = () => {
                 quizData={quizQuestions}
                 title={quizTitle}
                 description={quizDescription}
+                contentLocale={contentLocale}
               />
               <ShareButton quizId={quizId} />
               {isQuizChecked && <NewQuizButton />}
             </div>
             {isQuizChecked && (
               <p className="mt-4 text-sm font-medium text-slate-600">
-                Answers are locked after submission and grading.
+                {uiText("m4d044a00a228a796")}
               </p>
             )}
           </section>
@@ -466,10 +509,10 @@ const QuizDisplayPage: React.FC = () => {
           {liveAccessCode && (
             <section className="rounded-md border border-green-200 bg-green-50 px-4 py-5 shadow-sm">
               <h2 className="text-lg font-bold text-[#0F2654]">
-                Live quiz is ready
+                {uiText("mabe26b7f51256540")}
               </h2>
               <p className="mt-2 text-sm text-slate-700">
-                Share this access code with participants.
+                {uiText("ma58c8f9ff35c6407")}
               </p>
               <p className="mt-3 text-3xl font-bold tracking-widest text-[#0F2654]">
                 {liveAccessCode}
@@ -478,11 +521,11 @@ const QuizDisplayPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(liveAccessUrl);
-                  toast.success("Live quiz link copied.");
+                  toast.success(uiText("mc0a1b867714c680f"));
                 }}
                 className="mt-4 rounded-md border border-[#0F2654] bg-white px-4 py-2 text-sm font-semibold text-[#0F2654] hover:bg-slate-50"
               >
-                Copy Live Quiz Link
+                {uiText("m1a929e80f8c63e09")}
               </button>
             </section>
           )}
@@ -492,7 +535,7 @@ const QuizDisplayPage: React.FC = () => {
           {isQuizChecked && (
             <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
               <h2 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-4">
-                My Quiz Result
+                {uiText("mb68fb11995b3874e")}
               </h2>
 
               <div className="space-y-4">
@@ -506,22 +549,25 @@ const QuizDisplayPage: React.FC = () => {
                     }`}
                   >
                     <p>
-                      <strong>Question:</strong> {r.question}
+                      <strong>{uiText("m54de7f6007056e6f")}</strong>{" "}
+                      {r.question}
                     </p>
                     <p>
-                      <strong>Your Answer:</strong> {r.user_answer}
+                      <strong>{uiText("m7885a5c5706c2da2")}</strong>{" "}
+                      {r.user_answer}
                     </p>
                     <p>
-                      <strong>Correct:</strong> {r.correct_answer}
+                      <strong>{uiText("m987a02b6fbe6e9a2")}</strong>{" "}
+                      {r.correct_answer}
                     </p>
                     {r.accuracy_percentage && (
                       <p>
-                        <strong>Accuracy:</strong>{" "}
+                        <strong>{uiText("m141c19581b3470d1")}</strong>{" "}
                         {parseFloat(r.accuracy_percentage).toFixed(2)}%
                       </p>
                     )}
                     <p>
-                      <strong>Result:</strong> {r.result}
+                      <strong>{uiText("mccfbca6507781cd9")}</strong> {r.result}
                     </p>
                   </div>
                 ))}
@@ -529,7 +575,7 @@ const QuizDisplayPage: React.FC = () => {
 
               <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
                 <button className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-4 py-2 rounded-xl shadow-md transition text-sm">
-                  Upgrade Plan to Save your Quiz
+                  {uiText("mafafae0a7b70b115")}
                 </button>
                 <NewQuizButton />
               </div>
@@ -544,8 +590,10 @@ const QuizDisplayPage: React.FC = () => {
 };
 
 export default function DisplayQuiz() {
+  const { t: uiText } = useTranslation("ui");
+
   return (
-    <Suspense fallback={<div>Loading quiz...</div>}>
+    <Suspense fallback={<div>{uiText("m2b070ac169a0a16f")}</div>}>
       <QuizDisplayPage />
     </Suspense>
   );

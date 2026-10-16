@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import { useRouter } from "next/router";
@@ -17,6 +18,8 @@ export type QuickAction =
  * Category dashboards supply the actions; the layout stays consistent.
  */
 export default function QuickActions({ actions }: { actions: QuickAction[] }) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
 
   return (
@@ -43,7 +46,7 @@ export default function QuickActions({ actions }: { actions: QuickAction[] }) {
                 </span>
                 {action.unavailable ? (
                   <span className="mt-[8px] block text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
-                    Coming soon
+                    {uiText("m4f7d64017689437e")}
                   </span>
                 ) : null}
               </span>

@@ -12,6 +12,7 @@ from server.app.email_platform.service import EmailService
 from server.app.users.identity import normalize_email, now_utc
 from server.app.users.models import (
     UpdatePersonaRequest,
+    UpdateLocaleRequest,
     UpdateProfileRequest,
     UpdateProfileResponse,
     UserOut,
@@ -24,9 +25,19 @@ from server.app.users.repository import (
     revoke_user_sessions,
 )
 from server.app.users.schemas import MessageResponse
+from server.app.organizations.services import resolve_user_effective_locale
 
 
-def get_user_profile_service(current_user: UserOut) -> dict:
+async def get_user_profile_service(
+    current_user: UserOut,
+    organizations_collection: AsyncIOMotorCollection,
+    memberships_collection: AsyncIOMotorCollection,
+) -> dict:
+    effective_locale = await resolve_user_effective_locale(
+        current_user,
+        organizations_collection,
+        memberships_collection,
+    )
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -39,6 +50,11 @@ def get_user_profile_service(current_user: UserOut) -> dict:
         "persona_category": current_user.persona_category,
         "persona_user_type": current_user.persona_user_type,
         "persona_set_at": current_user.persona_set_at,
+        "preferred_locale": current_user.preferred_locale,
+        "effective_locale": effective_locale,
+        "active_organization_id": current_user.active_organization_id,
+        "onboarding_organization_id": current_user.onboarding_organization_id,
+        "language_selected": current_user.language_selected,
         "role": current_user.role,
         "status": current_user.status,
         "is_active": current_user.is_active,
@@ -176,6 +192,70 @@ async def update_user_persona_service(
         user=UserOut(
             **{
                 **build_user_out_payload(updated_user),
+                "created_at": created_at,
+                "updated_at": updated_at_value,
+            }
+        ),
+    )
+
+
+async def update_user_locale_service(
+    locale_data: UpdateLocaleRequest,
+    current_user: UserOut,
+    users_collection: AsyncIOMotorCollection,
+    organizations_collection: AsyncIOMotorCollection | None = None,
+    memberships_collection: AsyncIOMotorCollection | None = None,
+) -> UpdateProfileResponse:
+    """Persist a user's explicit locale or clear it for organisation inheritance."""
+
+    try:
+        user_object_id = ObjectId(current_user.id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid user ID format: {str(exc)}",
+        ) from exc
+
+    result = await users_collection.update_one(
+        {"_id": user_object_id, "status": {"$ne": "deleted"}},
+        {
+            "$set": {
+                "profile.preferred_locale": locale_data.preferred_locale,
+                "profile.language_selected": True,
+                "updated_at": now_utc(),
+            }
+        },
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    updated_user = await users_collection.find_one(
+        {"_id": user_object_id, "status": {"$ne": "deleted"}}
+    )
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found after update",
+        )
+
+    created_at = updated_user.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+    updated_at_value = updated_user.get("updated_at")
+    if isinstance(updated_at_value, datetime):
+        updated_at_value = updated_at_value.isoformat()
+
+    user_payload = build_user_out_payload(updated_user)
+    if organizations_collection is not None and memberships_collection is not None:
+        user_payload["effective_locale"] = await resolve_user_effective_locale(
+            UserOut(**{**user_payload, "created_at": created_at, "updated_at": updated_at_value}),
+            organizations_collection, memberships_collection,
+        )
+    return UpdateProfileResponse(
+        message="Language preference updated successfully",
+        user=UserOut(
+            **{
+                **user_payload,
                 "created_at": created_at,
                 "updated_at": updated_at_value,
             }

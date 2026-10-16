@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -26,11 +27,13 @@ interface QuizAttempt {
 const getAttemptId = (attempt: QuizAttempt) => attempt._id || attempt.id || "";
 
 export default function QuizAttemptsPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user } = useAuth();
   return (
     <RequireAuth
-      title="Quiz attempts"
-      description="Sign in to view your graded quiz attempts."
+      title={uiText("m90c6cbb0f5551411")}
+      description={uiText("m5a083c7801eee49d")}
     >
       <QuizAttemptsContent key={user?.id} />
     </RequireAuth>
@@ -38,6 +41,8 @@ export default function QuizAttemptsPage() {
 }
 
 function QuizAttemptsContent() {
+  const { t: uiText, i18n } = useTranslation("ui");
+
   const router = useRouter();
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,9 +72,7 @@ function QuizAttemptsContent() {
   }, [reload]);
 
   const removeAttempt = async (attemptId: string) => {
-    if (
-      !window.confirm("Delete this quiz attempt? This action cannot be undone.")
-    ) {
+    if (!window.confirm(uiText("attempts.confirmDelete"))) {
       return;
     }
     setDeletingId(attemptId);
@@ -78,10 +81,10 @@ function QuizAttemptsContent() {
       setAttempts((current) =>
         current.filter((attempt) => getAttemptId(attempt) !== attemptId),
       );
-      toast.success("Quiz attempt deleted.");
+      toast.success(uiText("m47ca7dcab0172ff2"));
     } catch (error) {
       console.error("Failed to delete quiz attempt:", error);
-      toast.error("Failed to delete quiz attempt.");
+      toast.error(uiText("m39567e1f1a212d37"));
     } finally {
       setDeletingId(null);
     }
@@ -94,32 +97,34 @@ function QuizAttemptsContent() {
         <div className="mx-auto max-w-4xl space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-3xl font-bold text-[#0F2654]">
-              Graded Quiz Attempts
+              {uiText("me8a5c4f3bd31cff5")}
             </h1>
             <button
               type="button"
               onClick={() => router.push("/quiz_history")}
               className="rounded-lg border border-[#0a3264] px-4 py-2 text-sm font-medium text-[#0a3264] hover:bg-blue-50"
             >
-              Generated quiz history
+              {uiText("me3c6ad27a038d956")}
             </button>
           </div>
           {loading ? (
-            <p className="text-center text-gray-600">Loading attempts…</p>
+            <p className="text-center text-gray-600">
+              {uiText("m5f703d2cbd71b602")}
+            </p>
           ) : loadError ? (
             <div role="alert" className="text-center text-gray-600">
-              <p>Could not load your graded attempts.</p>
+              <p>{uiText("m170c0a0c51b8d42c")}</p>
               <button
                 type="button"
                 onClick={() => setReload((value) => value + 1)}
                 className="mt-2 text-blue-600 underline"
               >
-                Try again
+                {uiText("md8b8392e2c542950")}
               </button>
             </div>
           ) : attempts.length === 0 ? (
             <p className="text-center text-gray-600">
-              No graded quiz attempts available yet.
+              {uiText("m2bcbaeee42de5b15")}
             </p>
           ) : (
             attempts.map((attempt) => {
@@ -130,27 +135,27 @@ function QuizAttemptsContent() {
                   className="rounded-xl border border-gray-200 bg-white p-6 shadow-md"
                 >
                   <p className="text-sm text-gray-500">
-                    Submitted on:{" "}
+                    {uiText("m201ab1d2d5c1637d")}{" "}
                     {attempt.submitted_at
-                      ? new Date(attempt.submitted_at).toLocaleString()
-                      : "Unknown date"}
+                      ? new Date(attempt.submitted_at).toLocaleString(
+                          i18n.language,
+                        )
+                      : uiText("mad224bb89c8a3fb6")}
                   </p>
                   <h2 className="mt-2 text-lg font-semibold text-[#0F2654]">
-                    {attempt.quiz_title || "Quiz Attempt"}
+                    {attempt.quiz_title || uiText("m1ad6a88a3bbe09cf")}
                   </h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    Score: {attempt.score}/{attempt.total_questions} ·{" "}
-                    {attempt.percentage.toFixed(0)}%
+                    {uiText("m9689a814f3584ec9")} {attempt.score}/
+                    {attempt.total_questions} · {attempt.percentage.toFixed(0)}%
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        router.push(`/quiz_attempts/${attemptId}`)
-                      }
+                      onClick={() => router.push(`/quiz_attempts/${attemptId}`)}
                       className="rounded-lg bg-[#0a3264] px-3 py-1 text-sm text-white hover:bg-[#082952]"
                     >
-                      View Details
+                      {uiText("m90789c12d0731b44")}
                     </button>
                     <button
                       type="button"
@@ -161,7 +166,7 @@ function QuizAttemptsContent() {
                       }
                       className="rounded-lg bg-emerald-700 px-3 py-1 text-sm text-white hover:bg-emerald-800"
                     >
-                      Retake Quiz
+                      {uiText("m926af581275da75d")}
                     </button>
                     <button
                       type="button"
@@ -169,7 +174,9 @@ function QuizAttemptsContent() {
                       disabled={deletingId === attemptId}
                       className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
                     >
-                      {deletingId === attemptId ? "Deleting…" : "Delete"}
+                      {deletingId === attemptId
+                        ? uiText("m43b5894c3e4e2b24")
+                        : uiText("me2d0a54968ead24e")}
                     </button>
                   </div>
                 </article>

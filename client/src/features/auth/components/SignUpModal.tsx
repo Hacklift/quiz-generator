@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { SignUpModalProps } from "@features/auth/types/sign-up-modal-props";
@@ -6,6 +7,9 @@ import { EMAIL_REGEX, PASSWORD_REGEX } from "@shared/config/patterns/patterns";
 import { useRouter } from "next/router";
 import { ROUTES } from "@shared/config/patterns/routes";
 import VerifyEmailModal from "./VerifyEmailModal";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
+import { useSignupLanguage } from "@features/auth/hooks/useSignupLanguage";
+import { LANGUAGES, LOCALE_DISPLAY_NAMES } from "@shared/config/locale";
 
 interface ExtendedSignUpModalProps extends SignUpModalProps {
   onSuccess?: () => void;
@@ -17,7 +21,11 @@ export default function SignUpModal({
   switchToSignIn,
   onSuccess,
 }: ExtendedSignUpModalProps) {
+  const { t: uiText } = useTranslation("ui");
+  const { t: authText } = useTranslation();
+
   const router = useRouter();
+  const signupLanguage = useSignupLanguage(isOpen);
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -49,18 +57,17 @@ export default function SignUpModal({
   useEffect(() => {
     const newErrors: Record<string, string> = {};
     if (username && username.length < 3)
-      newErrors.username = "Username must be at least 3 characters.";
+      newErrors.username = authText("auth.username");
     if (fullName && fullName.length < 3)
-      newErrors.fullName = "Full name must be at least 3 characters.";
+      newErrors.fullName = authText("auth.fullName");
     if (email && !EMAIL_REGEX.test(email))
-      newErrors.email = "Please enter a valid email address.";
+      newErrors.email = authText("auth.email");
     if (password && !PASSWORD_REGEX.test(password))
-      newErrors.password =
-        "Password must be at least 8 characters long, include a number, a letter, and a special character.";
+      newErrors.password = authText("auth.password");
     if (confirmPassword && password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match.";
+      newErrors.confirmPassword = authText("auth.passwordMatch");
     setErrors(newErrors);
-  }, [username, fullName, email, password, confirmPassword]);
+  }, [username, fullName, email, password, confirmPassword, authText]);
 
   useEffect(() => {
     if (!password) {
@@ -82,7 +89,12 @@ export default function SignUpModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (Object.keys(errors).length > 0) return;
+    if (
+      Object.keys(errors).length > 0 ||
+      signupLanguage.checkingInvitation ||
+      signupLanguage.invitationError
+    )
+      return;
     try {
       setLoading(true);
       await registerUser({
@@ -90,6 +102,9 @@ export default function SignUpModal({
         email,
         full_name: fullName,
         password,
+        preferred_locale: signupLanguage.preference,
+        organization_invitation_token:
+          signupLanguage.invitationToken || undefined,
       });
       setRegisteredEmail(email);
       setShowVerifyModal(true);
@@ -102,7 +117,7 @@ export default function SignUpModal({
       setPasswordStrength("");
     } catch (error: any) {
       setErrors({
-        global: error?.message || "Registration failed. Please try again.",
+        global: error?.message || authText("auth.registrationFailed"),
       });
     } finally {
       setLoading(false);
@@ -140,15 +155,15 @@ export default function SignUpModal({
         >
           <div className="relative">
             <h2 className="text-2xl font-semibold text-center text-[#143E6F] font-serif mb-6">
-              Sign Up
+              {uiText("m47de23586e49d833")}
             </h2>
             <button
               onClick={onClose}
               type="button"
-              aria-label="Close sign up modal"
+              aria-label={uiText("m69df6eafe61d3a9f")}
               className="absolute right-0 top-0 rounded-full p-1 text-2xl text-gray-400 hover:text-gray-600"
             >
-              &times;
+              {uiText("m6e8883d99e3c7fff")}
             </button>
           </div>
 
@@ -159,17 +174,62 @@ export default function SignUpModal({
           )}
 
           <form onSubmit={handleSubmit}>
+            <section className="mb-6 rounded border border-gray-200 p-3">
+              {signupLanguage.invitation && (
+                <p className="mb-3 text-sm">
+                  {authText("language.signupOrganization", {
+                    organization: signupLanguage.invitation.name,
+                    language:
+                      LOCALE_DISPLAY_NAMES[
+                        signupLanguage.invitation.default_locale
+                      ] ||
+                      LANGUAGES.find(
+                        (item) =>
+                          item.code ===
+                          signupLanguage.invitation?.default_locale,
+                      )?.name ||
+                      signupLanguage.invitation.default_locale,
+                  })}
+                </p>
+              )}
+              {signupLanguage.checkingInvitation && (
+                <p role="status">{authText("language.checkingInvitation")}</p>
+              )}
+              {signupLanguage.invitationError && (
+                <p role="alert" className="text-red-600">
+                  {authText("language.invitationError")}
+                </p>
+              )}
+              <LanguagePicker
+                value={
+                  signupLanguage.invitation
+                    ? signupLanguage.preference
+                    : signupLanguage.preference || "en"
+                }
+                onChange={signupLanguage.chooseLanguage}
+                allowOrganizationDefault={Boolean(signupLanguage.invitation)}
+                disabled={
+                  loading ||
+                  signupLanguage.checkingInvitation ||
+                  signupLanguage.invitationError
+                }
+                label={authText("language.signupLabel")}
+              />
+              <p className="mt-2 text-xs text-gray-600">
+                {authText("language.signupHelp")}
+              </p>
+            </section>
             <div className="mb-4">
               <label
                 className="block text-sm font-medium mb-2"
                 htmlFor="username"
               >
-                Choose a Username
+                {uiText("mcc8586487a10c3b2")}
               </label>
               <input
                 type="text"
                 id="username"
-                placeholder="Enter Username"
+                placeholder={uiText("m29cf2de040bd12a6")}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className={`w-full px-4 py-2 border rounded-md ${
@@ -184,12 +244,12 @@ export default function SignUpModal({
 
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" htmlFor="name">
-                Full Name
+                {uiText("m8e00cdf71fa7cc76")}
               </label>
               <input
                 type="text"
                 id="name"
-                placeholder="Enter Full Name"
+                placeholder={uiText("me45c8aa7db3ffb05")}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className={`w-full px-4 py-2 border rounded-md ${
@@ -204,12 +264,12 @@ export default function SignUpModal({
 
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2" htmlFor="email">
-                Email Address
+                {uiText("m09bf25ef30833633")}
               </label>
               <input
                 type="email"
                 id="email"
-                placeholder="Enter Email"
+                placeholder={uiText("m80d7f158474439dc")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={`w-full px-4 py-2 border rounded-md ${
@@ -227,12 +287,12 @@ export default function SignUpModal({
                 className="block text-sm font-medium mb-2"
                 htmlFor="password"
               >
-                Password
+                {uiText("me7cf3ef4f17c3999")}
               </label>
               <input
                 type={showPassword ? "text" : "password"}
                 id="password"
-                placeholder="Enter Password"
+                placeholder={uiText("m3d81652794e5a8ce")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={`w-full px-4 py-2 border rounded-md pr-10 ${
@@ -248,15 +308,18 @@ export default function SignUpModal({
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
               <p className="text-xs text-gray-500 mt-2">
-                Must be 8+ chars, include uppercase, lowercase, a number, and a
-                special character.
+                {uiText("me4abe1cfd4cabfaf")}
               </p>
               {errors.password && (
                 <p className="text-red-600 text-sm mt-1">{errors.password}</p>
               )}
               {password && (
                 <p className={`text-sm mt-1 ${getStrengthColor()}`}>
-                  Strength: {passwordStrength}
+                  {uiText("md7c97ff70026de77", {
+                    value0: passwordStrength
+                      ? authText("auth." + passwordStrength)
+                      : "",
+                  })}
                 </p>
               )}
             </div>
@@ -266,12 +329,12 @@ export default function SignUpModal({
                 className="block text-sm font-medium mb-2"
                 htmlFor="confirmPassword"
               >
-                Confirm Password
+                {uiText("mc292210c44167923")}
               </label>
               <input
                 type={showConfirmPassword ? "text" : "password"}
                 id="confirmPassword"
-                placeholder="Confirm Password"
+                placeholder={uiText("mc292210c44167923")}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className={`w-full px-4 py-2 border rounded-md pr-10 ${
@@ -295,15 +358,22 @@ export default function SignUpModal({
 
             <button
               type="submit"
-              disabled={loading || Object.keys(errors).length > 0}
+              disabled={
+                loading ||
+                signupLanguage.checkingInvitation ||
+                signupLanguage.invitationError ||
+                Object.keys(errors).length > 0
+              }
               className="w-full bg-[#143E6F] text-white py-2 rounded-md font-medium mb-6 disabled:opacity-50 hover:bg-[#0f2f54] transition-colors"
             >
-              {loading ? "Signing Up..." : "Sign Up"}
+              {loading
+                ? uiText("m7918d9ac376d6293")
+                : uiText("m47de23586e49d833")}
             </button>
           </form>
 
           <div className="text-center mt-6 text-sm">
-            Already Have An Account?{" "}
+            {uiText("m33d3f3055abfb69a")}{" "}
             <button
               onClick={() => {
                 onClose();
@@ -312,7 +382,7 @@ export default function SignUpModal({
               type="button"
               className="text-gray-400 hover:text-gray-600 underline"
             >
-              Login
+              {uiText("m9d6322c1f4d9d3f3")}
             </button>
           </div>
         </div>

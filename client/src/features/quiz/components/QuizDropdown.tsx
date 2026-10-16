@@ -1,7 +1,10 @@
+import { useTranslation } from "react-i18next";
 import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 const QuizDropdown: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   return (
@@ -9,10 +12,10 @@ const QuizDropdown: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        aria-label="Toggle quiz dropdown"
+        aria-label={uiText("m6eb376846967650a")}
         className="flex items-center text-base font-semibold text-black hover:opacity-80 transition"
       >
-        Quiz Here
+        {uiText("mde53383db46551cc")}
         <ChevronDown className="ml-1" size={20} />
       </button>
       {isOpen && (

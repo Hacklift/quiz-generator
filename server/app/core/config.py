@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     ASSISTANT_PLANNER_MODEL: str = "gemini-2.5-flash"
     ASSISTANT_PLANNER_FALLBACK_MODEL: str = "gemini-2.5-flash-lite"
     GEMINI_API_KEY: Optional[str] = None
+    GEMINI_QUIZ_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_QUIZ_TIMEOUT_SECONDS: float = Field(default=60.0, gt=0, le=120)
     ASSISTANT_EXECUTOR_PROVIDER: str = "groq"
     ASSISTANT_EXECUTOR_MODEL: str = "openai/gpt-oss-20b"
     ASSISTANT_EXECUTOR_FALLBACK_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -64,6 +66,13 @@ class Settings(BaseSettings):
     ASSISTANT_PENDING_RUN_TTL_SECONDS: int = 900
     QUIZ_GENERATION_MAX_QUESTIONS: int = 10
     QUIZ_GENERATION_REQUIRES_AUTH: bool = False
+    MULTILINGUAL_ENABLED: bool = True
+    MULTILINGUAL_GENERATION_ENABLED: bool = True
+    TRANSLATION_PROVIDER: Literal["none", "deepl", "google", "gemini", "llm"] = "none"
+    TRANSLATION_MODEL: str = "gemini-3.1-flash-lite"
+    TRANSLATION_PROVIDER_URL: Optional[str] = None
+    TRANSLATION_PROVIDER_API_KEY: Optional[str] = None
+    TRANSLATION_PROVIDER_TIMEOUT_SECONDS: float = Field(default=45.0, gt=0, le=120)
     PRODUCT_EVENT_TIMEOUT_SECONDS: float = 0.25
 
     @property

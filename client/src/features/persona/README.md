@@ -42,12 +42,30 @@ storage unchanged.
 
 ```tsx
 const t = useTerms();
-t("learner", "plural");   // "students" (school) · "team members" (corporate)
-t("group");               // "class" · "team" · "cohort" for a lecturer
+t("learner", "plural"); // "students" (school) · "team members" (corporate)
+t("group"); // "class" · "team" · "cohort" for a lecturer
 ```
 
 Keys live in `@shared/config/terminology.ts`, resolving user-type override →
-category → neutral default. **Persona views must never hardcode these nouns.**
+category → neutral default within the active locale. English, Spanish, and
+French share the same override structure in the `persona` i18next namespace.
+**Persona views must never hardcode these nouns.** Translate complete sentences
+as messages, too: replacing a noun alone does not localize the surrounding grammar.
+
+Use `usePersonaCopy()` for translated category/role labels, descriptions, and
+topic examples. `usePersona()` also exposes translated definitions. Taxonomy
+functions remain safe English fallbacks for URL parsing and non-React callers.
+Never put a translated role label in profile storage or a URL persona parameter.
+
+Catalogs are in `features/locale/messages/persona.{en,es,fr}.json`. They are
+bundled startup/fallback resources for the planned translation publishing service;
+the provider, database, and review workflow are not connected yet.
+
+Run `pnpm i18n:extract` from `client/` to emit an English message manifest
+with literal source references and dynamic references for the translation pipeline.
+Run `pnpm i18n:check` to validate keys, non-empty translations, and interpolation
+placeholders in all three locales. CI runs that check. It covers migrated
+namespaces; legacy hard-coded UI elsewhere still needs conversion.
 
 ## Components
 
@@ -59,7 +77,8 @@ category → neutral default. **Persona views must never hardcode these nouns.**
 
 Slugs exist in two places and must change together in one PR:
 
-- `client/src/shared/config/persona.ts` — slugs **and** all copy
+- `client/src/shared/config/persona.ts` — slugs and generation defaults; imports
+  its English fallback copy from the persona catalog
 - `server/app/users/persona.py` — slugs only, plus the `PersonaUserTypeField`
   literal in `server/app/users/models.py`
 

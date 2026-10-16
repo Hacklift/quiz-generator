@@ -62,7 +62,9 @@ describe("live quiz results export", () => {
       close: jest.fn(),
     } as unknown as WebSocket);
     mockedPersona.mockReturnValue({ userType: "teacher" });
-    jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    jest
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
   });
 
   test("teacher can request a server-generated format", async () => {
@@ -87,7 +89,10 @@ describe("live quiz results export", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export results" }));
 
     await waitFor(() =>
-      expect(mockedService.downloadResults).toHaveBeenCalledWith("quiz-1", "pdf"),
+      expect(mockedService.downloadResults).toHaveBeenCalledWith(
+        "quiz-1",
+        "pdf",
+      ),
     );
   });
 
@@ -126,10 +131,15 @@ describe("live quiz results export", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "CSV" }));
 
     await waitFor(() =>
-      expect(mockedService.downloadResults).toHaveBeenCalledWith("quiz-1", "csv"),
+      expect(mockedService.downloadResults).toHaveBeenCalledWith(
+        "quiz-1",
+        "csv",
+      ),
     );
     expect(
-      screen.queryByRole("menu", { name: "Export results for Biology Session" }),
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -146,7 +156,9 @@ describe("live quiz results export", () => {
     fireEvent.mouseDown(screen.getByRole("heading", { name: "Live Quizzes" }));
 
     expect(
-      screen.queryByRole("menu", { name: "Export results for Biology Session" }),
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -163,7 +175,9 @@ describe("live quiz results export", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(
-      screen.queryByRole("menu", { name: "Export results for Biology Session" }),
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -182,7 +196,9 @@ describe("live quiz results export", () => {
     });
     fireEvent.mouseDown(menu);
 
-    expect(within(menu).getByRole("menuitem", { name: "CSV" })).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "CSV" }),
+    ).toBeInTheDocument();
   });
 
   test("clicking the open actions trigger again closes it", async () => {
@@ -201,7 +217,9 @@ describe("live quiz results export", () => {
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(
-      screen.queryByRole("menu", { name: "Export results for Biology Session" }),
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -217,14 +235,20 @@ describe("live quiz results export", () => {
       screen.getByRole("button", { name: "More actions for Biology Session" }),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "More actions for Chemistry Session" }),
+      screen.getByRole("button", {
+        name: "More actions for Chemistry Session",
+      }),
     );
 
     expect(
-      screen.queryByRole("menu", { name: "Export results for Biology Session" }),
+      screen.queryByRole("menu", {
+        name: "Export results for Biology Session",
+      }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("menu", { name: "Export results for Chemistry Session" }),
+      screen.getByRole("menu", {
+        name: "Export results for Chemistry Session",
+      }),
     ).toBeInTheDocument();
   });
 });

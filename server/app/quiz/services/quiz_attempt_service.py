@@ -53,6 +53,7 @@ class QuizAttemptService:
             "question_results": [
                 {
                     "question": result.question,
+                    "explanation": result.explanation,
                     "user_answer": result.user_answer,
                     "correct_answer": result.correct_answer,
                     "options": result.options

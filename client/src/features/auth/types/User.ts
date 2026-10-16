@@ -1,4 +1,5 @@
 import type { PersonaCategory, PersonaUserType } from "@shared/config/persona";
+import type { SupportedLocale } from "@shared/config/locale";
 
 export interface User {
   id: string;
@@ -14,6 +15,11 @@ export interface User {
   persona_category?: PersonaCategory | null;
   persona_user_type?: PersonaUserType | null;
   persona_set_at?: string | null;
+  preferred_locale?: SupportedLocale | null;
+  effective_locale?: SupportedLocale;
+  active_organization_id?: string | null;
+  onboarding_organization_id?: string | null;
+  language_selected?: boolean;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   subscription_plan?: string;
@@ -39,6 +45,10 @@ export interface UpdateProfilePayload {
 export interface UpdateProfileResponse {
   message: string;
   user: User;
+}
+
+export interface UpdateLocalePayload {
+  preferred_locale: SupportedLocale | null;
 }
 
 export interface LoginResponse {

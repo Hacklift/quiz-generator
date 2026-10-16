@@ -9,6 +9,7 @@ class RenameSavedQuizRequest(BaseModel):
 
 
 class SavedQuizResponse(BaseModel):
+    content_locale: Optional[str] = None
     id: str = Field(alias="_id")
     quiz_id: str
     title: str
@@ -27,6 +28,9 @@ class QuizHistoryQuestionResponse(BaseModel):
     question: str
     options: list[str] | None = None
     answer: str
+    explanation: Optional[str] = None
+    correct_boolean: Optional[bool] = None
+    correct_option_index: Optional[int] = None
 
 
 class LiveQuizStatsResponse(BaseModel):
@@ -39,6 +43,9 @@ class LiveQuizStatsResponse(BaseModel):
 
 
 class QuizHistoryDetailResponse(BaseModel):
+    content_locale: Optional[str] = None
+    source: Optional[str] = None
+    description: Optional[str] = None
     id: str = Field(alias="_id")
     quiz_id: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -57,6 +64,7 @@ class QuizHistoryDetailResponse(BaseModel):
 
 class QuizAttemptQuestionResultResponse(BaseModel):
     question: str
+    explanation: str | None = None
     user_answer: str | int | None = None
     correct_answer: str | int | None = None
     options: list[str] | None = None

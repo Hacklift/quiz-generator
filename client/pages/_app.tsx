@@ -5,6 +5,9 @@ import { Toaster } from "react-hot-toast";
 import SplashScreen from "@app/components/SplashScreen";
 import { AuthProvider } from "@features/auth/context/authContext";
 import { PersonaProvider } from "@features/persona/context/personaContext";
+import { LocaleProvider } from "@features/locale/context/localeContext";
+import LanguageOnboarding from "@features/locale/components/LanguageOnboarding";
+import LanguageMenu from "@features/locale/components/LanguageMenu";
 import PersonaOnboardingGate from "@features/persona/components/PersonaOnboardingGate";
 import SignInModal from "@features/auth/components/SignInModal";
 import AssistantLauncher from "@features/assistant/components/AssistantLauncher";
@@ -51,26 +54,30 @@ export default function MyApp({ Component, pageProps }: AppProps) {
 
   return (
     <AuthProvider>
-      <PersonaProvider>
-        <SplashScreen />
-        <EmailVerificationBanner />
-        <PersonaOnboardingGate />
+      <LocaleProvider>
+        <PersonaProvider>
+          <SplashScreen />
+          <EmailVerificationBanner />
+          <PersonaOnboardingGate />
+          <LanguageOnboarding />
+          <LanguageMenu />
 
-        <Component {...pageProps} openLoginModal={openSignInModal} />
-        <AssistantLauncher />
+          <Component {...pageProps} openLoginModal={openSignInModal} />
+          <AssistantLauncher />
 
-        <SignInModal
-          isOpen={showSignInModal}
-          onClose={closeSignInModal}
-          redirectTo={ROUTES.DASHBOARD}
-          switchToSignUp={() => {
-            closeSignInModal();
-            router.push(ROUTES.REGISTER);
-          }}
-        />
+          <SignInModal
+            isOpen={showSignInModal}
+            onClose={closeSignInModal}
+            redirectTo={ROUTES.DASHBOARD}
+            switchToSignUp={() => {
+              closeSignInModal();
+              router.push(ROUTES.REGISTER);
+            }}
+          />
 
-        <Toaster position="top-right" />
-      </PersonaProvider>
+          <Toaster position="top-right" />
+        </PersonaProvider>
+      </LocaleProvider>
     </AuthProvider>
   );
 }

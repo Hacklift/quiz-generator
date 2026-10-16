@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
@@ -28,6 +29,8 @@ export default function RecentQuizzes({
   emptyMessage: string;
   limit?: number;
 }) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { user } = useAuth();
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
@@ -40,7 +43,8 @@ export default function RecentQuizzes({
 
     let active = true;
     getUserQuizHistory().then((history) => {
-      if (active) setRows(Array.isArray(history) ? history.slice(0, limit) : []);
+      if (active)
+        setRows(Array.isArray(history) ? history.slice(0, limit) : []);
     });
     return () => {
       active = false;
@@ -54,10 +58,12 @@ export default function RecentQuizzes({
       </h2>
 
       {rows === null ? (
-        <p className="mt-[14px] text-[14px] text-ink/60">Loading…</p>
+        <p className="mt-[14px] text-[14px] text-ink/60">
+          {uiText("mba3bbbe10d8bef66")}
+        </p>
       ) : !user?.is_verified ? (
         <p className="mt-[14px] max-w-[52ch] text-[15px] leading-[26px] text-ink/70">
-          Verify your email to view recent activity.
+          {uiText("m9c90fb5927b45688")}
         </p>
       ) : rows.length === 0 ? (
         <p className="mt-[14px] max-w-[52ch] text-[15px] leading-[26px] text-ink/70">
@@ -75,11 +81,18 @@ export default function RecentQuizzes({
                   className="flex w-full flex-wrap items-baseline justify-between gap-[12px] border-t-2 border-divider px-[6px] py-[14px] text-left transition hover:bg-ink/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
                   <span className="text-[15px] font-extrabold">
-                    {row.quiz_name || "Untitled quiz"}
+                    {row.quiz_name || uiText("mc699951f2ac37aff")}
                   </span>
                   <span className="text-[13px] text-ink/60">
-                    {row.question_type}
-                    {row.num_questions ? ` · ${row.num_questions} questions` : ""}
+                    {uiText("values." + row.question_type, {
+                      ns: "translation",
+                      defaultValue: row.question_type,
+                    })}
+                    {row.num_questions
+                      ? uiText("m847a323814f3a654", {
+                          value0: row.num_questions,
+                        })
+                      : ""}
                   </span>
                 </button>
               </li>

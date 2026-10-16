@@ -27,6 +27,9 @@ async def create_saved_quiz(
             question_type=quiz.question_type,
             questions=quiz.questions,
             quiz_id=quiz.quiz_id,
+            content_locale=quiz.content_locale,
+            description=quiz.description,
+            is_sample=quiz.is_sample,
         )
         return {
             "message": "Quiz saved successfully",

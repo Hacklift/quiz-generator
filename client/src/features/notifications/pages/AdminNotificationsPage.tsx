@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { FormEvent, useState } from "react";
 import toast from "react-hot-toast";
@@ -20,6 +21,8 @@ const notificationTypes: NotificationType[] = [
 ];
 
 export default function AdminNotificationsPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user, isLoading } = useAuth();
   const [mode, setMode] = useState<"single" | "broadcast">("broadcast");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,7 +89,7 @@ export default function AdminNotificationsPage() {
       toast.error(
         error?.response?.data?.detail ||
           error?.message ||
-          "Failed to create notification",
+          uiText("m4ccbe37d857fd13c"),
       );
     } finally {
       setIsSubmitting(false);
@@ -95,8 +98,8 @@ export default function AdminNotificationsPage() {
 
   return (
     <RequireAuth
-      title="Admin Notifications"
-      description="Sign in with an admin account to manage notifications."
+      title={uiText("mae80505b8ccd7e83")}
+      description={uiText("mabcc0825b584c28f")}
     >
       <div className="flex min-h-screen flex-col bg-gray-100">
         <NavBar />
@@ -105,10 +108,10 @@ export default function AdminNotificationsPage() {
           <div className="mx-auto max-w-3xl">
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-[#0F2654]">
-                Admin Notifications
+                {uiText("mae80505b8ccd7e83")}
               </h1>
               <p className="mt-1 text-sm text-gray-600">
-                Send direct or broadcast notifications.
+                {uiText("m275acc6b83943109")}
               </p>
             </div>
 
@@ -119,11 +122,10 @@ export default function AdminNotificationsPage() {
             ) : user?.role !== "admin" ? (
               <div className="rounded-lg border border-gray-200 bg-white px-6 py-10 text-center">
                 <h2 className="text-xl font-semibold text-[#0F2654]">
-                  Admin access required
+                  {uiText("m812fc837108361ba")}
                 </h2>
                 <p className="mt-2 text-sm text-gray-600">
-                  Your account does not have permission to create
-                  notifications.
+                  {uiText("mec01e5bb3aab2ccc")}
                 </p>
               </div>
             ) : (
@@ -141,7 +143,7 @@ export default function AdminNotificationsPage() {
                         : "text-gray-600 hover:bg-white"
                     }`}
                   >
-                    Broadcast
+                    {uiText("m17bc917834360179")}
                   </button>
                   <button
                     type="button"
@@ -152,7 +154,7 @@ export default function AdminNotificationsPage() {
                         : "text-gray-600 hover:bg-white"
                     }`}
                   >
-                    Single user
+                    {uiText("m3a09078a12c067a7")}
                   </button>
                 </div>
 
@@ -160,7 +162,7 @@ export default function AdminNotificationsPage() {
                   {mode === "single" && (
                     <label className="block">
                       <span className="text-sm font-semibold text-gray-700">
-                        User ID
+                        {uiText("m7967e089a7b94464")}
                       </span>
                       <input
                         value={formData.user_id}
@@ -176,7 +178,7 @@ export default function AdminNotificationsPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block">
                       <span className="text-sm font-semibold text-gray-700">
-                        Type
+                        {uiText("mbaaddf70fb5d432b")}
                       </span>
                       <select
                         value={formData.type}
@@ -198,7 +200,7 @@ export default function AdminNotificationsPage() {
 
                     <label className="block">
                       <span className="text-sm font-semibold text-gray-700">
-                        Expires at
+                        {uiText("mb613b9ece0d42862")}
                       </span>
                       <input
                         type="datetime-local"
@@ -213,7 +215,7 @@ export default function AdminNotificationsPage() {
 
                   <label className="block">
                     <span className="text-sm font-semibold text-gray-700">
-                      Title
+                      {uiText("m7e8cd2056da73a7f")}
                     </span>
                     <input
                       value={formData.title}
@@ -228,7 +230,7 @@ export default function AdminNotificationsPage() {
 
                   <label className="block">
                     <span className="text-sm font-semibold text-gray-700">
-                      Message
+                      {uiText("m2f77668a9dfbf8d5")}
                     </span>
                     <textarea
                       value={formData.message}
@@ -244,7 +246,7 @@ export default function AdminNotificationsPage() {
 
                   <label className="block">
                     <span className="text-sm font-semibold text-gray-700">
-                      Action URL
+                      {uiText("ma653dec58ff858ec")}
                     </span>
                     <input
                       value={formData.action_url}
@@ -266,7 +268,7 @@ export default function AdminNotificationsPage() {
                         }
                         className="h-4 w-4 rounded border-gray-300 text-[#0F2654]"
                       />
-                      Send only to active users
+                      {uiText("m5d3ed16541506ef5")}
                     </label>
                   )}
                 </div>
@@ -283,7 +285,9 @@ export default function AdminNotificationsPage() {
                     disabled={isSubmitting}
                     className="rounded-lg bg-[#0F2654] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#173773] disabled:cursor-not-allowed disabled:bg-gray-400"
                   >
-                    {isSubmitting ? "Sending..." : "Send notification"}
+                    {isSubmitting
+                      ? uiText("m286a3af7348e8312")
+                      : uiText("m02f68b6356d5c5dc")}
                   </button>
                 </div>
               </form>

@@ -17,6 +17,7 @@ class McpRequestContext:
     role: str | None = None
     scopes: set[str] = field(default_factory=set)
     tenant_id: str | None = None
+    effective_locale: str = "en"
     user: Any = field(default=None, repr=False, compare=False)
 
 

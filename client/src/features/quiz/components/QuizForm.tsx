@@ -1,9 +1,11 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import {
   useState,
   useEffect,
   useRef,
+  useId,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -23,6 +25,10 @@ import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryA
 import PersonaBadge from "@features/persona/components/PersonaBadge";
 import { usePersona } from "@features/persona/context/personaContext";
 import { useTerms } from "@features/persona/hooks/useTerms";
+import { useLocale } from "@features/locale/context/localeContext";
+import LanguagePicker from "@features/locale/components/LanguagePicker";
+import { LOCALE_DISPLAY_NAMES } from "@shared/config/locale";
+import { usePersonaCopy } from "@features/persona/hooks/usePersonaCopy";
 import { readStoredPersonaTopic } from "@features/persona/lib/personaStorage";
 import {
   getPersonaGenerationDefaults,
@@ -34,7 +40,7 @@ import {
 type ApiErrorLike = {
   response?: {
     data?: {
-      detail?: string;
+      detail?: string | { code?: string; provider?: string; message?: string };
     };
   };
   message?: string;
@@ -161,6 +167,8 @@ function formatBytes(bytes: number) {
 }
 
 export default function QuizForm() {
+  const { t: uiText } = useTranslation("ui");
+
   const [generationMode, setGenerationMode] = useState<"document" | "topic">(
     "topic",
   );
@@ -177,6 +185,9 @@ export default function QuizForm() {
   const [questionType, setQuestionType] = useState("multichoice");
   const [difficultyLevel, setDifficultyLevel] = useState("easy");
   const [token, setToken] = useState("");
+  const [aiProvider, setAiProvider] = useState<"huggingface" | "gemini">(
+    "huggingface",
+  );
   const [previousToken, setPreviousToken] = useState("");
   const [enableLiveQuiz, setEnableLiveQuiz] = useState(false);
   const [liveDurationMinutes, setLiveDurationMinutes] = useState(20);
@@ -195,6 +206,17 @@ export default function QuizForm() {
 
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
+  const { locale } = useLocale();
+  const [quizLocaleOverride, setQuizLocaleOverride] = useState<string | null>(
+    null,
+  );
+  const quizLocale = quizLocaleOverride ?? locale;
+  const [languageExpanded, setLanguageExpanded] = useState(false);
+  const languageOptionsId = useId();
+  const [allowSampleFallback, setAllowSampleFallback] = useState(false);
+  const sampleAvailable =
+    ["en", "es", "fr"].includes(quizLocale) && numQuestions <= 10;
+  const { roles } = usePersonaCopy();
   const appliedPresetRef = useRef<string | null>(null);
   const touchedGenerationFieldsRef = useRef({
     audienceType: false,
@@ -223,34 +245,36 @@ export default function QuizForm() {
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (!extension || !SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
       setDocumentFile(null);
-      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
-      toast.error("Unsupported file type. Upload PDF, DOCX, or TXT.");
+      setErrorMessage(uiText("m173a2e1479fc5e3c"));
+      toast.error(uiText("mb8a3c5e48f9a324e"));
       return;
     }
 
     if (file.size <= 0) {
       setDocumentFile(null);
-      setErrorMessage("The selected file is empty.");
-      toast.error("The selected file is empty.");
+      setErrorMessage(uiText("m42eb27c3baf606ac"));
+      toast.error(uiText("m42eb27c3baf606ac"));
       return;
     }
 
     if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
       setDocumentFile(null);
       setErrorMessage(
-        `The selected file is too large. Maximum size is ${DOCUMENT_UPLOAD_MAX_BYTES.toLocaleString()} bytes.`,
+        uiText("ma761247cd1d6b805", {
+          value0: DOCUMENT_UPLOAD_MAX_BYTES.toLocaleString(),
+        }),
       );
       toast.error(
-        `File too large. Maximum size is ${formatBytes(DOCUMENT_UPLOAD_MAX_BYTES)}.`,
+        uiText("m3212b912177d8b53", {
+          value0: formatBytes(DOCUMENT_UPLOAD_MAX_BYTES),
+        }),
       );
       return;
     }
 
     setDocumentFile(file);
     setErrorMessage("");
-    toast.success(
-      `${file.name} uploaded successfully. Ready for quiz generation.`,
-    );
+    toast.success(uiText("mb22b6c8a5a7dd202", { value0: file.name }));
   };
 
   // PersonaProvider resolves profile > URL query > localStorage, so persona
@@ -259,7 +283,7 @@ export default function QuizForm() {
   const { persona } = usePersona();
   const t = useTerms();
   const personaTopicPlaceholder = persona
-    ? getUserTypeDefinition(persona.userType).defaultTopic
+    ? roles[persona.userType].defaultTopic
     : "Enter the concept/context here";
 
   useEffect(() => {
@@ -287,8 +311,9 @@ export default function QuizForm() {
     const queryNumQuestions = searchParams?.get("numQuestions");
     const queryQuestionType = searchParams?.get("questionType");
     const presetKey = searchParams?.get("preset") || "";
-    const hasApplicablePreset =
-      Boolean(PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey]);
+    const hasApplicablePreset = Boolean(
+      PERSONA_GENERATION_PRESETS[persona.userType]?.[presetKey],
+    );
     const touched = touchedGenerationFieldsRef.current;
 
     if (!hasApplicablePreset && !touched.audienceType) {
@@ -348,9 +373,7 @@ export default function QuizForm() {
       );
     }
     if (!touched.customInstruction) {
-      setCustomInstruction(
-        queryCustomInstruction || preset.customInstruction,
-      );
+      setCustomInstruction(queryCustomInstruction || preset.customInstruction);
     }
     if (!touched.difficultyLevel) {
       setDifficultyLevel(
@@ -395,7 +418,9 @@ export default function QuizForm() {
           sessionStorage.setItem("user_api_token", res.data.token);
         }
       } catch (e: unknown) {
-        const typedError = e as ApiErrorLike & { response?: { status?: number } };
+        const typedError = e as ApiErrorLike & {
+          response?: { status?: number };
+        };
         if (typedError?.response?.status === 404) {
           return;
         }
@@ -410,7 +435,7 @@ export default function QuizForm() {
     const resolvedAudienceType = audienceType || t("learner", "plural");
 
     if (generationMode === "topic" && !profession) {
-      setErrorMessage("Please enter a profession or topic for your quiz.");
+      setErrorMessage(uiText("m227c928826ed8bcb"));
       return;
     }
 
@@ -419,7 +444,7 @@ export default function QuizForm() {
       documentInputMode === "upload" &&
       !documentFile
     ) {
-      setErrorMessage("Please upload a PDF, DOCX, or TXT file.");
+      setErrorMessage(uiText("m173a2e1479fc5e3c"));
       return;
     }
 
@@ -428,7 +453,7 @@ export default function QuizForm() {
       documentInputMode === "paste" &&
       !documentText.trim()
     ) {
-      setErrorMessage("Please paste the learning material.");
+      setErrorMessage(uiText("m2da7107eed1cff79"));
       return;
     }
 
@@ -438,28 +463,30 @@ export default function QuizForm() {
       documentText.length > DOCUMENT_TEXT_MAX_CHARS
     ) {
       setErrorMessage(
-        `Pasted text is too long. Maximum length is ${DOCUMENT_TEXT_MAX_CHARS.toLocaleString()} characters.`,
+        uiText("mad55b9bf63883c88", {
+          value0: DOCUMENT_TEXT_MAX_CHARS.toLocaleString(),
+        }),
       );
       return;
     }
 
     if (!questionType) {
-      setErrorMessage("Please select a question type.");
+      setErrorMessage(uiText("mec3eab8cd2416496"));
       return;
     }
 
     if (!numQuestions || numQuestions <= 0) {
-      setErrorMessage("Please enter a valid number of questions.");
+      setErrorMessage(uiText("m73a3247c93fbb9ff"));
       return;
     }
 
     if (enableLiveQuiz && (!user || !isAuthenticated)) {
-      setErrorMessage("Please log in to generate a live quiz access code.");
+      setErrorMessage(uiText("m53cbf34943e51c86"));
       return;
     }
 
     if (enableLiveQuiz && liveDurationMinutes <= 0) {
-      setErrorMessage("Please enter a valid live quiz duration.");
+      setErrorMessage(uiText("m108c206214c743c4"));
       return;
     }
 
@@ -467,7 +494,7 @@ export default function QuizForm() {
       enableLiveQuiz &&
       new Date(liveAccessExpiresAt).getTime() <= Date.now()
     ) {
-      setErrorMessage("Please choose a future access code expiration time.");
+      setErrorMessage(uiText("mbeb717e219eb1d60"));
       return;
     }
 
@@ -482,9 +509,7 @@ export default function QuizForm() {
         participantAccessMode === "invited_only") &&
       invitedEmails.length === 0
     ) {
-      setErrorMessage(
-        "Please add at least one invited email for restricted access.",
-      );
+      setErrorMessage(uiText("ma0d76e1e03a44731"));
       return;
     }
 
@@ -492,7 +517,7 @@ export default function QuizForm() {
     setLoading(true);
 
     try {
-      if (user && token.trim()) {
+      if (aiProvider === "huggingface" && user && token.trim()) {
         const accessToken = TokenService.getAccessToken();
 
         await api.post(
@@ -516,10 +541,16 @@ export default function QuizForm() {
         payload.append("difficulty_level", difficultyLevel);
         payload.append("audience_type", resolvedAudienceType);
         payload.append("custom_instruction", customInstruction);
-        payload.append("token", token);
+        payload.append("ai_provider", aiProvider);
+        if (aiProvider === "huggingface") payload.append("token", token);
         payload.append("document_title", documentTitle);
         payload.append("focus_topic", profession);
         payload.append("live_quiz_enabled", enableLiveQuiz ? "true" : "false");
+        payload.append("content_locale", quizLocale);
+        payload.append(
+          "allow_fallback",
+          String(allowSampleFallback && sampleAvailable),
+        );
 
         if (enableLiveQuiz) {
           payload.append("time_limit_minutes", liveDurationMinutes.toString());
@@ -550,6 +581,10 @@ export default function QuizForm() {
           JSON.stringify({
             ...response,
             historyMeta: {
+              content_locale: response.content_locale || quizLocale,
+              title: response.title,
+              description: response.description,
+              is_sample: response.source === "mock",
               quiz_id: response.quiz_id,
               question_type: questionType,
               num_questions: numQuestions,
@@ -594,20 +629,26 @@ export default function QuizForm() {
         custom_instruction: customInstruction,
         audience_type: resolvedAudienceType,
         difficulty_level: difficultyLevel,
-        token,
+        token: aiProvider === "huggingface" ? token : undefined,
+        ai_provider: aiProvider,
         live_quiz_enabled: enableLiveQuiz,
         time_limit_minutes: enableLiveQuiz ? liveDurationMinutes : undefined,
         access_code_expires_at: enableLiveQuiz
           ? new Date(liveAccessExpiresAt).toISOString()
           : undefined,
-        participant_access_mode: enableLiveQuiz ? participantAccessMode : undefined,
+        participant_access_mode: enableLiveQuiz
+          ? participantAccessMode
+          : undefined,
         invited_emails: enableLiveQuiz ? invitedEmails : undefined,
         send_email_invitations: enableLiveQuiz
           ? sendEmailInvitations
           : undefined,
+        content_locale: quizLocale,
+        allow_fallback: allowSampleFallback && sampleAvailable,
       };
 
-      const client = enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
+      const client =
+        enableLiveQuiz || TokenService.hasTokens() ? api : publicApi;
       const { data } = await client.post("/api/get-questions", payload);
       const questions = Array.isArray(data?.questions) ? data.questions : [];
       if (!questions.length) {
@@ -620,16 +661,21 @@ export default function QuizForm() {
           const historyResponse = await saveQuizToHistory(
             {
               quiz_id: canonicalQuizId || undefined,
+              content_locale: data?.content_locale || quizLocale,
+              title: data?.title || profession,
+              description: data?.description,
+              is_sample: data?.source === "mock",
               question_type: questionType,
               num_questions: numQuestions,
               difficulty_level: difficultyLevel,
-              profession,
+              profession: data?.title || profession,
               audience_type: resolvedAudienceType,
               custom_instruction: customInstruction,
             },
             questions,
           );
-          canonicalQuizId = canonicalQuizId || historyResponse?.data?.quiz_id || "";
+          canonicalQuizId =
+            canonicalQuizId || historyResponse?.data?.quiz_id || "";
         } catch (historyError) {
           console.error("Error saving quiz history:", historyError);
         }
@@ -638,8 +684,11 @@ export default function QuizForm() {
       const generatedQuizView = {
         id: canonicalQuizId || undefined,
         quiz_id: canonicalQuizId || undefined,
-        title: profession || `${questionType} Quiz`,
+        title: data?.title || profession || `${questionType} Quiz`,
+        content_locale: data?.content_locale || quizLocale,
+        source: data?.source,
         description:
+          data?.description ||
           customInstruction ||
           `A ${difficultyLevel} ${questionType} quiz for ${resolvedAudienceType}.`,
         question_type: questionType,
@@ -661,7 +710,6 @@ export default function QuizForm() {
         customInstruction,
         audienceType: resolvedAudienceType,
         difficultyLevel,
-        token,
         liveQuiz: enableLiveQuiz ? "true" : "false",
         liveDurationMinutes: liveDurationMinutes.toString(),
         liveAccessExpiresAt: enableLiveQuiz
@@ -680,10 +728,28 @@ export default function QuizForm() {
       router.push(`/quiz_display?${queryParams}`);
     } catch (error: unknown) {
       const typedError = error as ApiErrorLike;
+      const detail = typedError?.response?.data?.detail;
+      const providerErrorKeys: Record<string, string> = {
+        notConfigured: "quizProvider.notConfigured",
+        credentials: "quizProvider.credentials",
+        billing: "quizProvider.billing",
+        quota: "quizProvider.quota",
+        model: "quizProvider.model",
+        invalidOutput: "quizProvider.invalidOutput",
+        blocked: "quizProvider.blocked",
+        timeout: "quizProvider.timeout",
+        unavailable: "quizProvider.unavailable",
+      };
       setErrorMessage(
-        typedError?.response?.data?.detail ||
+        (typeof detail === "string"
+          ? detail
+          : detail?.code && providerErrorKeys[detail.code]
+            ? uiText(providerErrorKeys[detail.code], {
+                provider: detail.provider || aiProvider,
+              })
+            : detail?.message) ||
           typedError?.message ||
-          "Failed to generate quiz. Please try again.",
+          uiText("m0aacbdeb5c3065b8"),
       );
     } finally {
       setLoading(false);
@@ -749,6 +815,7 @@ export default function QuizForm() {
             setDifficultyLevel,
           )}
           token={token}
+          showTokenInput={aiProvider === "huggingface"}
           setToken={setToken}
           previousToken={previousToken}
         />
@@ -763,11 +830,10 @@ export default function QuizForm() {
             />
             <span>
               <span className="block text-sm font-semibold text-[#2C3E50]">
-                Generate this quiz as a live session
+                {uiText("m6936063ced1ea266")}
               </span>
               <span className="mt-1 block text-xs text-gray-500">
-                A shareable access code will be generated as soon as the quiz is
-                created.
+                {uiText("mbaacd1e96806262c")}
               </span>
             </span>
           </label>
@@ -775,7 +841,7 @@ export default function QuizForm() {
           {enableLiveQuiz && (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Quiz duration minutes
+                {uiText("m5232eb04a336ab88")}
                 <input
                   type="number"
                   min={1}
@@ -788,7 +854,7 @@ export default function QuizForm() {
                 />
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Access code expiration
+                {uiText("m4090711b316909a5")}
                 <input
                   type="datetime-local"
                   value={liveAccessExpiresAt}
@@ -799,7 +865,7 @@ export default function QuizForm() {
                 />
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50]">
-                Participant access
+                {uiText("m6ab7c606d3128746")}
                 <select
                   value={participantAccessMode}
                   onChange={(event) =>
@@ -812,19 +878,21 @@ export default function QuizForm() {
                   }
                   className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
                 >
-                  <option value="public">Public link</option>
-                  <option value="restricted">Invited emails only</option>
+                  <option value="public">{uiText("m178b790b1cb2c176")}</option>
+                  <option value="restricted">
+                    {uiText("m0c906cdd09708c8b")}
+                  </option>
                   <option value="invited_only">
-                    Invited emails only (strict)
+                    {uiText("mf9636e9a7397b7af")}
                   </option>
                 </select>
               </label>
               <label className="block text-sm font-semibold text-[#2C3E50] md:col-span-2">
-                Invitation emails
+                {uiText("m26f1e46c9dfb0e3f")}
                 <textarea
                   value={invitedEmailsText}
                   onChange={(event) => setInvitedEmailsText(event.target.value)}
-                  placeholder="ada@example.com, grace@example.com"
+                  placeholder={uiText("mefe42627ddbff54d")}
                   rows={3}
                   className="mt-2 w-full rounded-md border border-gray-300 px-4 py-2 focus:outline-none focus:ring focus:ring-blue-500"
                 />
@@ -838,10 +906,90 @@ export default function QuizForm() {
                   }
                   className="h-4 w-4 accent-[#0F2654]"
                 />
-                Send invitation emails
+                {uiText("ma04fe96c22a26440")}
               </label>
             </div>
           )}
+        </section>
+
+        <section className="mt-6 rounded-md border border-slate-200 bg-white p-5">
+          <label className="mb-2 block font-medium" htmlFor="quiz-ai-provider">
+            {uiText("quizProvider.title")}
+          </label>
+          <select
+            id="quiz-ai-provider"
+            value={aiProvider}
+            disabled={loading}
+            onChange={(event) =>
+              setAiProvider(event.target.value as "huggingface" | "gemini")
+            }
+            className="mb-2 w-full rounded border border-gray-300 bg-white p-2 text-gray-900"
+          >
+            <option value="huggingface">
+              {uiText("quizProvider.huggingface")}
+            </option>
+            <option value="gemini">{uiText("quizProvider.gemini")}</option>
+          </select>
+          <p className="text-sm text-gray-600">
+            {uiText(
+              aiProvider === "gemini"
+                ? "quizProvider.geminiHelp"
+                : "quizProvider.huggingfaceHelp",
+            )}
+          </p>
+        </section>
+
+        <section className="my-6 rounded-md border border-slate-200 bg-white p-5">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={allowSampleFallback && sampleAvailable}
+              disabled={loading || !sampleAvailable}
+              onChange={(event) => setAllowSampleFallback(event.target.checked)}
+            />
+            <span>{uiText("quizLanguage.allowSample")}</span>
+          </label>
+          <p className="mt-2 text-xs text-gray-600">
+            {uiText("quizLanguage.sampleLimit")}
+          </p>
+          <button
+            type="button"
+            aria-expanded={languageExpanded}
+            aria-controls={languageOptionsId}
+            disabled={loading}
+            onClick={() => setLanguageExpanded((expanded) => !expanded)}
+            className="mt-4 flex w-full items-center justify-between gap-3 rounded border border-slate-300 p-3 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+          >
+            <span>
+              {uiText("quizLanguage.title")}:{" "}
+              {LOCALE_DISPLAY_NAMES[quizLocale] || quizLocale} ({quizLocale})
+            </span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              className={`h-5 w-5 shrink-0 transition-transform ${languageExpanded ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+          <p className="mt-2 text-sm text-gray-600">
+            {uiText("quizLanguage.help")}
+          </p>
+          <div
+            id={languageOptionsId}
+            hidden={!languageExpanded}
+            className="mt-4"
+          >
+            <LanguagePicker
+              value={quizLocale}
+              onChange={setQuizLocaleOverride}
+              disabled={loading}
+              label={uiText("quizLanguage.title")}
+            />
+          </div>
         </section>
 
         {errorMessage && (

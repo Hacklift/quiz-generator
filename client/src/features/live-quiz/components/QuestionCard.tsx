@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React from "react";
 import { LiveQuizQuestion } from "@features/live-quiz/api/liveQuizService";
 
@@ -14,6 +15,8 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
   disabled,
   onSelect,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const options = question.options || [];
 
   return (
@@ -51,7 +54,7 @@ const QuestionCard: React.FC<QuestionCardProps> = ({
           disabled={disabled}
           onChange={(event) => onSelect(event.target.value)}
           className="mt-5 min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#0a3264] focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-          placeholder="Type your answer"
+          placeholder={uiText("md078bf7520a710d0")}
         />
       )}
     </section>

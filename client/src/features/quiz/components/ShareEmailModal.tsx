@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import api from "@shared/api/http";
@@ -11,6 +12,8 @@ const ShareEmailModal = ({
   isOpen: boolean;
   onClose: () => void;
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [recipientEmail, setRecipientEmail] = useState<string>("");
   const [status, setStatus] = useState<{
     message: string;
@@ -28,7 +31,7 @@ const ShareEmailModal = ({
         recipient_email: recipientEmail,
       });
       setStatus({ message: response.data.message, success: true });
-      toast.success(response.data.message || "Email sent successfully.");
+      toast.success(response.data.message || uiText("m9806937bdad8a8fc"));
       setRecipientEmail("");
     } catch (error: any) {
       const errorMessage =
@@ -49,19 +52,21 @@ const ShareEmailModal = ({
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-        <h3 className="text-xl font-semibold mb-4">Share Quiz via Email</h3>
+        <h3 className="text-xl font-semibold mb-4">
+          {uiText("m9fc472bba4ff1746")}
+        </h3>
         <label
           htmlFor="email"
           className="block text-sm font-medium text-gray-700"
         >
-          Recipient Email Address:
+          {uiText("m2b376ad5ce487221")}
         </label>
         <input
           type="email"
           id="email"
           value={recipientEmail}
           onChange={(e) => setRecipientEmail(e.target.value)}
-          placeholder="Enter recipient's email"
+          placeholder={uiText("m3b01874f455eb652")}
           className="mt-1 block w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
         />
         {status && (
@@ -74,7 +79,7 @@ const ShareEmailModal = ({
           >
             {typeof status.message === "string"
               ? status.message
-              : "An unexpected error occurred. Please try again."}
+              : uiText("me198269c2a19003d")}
           </div>
         )}
         <div className="mt-6 flex justify-end space-x-3">
@@ -82,7 +87,7 @@ const ShareEmailModal = ({
             onClick={onClose}
             className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
           >
-            Cancel
+            {uiText("m19766ed6ccb2f4a3")}
           </button>
           <button
             onClick={handleSendEmail}
@@ -91,7 +96,9 @@ const ShareEmailModal = ({
             }`}
             disabled={isSending || !recipientEmail}
           >
-            {isSending ? "Sending..." : "Send Email"}
+            {isSending
+              ? uiText("m286a3af7348e8312")
+              : uiText("m5908bccf22118371")}
           </button>
         </div>
       </div>

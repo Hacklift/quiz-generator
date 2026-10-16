@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React from "react";
 
 /**
@@ -37,8 +38,13 @@ function AnswerRow({
 }
 
 export default function HeroMockup() {
+  const { t: uiText } = useTranslation("ui");
+
   return (
-    <div aria-hidden="true" className="relative mr-[96px] pb-[28px] max-[560px]:mr-0">
+    <div
+      aria-hidden="true"
+      className="relative mr-[96px] pb-[28px] max-[560px]:mr-0"
+    >
       {/* ── Laptop ── */}
       <div>
         {/* Screen bezel */}
@@ -49,7 +55,7 @@ export default function HeroMockup() {
             <div className="flex items-center justify-between pb-[8px]">
               <span className="flex items-center gap-[7px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-700">
                 <span className="h-[7px] w-[7px] animate-live-pulse bg-brand" />
-                LIVE · 4F7KQ2
+                {uiText("m271e7a435ef92ff1")}
               </span>
               <span className="text-[11px] [font-variant-numeric:tabular-nums] text-ink/70">
                 3 / 5
@@ -57,13 +63,13 @@ export default function HeroMockup() {
             </div>
             <div className="mb-[12px] h-[2px] bg-divider" />
             <p className="mb-[12px] font-extrabold leading-[1.25] tracking-[-0.015em] text-[16px]">
-              Which of these is the correct first step in a fire evacuation?
+              {uiText("mdceabed9126ff631")}
             </p>
             <AnswerRow letter="A" text="Raise the alarm" pct={62} leader />
             <AnswerRow letter="B" text="Collect belongings" pct={21} />
             <AnswerRow letter="C" text="Call your manager" pct={17} />
             <p className="mt-[12px] text-[11px] uppercase tracking-[0.08em] text-ink/50">
-              24 of 26 answered
+              {uiText("m62101080ff417f39")}
             </p>
           </div>
         </div>
@@ -79,22 +85,25 @@ export default function HeroMockup() {
           <div className="mx-auto mb-[8px] h-[16px] w-[54px] rounded-full bg-[#101012]" />
           <p className="mb-[6px] flex items-center gap-[5px] text-[9px] font-extrabold uppercase tracking-[0.1em] text-brand-700">
             <span className="h-[5px] w-[5px] animate-live-pulse bg-brand" />
-            LIVE
+            {uiText("m35e0d0360a0af6d1")}
           </p>
           <p className="mb-[8px] text-[11px] font-extrabold leading-[1.3] tracking-[-0.015em]">
-            Which of these is the correct first step in a fire evacuation?
+            {uiText("mdceabed9126ff631")}
           </p>
           <div className="mb-[6px] border-[1.5px] border-brand bg-brand-100 px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">A</span> Raise the alarm
+            <span className="font-extrabold">A</span>
+            {" " + uiText("m8f9b03f16dcf105e")}
           </div>
           <div className="mb-[6px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">B</span> Collect belongings
+            <span className="font-extrabold">B</span>
+            {" " + uiText("m4897f6cb5542b28c")}
           </div>
           <div className="mb-[8px] border-[1.5px] border-divider px-[8px] py-[6px] text-[10px]">
-            <span className="font-extrabold">C</span> Call your manager
+            <span className="font-extrabold">C</span>
+            {" " + uiText("mece9da09a3861708")}
           </div>
           <div className="bg-brand px-[8px] py-[7px] text-center text-[11px] font-extrabold text-paper">
-            Submit
+            {uiText("m155f816c0407310c")}
           </div>
           <div className="mx-auto mt-[8px] h-[3px] w-[48px] rounded-full bg-[#101012]/30" />
         </div>

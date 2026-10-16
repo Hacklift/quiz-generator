@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GetServerSideProps } from "next";
 import Head from "next/head";
 import axios from "axios";
@@ -34,6 +35,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 };
 
 function SharedQuizMissingState() {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
 
   useEffect(() => {
@@ -47,23 +50,22 @@ function SharedQuizMissingState() {
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-xl flex-col items-center justify-center rounded-2xl bg-white px-6 py-10 text-center shadow-sm">
       <h1 className="mb-3 text-2xl font-semibold text-[#0F2654]">
-        Quiz not found
+        {uiText("mca480964fa3dfb6e")}
       </h1>
-      <p className="text-gray-600">
-        This shared quiz link is invalid or no longer available. Redirecting to
-        the home page.
-      </p>
+      <p className="text-gray-600">{uiText("m391151be3c7fb0ce")}</p>
     </div>
   );
 }
 
 export default function SharePage({ quiz, notFoundQuiz }: SharePageProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const ShareUrl = process.env.SHARE_URL;
 
   return (
     <>
       <Head>
-        <title>{quiz?.title || "Quiz not found"}</title>
+        <title>{quiz?.title || uiText("mca480964fa3dfb6e")}</title>
         <meta property="og:title" content={quiz?.title || "Quiz not found"} />
         <meta
           property="og:description"

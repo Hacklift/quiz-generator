@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { VerifyEmailModalProps } from "@features/auth/types/VerifyEmailModalProps";
 import { verifyOtp, resendVerification } from "@features/auth/api/authApi";
@@ -8,6 +9,8 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
   userEmail,
   onVerified,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -31,10 +34,7 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
         onClose();
       }, 1500);
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail ||
-          "OTP verification failed. Please try again.",
-      );
+      setError(err.response?.data?.detail || uiText("m748de674c8df3499"));
     } finally {
       setLoading(false);
     }
@@ -49,9 +49,7 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
       await resendVerification(userEmail);
       setSuccessMessage("Verification email resent! Check your inbox.");
     } catch (err: any) {
-      setError(
-        err.response?.data?.detail || "Failed to resend verification email.",
-      );
+      setError(err.response?.data?.detail || uiText("mdf7531f70e039e48"));
     } finally {
       setResendLoading(false);
     }
@@ -62,27 +60,27 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
       <div className="bg-white rounded-2xl w-full max-w-md p-8">
         <div className="relative mb-6">
           <h2 className="text-2xl font-semibold text-center text-[#143E6F] font-serif">
-            Verify Your Email
+            {uiText("m4880bcb6faa527e7")}
           </h2>
           <button
             onClick={onClose}
             className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 text-2xl"
           >
-            &times;
+            {uiText("m6e8883d99e3c7fff")}
           </button>
         </div>
 
         {/* Instructions avec les 2 méthodes */}
         <div className="mb-6 text-center">
           <p className="text-sm text-gray-600 mb-3">
-            We sent a verification email to{" "}
+            {uiText("mc9d629e85fdb4e3e")}{" "}
             <span className="font-medium text-[#143E6F]">{userEmail}</span>
           </p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
-            <p className="font-medium mb-2">Choose your verification method:</p>
+            <p className="font-medium mb-2">{uiText("m611eb397057e4455")}</p>
             <ul className="text-left space-y-1 text-xs">
-              <li>• Enter the 6-digit OTP code below, OR</li>
-              <li>• Click the verification link in your email</li>
+              <li>{uiText("mc38acdd567e2cfe8")}</li>
+              <li>{uiText("m9d85af73d916bc19")}</li>
             </ul>
           </div>
         </div>
@@ -104,12 +102,12 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="otp" className="block text-sm font-medium mb-2">
-              Enter OTP Code
+              {uiText("m5f6da93c0673246e")}
             </label>
             <input
               id="otp"
               type="text"
-              placeholder="Enter 6-digit code"
+              placeholder={uiText("mb6cdda8122fb9e2e")}
               value={otp}
               onChange={(e) =>
                 setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
@@ -125,28 +123,34 @@ const VerifyEmailModal: React.FC<VerifyEmailModalProps> = ({
             disabled={loading || otp.length !== 6}
             className="w-full bg-[#143E6F] text-white py-2 rounded-md font-medium mb-4 disabled:opacity-50"
           >
-            {loading ? "Verifying..." : "Verify with OTP"}
+            {loading
+              ? uiText("m2ec1ac7d45e8079b")
+              : uiText("m001630c71477de4c")}
           </button>
         </form>
 
         {/* Séparateur */}
         <div className="flex items-center mb-4">
           <div className="flex-1 border-t border-gray-300"></div>
-          <span className="px-3 text-sm text-gray-500">OR</span>
+          <span className="px-3 text-sm text-gray-500">
+            {uiText("m829e5b28af38ab33")}
+          </span>
           <div className="flex-1 border-t border-gray-300"></div>
         </div>
 
         {/* Resend */}
         <div className="text-center">
           <p className="text-sm text-gray-600 mb-2">
-            Didn&apos;t receive the email?
+            {uiText("mfe3ac3ada82e4723")}
           </p>
           <button
             onClick={handleResend}
             disabled={resendLoading}
             className="text-[#143E6F] hover:text-[#0f2f54] underline text-sm font-medium disabled:opacity-50"
           >
-            {resendLoading ? "Sending..." : "Resend Verification Email"}
+            {resendLoading
+              ? uiText("m286a3af7348e8312")
+              : uiText("m5173cc04ffbea7c6")}
           </button>
         </div>
       </div>

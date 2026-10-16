@@ -59,6 +59,9 @@ class QuizUserLibraryService:
                 "question": question.question,
                 "options": question.options,
                 "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
+                "correct_boolean": question.correct_boolean,
+                "correct_option_index": question.correct_option_index,
                 "question_type": quiz.quiz_type.value if hasattr(quiz.quiz_type, "value") else quiz.quiz_type,
             }
             for question in quiz.questions
@@ -71,6 +74,9 @@ class QuizUserLibraryService:
                 "question": question.question,
                 "options": question.options,
                 "answer": question.correct_answer,
+                "explanation": question.explanation,
+                "correct_boolean": question.correct_boolean,
+                "correct_option_index": question.correct_option_index,
             }
             for question in quiz.questions
         ]
@@ -136,6 +142,7 @@ class QuizUserLibraryService:
         description: str | None = None,
         owner_user_id: str | None = None,
         source: str = "manual",
+        content_locale: str = "en",
     ) -> QuizDocumentV2:
         if quiz_id:
             quiz = await self.quiz_repository.find_by_id(quiz_id)
@@ -154,6 +161,7 @@ class QuizUserLibraryService:
             owner_user_id=owner_user_id,
             source=source,
             questions=questions,
+            content_locale=content_locale,
         )
         return await self.canonical_service.find_or_create_quiz_v2_by_fingerprint(quiz_document)
 
@@ -171,6 +179,9 @@ class QuizUserLibraryService:
             "question_type": self._quiz_type(quiz),
             "is_deleted": False,
             "questions": self._saved_questions(quiz),
+            "content_locale": quiz.content_locale or "en",
+            "description": quiz.description,
+            "source": quiz.source.value,
             "created_at": self._isoformat(reference.saved_at),
         }
 
@@ -182,13 +193,18 @@ class QuizUserLibraryService:
         question_type: str | None = None,
         questions: list[Any] | None = None,
         quiz_id: str | None = None,
+        content_locale: str = "en",
+        description: str | None = None,
+        is_sample: bool = False,
     ) -> SavedQuizDocumentV2:
         quiz = await self._resolve_or_create_quiz(
             quiz_id=quiz_id,
             title=title,
             question_type=question_type,
             questions=questions,
-            source="manual",
+            source="seed" if is_sample else "manual",
+            content_locale=content_locale,
+            description=description,
         )
         return await self.reference_repository.upsert_saved_quiz(
             SavedQuizDocumentV2(
@@ -266,6 +282,7 @@ class QuizUserLibraryService:
             return None
         quiz = await self.quiz_repository.find_by_id(reference.quiz_id)
         return SavedQuizResponse(
+            content_locale=quiz.content_locale if quiz else None,
             id=str(reference.id),
             quiz_id=reference.quiz_id,
             title=title,
@@ -277,11 +294,12 @@ class QuizUserLibraryService:
         quiz = await self._resolve_or_create_quiz(
             quiz_id=quiz_data.get("canonical_quiz_id") or quiz_data.get("quiz_id"),
             title=quiz_data.get("quiz_name") or quiz_data.get("profession") or "Quiz History",
-            description=quiz_data.get("custom_instruction"),
+            description=quiz_data.get("description") or quiz_data.get("custom_instruction"),
             question_type=quiz_data["question_type"],
             owner_user_id=quiz_data.get("user_id"),
-            source="ai",
+            source="seed" if quiz_data.get("is_sample") else "ai",
             questions=quiz_data["questions"],
+            content_locale=quiz_data.get("content_locale") or "en",
         )
         return await self.reference_repository.insert_quiz_history(
             QuizHistoryDocumentV2(
@@ -315,6 +333,9 @@ class QuizUserLibraryService:
                     "id": str(reference.id),
                     "created_at": self._isoformat(reference.created_at),
                     "quiz_id": str(quiz.id),
+                    "content_locale": quiz.content_locale or "en",
+                    "description": quiz.description,
+                    "source": quiz.source.value,
                     "quiz_name": metadata.get("quiz_name") or quiz.title,
                     "question_type": self._quiz_type(quiz),
                     "difficulty_level": metadata.get("difficulty_level"),
@@ -340,6 +361,10 @@ class QuizUserLibraryService:
             return None
         metadata = reference.metadata or {}
         return QuizHistoryDetailResponse(
+            content_locale=quiz.content_locale,
+            quiz_id=str(quiz.id),
+            source=quiz.source.value,
+            description=quiz.description,
             id=str(reference.id),
             created_at=reference.created_at,
             quiz_name=metadata.get("quiz_name") or quiz.title,
@@ -353,6 +378,9 @@ class QuizUserLibraryService:
                     question=question.question,
                     options=question.options,
                     answer=question.correct_answer,
+                    explanation=question.explanation,
+                    correct_boolean=question.correct_boolean,
+                    correct_option_index=question.correct_option_index,
                 )
                 for question in quiz.questions
             ],
@@ -423,6 +451,9 @@ class QuizUserLibraryService:
                     ),
                     "question_type": self._quiz_type(quiz),
                     "questions": self._saved_questions(quiz),
+                    "content_locale": quiz.content_locale or "en",
+                    "description": quiz.description,
+                    "source": quiz.source.value,
                     "created_at": self._isoformat(item.created_at),
                     "added_on": self._isoformat(item.created_at),
                 }

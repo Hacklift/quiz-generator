@@ -1,6 +1,10 @@
+import { useTranslation } from "react-i18next";
 import { useState, useEffect } from "react";
 import { PasswordResetProps } from "@features/auth/types/PasswordResetProps";
-import { resetPassword, requestPasswordReset } from "@features/auth/api/authApi";
+import {
+  resetPassword,
+  requestPasswordReset,
+} from "@features/auth/api/authApi";
 import { PASSWORD_REGEX } from "@shared/config/patterns/patterns";
 
 const PasswordResetModal: React.FC<PasswordResetProps> = ({
@@ -11,6 +15,8 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
   tokenFromUrl,
   onResetSuccess,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [email, setEmail] = useState(initialEmail);
   const [method, setMethod] = useState<"otp" | "token">(initialMethod);
   const [otp, setOtp] = useState("");
@@ -70,7 +76,7 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
 
   const handleResendOTP = async () => {
     if (!email) {
-      setError("Email is required to resend OTP");
+      setError(uiText("m0fd2a312f899725d"));
       return;
     }
 
@@ -102,7 +108,7 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
     setError("");
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(uiText("mb6eb82cd3300c838"));
       return;
     }
 
@@ -172,12 +178,12 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold text-center mb-2 text-[#143E6F]">
-          Reset Your Password
+          {uiText("m0568c7b06559cc28")}
         </h2>
 
         {method === "otp" && !success && (
           <p className="text-sm text-gray-600 text-center mb-4">
-            Enter the 6-digit code sent to your email
+            {uiText("m2cacaf4eb7da23ed")}
           </p>
         )}
 
@@ -185,10 +191,10 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
           <div className="text-center py-6">
             <div className="text-green-600 text-5xl mb-4">✓</div>
             <p className="text-gray-700 mb-2 font-medium">
-              Password Reset Successful!
+              {uiText("m34a35e3d3e701152")}
             </p>
             <p className="text-sm text-gray-500">
-              You can now log in with your new password.
+              {uiText("m7a6e1d4bfa80dc26")}
             </p>
           </div>
         ) : (
@@ -201,24 +207,24 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
 
             {resendSuccess && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-                New OTP sent successfully! Check your email.
+                {uiText("m032efa72e3a9cc1d")}
               </div>
             )}
 
             <form onSubmit={handleSubmit}>
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
+                  {uiText("m09bf25ef30833633")}
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={uiText("m53e6cdc30765aade")}
                   className="w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-[#143E6F]"
                   required
                   disabled={loading || !!initialEmail}
-                  aria-label="Email address"
+                  aria-label={uiText("mf2488fd4ef4adbc6")}
                 />
               </div>
 
@@ -226,7 +232,7 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                 <>
                   <div className="mb-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Enter OTP
+                      {uiText("m901b26f4bda5ab97")}
                     </label>
                     <input
                       type="text"
@@ -239,11 +245,11 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                       required
                       disabled={loading}
                       maxLength={6}
-                      aria-label="One-time password"
+                      aria-label={uiText("me380920438b23488")}
                     />
                     <div className="flex items-center justify-between mt-2">
                       <p className="text-xs text-gray-500">
-                        Check your email for the code
+                        {uiText("m5fd7f9b41ce803b8")}
                       </p>
                       <button
                         type="button"
@@ -254,10 +260,12 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                         className="text-xs text-[#143E6F] hover:text-[#0f2f54] hover:underline disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                       >
                         {resendLoading
-                          ? "Sending..."
+                          ? uiText("m286a3af7348e8312")
                           : resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
-                            : "Resend OTP"}
+                            ? uiText("me209a9f157acf253", {
+                                value0: resendCooldown,
+                              })
+                            : uiText("m6747ac5ba6564a3e")}
                       </button>
                     </div>
                   </div>
@@ -266,13 +274,13 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
 
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
+                  {uiText("m7c451e0f436d04a6")}
                 </label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => handlePasswordChange(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder={uiText("m15f691f800a4b76a")}
                   className={`w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 ${
                     passwordErrors.length > 0 && newPassword
                       ? "border-red-300 focus:ring-red-500"
@@ -280,7 +288,7 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                   }`}
                   required
                   disabled={loading}
-                  aria-label="New password"
+                  aria-label={uiText("m3dd9df4441fb348f")}
                 />
                 {newPassword && passwordErrors.length > 0 && (
                   <div className="mt-1">
@@ -295,13 +303,13 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm Password
+                  {uiText("mc292210c44167923")}
                 </label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
+                  placeholder={uiText("mbf000421aeb39493")}
                   className={`w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 ${
                     confirmPassword && newPassword !== confirmPassword
                       ? "border-red-300 focus:ring-red-500"
@@ -309,11 +317,11 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                   }`}
                   required
                   disabled={loading}
-                  aria-label="Confirm password"
+                  aria-label={uiText("m5ac265f396a2c586")}
                 />
                 {confirmPassword && newPassword !== confirmPassword && (
                   <p className="text-xs text-red-600 mt-1">
-                    Passwords do not match
+                    {uiText("mb6eb82cd3300c838")}
                   </p>
                 )}
               </div>
@@ -325,14 +333,16 @@ const PasswordResetModal: React.FC<PasswordResetProps> = ({
                   disabled={loading}
                   className="flex-1 border border-gray-300 text-gray-700 py-2 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                 >
-                  Cancel
+                  {uiText("m19766ed6ccb2f4a3")}
                 </button>
                 <button
                   type="submit"
                   disabled={loading || !isFormValid()}
                   className="flex-1 bg-[#143E6F] text-white py-2 rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0f2f54] transition-colors"
                 >
-                  {loading ? "Resetting..." : "Reset Password"}
+                  {loading
+                    ? uiText("m02281affa65c88d2")
+                    : uiText("m4e70f1fd24babdea")}
                 </button>
               </div>
             </form>

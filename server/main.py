@@ -18,9 +18,13 @@ from server.app.core.rate_limiter import limiter, rate_limit_handler
 from server.app.db.core.connection import (
     database,
     get_auth_events_collection,
+    get_organization_memberships_collection,
+    get_organizations_collection,
     get_quizzes_collection,
     get_user_sessions_collection,
     get_users_collection,
+    translation_memory_collection,
+    ensure_translation_memory_indexes,
     startUp,
 )
 from server.app.mcp.middleware import McpAuthorizationHeaderMiddleware
@@ -42,12 +46,18 @@ mcp_server = create_mcp_server()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await startUp()
+    await ensure_translation_memory_indexes(translation_memory_collection)
     redis_client = Redis.from_url(redis_url, decode_responses=True)
     app.state.redis = redis_client
     app.state.users_collection = get_users_collection()
     app.state.user_sessions_collection = get_user_sessions_collection()
     app.state.auth_events_collection = get_auth_events_collection()
     app.state.quizzes_collection = get_quizzes_collection()
+    app.state.organizations_collection = get_organizations_collection()
+    app.state.organization_memberships_collection = (
+        get_organization_memberships_collection()
+    )
+    app.state.translation_memory_collection = translation_memory_collection
 
     async with mcp_server.session_manager.run():
         yield

@@ -58,6 +58,8 @@ jobs:
         run: |
           corepack enable
           pnpm install --frozen-lockfile
+      - name: Check translations
+        run: pnpm run i18n:check
       - name: Run jest
         run: pnpm test --ci
       - name: Build

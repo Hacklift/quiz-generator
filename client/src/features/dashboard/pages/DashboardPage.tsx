@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 import NavBar from "@features/quiz/components/NavBar";
@@ -19,12 +20,16 @@ import CorporateDashboard from "@features/dashboard/corporate/CorporateDashboard
  * branch here; adding a user type means editing that category's map.
  */
 export default function DashboardPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user } = useAuth();
   const { persona, isLoading } = usePersona();
 
   return (
     <RequireAuth>
-      <div className={`${archivo.className} flex min-h-screen flex-col bg-paper text-ink`}>
+      <div
+        className={`${archivo.className} flex min-h-screen flex-col bg-paper text-ink`}
+      >
         <NavBar />
         <main className="flex-grow">
           {isLoading || !user ? (

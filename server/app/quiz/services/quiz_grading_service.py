@@ -80,6 +80,7 @@ def grade_against_stored_questions(
         questions_by_text[question["question"]].append(question)
 
     grading_payload = []
+    matched_questions = []
     for submitted in submitted_answers:
         matching_questions = questions_by_text.get(submitted.get("question"))
         if not matching_questions:
@@ -87,12 +88,20 @@ def grade_against_stored_questions(
                 "Submitted answers do not match this quiz's questions."
             )
         stored = matching_questions.popleft()
+        matched_questions.append(stored)
 
         user_answer = submitted.get("user_answer")
         correct_answer = stored["correct_answer"]
         if quiz_type == "true-false":
             user_answer = _normalize_true_false(user_answer)
-            correct_answer = _normalize_true_false(correct_answer)
+            stored_boolean = stored.get("correct_boolean")
+            if type(stored_boolean) is bool:
+                correct_answer = "true" if stored_boolean else "false"
+                options = stored.get("options") or []
+                if submitted.get("user_answer") in options and len(options) == 2:
+                    user_answer = "true" if options.index(submitted["user_answer"]) == 0 else "false"
+            else:
+                correct_answer = _normalize_true_false(correct_answer)
             if source == "ai":
                 user_answer = {"true": 1, "false": 0}.get(user_answer, user_answer)
                 correct_answer = {"true": 1, "false": 0}.get(correct_answer, correct_answer)
@@ -106,7 +115,12 @@ def grade_against_stored_questions(
             }
         )
 
-    return grade_answers(grading_payload, source)
+    results = grade_answers(grading_payload, source)
+    for result, stored, submitted in zip(results, matched_questions, submitted_answers):
+        result["user_answer"] = submitted.get("user_answer")
+        result["correct_answer"] = stored["correct_answer"]
+        result["explanation"] = stored.get("explanation")
+    return results
 
 
 class QuizGradingService:
@@ -221,6 +235,8 @@ class QuizGradingService:
             {
                 "question": question.question,
                 "correct_answer": question.correct_answer,
+                "explanation": question.explanation,
+                "correct_boolean": question.correct_boolean,
                 "options": question.options,
             }
             for question in quiz_doc.questions

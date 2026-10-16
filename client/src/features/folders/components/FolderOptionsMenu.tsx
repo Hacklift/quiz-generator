@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState, useRef, useEffect } from "react";
 import { MoreVertical } from "lucide-react";
@@ -14,6 +15,8 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
   onOrganize,
   onDelete,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -45,7 +48,7 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
             }}
             className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-navy-900"
           >
-            Organize Folders
+            {uiText("mf9885788b35df9b1")}
           </button>
           <button
             onClick={() => {
@@ -54,7 +57,7 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
             }}
             className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-navy-900"
           >
-            Create Folder
+            {uiText("m8ce1226161bc4c4e")}
           </button>
           <button
             onClick={() => {
@@ -63,7 +66,7 @@ const FolderOptionsMenu: React.FC<FolderOptionsMenuProps> = ({
             }}
             className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-red-600"
           >
-            Delete Folder
+            {uiText("m0fac0167c61ceabb")}
           </button>
         </div>
       )}

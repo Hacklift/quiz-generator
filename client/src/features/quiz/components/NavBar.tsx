@@ -1,4 +1,7 @@
 "use client";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import fallbackI18n from "@features/locale/i18n";
 
 import React, { useState } from "react";
 import { useRouter } from "next/router";
@@ -34,26 +37,49 @@ type NavItem = {
   authOnly?: boolean;
 };
 
-export function navigationItems(): NavItem[] {
+export function navigationItems(
+  translate: (key: string) => string = (key) => fallbackI18n.t(key),
+): NavItem[] {
   return [
-    { kind: "link", label: "Home", href: "/" },
-    { kind: "link", label: "Dashboard", href: "/dashboard", authOnly: true },
-    { kind: "link", label: "Categories", href: ROUTES.CATEGORIES },
-    { kind: "link", label: "Pricing", href: "/#pricing" },
+    { kind: "link", label: translate("nav.home"), href: "/" },
+    {
+      kind: "link",
+      label: translate("nav.dashboard"),
+      href: "/dashboard",
+      authOnly: true,
+    },
+    {
+      kind: "link",
+      label: translate("nav.categories"),
+      href: ROUTES.CATEGORIES,
+    },
+    { kind: "link", label: translate("nav.pricing"), href: "/#pricing" },
   ];
 }
 
-function mobileWorkspaceLinks(t: TerminologyResolver) {
+function mobileWorkspaceLinks(t: TerminologyResolver, translate: TFunction) {
   return [
-    { label: "My Profile", href: "/profile" },
-    { label: `Saved ${t("quiz", "plural")}`, href: "/saved_quiz" },
-    { label: `Popular ${t("quiz", "plural")}`, href: "/popular" },
-    { label: "Folders", href: "/folders" },
-    { label: `${titleCaseTerm(t("quiz"))} history`, href: "/quiz_history" },
+    { label: translate("nav.profile"), href: "/profile" },
+    {
+      label: translate("nav.saved", { items: t("quiz", "plural") }),
+      href: "/saved_quiz",
+    },
+    {
+      label: translate("nav.popular", { items: t("quiz", "plural") }),
+      href: "/popular",
+    },
+    { label: translate("nav.folders"), href: "/folders" },
+    {
+      label: translate("nav.history", { items: titleCaseTerm(t("quiz")) }),
+      href: "/quiz_history",
+    },
   ];
 }
 
 const NavBar: React.FC = () => {
+  const { t: uiText } = useTranslation("ui");
+  const { t: navText } = useTranslation();
+
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -84,10 +110,10 @@ const NavBar: React.FC = () => {
     return router.pathname === href;
   };
 
-  const visibleItems = navigationItems().filter(
+  const visibleItems = navigationItems(navText).filter(
     (item) => !("authOnly" in item && item.authOnly) || isAuthenticated,
   );
-  const workspaceLinks = mobileWorkspaceLinks(t);
+  const workspaceLinks = mobileWorkspaceLinks(t, navText);
 
   return (
     <div className={archivo.className}>
@@ -95,7 +121,7 @@ const NavBar: React.FC = () => {
         <>
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label="Toggle workspace sidebar"
+            aria-label={uiText("md51d6fa0615aea1f")}
             className="fixed left-4 top-4 z-[100] hidden bg-brand p-2 text-paper transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:flex"
           >
             {isSidebarOpen ? <X /> : <Menu />}
@@ -118,7 +144,7 @@ const NavBar: React.FC = () => {
             href="/"
             className="text-[18px] font-extrabold tracking-[-0.015em] text-ink"
           >
-            Quizwerk
+            {uiText("m44523d5233cb56d9")}
           </Link>
 
           <div className="hidden items-center gap-[28px] md:flex">
@@ -145,7 +171,8 @@ const NavBar: React.FC = () => {
                   <>
                     <NotificationBell />
                     <span className="text-[15px] text-ink">
-                      Hi, {user?.username || "User"}
+                      {uiText("mbc50944723f01460")}
+                      {user?.username || uiText("mb512d97e7cbf97c2")}
                       {personaDefinition ? (
                         <span className="ml-[6px] text-[13px] text-ink/60">
                           · {personaDefinition.label}
@@ -153,7 +180,7 @@ const NavBar: React.FC = () => {
                       ) : null}
                     </span>
                     <button onClick={logout} className={BTN_PRIMARY}>
-                      Logout
+                      {uiText("md0527e4b3d658351")}
                     </button>
                   </>
                 ) : (
@@ -169,7 +196,7 @@ const NavBar: React.FC = () => {
           <button
             onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
             className="p-2 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
-            aria-label="Toggle mobile top-nav"
+            aria-label={uiText("me86d39a1f00ecf4b")}
           >
             {isMobileNavOpen ? <X /> : <Menu />}
           </button>
@@ -202,7 +229,7 @@ const NavBar: React.FC = () => {
           {!isLoading && isAuthenticated && (
             <>
               <p className="mb-1 mt-4 px-3 text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
-                Workspace
+                {uiText("m87bb59ba2f92f2a5")}
               </p>
               {workspaceLinks.map((link) => (
                 <Link
@@ -224,7 +251,9 @@ const NavBar: React.FC = () => {
                 {isAuthenticated ? (
                   <>
                     <span className="text-center text-[15px] text-ink">
-                      Hi, {user?.username || "User"}
+                      {uiText("m4d075782cd3c2a6d", {
+                        value0: user?.username || uiText("mb512d97e7cbf97c2"),
+                      })}
                     </span>
                     <div className="flex justify-center">
                       <NotificationBell />
@@ -236,7 +265,7 @@ const NavBar: React.FC = () => {
                       }}
                       className={`${BTN_PRIMARY} w-full`}
                     >
-                      Logout
+                      {uiText("md0527e4b3d658351")}
                     </button>
                   </>
                 ) : (

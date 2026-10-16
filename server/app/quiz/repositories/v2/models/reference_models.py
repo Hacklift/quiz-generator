@@ -112,6 +112,7 @@ class QuizHistoryDocumentV2(BaseModel):
 
 class QuizAttemptQuestionResultV2(BaseModel):
     question: str
+    explanation: str | None = None
     user_answer: str | int | None = None
     correct_answer: str | int | None = None
     options: list[str] | None = None

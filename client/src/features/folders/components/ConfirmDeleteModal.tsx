@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
@@ -16,6 +17,8 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   onClose,
   onDeleted,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
@@ -45,13 +48,16 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
         animate={{ scale: 1, opacity: 1 }}
       >
         <h2 className="text-2xl font-semibold text-navy-900 mb-4">
-          Confirm Delete
+          {uiText("ma7f54311a3e625f5")}
         </h2>
 
         <p className="text-gray-700 mb-6">
-          Are you sure you want to delete{" "}
+          {uiText("m3a57bb9fb3bf7756")}{" "}
           <span className="font-semibold">{selectedItems.length}</span>{" "}
-          {selectedItems.length === 1 ? type : `${type}s`}?
+          {selectedItems.length === 1
+            ? type
+            : uiText("m852fe3718c6cfd72", { value0: type })}
+          ?
         </p>
 
         <div className="flex justify-end space-x-3">
@@ -60,14 +66,16 @@ const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
             disabled={loading}
             className="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400 disabled:opacity-60"
           >
-            Cancel
+            {uiText("m19766ed6ccb2f4a3")}
           </button>
           <button
             onClick={handleDelete}
             disabled={loading}
             className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
           >
-            {loading ? "Deleting..." : "Delete"}
+            {loading
+              ? uiText("m685ecb984ac29ce8")
+              : uiText("me2d0a54968ead24e")}
           </button>
         </div>
       </motion.div>

@@ -3,6 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from server.app.quiz.models.quiz_models import QuizQuestion
+from server.app.i18n.locales import SupportedLocale
 
 
 class DocumentQuizResponse(BaseModel):
@@ -31,3 +32,4 @@ class DocumentQuizResponse(BaseModel):
     retrieval_query: str
     rag_strategy: str = "embedding_mmr"
     embedding_cache_hit: Optional[bool] = False
+    content_locale: SupportedLocale = "en"

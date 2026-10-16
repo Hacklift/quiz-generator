@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import { useAuth } from "@features/auth/context/authContext";
@@ -12,9 +13,12 @@ interface RequireAuthProps {
 
 const RequireAuth: React.FC<RequireAuthProps> = ({
   children,
-  title = "Authentication Required",
-  description = "Please sign in to continue.",
+  title,
+  description,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+  const { t: authText } = useTranslation();
+
   const { isAuthenticated, isLoading } = useAuth();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
@@ -30,15 +34,17 @@ const RequireAuth: React.FC<RequireAuthProps> = ({
     return (
       <>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-gray-700 px-4">
-          <h1 className="text-2xl font-bold mb-2 text-[#0F2654]">{title}</h1>
+          <h1 className="text-2xl font-bold mb-2 text-[#0F2654]">
+            {title ?? authText("auth.requiredTitle")}
+          </h1>
           <p className="max-w-xl">
-            {description}{" "}
+            {description ?? authText("auth.requiredDescription")}{" "}
             <button
               type="button"
               onClick={() => setIsLoginOpen(true)}
               className="text-blue-600 underline"
             >
-              Sign in
+              {uiText("mbfd402b2f6f38125")}
             </button>
             .
           </p>

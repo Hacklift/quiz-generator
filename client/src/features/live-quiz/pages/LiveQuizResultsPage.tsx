@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
@@ -15,6 +16,8 @@ interface LiveQuizResultsPageProps {
 const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
   sessionId,
 }) => {
+  const { t: uiText, i18n } = useTranslation("ui");
+
   const router = useRouter();
   const [session, setSession] = useState<LiveQuizSessionState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,7 +33,9 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
           data.status === "submitted" && router.query.completed === "1",
         );
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Could not load results.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mce260d10b53215d0"),
+        );
       } finally {
         setIsLoading(false);
       }
@@ -49,46 +54,60 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10">
       <section className="mx-auto max-w-xl rounded-md border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-[#0F2654]">Quiz result</h1>
+        <h1 className="text-2xl font-bold text-[#0F2654]">
+          {uiText("m13aa4cadf07304d9")}
+        </h1>
         {session ? (
           <div className="mt-6 divide-y divide-slate-200 rounded-md border border-slate-200">
             <div className="flex justify-between gap-4 px-4 py-3 text-sm">
-              <span className="font-semibold text-slate-600">Participant</span>
+              <span className="font-semibold text-slate-600">
+                {uiText("m554f4235112e7913")}
+              </span>
               <span className="text-right text-slate-900">
                 {session.participant_name}
               </span>
             </div>
             <div className="flex justify-between gap-4 px-4 py-3 text-sm">
-              <span className="font-semibold text-slate-600">Score</span>
+              <span className="font-semibold text-slate-600">
+                {uiText("m38e5a46cbc5ad328")}
+              </span>
               <span className="text-right text-slate-900">
                 {session.score}/{session.total_questions}
               </span>
             </div>
             <div className="flex justify-between gap-4 px-4 py-3 text-sm">
-              <span className="font-semibold text-slate-600">Percentage</span>
+              <span className="font-semibold text-slate-600">
+                {uiText("m379db318f5b44fcd")}
+              </span>
               <span className="text-right text-slate-900">
                 {session.percentage}%
               </span>
             </div>
             <div className="flex justify-between gap-4 px-4 py-3 text-sm">
-              <span className="font-semibold text-slate-600">Status</span>
+              <span className="font-semibold text-slate-600">
+                {uiText("m920e413c7d411b61")}
+              </span>
               <span className="text-right text-slate-900">
-                {session.auto_submitted ? "Auto Submitted" : "Submitted"}
+                {session.auto_submitted
+                  ? uiText("m5c2981214763cb2e")
+                  : uiText("m64900440a8c9a5ed")}
               </span>
             </div>
             {session.submitted_at && (
               <div className="flex justify-between gap-4 px-4 py-3 text-sm">
                 <span className="font-semibold text-slate-600">
-                  Submitted At
+                  {uiText("m2290bea1f250b3fc")}
                 </span>
                 <span className="text-right text-slate-900">
-                  {new Date(session.submitted_at).toLocaleString()}
+                  {new Date(session.submitted_at).toLocaleString(i18n.language)}
                 </span>
               </div>
             )}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-slate-600">Result unavailable.</p>
+          <p className="mt-4 text-sm text-slate-600">
+            {uiText("ma1286c3b41c13c44")}
+          </p>
         )}
       </section>
       <GuestSignupPopup

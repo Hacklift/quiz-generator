@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -7,6 +8,8 @@ import { useAuth } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
 
 const ProfileButton = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,7 +28,7 @@ const ProfileButton = () => {
   return (
     <>
       <SidebarButton
-        label="My Profile"
+        label={uiText("m991bfa015514f9d5")}
         icon="👤"
         isActive={isActive}
         onClick={handleClick}

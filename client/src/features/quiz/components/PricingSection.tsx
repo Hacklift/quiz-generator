@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import SignInModal from "@features/auth/components/SignInModal";
@@ -7,12 +8,11 @@ import {
   createCheckoutSession,
   getBillingErrorMessage,
 } from "@features/profile/api/billingApi";
-import {
-  BillingPlanAction,
-  billingPlans,
-} from "@shared/config/billingPlans";
+import { BillingPlanAction, billingPlans } from "@shared/config/billingPlans";
 
 export default function PricingSection() {
+  const { t: uiText } = useTranslation("ui");
+
   const { isAuthenticated, isLoading, user } = useAuth();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [activePlan, setActivePlan] = useState<"monthly" | "yearly" | null>(
@@ -51,14 +51,13 @@ export default function PricingSection() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#143E6F]/70">
-            Pricing
+            {uiText("mdfe95783edfef791")}
           </p>
           <h2 className="mt-3 text-2xl font-semibold text-[#102347] sm:text-3xl">
-            Pick a plan that fits how you build quizzes
+            {uiText("ma87a4ab1508019e0")}
           </h2>
           <p className="mt-3 max-w-2xl mx-auto text-sm text-gray-600 sm:text-base">
-            Start free, then upgrade when you want Stripe-powered billing,
-            expanded usage, and premium workflow perks.
+            {uiText("me24a8251d9202ced")}
           </p>
         </div>
 
@@ -95,12 +94,12 @@ export default function PricingSection() {
                         {plan}
                       </h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        {billingPeriod || "Included"}
+                        {billingPeriod || uiText("mba829a98b7994088")}
                       </p>
                     </div>
                     {isCurrentPlan ? (
                       <span className="rounded-full bg-[#143E6F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#143E6F]">
-                        Current
+                        {uiText("me0d1b68224bf0b31")}
                       </span>
                     ) : null}
                   </div>
@@ -123,12 +122,12 @@ export default function PricingSection() {
                     className="mt-6 w-full bg-[#0F2654] text-white py-3 rounded-2xl hover:bg-[#0C2142] transition disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {action === "free"
-                      ? "Included"
+                      ? uiText("mba829a98b7994088")
                       : isCurrentPlan
-                        ? "Current Plan"
+                        ? uiText("m5d85632008c54b1f")
                         : isBusy
-                          ? "Redirecting..."
-                          : "Get Started"}
+                          ? uiText("mcd23991b4e02a17e")
+                          : uiText("m983f311018642b0a")}
                   </button>
                 </div>
               );

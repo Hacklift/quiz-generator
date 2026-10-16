@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import { X, ChevronDown } from "lucide-react";
@@ -14,6 +15,8 @@ interface OrganizeModalProps<T> {
 function OrganizeModal<
   T extends { title?: string; name?: string; created_at?: string },
 >({ title, items, onClose, onOrganized, renderItem }: OrganizeModalProps<T>) {
+  const { t: uiText } = useTranslation("ui");
+
   const [mode, setMode] = useState<"select" | "manual">("select");
   const [expanded, setExpanded] = useState<"date" | "alpha" | null>(null);
   const [sortedItems, setSortedItems] = useState<T[]>(items);
@@ -66,9 +69,7 @@ function OrganizeModal<
 
         {mode === "select" ? (
           <>
-            <p className="text-gray-600 mb-4">
-              Choose how you want to organize:
-            </p>
+            <p className="text-gray-600 mb-4">{uiText("m6a401155f2923f96")}</p>
             <div className="flex flex-col gap-3">
               <div>
                 <button
@@ -77,7 +78,7 @@ function OrganizeModal<
                   }
                   className="w-full flex justify-between items-center border rounded-lg py-2 px-3 hover:bg-gray-100 text-sm"
                 >
-                  <span>📅 By Date</span>
+                  <span>{uiText("m5b84168cb555511f")}</span>
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${
                       expanded === "date" ? "rotate-180" : ""
@@ -91,13 +92,13 @@ function OrganizeModal<
                       onClick={() => sortByDate("asc")}
                       className="text-left text-sm text-gray-700 hover:bg-gray-100 px-2 py-1 rounded"
                     >
-                      Oldest → Newest
+                      {uiText("m5785525c88088c39")}
                     </button>
                     <button
                       onClick={() => sortByDate("desc")}
                       className="text-left text-sm text-gray-700 hover:bg-gray-100 px-2 py-1 rounded"
                     >
-                      Newest → Oldest
+                      {uiText("m284ec6fac376ed75")}
                     </button>
                   </div>
                 )}
@@ -110,7 +111,7 @@ function OrganizeModal<
                   }
                   className="w-full flex justify-between items-center border rounded-lg py-2 px-3 hover:bg-gray-100 text-sm"
                 >
-                  <span>🔤 By Alphabet</span>
+                  <span>{uiText("m8f591adaf5e82040")}</span>
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${
                       expanded === "alpha" ? "rotate-180" : ""
@@ -140,7 +141,7 @@ function OrganizeModal<
                 onClick={() => setMode("manual")}
                 className="w-full flex justify-between items-center border rounded-lg py-2 px-3 hover:bg-gray-100 text-sm"
               >
-                ✋ Manual Reorder
+                {uiText("m0d448d03ce34987e")}
               </button>
             </div>
           </>
@@ -184,13 +185,13 @@ function OrganizeModal<
                 onClick={onClose}
                 className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100"
               >
-                Cancel
+                {uiText("m19766ed6ccb2f4a3")}
               </button>
               <button
                 onClick={handleSave}
                 className="bg-[#0a3264] hover:bg-[#082952] text-white font-semibold px-6 py-2 rounded-xl shadow-md transition text-sm"
               >
-                Save Order
+                {uiText("me05eaaafa3c1451f")}
               </button>
             </div>
           </>

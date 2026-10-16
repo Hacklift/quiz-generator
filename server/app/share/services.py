@@ -58,6 +58,7 @@ class SharedQuizReadService:
         return {
             "id": str(quiz_doc.id),
             "title": quiz_doc.title,
+            "content_locale": quiz_doc.content_locale,
             "description": quiz_doc.description or build_default_description(topic),
             "quiz_type": quiz_doc.quiz_type.value,
             # correct_answer is deliberately omitted: shared quizzes are served

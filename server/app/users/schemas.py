@@ -3,9 +3,12 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from enum import Enum
 import re
+from server.app.i18n.locales import SupportedLocale
 
 
 class UserRegisterSchema(BaseModel):
+    preferred_locale: Optional[SupportedLocale] = None
+    organization_invitation_token: Optional[str] = Field(default=None, min_length=1, max_length=4096)
     username: str
     email: EmailStr
     full_name: Optional[str] = None

@@ -1,20 +1,17 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useTerms } from "@features/persona/hooks/useTerms";
-import { trainingRunApi, type TrainingRunSummary } from "@features/training/api/trainingRunApi";
+import {
+  trainingRunApi,
+  type TrainingRunSummary,
+} from "@features/training/api/trainingRunApi";
 import { BTN_GHOST, BTN_PRIMARY, Kicker } from "@shared/ui/quizwerk";
 import { personaGenerateHref } from "@shared/config/persona";
 import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
 import { ROUTES } from "@shared/config/patterns/routes";
-
-const formatDate = (value?: string | null) =>
-  value ? new Date(value).toLocaleDateString() : "No deadline";
-const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
-    ? `${run.completed_count}/${run.assigned_count} complete`
-    : `${run.completed_count} completed`;
 
 const businessPresetHref = (
   userType: DashboardViewProps["persona"]["userType"],
@@ -25,15 +22,35 @@ const businessPresetHref = (
   );
   if (preset === "onboarding") {
     params.set("topic", "Employee onboarding essentials");
-    params.set("customInstruction", "Create practical first-week onboarding checks for employees.");
+    params.set(
+      "customInstruction",
+      "Create practical first-week onboarding checks for employees.",
+    );
   } else {
     params.set("topic", "Product knowledge");
-    params.set("customInstruction", "Test practical product knowledge for customer-facing teams.");
+    params.set(
+      "customInstruction",
+      "Test practical product knowledge for customer-facing teams.",
+    );
   }
   return `/generate?${params.toString()}`;
 };
 
 export default function BusinessDashboard({ persona }: DashboardViewProps) {
+  const { t: uiText, i18n } = useTranslation("ui");
+
+  const formatDate = (value?: string | null) =>
+    value
+      ? new Date(value).toLocaleDateString(i18n.language)
+      : uiText("trainingStatus.noDue");
+  const completionLabel = (run: TrainingRunSummary) =>
+    run.assigned_count
+      ? uiText("trainingStatus.progress", {
+          completed: run.completed_count,
+          total: run.assigned_count,
+        })
+      : uiText("trainingStatus.completed", { completed: run.completed_count });
+
   const router = useRouter();
   const t = useTerms();
   const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
@@ -63,40 +80,64 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
   const presets = [
     {
       id: "onboarding",
-      title: "Employee onboarding",
-      description: `Build a practical first-week ${t("quiz")} that gets new ${t("group", "plural")} aligned quickly.`,
+      title: uiText("m73f7c68653183f09"),
+      description: uiText("mf553482d4b2e759b", {
+        value0: t("quiz"),
+        value1: t("group", "plural"),
+      }),
     },
     {
       id: "product-knowledge",
-      title: "Product knowledge",
-      description: `Check that customer-facing ${t("group", "plural")} can explain the product with confidence.`,
+      title: uiText("mbe7077604d1d8f33"),
+      description: uiText("mefbe30179911363b", {
+        value0: t("group", "plural"),
+      }),
     },
   ];
 
   return (
     <div className="flex flex-col gap-[36px]">
-      <section className="border-t-2 border-divider pt-[28px]" aria-labelledby="business-presets-heading">
-        <Kicker>Business dashboard</Kicker>
+      <section
+        className="border-t-2 border-divider pt-[28px]"
+        aria-labelledby="business-presets-heading"
+      >
+        <Kicker>{uiText("m6fa61dd8f4d0ed00")}</Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
-            <h2 id="business-presets-heading" className="text-[20px] font-extrabold tracking-[-0.015em] text-ink">
-              Create training that scales
+            <h2
+              id="business-presets-heading"
+              className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
+            >
+              {uiText("m62a991bbf7eed5ec")}
             </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              Start with a focused preset, then distribute it through an assigned training run or a shareable live link.
+              {uiText("mbd24087608269ab4")}
             </p>
           </div>
-          <button type="button" onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)} className={BTN_PRIMARY}>
-            Manage training runs
+          <button
+            type="button"
+            onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)}
+            className={BTN_PRIMARY}
+          >
+            {uiText("maebcad530db03bee")}
           </button>
         </div>
         <div className="mt-[20px] grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-[20px]">
           {presets.map((preset) => (
-            <article key={preset.id} className="flex flex-col justify-between border-2 border-divider bg-paper p-[20px]">
+            <article
+              key={preset.id}
+              className="flex flex-col justify-between border-2 border-divider bg-paper p-[20px]"
+            >
               <div>
-                <p className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-brand">Training preset</p>
-                <h3 className="mt-[10px] text-[17px] font-extrabold text-ink">{preset.title}</h3>
-                <p className="mt-[8px] text-[13.5px] leading-[22px] text-ink/70">{preset.description}</p>
+                <p className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-brand">
+                  {uiText("m212442d21c636906")}
+                </p>
+                <h3 className="mt-[10px] text-[17px] font-extrabold text-ink">
+                  {preset.title}
+                </h3>
+                <p className="mt-[8px] text-[13.5px] leading-[22px] text-ink/70">
+                  {preset.description}
+                </p>
               </div>
               <button
                 type="button"
@@ -110,29 +151,48 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
                 }
                 className={`${BTN_PRIMARY} mt-[20px] w-full`}
               >
-                Create {preset.title}
+                {uiText("m37a7e45e1b49df1f", { value0: preset.title })}
               </button>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="border-t-2 border-divider pt-[28px]" aria-labelledby="business-runs-heading">
-        <Kicker>Completion overview</Kicker>
+      <section
+        className="border-t-2 border-divider pt-[28px]"
+        aria-labelledby="business-runs-heading"
+      >
+        <Kicker>{uiText("m33741c714d192412")}</Kicker>
         <div className="flex flex-wrap items-end justify-between gap-[16px]">
           <div>
-            <h2 id="business-runs-heading" className="text-[20px] font-extrabold tracking-[-0.015em] text-ink">Your training runs</h2>
+            <h2
+              id="business-runs-heading"
+              className="text-[20px] font-extrabold tracking-[-0.015em] text-ink"
+            >
+              {uiText("m7445a62c0b670145")}
+            </h2>
             <p className="mt-[6px] max-w-[58ch] text-[14.5px] leading-[24px] text-ink/70">
-              See who has started, completed, and needs a reminder without opening each {t("session")}.
+              {uiText("m7877cd897bbc0398", { value0: t("session") })}
             </p>
           </div>
-          <button type="button" onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)} className={BTN_GHOST}>View all runs</button>
+          <button
+            type="button"
+            onClick={() => router.push(`${ROUTES.TRAINING_RUNS}?kind=business`)}
+            className={BTN_GHOST}
+          >
+            {uiText("m346de5a03a7af536")}
+          </button>
         </div>
         {isLoading ? (
-          <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] text-ink/70">Loading training runs...</p>
+          <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] text-ink/70">
+            {uiText("md11ca191e75a7f25")}
+          </p>
         ) : loadError ? (
-          <p role="alert" className="mt-[20px] border-2 border-brand bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
-            Training runs could not be loaded. Refresh the page to try again.
+          <p
+            role="alert"
+            className="mt-[20px] border-2 border-brand bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70"
+          >
+            {uiText("ma6db1d54dee2cb3a")}
           </p>
         ) : runs.length ? (
           <div className="mt-[20px] grid gap-[12px]">
@@ -143,15 +203,28 @@ export default function BusinessDashboard({ persona }: DashboardViewProps) {
                 onClick={() => router.push(ROUTES.trainingRun(run.id))}
                 className="grid w-full grid-cols-1 gap-[12px] border-2 border-divider bg-paper p-[16px] text-left transition hover:border-ink/60 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
               >
-                <span><strong className="block text-ink">{run.title}</strong><span className="mt-[3px] block text-[13px] text-ink/65">Closes {formatDate(run.closes_at)}</span></span>
-                <span className="text-[13px] font-extrabold text-ink">{completionLabel(run)}</span>
-                <span className="text-[13px] text-ink/70">{run.average_score ?? "-"} avg score</span>
+                <span>
+                  <strong className="block text-ink">{run.title}</strong>
+                  <span className="mt-[3px] block text-[13px] text-ink/65">
+                    {uiText("mdb8084b091623bcc", {
+                      value0: formatDate(run.closes_at),
+                    })}
+                  </span>
+                </span>
+                <span className="text-[13px] font-extrabold text-ink">
+                  {completionLabel(run)}
+                </span>
+                <span className="text-[13px] text-ink/70">
+                  {uiText("mfff86921b49f612d", {
+                    value0: run.average_score ?? "-",
+                  })}
+                </span>
               </button>
             ))}
           </div>
         ) : (
           <p className="mt-[20px] border-2 border-divider bg-paper p-[20px] text-[14px] leading-[24px] text-ink/70">
-            No training runs yet. Create a quiz, then assign it to your {t("group", "plural")} or share a live link.
+            {uiText("med858193fe0bed66", { value0: t("group", "plural") })}
           </p>
         )}
       </section>

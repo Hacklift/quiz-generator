@@ -1,10 +1,12 @@
 import axios from "axios";
+import { isSupportedLocale } from "@shared/config/locale";
 import {
   LoginResponse,
   LoginPayload,
   RefreshTokenResponse,
   UpdateProfilePayload,
   UpdateProfileResponse,
+  UpdateLocalePayload,
 } from "@features/auth/types/User";
 import { API_BASE_URL, api } from "@shared/api/http";
 
@@ -15,9 +17,22 @@ export const registerUser = async (data: {
   email: string;
   full_name: string;
   password: string;
+  preferred_locale?: string | null;
+  organization_invitation_token?: string;
 }) => {
   try {
-    const response = await api.post("/auth/register/", data);
+    let preferred_locale = data.preferred_locale;
+    if (preferred_locale === undefined) {
+      preferred_locale = null;
+      try {
+        const stored = localStorage.getItem("quizwerk.guestLocale");
+        if (isSupportedLocale(stored)) preferred_locale = stored;
+      } catch {}
+    }
+    const response = await api.post("/auth/register/", {
+      ...data,
+      preferred_locale,
+    });
     return response.data;
   } catch (error: any) {
     const detail = error.response?.data?.detail;
@@ -44,7 +59,33 @@ export const login = async (payload: LoginPayload): Promise<LoginResponse> => {
     const response = await api.post("/auth/login", payload);
     return response.data as LoginResponse;
   } catch (error: any) {
-    throw new Error(error.response?.data?.detail || "Login failed");
+    const status = error?.response?.status;
+    const responseData = error?.response?.data;
+    const detail = responseData?.detail ?? responseData?.message;
+    const detailMessage = Array.isArray(detail)
+      ? detail
+          .map((item: any) => item?.msg || item?.message)
+          .filter(Boolean)
+          .join("; ")
+      : typeof detail === "string"
+        ? detail
+        : "";
+
+    if (detailMessage) {
+      throw new Error(detailMessage);
+    }
+
+    if (!error?.response) {
+      throw new Error(
+        `Cannot reach the API at ${String(api.defaults.baseURL || "the server")}. ` +
+          "Check that the backend container is running and the API URL is correct.",
+      );
+    }
+
+    throw new Error(
+      `Login failed (server returned ${status || "an unknown status"}). ` +
+        "Check the backend logs for the request details.",
+    );
   }
 };
 
@@ -96,6 +137,19 @@ export const updateProfile = async (
     return response.data as UpdateProfileResponse;
   } catch (error: any) {
     throw new Error(error.response?.data?.detail || "Failed to update profile");
+  }
+};
+
+export const updateLocale = async (
+  data: UpdateLocalePayload,
+): Promise<UpdateProfileResponse> => {
+  try {
+    const response = await api.put("/auth/profile/locale", data);
+    return response.data as UpdateProfileResponse;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.detail || "Failed to update language preference",
+    );
   }
 };
 

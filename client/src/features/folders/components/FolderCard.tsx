@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React from "react";
 
@@ -23,6 +24,8 @@ const FolderCard: React.FC<FolderCardProps> = ({
   onOpen,
   onToggleSelect,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   return (
     <div
       onClick={onOpen}
@@ -36,7 +39,9 @@ const FolderCard: React.FC<FolderCardProps> = ({
         <div>
           <h3 className="font-semibold text-navy-800">{folder.name}</h3>
           <p className="text-sm text-gray-500">
-            {folder.quizzes?.length ?? folder.quiz_count ?? 0} quizzes
+            {uiText("m55b18220390f39e3", {
+              value0: folder.quizzes?.length ?? folder.quiz_count ?? 0,
+            })}
           </p>
         </div>
         <label className="flex items-center gap-2 text-xs text-gray-600">
@@ -49,7 +54,7 @@ const FolderCard: React.FC<FolderCardProps> = ({
             }}
             onClick={(e) => e.stopPropagation()}
           />
-          Select
+          {uiText("m2a78025de6aae5e7")}
         </label>
       </div>
     </div>

@@ -13,6 +13,8 @@ from server.app.db.core.connection import (
     get_auth_events_collection,
     get_user_sessions_collection,
     users_collection,
+    get_organizations_collection,
+    get_organization_memberships_collection,
 )
 from motor.motor_asyncio import AsyncIOMotorCollection
 from server.app.users.identity import (
@@ -56,12 +58,20 @@ from server.app.db.core.redis import get_redis_client
 from passlib.context import CryptContext
 from server.app.core.config import settings
 from server.app.email_platform.service import EmailService
+from server.app.organizations.onboarding import validate_onboarding_token, enroll_onboarding_user
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
   
 
 async def register_user_service(user: UserRegisterSchema, email_svc: EmailService) -> UserResponseSchema:
+    # Validate before creating an account. Organization IDs and UI defaults are
+    # never trusted as enrollment authority; the signed invitation binds email.
+    onboarding_organization = None
+    if user.organization_invitation_token:
+        onboarding_organization = await validate_onboarding_token(
+            user.organization_invitation_token, get_organizations_collection(), email=user.email,
+        )
     auth_events_collection = get_auth_events_collection()
     existing_user = await users_collection.find_one(
         {
@@ -79,12 +89,18 @@ async def register_user_service(user: UserRegisterSchema, email_svc: EmailServic
         username=user.username,
         email=user.email,
         full_name=user.full_name,
+        preferred_locale=user.preferred_locale,
         password=user.password
     )
     
     created_user = await create_user(users_collection, user_data)
     if not created_user:
         raise HTTPException(status_code=500, detail="User registration failed")
+    if onboarding_organization:
+        await enroll_onboarding_user(
+            str(onboarding_organization["_id"]), created_user,
+            get_organization_memberships_collection(), users_collection,
+        )
     await record_auth_event(
         auth_events_collection,
         event_type="register",

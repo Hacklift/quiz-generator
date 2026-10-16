@@ -5,6 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from bson import ObjectId
+from server.app.i18n.locales import SupportedLocale
 
 
 class QuizQuestionModel(BaseModel):
@@ -14,6 +15,9 @@ class QuizQuestionModel(BaseModel):
     options: Optional[List[str]] = None
 
     answer: str
+    explanation: Optional[str] = None
+    correct_option_index: Optional[int] = None
+    correct_boolean: Optional[bool] = None
 
     question_type: str
 
@@ -25,6 +29,9 @@ class QuizHistoryModel(BaseModel):
 
     user_id: Optional[str] = None
     quiz_id: Optional[str] = None
+    content_locale: SupportedLocale = "en"
+    description: Optional[str] = None
+    is_sample: bool = False
 
 
     quiz_name: Optional[str] = None

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -38,12 +39,18 @@ const getString = (value: unknown): string | null =>
 const getNumber = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-const isAssistantArtifactAction = (value: unknown): value is AssistantArtifactAction =>
+const isAssistantArtifactAction = (
+  value: unknown,
+): value is AssistantArtifactAction =>
   isRecord(value) && value.type === "copy_to_clipboard";
 
-const readPersistedDownloadState = (artifactKey: string): DownloadState | null => {
+const readPersistedDownloadState = (
+  artifactKey: string,
+): DownloadState | null => {
   if (typeof window === "undefined") return null;
-  const raw = window.sessionStorage.getItem(`${DOWNLOAD_STATE_STORAGE_PREFIX}${artifactKey}`);
+  const raw = window.sessionStorage.getItem(
+    `${DOWNLOAD_STATE_STORAGE_PREFIX}${artifactKey}`,
+  );
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -51,7 +58,9 @@ const readPersistedDownloadState = (artifactKey: string): DownloadState | null =
     const status = parsed.status;
     const attempts = parsed.attempts;
     if (
-      (status === "downloading" || status === "started" || status === "failed") &&
+      (status === "downloading" ||
+        status === "started" ||
+        status === "failed") &&
       typeof attempts === "number"
     ) {
       return {
@@ -74,13 +83,23 @@ const persistDownloadState = (artifactKey: string, state: DownloadState) => {
 };
 
 const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
-  const [expandedArtifacts, setExpandedArtifacts] = useState<Record<string, boolean>>({});
-  const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
-  const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
+  const { t: uiText } = useTranslation("ui");
+
+  const [expandedArtifacts, setExpandedArtifacts] = useState<
+    Record<string, boolean>
+  >({});
+  const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(
+    null,
+  );
+  const [downloadStates, setDownloadStates] = useState<
+    Record<string, DownloadState>
+  >({});
   const autoDownloadAttemptsRef = useRef<Record<string, boolean>>({});
 
   const getDownloadState = (artifactKey: string): DownloadState | undefined =>
-    downloadStates[artifactKey] || readPersistedDownloadState(artifactKey) || undefined;
+    downloadStates[artifactKey] ||
+    readPersistedDownloadState(artifactKey) ||
+    undefined;
 
   const setDownloadState = (artifactKey: string, state: DownloadState) => {
     persistDownloadState(artifactKey, state);
@@ -90,7 +109,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
     }));
   };
 
-  const getVisibleItems = (artifactKey: string, items: AssistantResourceItem[]) => {
+  const getVisibleItems = (
+    artifactKey: string,
+    items: AssistantResourceItem[],
+  ) => {
     if (expandedArtifacts[artifactKey]) return items;
     return items.slice(0, 8);
   };
@@ -109,7 +131,9 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
         }
         className="text-xs font-semibold text-blue-700 transition hover:text-blue-900"
       >
-        {isExpanded ? "Show less" : `Show all ${total}`}
+        {isExpanded
+          ? uiText("m94ea9b1d33a02975")
+          : uiText("m923d54ae6cdd3b7c", { value0: total })}
       </button>
     );
   };
@@ -117,14 +141,14 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
   const copyToClipboard = async (value: unknown) => {
     const text = typeof value === "string" ? value : "";
     if (!text) {
-      toast.error("There is nothing to copy.");
+      toast.error(uiText("m333b19967e1e525b"));
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard.");
+      toast.success(uiText("maf09632242f33f4a"));
     } catch {
-      toast.error("Could not copy to clipboard.");
+      toast.error(uiText("meef9456154d08468"));
     }
   };
 
@@ -162,11 +186,11 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
     const attempts = currentState?.attempts || 0;
     const maxRetries = getNumber(data.max_retries) || 3;
     if (!href || !quizId) {
-      toast.error("Download details are incomplete.");
+      toast.error(uiText("mf7bc188d2676f95a"));
       return;
     }
     if (attempts >= maxRetries) {
-      toast.error("Download retry limit reached. Please use the in-app Download Quiz button.");
+      toast.error(uiText("mfcae06a2e20777c4"));
       return;
     }
 
@@ -184,7 +208,8 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
         },
       });
       const contentDisposition = response.headers["content-disposition"];
-      const matchedFilename = contentDisposition?.match(/filename=([^;]+)/i)?.[1];
+      const matchedFilename =
+        contentDisposition?.match(/filename=([^;]+)/i)?.[1];
       const fallbackName = getString(metadata.filename) || `quiz.${format}`;
       const resolvedName = matchedFilename?.replace(/"/g, "") || fallbackName;
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -195,14 +220,18 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("Quiz download started.");
+      toast.success(uiText("m83b8ccb16b4c9996"));
       setDownloadState(artifactKey, {
         status: "started",
         attempts: attempts + 1,
       });
     } catch (error: unknown) {
       const typedError = error as ApiErrorLike;
-      toast.error(typedError?.response?.data?.detail || typedError?.message || "Failed to download quiz.");
+      toast.error(
+        typedError?.response?.data?.detail ||
+          typedError?.message ||
+          uiText("mb2ad305270562bf5"),
+      );
       setDownloadState(artifactKey, {
         status: "failed",
         attempts: attempts + 1,
@@ -228,7 +257,10 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
 
   if (!artifacts?.length) return null;
 
-  const renderResourceList = (artifact: AssistantArtifact, artifactKey: string) => {
+  const renderResourceList = (
+    artifact: AssistantArtifact,
+    artifactKey: string,
+  ) => {
     const items = Array.isArray(artifact.data.items)
       ? (artifact.data.items.filter(isRecord) as AssistantResourceItem[])
       : [];
@@ -239,30 +271,36 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
             {artifact.data.title}
           </p>
         )}
-        {getVisibleItems(artifactKey, items).map((item: AssistantResourceItem, itemIndex) => {
-          const label = String(item.label || item.title || item.name || "Open");
-          const href = typeof item.href === "string" ? item.href : null;
-          const key = String(item.id || item.href || `${artifactKey}-${itemIndex}`);
-          if (href) {
+        {getVisibleItems(artifactKey, items).map(
+          (item: AssistantResourceItem, itemIndex) => {
+            const label = String(
+              item.label || item.title || item.name || "Open",
+            );
+            const href = typeof item.href === "string" ? item.href : null;
+            const key = String(
+              item.id || item.href || `${artifactKey}-${itemIndex}`,
+            );
+            if (href) {
+              return (
+                <Link
+                  key={key}
+                  href={href}
+                  className="block rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900 transition hover:border-blue-300 hover:bg-blue-100"
+                >
+                  {label}
+                </Link>
+              );
+            }
             return (
-              <Link
+              <div
                 key={key}
-                href={href}
-                className="block rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900 transition hover:border-blue-300 hover:bg-blue-100"
+                className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900"
               >
                 {label}
-              </Link>
+              </div>
             );
-          }
-          return (
-            <div
-              key={key}
-              className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900"
-            >
-              {label}
-            </div>
-          );
-        })}
+          },
+        )}
         {renderListToggle(artifactKey, items.length)}
       </div>
     );
@@ -280,7 +318,8 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
 
         if (artifact.type === "resource") {
           const label = String(artifact.data.label || "Open");
-          const href = typeof artifact.data.href === "string" ? artifact.data.href : null;
+          const href =
+            typeof artifact.data.href === "string" ? artifact.data.href : null;
           if (!href) {
             return (
               <div
@@ -313,7 +352,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
                 key={artifactKey}
                 className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900"
               >
-                Download started.
+                {uiText("ma2336115c2ac7984")}
               </div>
             );
           }
@@ -329,7 +368,7 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
                 key={artifactKey}
                 className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900"
               >
-                Download could not start from the assistant. Please use the in-app Download Quiz button.
+                {uiText("m5a8ed7d3266d8ee8")}
               </div>
             );
           }
@@ -343,9 +382,12 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
               className="block w-full rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs font-semibold text-blue-900 transition hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isDownloading
-                ? "Preparing download..."
+                ? uiText("m757726036c1c068c")
                 : downloadState?.status === "failed"
-                  ? `Retry download (${attempts}/${maxRetries})`
+                  ? uiText("mf8df14d6bd2d226f", {
+                      value0: attempts,
+                      value1: maxRetries,
+                    })
                   : label}
             </button>
           );
@@ -357,7 +399,9 @@ const AssistantArtifactList = ({ artifacts }: AssistantArtifactListProps) => {
               key={artifactKey}
               className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900"
             >
-              {String(artifact.data.label || artifact.data.message || "Completed")}
+              {String(
+                artifact.data.label || artifact.data.message || "Completed",
+              )}
             </div>
           );
         }

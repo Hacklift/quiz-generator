@@ -16,18 +16,38 @@ jest.mock("@features/auth/components/RequireAuth", () => ({
   __esModule: true,
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({ getQuizAttempt: jest.fn() }));
-jest.mock("react-hot-toast", () => ({
-  __esModule: true, default: { error: jest.fn() },
+jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({
+  getQuizAttempt: jest.fn(),
 }));
-jest.mock("@features/quiz/components/NavBar", () => ({ __esModule: true, default: () => <nav /> }));
-jest.mock("@features/quiz/components/Footer", () => ({ __esModule: true, default: () => <footer /> }));
+jest.mock("react-hot-toast", () => ({
+  __esModule: true,
+  default: { error: jest.fn() },
+}));
+jest.mock("@features/quiz/components/NavBar", () => ({
+  __esModule: true,
+  default: () => <nav />,
+}));
+jest.mock("@features/quiz/components/Footer", () => ({
+  __esModule: true,
+  default: () => <footer />,
+}));
 
 const mockGetAttempt = getQuizAttempt as jest.Mock;
 const attempt = {
-  quiz_title: "Network practice", score: 1, percentage: 100, total_questions: 1,
-  question_results: [{ question: "Q1", user_answer: "A", correct_answer: "A",
-    question_type: "multichoice", is_correct: true, result: "Correct" }],
+  quiz_title: "Network practice",
+  score: 1,
+  percentage: 100,
+  total_questions: 1,
+  question_results: [
+    {
+      question: "Q1",
+      user_answer: "A",
+      correct_answer: "A",
+      question_type: "multichoice",
+      is_correct: true,
+      result: "Correct",
+    },
+  ],
 };
 
 describe("QuizAttemptDetailPage", () => {
@@ -51,7 +71,10 @@ describe("QuizAttemptDetailPage", () => {
     expect(await screen.findByText("Network practice")).toBeInTheDocument();
     mockUserId = "user-2";
     mockAttemptId = "attempt-2";
-    mockGetAttempt.mockResolvedValue({ ...attempt, quiz_title: "New practice" });
+    mockGetAttempt.mockResolvedValue({
+      ...attempt,
+      quiz_title: "New practice",
+    });
     rerender(<QuizAttemptDetailPage />);
     expect(screen.queryByText("Network practice")).not.toBeInTheDocument();
     expect(await screen.findByText("New practice")).toBeInTheDocument();
@@ -62,7 +85,9 @@ describe("QuizAttemptDetailPage", () => {
     jest.spyOn(console, "error").mockImplementation(() => {});
     mockGetAttempt.mockRejectedValueOnce(new Error("network unavailable"));
     render(<QuizAttemptDetailPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load this graded attempt.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load this graded attempt.",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Network practice")).toBeInTheDocument();
   });

@@ -41,6 +41,7 @@ def build_request(question_type: str, num_questions: int) -> QuizRequest:
         difficulty_level="medium",
         audience_type="students",
         custom_instruction="",
+        allow_fallback=True,
     )
 
 
@@ -84,8 +85,8 @@ async def test_get_questions_invalid_type():
     with pytest.raises(HTTPException) as exc:
         await get_quiz(MagicMock(), Response(), build_request("invalid-type", 2), current_user=None)
 
-    assert exc.value.status_code == 400
-    assert "No mock data for question type" in exc.value.detail
+    assert exc.value.status_code == 422
+    assert "Unsupported question type" in exc.value.detail
 
 
 @pytest.mark.asyncio
@@ -130,7 +131,8 @@ def test_grade_against_stored_questions_true_false_normalizes_formats():
 
     assert len(data) == 2
     assert all(item["is_correct"] is True for item in data)
-    assert data[0]["correct_answer"] == "false"
+    # Normalize only for comparison; display the stored answer unchanged.
+    assert data[0]["correct_answer"] == "False"
 
 
 def test_grade_against_stored_questions_open_ended():

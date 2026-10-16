@@ -15,7 +15,9 @@ services:
       - NEXT_PUBLIC_SSR_API_BASE_URL=http://server:8000
       - SHARE_URL=${SHARE_URL}
       - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:3000}
-    command: ["pnpm", "run", "dev"]
+    # The anonymous node_modules volume survives image rebuilds. Reconcile it
+    # on startup so newly added frontend dependencies are available in dev.
+    command: ["sh", "-c", "pnpm install --frozen-lockfile && pnpm run dev"]
     depends_on:
       - server
 
@@ -63,6 +65,8 @@ services:
               "-Q", "email,celery",
               "--loglevel=info", "--pool=solo", "--concurrency=1"]
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       server:

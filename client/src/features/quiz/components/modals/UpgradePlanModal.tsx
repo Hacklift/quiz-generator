@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { Dialog } from "@headlessui/react";
 import { X } from "lucide-react";
@@ -24,6 +25,8 @@ export default function UpgradePlanModal({
   isOpen,
   onClose,
 }: UpgradePlanModalProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const { isAuthenticated, isLoading, user } = useAuth();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [activePlan, setActivePlan] = useState<"monthly" | "yearly" | null>(
@@ -73,18 +76,17 @@ export default function UpgradePlanModal({
                 <div className="flex items-start justify-between gap-4">
                   <div className="max-w-2xl">
                     <Dialog.Title className="text-2xl sm:text-3xl font-bold text-white">
-                      Choose the right plan
+                      {uiText("m2d37bccde37c2268")}
                     </Dialog.Title>
                     <p className="mt-3 text-sm sm:text-base text-white/85">
-                      Compare Free, Pro, and Premium in one place, then start
-                      checkout directly from this modal.
+                      {uiText("me01c8c8cde4525a0")}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={onClose}
                     className="rounded-full bg-white/90 p-2 text-[#143E6F] hover:bg-white"
-                    aria-label="Close upgrade modal"
+                    aria-label={uiText("mdf08b58678c461df")}
                   >
                     <X className="h-5 w-5" />
                   </button>
@@ -130,13 +132,13 @@ export default function UpgradePlanModal({
                                 </p>
                               ) : (
                                 <p className="mt-1 text-sm uppercase tracking-[0.15em] text-[#6b7280]">
-                                  Included
+                                  {uiText("mba829a98b7994088")}
                                 </p>
                               )}
                             </div>
                             {isCurrentPlan ? (
                               <span className="rounded-full bg-[#143E6F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#143E6F]">
-                                Current
+                                {uiText("me0d1b68224bf0b31")}
                               </span>
                             ) : null}
                           </div>
@@ -165,12 +167,12 @@ export default function UpgradePlanModal({
                             }`}
                           >
                             {action === "free"
-                              ? "Stay on Free"
+                              ? uiText("mb30197f932be27e3")
                               : isCurrentPlan
-                                ? "Current Plan"
+                                ? uiText("m5d85632008c54b1f")
                                 : isBusy
-                                  ? "Redirecting..."
-                                  : "Subscribe"}
+                                  ? uiText("mcd23991b4e02a17e")
+                                  : uiText("mcc0e38da9c41790b")}
                           </button>
                         </div>
                       );
@@ -181,7 +183,7 @@ export default function UpgradePlanModal({
                 <div className="mt-8 rounded-3xl border border-[#143E6F]/10 bg-white overflow-hidden">
                   <div className="border-b border-[#143E6F]/10 px-5 py-4">
                     <h4 className="text-lg font-semibold text-[#102347]">
-                      Compare plans
+                      {uiText("m30d9abfd7c7af513")}
                     </h4>
                   </div>
                   <div className="overflow-x-auto">
@@ -189,16 +191,16 @@ export default function UpgradePlanModal({
                       <thead className="bg-[#f8fafc]">
                         <tr>
                           <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            Feature
+                            {uiText("m3d377ae910dce03a")}
                           </th>
                           <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            Free
+                            {uiText("mf411a1fb62758b4c")}
                           </th>
                           <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            Pro
+                            {uiText("m957b0b874524d09a")}
                           </th>
                           <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            Premium
+                            {uiText("mde88c121a82a0635")}
                           </th>
                         </tr>
                       </thead>

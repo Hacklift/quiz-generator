@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -11,6 +12,7 @@ import { getQuizAttempt } from "@features/quiz-history/api/quizHistoryApi";
 
 interface QuestionResult {
   question: string;
+  explanation?: string | null;
   user_answer?: string | number | null;
   correct_answer?: string | number | null;
   options?: string[] | null;
@@ -30,12 +32,14 @@ interface QuizAttempt {
 }
 
 export default function QuizAttemptDetailPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { user } = useAuth();
   const router = useRouter();
   return (
     <RequireAuth
-      title="Quiz attempt details"
-      description="Sign in to view this graded attempt."
+      title={uiText("me4f557f07b37e8ad")}
+      description={uiText("mccfc2c48ffa86694")}
     >
       <QuizAttemptDetailContent key={`${user?.id}:${router.query.attemptId}`} />
     </RequireAuth>
@@ -43,6 +47,9 @@ export default function QuizAttemptDetailPage() {
 }
 
 function QuizAttemptDetailContent() {
+  const { t: uiText, i18n } = useTranslation("ui");
+  const { t } = useTranslation();
+
   const router = useRouter();
   const { attemptId } = router.query;
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null);
@@ -63,7 +70,7 @@ function QuizAttemptDetailContent() {
         console.error("Failed to fetch quiz attempt:", error);
         if (active) {
           setLoadError(true);
-          toast.error("Failed to load quiz attempt details.");
+          toast.error(uiText("m54b819a3d732973c"));
         }
       } finally {
         if (active) setLoading(false);
@@ -85,39 +92,41 @@ function QuizAttemptDetailContent() {
             onClick={() => router.push("/quiz_attempts")}
             className="mb-4 text-sm text-blue-600 hover:underline"
           >
-            ← Back to graded attempts
+            {uiText("m2a508169be3fdf31")}
           </button>
           {loading ? (
-            <p className="text-center text-gray-600">Loading attempt…</p>
+            <p className="text-center text-gray-600">
+              {uiText("m43fa26b3a072f77b")}
+            </p>
           ) : loadError ? (
             <div role="alert" className="text-center text-gray-600">
-              <p>Could not load this graded attempt.</p>
+              <p>{uiText("m61586e70e3c174a5")}</p>
               <button
                 type="button"
                 onClick={() => setReload((value) => value + 1)}
                 className="mt-2 text-blue-600 underline"
               >
-                Try again
+                {uiText("md8b8392e2c542950")}
               </button>
             </div>
           ) : !attempt ? (
             <p className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-600 shadow-md">
-              Quiz attempt not found.
+              {uiText("m1533297689ffa9d5")}
             </p>
           ) : (
             <article className="rounded-xl border border-gray-200 bg-white p-6 shadow-md">
               <h1 className="text-3xl font-bold text-[#0F2654]">
-                {attempt.quiz_title || "Quiz Attempt"}
+                {attempt.quiz_title || uiText("m1ad6a88a3bbe09cf")}
               </h1>
               <p className="mt-2 text-sm text-gray-500">
-                Submitted on:{" "}
+                {uiText("m201ab1d2d5c1637d")}{" "}
                 {attempt.submitted_at
-                  ? new Date(attempt.submitted_at).toLocaleString()
-                  : "Unknown date"}
+                  ? new Date(attempt.submitted_at).toLocaleString(i18n.language)
+                  : uiText("mad224bb89c8a3fb6")}
               </p>
               <p className="mt-1 text-sm text-gray-600">
-                Score: {attempt.score}/{attempt.total_questions} ·{" "}
-                {attempt.percentage.toFixed(0)}%
+                {uiText("m9689a814f3584ec9")} {attempt.score}/
+                {attempt.total_questions} · {attempt.percentage.toFixed(0)}%
               </p>
               <div className="mt-6 space-y-5">
                 {attempt.question_results.map((question, index) => (
@@ -129,7 +138,15 @@ function QuizAttemptDetailContent() {
                       {index + 1}. {question.question}
                     </h2>
                     <p className="mt-1 text-sm text-gray-600">
-                      {question.question_type} · {question.result}
+                      {t(`values.${question.question_type}`, {
+                        defaultValue: question.question_type,
+                      })}{" "}
+                      ·{" "}
+                      {question.result === "Correct"
+                        ? uiText("attempts.correct")
+                        : question.result === "Incorrect"
+                          ? uiText("attempts.incorrect")
+                          : question.result}
                     </p>
                     {question.options?.length ? (
                       <ul className="mt-2 list-inside list-disc text-sm text-gray-700">
@@ -139,19 +156,26 @@ function QuizAttemptDetailContent() {
                       </ul>
                     ) : null}
                     <p className="mt-2 text-sm text-slate-700">
-                      <strong>Your answer:</strong>{" "}
-                      {question.user_answer?.toString() || "No answer"}
+                      <strong>{uiText("madceb15c665f2cad")}</strong>{" "}
+                      {question.user_answer?.toString() ||
+                        uiText("m7e49c68db30e39dc")}
                     </p>
                     <p className="mt-1 text-sm text-[#0F2654]">
-                      <strong>Correct answer:</strong>{" "}
-                      {question.correct_answer?.toString() || "Unavailable"}
+                      <strong>{uiText("m4d659fb1085d715b")}</strong>{" "}
+                      {question.correct_answer?.toString() ||
+                        uiText("mca184496974204a0")}
                     </p>
                     {typeof question.accuracy_percentage === "number" ? (
                       <p className="mt-1 text-sm text-slate-700">
-                        <strong>Accuracy:</strong>{" "}
+                        <strong>{uiText("m141c19581b3470d1")}</strong>{" "}
                         {question.accuracy_percentage.toFixed(0)}%
                       </p>
                     ) : null}
+                    {question.explanation && (
+                      <p className="mt-2 text-sm text-slate-700">
+                        {question.explanation}
+                      </p>
+                    )}
                   </section>
                 ))}
               </div>

@@ -9,6 +9,36 @@ from server.app.quiz.services.quiz_attempt_service import QuizAttemptService
 from server.app.quiz.services.quiz_grading_service import QuizGradingService
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["mock", "ai"])
+@pytest.mark.parametrize("locale,options,explanations", [
+    ("fr", ["Vrai", "Faux"], ["La première affirmation est vraie.", "La seconde affirmation est fausse."]),
+    ("es", ["Verdadero", "Falso"], ["La primera afirmación es verdadera.", "La segunda afirmación es falsa."]),
+])
+async def test_localized_repeated_questions_retain_answers_and_explanations_in_attempt_history(source, locale, options, explanations):
+    quiz = QuizDocumentV2(
+        title="Test", quiz_type="true-false", content_locale=locale,
+        questions=[
+            {"question": "Test", "options": options, "correct_answer": options[0], "correct_boolean": True, "explanation": explanations[0]},
+            {"question": "Test", "options": options, "correct_answer": options[1], "correct_boolean": False, "explanation": explanations[1]},
+        ],
+    )
+    quizzes = FakeQuizRepository({str(quiz.id): quiz})
+    attempts = FakeAttemptRepository()
+    service = QuizGradingService(quiz_repository=quizzes, reference_repository=FakeReferenceRepository(), attempt_repository=attempts)
+    graded = await service.grade_submission(str(quiz.id), [
+        {"question": "Test", "user_answer": option} for option in options
+    ], user_id="user-1", source=source)
+    assert graded.attempt_saved is True
+    assert all(result["is_correct"] for result in graded.results)
+    history = await QuizAttemptService(quiz_repository=quizzes, attempt_repository=attempts).get_attempt(
+        user_id="user-1", attempt_id=str(attempts.attempts[0].id),
+    )
+    assert [result["explanation"] for result in history["question_results"]] == explanations
+    assert [result["correct_answer"] for result in history["question_results"]] == options
+    assert [result["user_answer"] for result in history["question_results"]] == options
+
+
 class FakeQuizRepository:
     def __init__(self, quizzes: dict[str, QuizDocumentV2]):
         self.quizzes = quizzes

@@ -12,14 +12,20 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
     }
     grading_payload = []
     for index, question in enumerate(questions):
+        selected = answer_by_index.get(index, "")
+        correct = question.get("correct_answer") or question.get("answer")
+        question_type = question.get("question_type") or quiz.get("quiz_type") or "multichoice"
+        if question_type == "true-false" and type(question.get("correct_boolean")) is bool:
+            correct = str(question["correct_boolean"]).lower()
+            options = question.get("options") or []
+            if len(options) == 2 and selected in options:
+                selected = "true" if options.index(selected) == 0 else "false"
         grading_payload.append(
             {
                 "question": question.get("question", ""),
-                "user_answer": answer_by_index.get(index, ""),
-                "correct_answer": question.get("correct_answer") or question.get("answer"),
-                "question_type": question.get("question_type")
-                or quiz.get("quiz_type")
-                or "multichoice",
+                "user_answer": selected,
+                "correct_answer": correct,
+                "question_type": question_type,
                 "source": question.get("source", "live"),
             }
         )
@@ -29,8 +35,9 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
         {
             "question_index": index,
             "question": answer.get("question", ""),
-            "selected_answer": str(answer.get("user_answer", "")),
-            "correct_answer": str(answer.get("correct_answer", "")),
+            "selected_answer": str(answer_by_index.get(index, "")),
+            "correct_answer": str(questions[index].get("correct_answer") or questions[index].get("answer", "")),
+            "explanation": questions[index].get("explanation"),
             "question_type": answer.get("question_type", ""),
             "is_correct": bool(answer.get("is_correct", False)),
         }
@@ -39,6 +46,7 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
     score = sum(1 for answer in graded_answers if answer.get("is_correct"))
     total = len(questions)
     return {
+        "content_locale": quiz.get("content_locale") or "en",
         "score": score,
         "percentage": round((score / total) * 100, 2) if total else 0,
         "graded_answers": indexed_answers,

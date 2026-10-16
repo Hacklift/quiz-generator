@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -16,6 +17,8 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, "");
 
 export default function CategoriesPage() {
+  const { t: uiText } = useTranslation("ui");
+
   const { category, isLoading: personaLoading } = usePersona();
   const [showAll, setShowAll] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
@@ -35,7 +38,7 @@ export default function CategoriesPage() {
       } catch (error) {
         if (!cancelled) {
           console.error(error);
-          toast.error("Failed to load categories.");
+          toast.error(uiText("mf0dc38ac2b15faa5"));
         }
       } finally {
         if (!cancelled) {
@@ -55,11 +58,13 @@ export default function CategoriesPage() {
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-              Browse quizzes
+              {uiText("m64af555237039009")}
             </p>
-            <h1 className="mt-2 text-3xl font-bold">Categories</h1>
+            <h1 className="mt-2 text-3xl font-bold">
+              {uiText("mb8b1d894c6837252")}
+            </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Explore curated quiz questions by category and subcategory.
+              {uiText("m321edf3fd12c7436")}
             </p>
           </div>
 
@@ -69,16 +74,20 @@ export default function CategoriesPage() {
               onClick={() => setShowAll((prev) => !prev)}
               className="rounded-full border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
             >
-              {showAll ? "Show my categories" : "Show all categories"}
+              {showAll
+                ? uiText("m7edf38bf075109b9")
+                : uiText("m4bf744741ec59c48")}
             </button>
           )}
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-slate-500">Loading categories...</p>
+          <p className="text-sm text-slate-500">
+            {uiText("md3cf16ece0883bf2")}
+          </p>
         ) : categories.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No categories are available yet.
+            {uiText("m697c80be92edf491")}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -90,7 +99,7 @@ export default function CategoriesPage() {
               >
                 <h2 className="text-lg font-semibold">{categoryName}</h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  View subcategories and quiz types.
+                  {uiText("mba59bfcf48bd1e52")}
                 </p>
               </Link>
             ))}

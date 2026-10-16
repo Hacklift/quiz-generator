@@ -17,6 +17,7 @@ from server.app.users.identity import (
     now_utc,
 )
 from server.app.users.persona import build_persona, get_persona
+from server.app.i18n.locales import resolve_effective_locale
 from server.app.users.schemas import (
     CreateUserRequest,
     DeleteUserResponse,
@@ -64,6 +65,13 @@ def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
         "persona_category": persona.get("category"),
         "persona_user_type": persona.get("user_type"),
         "persona_set_at": persona_set_at,
+        "preferred_locale": get_profile_value(user, "preferred_locale"),
+        "effective_locale": resolve_effective_locale(
+            get_profile_value(user, "preferred_locale")
+        ),
+        "active_organization_id": get_profile_value(user, "active_organization_id"),
+        "onboarding_organization_id": get_profile_value(user, "onboarding_organization_id"),
+        "language_selected": bool(get_profile_value(user, "language_selected") or get_profile_value(user, "preferred_locale")),
         "role": user.get("role", "user"),
         "status": coerce_user_status(user),
         "is_active": user.get("is_active", True),
@@ -99,7 +107,7 @@ async def create_user(users_collection: AsyncIOMotorCollection, user: CreateUser
             "username_normalized": normalize_username(user_dict["username"]),
             "email": user_dict["email"],
             "email_normalized": normalize_email(user_dict["email"]),
-            "profile": build_profile(full_name=user_dict.get("full_name")),
+            "profile": build_profile(full_name=user_dict.get("full_name"), preferred_locale=user_dict.get("preferred_locale")),
             "quizzes": [],
             "is_active": True,
             "is_verified": is_verified,

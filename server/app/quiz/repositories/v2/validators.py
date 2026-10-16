@@ -46,6 +46,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                             "confidence": {"bsonType": ["double", "int", "long", "decimal", "null"]},
                         },
                     },
+                    "content_locale": {"bsonType": ["string", "null"], "pattern": "^[a-z]{2,3}$"},
                     "legacy_source_collection": {"bsonType": ["string", "null"]},
                     "legacy_quiz_id": {"bsonType": ["string", "null"]},
                     "content_fingerprint": {"bsonType": ["string", "null"]},
@@ -161,6 +162,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                             ],
                             "properties": {
                                 "question": {"bsonType": "string", "minLength": 1},
+                                "explanation": {"bsonType": ["string", "null"]},
                                 "user_answer": {"bsonType": ["string", "int", "long", "null"]},
                                 "correct_answer": {"bsonType": ["string", "int", "long", "null"]},
                                 "options": {

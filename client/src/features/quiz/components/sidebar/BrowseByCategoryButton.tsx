@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React from "react";
 import SidebarButton from "./SidebarButton";
 
@@ -8,9 +9,11 @@ interface BrowseByCategoryButtonProps {
 const BrowseByCategoryButton: React.FC<BrowseByCategoryButtonProps> = ({
   onBrowseClick,
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   return (
     <SidebarButton
-      label="Browse by Category"
+      label={uiText("mc487162ccd5d4c00")}
       icon="📚"
       onClick={onBrowseClick}
     />

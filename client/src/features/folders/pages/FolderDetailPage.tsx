@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
@@ -18,6 +19,8 @@ import RequireAuth from "@features/auth/components/RequireAuth";
 const getFolderItemId = (quiz: any) => quiz?.id || "";
 
 const FolderView = () => {
+  const { t: uiText, i18n } = useTranslation("ui");
+
   const router = useRouter();
   const { folderId } = router.query;
   const { user, isAuthenticated } = useAuth();
@@ -50,7 +53,7 @@ const FolderView = () => {
         setFolder(res);
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load folder");
+        toast.error(uiText("mb0cb71cf9ee4b0a5"));
       } finally {
         setLoading(false);
       }
@@ -61,7 +64,7 @@ const FolderView = () => {
   const handleDeleteQuizConfirmed = async (quizId: string) => {
     try {
       await removeQuizFromFolder(folderId as string, quizId);
-      toast.success("Quiz deleted successfully");
+      toast.success(uiText("m8b0925714fce10e7"));
       setFolder((prev: any) =>
         prev
           ? {
@@ -74,7 +77,7 @@ const FolderView = () => {
       );
     } catch (err) {
       console.error(err);
-      toast.error("Error deleting quiz");
+      toast.error(uiText("mc32bc95b9897c6fc"));
     }
   };
 
@@ -96,14 +99,14 @@ const FolderView = () => {
   };
 
   const formatDate = (date: string) => {
-    if (!date) return "Date unavailable";
+    if (!date) return uiText("mad224bb89c8a3fb6");
     const parsed = new Date(date);
     return isNaN(parsed.getTime())
-      ? "Date unavailable"
-      : parsed.toLocaleDateString();
+      ? uiText("mad224bb89c8a3fb6")
+      : parsed.toLocaleDateString(i18n.language);
   };
 
-  const getQuizTitle = (quiz: any) => quiz.title || "Untitled Quiz";
+  const getQuizTitle = (quiz: any) => quiz.title || uiText("m96c2c6ca09471b4d");
   const getQuizQuestions = (quiz: any) =>
     quiz.questions || quiz.quiz_data?.questions || [];
 
@@ -111,16 +114,16 @@ const FolderView = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <NavBar />
       <RequireAuth
-        title="Folder Access"
-        description="Sign in to view and manage quizzes in this folder."
+        title={uiText("m4f6dd3d9aafb5968")}
+        description={uiText("m5400755a4196bbff")}
       >
         {loading ? (
           <div className="flex justify-center items-center h-screen text-gray-600">
-            <p>Loading folder...</p>
+            <p>{uiText("me54f895605402f41")}</p>
           </div>
         ) : !folder ? (
           <div className="flex justify-center items-center h-screen text-gray-500">
-            <p>Folder not found.</p>
+            <p>{uiText("mccbf07f84d310412")}</p>
           </div>
         ) : (
           <>
@@ -139,15 +142,17 @@ const FolderView = () => {
                 {folder.name}
               </h2>
               <p className="text-sm text-gray-500">
-                {folder.quizzes?.length || 0} quizzes • Created on{" "}
-                {formatDate(folder.created_at)}
+                {uiText("mb6cc77afda6a9d8f", {
+                  value0: folder.quizzes?.length || 0,
+                  value1: formatDate(folder.created_at),
+                })}
               </p>
             </header>
 
             <main className="flex-1 p-6 flex flex-col items-center gap-6">
               {folder.quizzes.length === 0 ? (
                 <div className="w-full text-center text-gray-500">
-                  <p>No quizzes in this folder.</p>
+                  <p>{uiText("mbf32802309ef0625")}</p>
                 </div>
               ) : (
                 folder.quizzes.map((quiz: any) => (
@@ -160,24 +165,26 @@ const FolderView = () => {
                         {getQuizTitle(quiz)}
                       </h3>
                       <p className="text-sm text-gray-500 mb-2">
-                        Added on {formatDate(quiz.added_on || quiz.created_at)}
+                        {uiText("me17e189f84ccfd31", {
+                          value0: formatDate(quiz.added_on || quiz.created_at),
+                        })}
                       </p>
 
                       <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md border">
                         <p>
-                          <strong>Type:</strong>{" "}
+                          <strong>{uiText("m6cc5ad2e47e3be35")}</strong>{" "}
                           {quiz.question_type ||
                             quiz.quiz_data?.question_type ||
                             "N/A"}
                         </p>
                         <p>
-                          <strong>Questions:</strong>{" "}
+                          <strong>{uiText("m80f86d1e313fb622")}</strong>{" "}
                           {getQuizQuestions(quiz).length}
                         </p>
                         {getQuizQuestions(quiz).length > 0 && (
                           <div className="mt-2">
                             <p className="font-medium text-gray-700 mb-1">
-                              Questions Preview:
+                              {uiText("mc1c4721dd52b6c4b")}
                             </p>
                             {getQuizQuestions(quiz).map(
                               (q: any, idx: number) => (
@@ -222,13 +229,13 @@ const FolderView = () => {
                             onClick={() => handleViewQuiz(quiz)}
                             className="px-3 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-t-lg"
                           >
-                            View Quiz
+                            {uiText("m515f6a0d4288e0d7")}
                           </button>
                           <button
                             onClick={() => handleMoveQuiz(quiz)}
                             className="px-3 py-2 text-sm text-navy-700 bg-blue-100 hover:bg-blue-200"
                           >
-                            Move
+                            {uiText("m6ecc3df6bffdd06c")}
                           </button>
                           <button
                             onClick={() =>
@@ -236,7 +243,7 @@ const FolderView = () => {
                             }
                             className="px-3 py-2 text-sm text-red-600 bg-red-100 hover:bg-red-200 rounded-b-lg"
                           >
-                            Delete
+                            {uiText("me2d0a54968ead24e")}
                           </button>
                         </div>
                       )}

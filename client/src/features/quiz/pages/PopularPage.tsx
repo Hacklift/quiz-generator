@@ -1,17 +1,11 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useMemo, useState } from "react";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 
 type TimeRange = "today" | "week" | "month" | "all";
-
-const timeRanges: { key: TimeRange; label: string; hint: string }[] = [
-  { key: "today", label: "Today", hint: "Last 24 hours" },
-  { key: "week", label: "This Week", hint: "Last 7 days" },
-  { key: "month", label: "This Month", hint: "Last 30 days" },
-  { key: "all", label: "All Time", hint: "All activity" },
-];
 
 const categories = [
   "All Categories",
@@ -27,97 +21,6 @@ const categories = [
 const difficulties = ["All Levels", "Easy", "Medium", "Hard"];
 const questionTypes = ["All Types", "multichoice", "true-false", "open-ended"];
 const sorts = ["Most Popular", "Most Saves", "Highest Rated", "Newest"];
-
-const mockPopularQuizzes = [
-  {
-    id: "pq-1",
-    title: "Everyday Science Essentials",
-    category: "Science",
-    difficulty: "Easy",
-    questionType: "multichoice",
-    plays: 1240,
-    saves: 310,
-    rating: 4.8,
-    lastActiveDays: 1,
-  },
-  {
-    id: "pq-2",
-    title: "Modern Art Movements",
-    category: "Arts",
-    difficulty: "Medium",
-    questionType: "open-ended",
-    plays: 860,
-    saves: 190,
-    rating: 4.6,
-    lastActiveDays: 3,
-  },
-  {
-    id: "pq-3",
-    title: "Tech Trends 2025",
-    category: "Technology",
-    difficulty: "Medium",
-    questionType: "multichoice",
-    plays: 2140,
-    saves: 540,
-    rating: 4.9,
-    lastActiveDays: 2,
-  },
-  {
-    id: "pq-4",
-    title: "World History Highlights",
-    category: "History",
-    difficulty: "Easy",
-    questionType: "true-false",
-    plays: 990,
-    saves: 210,
-    rating: 4.5,
-    lastActiveDays: 8,
-  },
-  {
-    id: "pq-5",
-    title: "Startup Finance Fundamentals",
-    category: "Business",
-    difficulty: "Hard",
-    questionType: "open-ended",
-    plays: 620,
-    saves: 160,
-    rating: 4.3,
-    lastActiveDays: 12,
-  },
-  {
-    id: "pq-6",
-    title: "Healthy Habits Check-in",
-    category: "Health",
-    difficulty: "Easy",
-    questionType: "multichoice",
-    plays: 1120,
-    saves: 280,
-    rating: 4.7,
-    lastActiveDays: 6,
-  },
-  {
-    id: "pq-7",
-    title: "Teaching Strategies Toolkit",
-    category: "Education",
-    difficulty: "Medium",
-    questionType: "true-false",
-    plays: 700,
-    saves: 140,
-    rating: 4.4,
-    lastActiveDays: 16,
-  },
-  {
-    id: "pq-8",
-    title: "AI Safety and Ethics",
-    category: "Technology",
-    difficulty: "Hard",
-    questionType: "open-ended",
-    plays: 1580,
-    saves: 420,
-    rating: 4.8,
-    lastActiveDays: 5,
-  },
-];
 
 const timeRangeToDays = (range: TimeRange) => {
   if (range === "today") return 1;
@@ -189,6 +92,106 @@ function FilterSelect({
 }
 
 export default function PopularQuizzesPage() {
+  const { t: uiText } = useTranslation("ui");
+
+  const mockPopularQuizzes = [
+    {
+      id: "pq-1",
+      title: uiText("m3af918d958c3e5ed"),
+      category: "Science",
+      difficulty: "Easy",
+      questionType: "multichoice",
+      plays: 1240,
+      saves: 310,
+      rating: 4.8,
+      lastActiveDays: 1,
+    },
+    {
+      id: "pq-2",
+      title: uiText("mecfc250397ce7aee"),
+      category: "Arts",
+      difficulty: "Medium",
+      questionType: "open-ended",
+      plays: 860,
+      saves: 190,
+      rating: 4.6,
+      lastActiveDays: 3,
+    },
+    {
+      id: "pq-3",
+      title: uiText("m27247da599aadeb1"),
+      category: "Technology",
+      difficulty: "Medium",
+      questionType: "multichoice",
+      plays: 2140,
+      saves: 540,
+      rating: 4.9,
+      lastActiveDays: 2,
+    },
+    {
+      id: "pq-4",
+      title: uiText("m900158083571794b"),
+      category: "History",
+      difficulty: "Easy",
+      questionType: "true-false",
+      plays: 990,
+      saves: 210,
+      rating: 4.5,
+      lastActiveDays: 8,
+    },
+    {
+      id: "pq-5",
+      title: uiText("m5b09c4815d41a326"),
+      category: "Business",
+      difficulty: "Hard",
+      questionType: "open-ended",
+      plays: 620,
+      saves: 160,
+      rating: 4.3,
+      lastActiveDays: 12,
+    },
+    {
+      id: "pq-6",
+      title: uiText("m48f749ce8951339c"),
+      category: "Health",
+      difficulty: "Easy",
+      questionType: "multichoice",
+      plays: 1120,
+      saves: 280,
+      rating: 4.7,
+      lastActiveDays: 6,
+    },
+    {
+      id: "pq-7",
+      title: uiText("m2635645b424541ad"),
+      category: "Education",
+      difficulty: "Medium",
+      questionType: "true-false",
+      plays: 700,
+      saves: 140,
+      rating: 4.4,
+      lastActiveDays: 16,
+    },
+    {
+      id: "pq-8",
+      title: uiText("ma279e3fe3de341c0"),
+      category: "Technology",
+      difficulty: "Hard",
+      questionType: "open-ended",
+      plays: 1580,
+      saves: 420,
+      rating: 4.8,
+      lastActiveDays: 5,
+    },
+  ];
+
+  const timeRanges: { key: TimeRange; label: string; hint: string }[] = [
+    { key: "today", label: uiText("m2b065c7c9ce466e5"), hint: "Last 24 hours" },
+    { key: "week", label: uiText("m017cb5682cc32316"), hint: "Last 7 days" },
+    { key: "month", label: uiText("m64367736022306e3"), hint: "Last 30 days" },
+    { key: "all", label: uiText("m476adfac4cd9494e"), hint: "All activity" },
+  ];
+
   const [range, setRange] = useState<TimeRange>("week");
   const [category, setCategory] = useState("All Categories");
   const [difficulty, setDifficulty] = useState("All Levels");
@@ -240,12 +243,10 @@ export default function PopularQuizzesPage() {
         <div className="max-w-6xl mx-auto space-y-8">
           <div className="flex flex-col gap-3">
             <h1 className="text-3xl sm:text-4xl font-bold text-[#0F2654]">
-              Popular Quizzes
+              {uiText("m546ddeb74ccc707a")}
             </h1>
             <p className="text-gray-600 max-w-3xl">
-              Explore what people are learning right now. Filter by timeframe,
-              category, difficulty, and quiz type to find the most popular
-              quizzes across the platform.
+              {uiText("m72c294627434ab04")}
             </p>
           </div>
 
@@ -270,7 +271,7 @@ export default function PopularQuizzesPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FilterSelect
-                  label="Category"
+                  label={uiText("m292c06f0045a45d0")}
                   value={category}
                   options={categories}
                   onChange={setCategory}
@@ -282,7 +283,7 @@ export default function PopularQuizzesPage() {
                   }
                 />
                 <FilterSelect
-                  label="Difficulty"
+                  label={uiText("mbe44133ed57f9e44")}
                   value={difficulty}
                   options={difficulties}
                   onChange={setDifficulty}
@@ -294,7 +295,7 @@ export default function PopularQuizzesPage() {
                   }
                 />
                 <FilterSelect
-                  label="Question Type"
+                  label={uiText("mcb38ff91243be92f")}
                   value={questionType}
                   options={questionTypes}
                   onChange={setQuestionType}
@@ -306,7 +307,7 @@ export default function PopularQuizzesPage() {
                   }
                 />
                 <FilterSelect
-                  label="Sort By"
+                  label={uiText("m6d2227555fccff99")}
                   value={sort}
                   options={sorts}
                   onChange={setSort}
@@ -320,7 +321,7 @@ export default function PopularQuizzesPage() {
               <div className="flex flex-col md:flex-row md:items-center gap-3">
                 <input
                   type="search"
-                  placeholder="Search by quiz title or category..."
+                  placeholder={uiText("m05845c469c45d10f")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="w-full md:flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white"
@@ -336,7 +337,7 @@ export default function PopularQuizzesPage() {
                   }}
                   className="md:w-auto px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
                 >
-                  Reset Filters
+                  {uiText("m660f3d76f4f2802d")}
                 </button>
               </div>
             </div>
@@ -361,25 +362,33 @@ export default function PopularQuizzesPage() {
                     </p>
                   </div>
                   <span className="text-xs px-3 py-1 rounded-full bg-[#f2f6ff] text-[#0F2654] font-semibold">
-                    Active {quiz.lastActiveDays}d ago
+                    {uiText("m2259b7dbd8901d9e", {
+                      value0: quiz.lastActiveDays,
+                    })}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Plays</p>
+                    <p className="text-xs text-gray-500">
+                      {uiText("m725b66fb9f520d78")}
+                    </p>
                     <p className="text-lg font-semibold text-[#0F2654]">
                       {quiz.plays}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Saves</p>
+                    <p className="text-xs text-gray-500">
+                      {uiText("m989716267f5c4d56")}
+                    </p>
                     <p className="text-lg font-semibold text-[#0F2654]">
                       {quiz.saves}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <p className="text-xs text-gray-500">Rating</p>
+                    <p className="text-xs text-gray-500">
+                      {uiText("m9f29530464f730bd")}
+                    </p>
                     <p className="text-lg font-semibold text-[#0F2654]">
                       {quiz.rating}
                     </p>
@@ -388,19 +397,19 @@ export default function PopularQuizzesPage() {
 
                 <div className="flex flex-wrap gap-2">
                   <span className="text-xs px-2.5 py-1 rounded-full bg-[#e8f0ff] text-[#0F2654] font-medium">
-                    Trending
+                    {uiText("m5e1a0ebc939d884a")}
                   </span>
                   <span className="text-xs px-2.5 py-1 rounded-full bg-[#f6f6f6] text-gray-700 font-medium">
-                    Community Favorite
+                    {uiText("m2cb59542c1d87000")}
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button className="flex-1 px-4 py-2 rounded-lg bg-[#0F2654] text-white font-semibold hover:bg-[#173773]">
-                    View Quiz
+                    {uiText("m515f6a0d4288e0d7")}
                   </button>
                   <button className="flex-1 px-4 py-2 rounded-lg border border-[#0F2654] text-[#0F2654] font-semibold hover:bg-[#f2f6ff]">
-                    Save for Later
+                    {uiText("m1a720e27caa63948")}
                   </button>
                 </div>
               </div>
@@ -409,8 +418,7 @@ export default function PopularQuizzesPage() {
 
           {filtered.length === 0 && (
             <div className="bg-white rounded-2xl p-8 border border-gray-200 text-center text-gray-600">
-              No quizzes match these filters yet. Try a different timeframe or
-              category.
+              {uiText("m8b4fc64d9f49d86e")}
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -7,6 +8,8 @@ import { useAuth } from "@features/auth/context/authContext";
 import SignInModal from "@features/auth/components/SignInModal";
 
 const FoldersButton = () => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,7 +29,7 @@ const FoldersButton = () => {
   return (
     <>
       <SidebarButton
-        label="Folders"
+        label={uiText("mc4d6bb200f4c058a")}
         icon="📁"
         onClick={handleOpenFolders}
         isActive={isActive}

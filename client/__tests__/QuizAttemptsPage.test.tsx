@@ -30,7 +30,8 @@ jest.mock("@features/quiz-history/api/quizHistoryApi", () => ({
 
 jest.mock("@features/auth/components/RequireAuth", () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => mockAuthenticated ? <>{children}</> : <p>Sign in</p>,
+  default: ({ children }: { children: React.ReactNode }) =>
+    mockAuthenticated ? <>{children}</> : <p>Sign in</p>,
 }));
 
 jest.mock("@features/quiz/components/NavBar", () => ({
@@ -110,15 +111,23 @@ describe("QuizAttemptsPage", () => {
     mockGetUserQuizAttempts.mockResolvedValue([]);
     rerender(<QuizAttemptsPage />);
     expect(screen.queryByText("Networking Basics")).not.toBeInTheDocument();
-    expect(await screen.findByText("No graded quiz attempts available yet.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No graded quiz attempts available yet."),
+    ).toBeInTheDocument();
   });
 
   test("offers retry rather than presenting a failed fetch as empty history", async () => {
     jest.spyOn(console, "error").mockImplementation(() => {});
-    mockGetUserQuizAttempts.mockRejectedValueOnce(new Error("network unavailable"));
+    mockGetUserQuizAttempts.mockRejectedValueOnce(
+      new Error("network unavailable"),
+    );
     render(<QuizAttemptsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your graded attempts.");
-    expect(screen.queryByText("No graded quiz attempts available yet.")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load your graded attempts.",
+    );
+    expect(
+      screen.queryByText("No graded quiz attempts available yet."),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
   });

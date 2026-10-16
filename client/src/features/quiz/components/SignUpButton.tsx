@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import React from "react";
 
 interface SignUpButtonProps {
@@ -9,6 +10,8 @@ const SignUpButton: React.FC<SignUpButtonProps> = ({
   onOpen,
   className = "",
 }) => {
+  const { t: uiText } = useTranslation("ui");
+
   return (
     <button
       type="button"
@@ -20,7 +23,7 @@ const SignUpButton: React.FC<SignUpButtonProps> = ({
         ${className}
       `}
     >
-      Sign Up
+      {uiText("m47de23586e49d833")}
     </button>
   );
 };

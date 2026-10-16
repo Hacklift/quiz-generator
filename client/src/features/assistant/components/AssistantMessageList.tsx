@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
 import { AssistantAction, AssistantMessage } from "@features/assistant/types";
 import AssistantArtifactList from "@features/assistant/components/AssistantArtifactList";
@@ -13,6 +14,8 @@ const AssistantMessageList = ({
   isSending,
   onConfirmAction,
 }: AssistantMessageListProps) => {
+  const { t: uiText } = useTranslation("ui");
+
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
 
@@ -79,7 +82,7 @@ const AssistantMessageList = ({
       {isSending ? (
         <div className="flex justify-start">
           <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
-            Thinking...
+            {uiText("mb4739a4f08650db2")}
           </div>
         </div>
       ) : null}

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -16,6 +17,8 @@ interface LiveQuizPageProps {
 }
 
 const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const [session, setSession] = useState<LiveQuizSessionState | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState("");
@@ -91,7 +94,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         setIsLoading(true);
         await loadSession();
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Could not load session.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mfe89c934c84a3eec"),
+        );
         router.replace("/quiz-access");
       } finally {
         setIsLoading(false);
@@ -138,7 +143,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
           return;
         }
         setIsTimerStopped(false);
-        toast.error(error?.response?.data?.detail || "Could not submit quiz.");
+        toast.error(
+          error?.response?.data?.detail || uiText("mb95377e1b3efea6d"),
+        );
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
@@ -196,7 +203,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
       await saveCurrentAnswer(nextQuestionIndex);
       await loadSession();
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "Could not save answer.");
+      toast.error(error?.response?.data?.detail || uiText("m11608bfcd31e86bb"));
     }
   };
 
@@ -211,9 +218,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         answer,
       );
     } catch (error: any) {
-      toast.error(
-        error?.response?.data?.detail || "Could not autosave answer.",
-      );
+      toast.error(error?.response?.data?.detail || uiText("me2bb7b5228eb6a86"));
     }
   };
 
@@ -237,7 +242,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
         remainingSeconds={remainingSeconds}
       >
         <section className="rounded-md border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-slate-700">Loading question...</p>
+          <p className="text-slate-700">{uiText("m580a48b30072fda2")}</p>
         </section>
       </LiveQuizLayout>
     );

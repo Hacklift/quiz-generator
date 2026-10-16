@@ -1,0 +1,245 @@
+{
+  "home": {
+    "kicker": "À qui s’adresse Quizwerk ?",
+    "heading": "Choisissez votre profil",
+    "description": "Deux univers, un générateur. Choisissez un profil pour commencer avec un quiz adapté ; vous pouvez tout modifier avant de le lancer."
+  },
+  "placeholder": {
+    "progress": "En cours",
+    "description": "{{description}}. Cette vue est en cours de développement dans le ticket #{{issue}}. Le reste de l’application reste disponible.",
+    "track": "Suivre le ticket #{{issue}}"
+  },
+  "picker": {
+    "heading": "Pour qui configurez-vous Quizwerk ?",
+    "setup": "Configuration",
+    "role": "Quelle option vous décrit le mieux ?",
+    "back": "Retour",
+    "saving": "Enregistrement…",
+    "error": "Votre choix n’a pas pu être enregistré. Réessayez."
+  },
+  "onboarding": {
+    "title": "Première configuration",
+    "description": "Choisissez votre profil pour que Quizwerk adapte votre tableau de bord, votre vocabulaire et vos points de départ.",
+    "skip": "Ignorer",
+    "heading": "Choisissez votre profil Quizwerk",
+    "later": "Je le ferai plus tard"
+  },
+  "badge": {
+    "setup": "Configuré pour : {{persona}}",
+    "defaults": "Paramètres du profil appliqués",
+    "audience": "Public :",
+    "difficulty": "Difficulté :",
+    "format": "Format :",
+    "guidance": "Consignes :",
+    "applied": "Appliquées",
+    "questions_one": "question",
+    "questions_other": "questions"
+  },
+  "profile": {
+    "heading": "Modifiez votre profil Quizwerk",
+    "current": "Sélection actuelle : {{persona}}",
+    "unset": "Non défini",
+    "saved": "Profil mis à jour.",
+    "title": "Profil d’utilisation"
+  },
+  "audiences": {
+    "students": "Étudiants",
+    "undergraduates": "Étudiants de premier cycle",
+    "children": "Enfants",
+    "employees": "Employés",
+    "general": "Grand public",
+    "learners": "Apprenants"
+  },
+  "difficulty": {
+    "easy": "Facile",
+    "medium": "Moyenne",
+    "hard": "Difficile"
+  },
+  "formats": {
+    "multichoice": "Choix multiple",
+    "true-false": "Vrai/Faux",
+    "short-answer": "Réponse courte",
+    "open-ended": "Réponse ouverte"
+  },
+  "categories": {
+    "school": {
+      "label": "Éducation",
+      "description": "Enseignants, enseignants universitaires, étudiants et parents."
+    },
+    "corporate": {
+      "label": "Entreprise",
+      "description": "Entreprises, employés et personnel des ressources humaines."
+    }
+  },
+  "roles": {
+    "teacher": {
+      "label": "Enseignant",
+      "description": "Quiz de classe, vérification des devoirs et révision des examens",
+      "defaultTopic": "Photosynthèse — biologie au collège"
+    },
+    "lecturer": {
+      "label": "Enseignant universitaire",
+      "description": "Révision des cours et préparation des séminaires pour de grandes cohortes",
+      "defaultTopic": "Introduction à la microéconomie"
+    },
+    "student": {
+      "label": "Étudiant",
+      "description": "Autoévaluation avant l’examen",
+      "defaultTopic": "Seconde Guerre mondiale — dates et causes principales"
+    },
+    "parent": {
+      "label": "Parent",
+      "description": "Entraînement à la maison avec correction automatique",
+      "defaultTopic": "Tables de multiplication — de 7 à 9 ans"
+    },
+    "business": {
+      "label": "Entreprise",
+      "description": "Intégration et connaissance des produits à grande échelle",
+      "defaultTopic": "Les bases de l’intégration en entreprise"
+    },
+    "employee": {
+      "label": "Employé",
+      "description": "Développez vos compétences et obtenez des certifications à votre rythme",
+      "defaultTopic": "Les bases de la protection des données"
+    },
+    "hr": {
+      "label": "Personnel RH",
+      "description": "Formation à la conformité avec piste d’audit",
+      "defaultTopic": "Politique de travail — prévention du harcèlement"
+    }
+  },
+  "terms": {
+    "defaultTerms": {
+      "learner": {
+        "singular": "apprenant",
+        "plural": "apprenants"
+      },
+      "group": {
+        "singular": "groupe",
+        "plural": "groupes"
+      },
+      "quiz": {
+        "singular": "quiz",
+        "plural": "quiz"
+      },
+      "live_quiz": {
+        "singular": "quiz en direct",
+        "plural": "quiz en direct"
+      },
+      "assignment": {
+        "singular": "devoir",
+        "plural": "devoirs"
+      },
+      "library": {
+        "singular": "bibliothèque",
+        "plural": "bibliothèques"
+      },
+      "report": {
+        "singular": "rapport",
+        "plural": "rapports"
+      },
+      "session": {
+        "singular": "session",
+        "plural": "sessions"
+      }
+    },
+    "categoryTerms": {
+      "school": {
+        "learner": {
+          "singular": "élève",
+          "plural": "élèves"
+        },
+        "group": {
+          "singular": "classe",
+          "plural": "classes"
+        },
+        "quiz": {
+          "singular": "quiz de classe",
+          "plural": "quiz de classe"
+        },
+        "assignment": {
+          "singular": "devoir",
+          "plural": "devoirs"
+        },
+        "report": {
+          "singular": "carnet de notes",
+          "plural": "carnets de notes"
+        },
+        "live_quiz": {
+          "singular": "quiz de classe en direct",
+          "plural": "quiz de classe en direct"
+        },
+        "library": {
+          "singular": "ressources",
+          "plural": "ressources"
+        },
+        "session": {
+          "singular": "quiz de classe",
+          "plural": "quiz de classe"
+        }
+      },
+      "corporate": {
+        "learner": {
+          "singular": "membre de l’équipe",
+          "plural": "membres de l’équipe"
+        },
+        "group": {
+          "singular": "équipe",
+          "plural": "équipes"
+        },
+        "quiz": {
+          "singular": "quiz de formation",
+          "plural": "quiz de formation"
+        },
+        "assignment": {
+          "singular": "cours",
+          "plural": "cours"
+        },
+        "report": {
+          "singular": "dossier de conformité",
+          "plural": "dossiers de conformité"
+        },
+        "live_quiz": {
+          "singular": "session de formation en direct",
+          "plural": "sessions de formation en direct"
+        },
+        "library": {
+          "singular": "catalogue de formation",
+          "plural": "catalogues de formation"
+        },
+        "session": {
+          "singular": "session de formation",
+          "plural": "sessions de formation"
+        }
+      }
+    },
+    "userTypeTerms": {
+      "parent": {
+        "learner": {
+          "singular": "enfant",
+          "plural": "enfants"
+        },
+        "assignment": {
+          "singular": "série d’exercices",
+          "plural": "séries d’exercices"
+        }
+      },
+      "lecturer": {
+        "group": {
+          "singular": "cohorte",
+          "plural": "cohortes"
+        },
+        "session": {
+          "singular": "cours magistral",
+          "plural": "cours magistraux"
+        }
+      },
+      "hr": {
+        "assignment": {
+          "singular": "cours de conformité",
+          "plural": "cours de conformité"
+        }
+      }
+    }
+  }
+}

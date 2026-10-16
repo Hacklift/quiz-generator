@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/router";
@@ -10,12 +11,16 @@ interface RequireTrainingManagerProps {
   children: ReactNode;
 }
 
-const canManageTrainingRuns = (category: string | null, userType: string | null) =>
-  category === "corporate" && (userType === "business" || userType === "hr");
+const canManageTrainingRuns = (
+  category: string | null,
+  userType: string | null,
+) => category === "corporate" && (userType === "business" || userType === "hr");
 
 export default function RequireTrainingManager({
   children,
 }: RequireTrainingManagerProps) {
+  const { t: uiText } = useTranslation("ui");
+
   const router = useRouter();
   const { user, isAuthenticated, isLoading } = useAuth();
   // URL and local-storage personas tailor the product, but only the persisted
@@ -33,8 +38,8 @@ export default function RequireTrainingManager({
 
   return (
     <RequireAuth
-      title="Training runs"
-      description="Sign in to create and manage training runs."
+      title={uiText("mf228db69bd02211a")}
+      description={uiText("m95450be3d95c6cfc")}
     >
       {isAuthenticated && (isLoading || !isAllowed) ? (
         <div className="flex min-h-screen items-center justify-center">

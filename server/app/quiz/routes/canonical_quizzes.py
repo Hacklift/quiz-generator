@@ -17,6 +17,7 @@ def _quiz_to_display_payload(quiz) -> dict[str, Any]:
         "id": str(quiz.id),
         "quiz_id": str(quiz.id),
         "title": quiz.title,
+        "content_locale": quiz.content_locale,
         "description": quiz.description,
         "question_type": quiz_type,
         "quiz_type": quiz_type,
@@ -27,6 +28,9 @@ def _quiz_to_display_payload(quiz) -> dict[str, Any]:
                 "question": question.question,
                 "options": question.options,
                 "answer": question.correct_answer,
+                "explanation": question.explanation,
+                "correct_option_index": question.correct_option_index,
+                "correct_boolean": question.correct_boolean,
                 "correct_answer": question.correct_answer,
                 "question_type": quiz_type,
             }

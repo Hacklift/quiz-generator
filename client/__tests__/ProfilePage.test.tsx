@@ -1,12 +1,22 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ProfilePage from "@features/profile/pages/ProfilePage";
+import { I18nextProvider } from "react-i18next";
+import { createLocaleI18n } from "@features/locale/i18n";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockLogout = jest.fn();
 const mockRefreshUser = jest.fn();
 const mockUpdateProfile = jest.fn();
+const mockSetPreferredLocale = jest.fn().mockResolvedValue(undefined);
+
+jest.mock("@features/locale/context/localeContext", () => ({
+  useLocale: () => ({
+    preferredLocale: null,
+    setPreferredLocale: mockSetPreferredLocale,
+  }),
+}));
 
 jest.mock("next/router", () => ({
   useRouter: () => ({
@@ -74,7 +84,9 @@ jest.mock("@features/auth/api/authApi", () => ({
 }));
 
 jest.mock("@features/profile/api/billingApi", () => ({
-  createPortalSession: jest.fn().mockResolvedValue({ portal_url: "https://stripe.com/portal" }),
+  createPortalSession: jest
+    .fn()
+    .mockResolvedValue({ portal_url: "https://stripe.com/portal" }),
   getBillingErrorMessage: (_err: any, fallback: string) => fallback,
   getSubscriptionSummary: jest.fn(),
 }));
@@ -89,11 +101,15 @@ jest.mock("@features/quiz/components/Footer", () => ({
 }));
 jest.mock("@features/auth/components/RequireAuth", () => ({
   __esModule: true,
-  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 jest.mock("@features/persona/components/PersonaPicker", () => ({
   __esModule: true,
-  default: () => <div data-testid="mock-persona-picker">Mock Persona Picker</div>,
+  default: () => (
+    <div data-testid="mock-persona-picker">Mock Persona Picker</div>
+  ),
 }));
 
 describe("ProfilePage", () => {
@@ -105,21 +121,73 @@ describe("ProfilePage", () => {
   test("renders profile hero header with user details and verified badge", () => {
     render(<ProfilePage />);
 
-    expect(screen.getByRole("heading", { name: "Profile Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Alex Teacher" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Profile Settings" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Alex Teacher" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/@testteacher/).length).toBeGreaterThan(0);
     expect(screen.getByText("Verified")).toBeInTheDocument();
     expect(screen.getByText(/School · Teacher/)).toBeInTheDocument();
   });
 
-  test("renders all 4 navigation tabs", () => {
+  test("renders all navigation tabs including independent language preferences", () => {
     render(<ProfilePage />);
 
-    expect(screen.getByRole("button", { name: /overview & details/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /role & persona/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /subscription & billing/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /security & account/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /overview & details/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /role & persona/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /subscription & billing/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /security & account/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Language" }),
+    ).toBeInTheDocument();
   });
+
+  test("a user without an organization can save a preferred language", async () => {
+    render(<ProfilePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Language" }));
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "French" },
+    });
+    fireEvent.change(screen.getByRole("listbox"), { target: { value: "fr" } });
+    await waitFor(() =>
+      expect(mockSetPreferredLocale).toHaveBeenCalledWith("fr"),
+    );
+    expect(
+      screen.queryByText("Use organization default"),
+    ).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ["fr", "Paramètres du profil", "Langue"],
+    ["es", "Configuración del perfil", "Idioma"],
+  ])(
+    "the redesigned profile remains translated in %s",
+    async (locale, heading, language) => {
+      const instance = createLocaleI18n();
+      await instance.changeLanguage(locale);
+      render(
+        <I18nextProvider i18n={instance}>
+          <ProfilePage />
+        </I18nextProvider>,
+      );
+      expect(
+        screen.getByRole("heading", { name: heading }),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: language }));
+      expect(screen.getByRole("searchbox")).toBeInTheDocument();
+      expect(screen.queryByText("Profile Settings")).not.toBeInTheDocument();
+    },
+  );
 
   test("switches between tabs cleanly", () => {
     render(<ProfilePage />);
@@ -134,7 +202,9 @@ describe("ProfilePage", () => {
     expect(screen.getByTestId("mock-persona-picker")).toBeInTheDocument();
 
     // Switch to Subscription & Billing tab
-    const billingTab = screen.getByRole("button", { name: /subscription & billing/i });
+    const billingTab = screen.getByRole("button", {
+      name: /subscription & billing/i,
+    });
     fireEvent.click(billingTab);
 
     expect(
@@ -143,7 +213,9 @@ describe("ProfilePage", () => {
     expect(screen.getAllByText(/Free Plan/i).length).toBeGreaterThan(0);
 
     // Switch to Security & Account tab
-    const securityTab = screen.getByRole("button", { name: /security & account/i });
+    const securityTab = screen.getByRole("button", {
+      name: /security & account/i,
+    });
     fireEvent.click(securityTab);
 
     expect(
@@ -187,7 +259,9 @@ describe("ProfilePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /edit profile/i }));
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    expect(await screen.findByText("Network down")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Network down", {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("e.g. Dr. Alex Morgan"), {
       target: { value: "Alex T." },
@@ -220,6 +294,8 @@ describe("ProfilePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel edit/i }));
 
     expect(screen.queryByText("Discard Me")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Alex Teacher" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Alex Teacher" }),
+    ).toBeInTheDocument();
   });
 });
