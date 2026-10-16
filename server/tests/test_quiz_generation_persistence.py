@@ -247,7 +247,7 @@ class FakeLiveQuizRepository:
     async def access_code_exists(self, access_code):
         return False
 
-    async def enable_live_quiz(self, **kwargs):
+    async def claim_live_quiz_activation(self, **kwargs):
         self.quiz = {
             **self.quiz,
             "live_quiz_enabled": True,

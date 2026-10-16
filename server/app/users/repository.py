@@ -473,7 +473,16 @@ async def record_auth_event(
     ip_address: str | None = None,
     user_agent: str | None = None,
     metadata: dict[str, Any] | None = None,
+    user: Any = None,
 ) -> None:
+    from server.app.users.persona import analytics_persona_snapshot
+
+    snapshot = analytics_persona_snapshot(user)
+    event_metadata = dict(metadata or {})
+    event_metadata["persona"] = {
+        "category": snapshot["persona_category"],
+        "user_type": snapshot["persona_user_type"],
+    }
     try:
         await auth_events_collection.insert_one(
             {
@@ -482,7 +491,7 @@ async def record_auth_event(
                 "status": status,
                 "ip_address": ip_address,
                 "user_agent": user_agent,
-                "metadata": metadata or {},
+                "metadata": event_metadata,
                 "created_at": now_utc(),
             }
         )
