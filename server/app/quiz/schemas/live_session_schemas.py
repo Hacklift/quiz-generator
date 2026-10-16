@@ -35,6 +35,16 @@ class LiveQuizQuestion(BaseModel):
     selected_answer: Optional[str] = None
 
 
+class LiveQuizGradedAnswer(BaseModel):
+    question_index: int
+    question: str
+    selected_answer: str
+    correct_answer: Optional[str] = None
+    question_type: str
+    is_correct: Optional[bool] = None
+    explanation: Optional[str] = Field(default=None, max_length=5000)
+
+
 class LiveQuizSessionState(BaseModel):
     session_id: str
     quiz_id: str
@@ -56,6 +66,9 @@ class LiveQuizSessionState(BaseModel):
     score: Optional[int] = None
     percentage: Optional[float] = None
     auto_submitted: bool = False
+    graded_answers: Optional[List[LiveQuizGradedAnswer]] = None
+    answers_released: bool = True
+    release_answers_at: Optional[datetime] = None
 
 
 class SaveLiveQuizAnswerRequest(BaseModel):
@@ -95,15 +108,6 @@ class LiveQuizAnalyticsRow(BaseModel):
     progress_percentage: Optional[float] = None
     status: str
     auto_submitted: bool = False
-
-
-class LiveQuizGradedAnswer(BaseModel):
-    question_index: int
-    question: str
-    selected_answer: str
-    correct_answer: str
-    question_type: str
-    is_correct: bool
 
 
 class LiveQuizAttemptDetail(BaseModel):

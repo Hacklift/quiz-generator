@@ -421,24 +421,64 @@ const QuizDisplayPage: React.FC = () => {
             )}
 
             <div className="space-y-6">
-              {quizQuestions.map((q, i) => (
-                <div
-                  key={i}
-                  className="bg-gray-50 p-4 rounded-md border border-gray-200"
-                >
-                  <h3 className="font-medium text-gray-800 mb-2 text-sm sm:text-base">
-                    {i + 1}. {q.question}
-                  </h3>
-                  <QuizAnswerField
-                    questionType={q.question_type}
-                    index={i}
-                    onAnswerChange={handleAnswerChange}
-                    options={q.options || []}
-                    value={userAnswers[i]}
-                    disabled={isQuizChecked || isGrading}
-                  />
-                </div>
-              ))}
+              {quizQuestions.map((q, i) => {
+                const reportItem = isQuizChecked ? quizReport[i] : null;
+                return (
+                  <div
+                    key={i}
+                    className={`p-4 rounded-md border transition ${
+                      reportItem
+                        ? reportItem.is_correct
+                          ? "border-emerald-300 bg-emerald-50/40"
+                          : "border-rose-300 bg-rose-50/40"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <h3 className="font-medium text-gray-800 text-sm sm:text-base">
+                        {i + 1}. {q.question}
+                      </h3>
+                      {reportItem && (
+                        <span
+                          className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                            reportItem.is_correct
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {reportItem.is_correct ? "✓ Correct" : "✗ Incorrect"}
+                        </span>
+                      )}
+                    </div>
+                    <QuizAnswerField
+                      questionType={q.question_type}
+                      index={i}
+                      onAnswerChange={handleAnswerChange}
+                      options={q.options || []}
+                      value={userAnswers[i]}
+                      disabled={isQuizChecked || isGrading}
+                    />
+                    {reportItem && (
+                      <div className="mt-4 pt-3 border-t border-slate-200 space-y-2 text-xs sm:text-sm">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <p className="text-slate-700">
+                            <strong>Your Answer:</strong> {reportItem.user_answer || "No answer"}
+                          </p>
+                          <p className={reportItem.is_correct ? "text-emerald-800 font-medium" : "text-[#0F2654] font-medium"}>
+                            <strong>Correct Answer:</strong> {reportItem.correct_answer}
+                          </p>
+                        </div>
+                        {reportItem.explanation && (
+                          <div className="rounded-md border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-800 shadow-sm">
+                            <strong className="block text-slate-900 mb-0.5">💡 Explanation:</strong>
+                            {reportItem.explanation}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
@@ -491,9 +531,34 @@ const QuizDisplayPage: React.FC = () => {
 
           {isQuizChecked && (
             <section className="bg-white shadow rounded-xl px-4 sm:px-6 py-6 sm:py-8 border border-gray-200">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#0F2654] mb-4">
-                My Quiz Result
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-gray-200">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-[#0F2654]">
+                    My Quiz Result
+                  </h2>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Instant feedback with explanations for each question.
+                  </p>
+                </div>
+                {quizReport.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-2 text-center">
+                      <span className="block text-xs font-semibold uppercase text-slate-500">Score</span>
+                      <strong className="text-lg font-bold text-[#0F2654]">
+                        {quizReport.filter((r) => r.is_correct).length} / {quizReport.length}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg bg-[#0F2654]/5 border border-[#0F2654]/10 px-4 py-2 text-center">
+                      <span className="block text-xs font-semibold uppercase text-slate-500">Accuracy</span>
+                      <strong className="text-lg font-bold text-[#0F2654]">
+                        {Math.round(
+                          (quizReport.filter((r) => r.is_correct).length / quizReport.length) * 100,
+                        )}%
+                      </strong>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-4">
                 {quizReport.map((r, i) => (
@@ -523,6 +588,12 @@ const QuizDisplayPage: React.FC = () => {
                     <p>
                       <strong>Result:</strong> {r.result}
                     </p>
+                    {r.explanation && (
+                      <div className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-800 shadow-sm">
+                        <strong className="block text-slate-900 mb-0.5">💡 Explanation:</strong>
+                        {r.explanation}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

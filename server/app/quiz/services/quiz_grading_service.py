@@ -103,6 +103,7 @@ def grade_against_stored_questions(
                 "user_answer": user_answer,
                 "correct_answer": correct_answer,
                 "question_type": quiz_type,
+                "explanation": stored.get("explanation"),
             }
         )
 
@@ -222,6 +223,7 @@ class QuizGradingService:
                 "question": question.question,
                 "correct_answer": question.correct_answer,
                 "options": question.options,
+                "explanation": getattr(question, "explanation", None),
             }
             for question in quiz_doc.questions
         ]

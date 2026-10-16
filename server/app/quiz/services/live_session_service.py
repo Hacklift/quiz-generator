@@ -450,7 +450,11 @@ class LiveQuizSessionService:
         elif session.get("status") != "submitted":
             await self._ensure_training_run_open(session)
 
-        return self._build_session_state(session, quiz)
+        training_run = None
+        if session.get("status") == "submitted" and session.get("training_run_id") and self.assignment_repository:
+            training_run = await self.assignment_repository.get_run(session["training_run_id"])
+
+        return self._build_session_state(session, quiz, training_run=training_run)
 
     async def save_answer(
         self,
@@ -793,11 +797,14 @@ class LiveQuizSessionService:
         if not run_id or not self.assignment_repository:
             return
         run = await self.assignment_repository.get_run(run_id)
+        if not run:
+            raise HTTPException(status_code=409, detail="Training run is closed")
+        closes_at_raw = run.get("closes_at")
+        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
         if (
-            not run
-            or run.get("status") != "open"
+            run.get("status") != "open"
             or run.get("closure_in_progress")
-            or _as_utc(run["closes_at"]) <= _utc_now()
+            or (closes_at and closes_at <= _utc_now())
         ):
             raise HTTPException(status_code=409, detail="Training run is closed")
 
@@ -933,10 +940,61 @@ class LiveQuizSessionService:
     ) -> Dict[str, Any]:
         return grade_live_session(session, quiz)
 
+    def _mask_graded_answers(
+        self,
+        raw_graded: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Mask correct answers and explanations for withheld participant view."""
+        return [
+            {
+                "question_index": item.get("question_index", idx),
+                "question": item.get("question", ""),
+                "selected_answer": str(item["selected_answer"]) if item.get("selected_answer") is not None else "",
+                "correct_answer": None,
+                "question_type": str(item.get("question_type", "")),
+                "is_correct": None,
+                "explanation": None,
+            }
+            for idx, item in enumerate(raw_graded)
+        ]
+
+    def _determine_answers_released(
+        self,
+        session: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]],
+        server_now: datetime,
+    ) -> tuple[bool, Optional[datetime]]:
+        """Determine whether answers and explanations may be released to participants."""
+        if not session.get("training_run_id"):
+            return True, None
+
+        if not training_run:
+            logger.warning(
+                "Training run %s could not be loaded for session %s; withholding answers fail-closed",
+                session.get("training_run_id"),
+                session.get("_id"),
+            )
+            # Fail-closed: session has a training_run_id but the run could not be resolved
+            return False, None
+
+        closes_at_raw = training_run.get("closes_at")
+        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
+        # Match _ensure_training_run_open:
+        # A run is open if status is 'open', closure is not in progress, and deadline has not passed.
+        is_open = (
+            training_run.get("status") == "open"
+            and not bool(training_run.get("closure_in_progress"))
+            and (closes_at is None or closes_at > server_now)
+        )
+        if training_run.get("release_answers") == "after_close" and is_open:
+            return False, closes_at
+        return True, None
+
     def _build_session_state(
         self,
         session: Dict[str, Any],
         quiz: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         current_index = session.get("current_question_index", 0)
         questions = quiz.get("questions") or []
@@ -963,6 +1021,23 @@ class LiveQuizSessionService:
             _as_utc(session["submitted_at"]) if session.get("submitted_at") else None
         )
 
+        answers_released = True
+        release_answers_at = None
+        graded_answers = None
+
+        if session.get("status") == "submitted":
+            raw_graded = session.get("graded_answers")
+            if not isinstance(raw_graded, list):
+                raw_graded = self._grade_session(session, quiz).get("graded_answers", [])
+
+            answers_released, release_answers_at = self._determine_answers_released(
+                session, training_run, server_now
+            )
+            if not answers_released:
+                graded_answers = self._mask_graded_answers(raw_graded)
+            else:
+                graded_answers = raw_graded
+
         return {
             "session_id": str(session["_id"]),
             "quiz_id": session["quiz_id"],
@@ -987,6 +1062,9 @@ class LiveQuizSessionService:
             "score": session.get("score"),
             "percentage": session.get("percentage"),
             "auto_submitted": session.get("auto_submitted", False),
+            "graded_answers": graded_answers,
+            "answers_released": answers_released,
+            "release_answers_at": release_answers_at,
         }
 
     def _public_question(

@@ -226,6 +226,7 @@ async def test_submission_persists_graded_answers_and_owner_can_read_detail(monk
             "correct_answer": "A",
             "question_type": "multichoice",
             "is_correct": True,
+            "explanation": None,
         },
         {
             "question_index": 1,
@@ -234,6 +235,7 @@ async def test_submission_persists_graded_answers_and_owner_can_read_detail(monk
             "correct_answer": "B",
             "question_type": "multichoice",
             "is_correct": False,
+            "explanation": None,
         },
     ]
 

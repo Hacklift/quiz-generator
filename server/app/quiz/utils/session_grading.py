@@ -21,6 +21,7 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
                 or quiz.get("quiz_type")
                 or "multichoice",
                 "source": question.get("source", "live"),
+                "explanation": question.get("explanation"),
             }
         )
 
@@ -33,6 +34,7 @@ def grade_live_session(session: dict[str, Any], quiz: dict[str, Any]) -> dict[st
             "correct_answer": str(answer.get("correct_answer", "")),
             "question_type": answer.get("question_type", ""),
             "is_correct": bool(answer.get("is_correct", False)),
+            "explanation": answer.get("explanation"),
         }
         for index, answer in enumerate(graded_answers)
     ]

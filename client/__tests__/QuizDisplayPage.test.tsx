@@ -210,4 +210,57 @@ describe("QuizDisplayPage", () => {
     resolveGrade({ data: [] });
     expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
   });
+
+  test("renders per-question correctness, correct answers, and explanations after submission", async () => {
+    mockApiPost.mockResolvedValue({
+      data: [
+        {
+          question: "What is the capital of France?",
+          user_answer: "A) Paris",
+          correct_answer: "A) Paris",
+          result: "Correct",
+          is_correct: true,
+          question_type: "multichoice",
+          explanation: "Paris has been the capital of France since the 10th century.",
+        },
+        {
+          question: "What is the capital of Spain?",
+          user_answer: "B) Rome",
+          correct_answer: "A) Madrid",
+          result: "Incorrect",
+          is_correct: false,
+          question_type: "multichoice",
+          explanation: "Madrid is the capital of Spain, whereas Rome is in Italy.",
+        },
+      ],
+    });
+
+    render(<DisplayQuiz />);
+
+    const radioButtons = await screen.findAllByRole("radio");
+    fireEvent.click(radioButtons[0]);
+    fireEvent.click(radioButtons[3]);
+    fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("My Quiz Result")).toBeInTheDocument();
+    });
+
+    // Check score badges
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+
+    // Check explanations in the DOM
+    expect(
+      screen.getAllByText("Paris has been the capital of France since the 10th century.").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Madrid is the capital of Spain, whereas Rome is in Italy.").length,
+    ).toBeGreaterThan(0);
+
+    // Check correctness badges
+    expect(screen.getAllByText("✓ Correct").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("✗ Incorrect").length).toBeGreaterThan(0);
+  });
 });
+

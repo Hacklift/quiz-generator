@@ -44,7 +44,8 @@ def grade_mock_answers(user_answers):
 
                 "is_correct": is_correct,
 
-                "result": "Correct" if is_correct else "Incorrect"
+                "result": "Correct" if is_correct else "Incorrect",
+                "explanation": answer.get("explanation"),
 
             })
 
@@ -69,7 +70,8 @@ def grade_mock_answers(user_answers):
 
                 "is_correct": is_correct,
 
-                "result": "Correct" if is_correct else "Incorrect"
+                "result": "Correct" if is_correct else "Incorrect",
+                "explanation": answer.get("explanation"),
 
             })
 
@@ -91,7 +93,8 @@ def grade_mock_answers(user_answers):
 
                 "is_correct": is_correct,
 
-                "result": "Correct" if is_correct else "Incorrect"
+                "result": "Correct" if is_correct else "Incorrect",
+                "explanation": answer.get("explanation"),
 
             })
 
@@ -109,7 +112,8 @@ def grade_mock_answers(user_answers):
 
                 "is_correct": False,
 
-                "result": "Incorrect"
+                "result": "Incorrect",
+                "explanation": answer.get("explanation"),
 
             })
 
