@@ -488,3 +488,29 @@ async def test_session_state_withholds_when_run_has_no_closes_at_until_manually_
     assert state_closed["graded_answers"][0]["explanation"] == "Secret explanation."
 
 
+@pytest.mark.asyncio
+async def test_started_unsubmitted_session_state_leaks_no_explanation_or_correct_answer(monkeypatch):
+    """A started, unsubmitted session state must contain no explanation or correct_answer."""
+    fixed_now = datetime(2025, 5, 14, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repo = FakeLiveQuizRepository(time_limit_minutes=1)
+    repo.quiz["questions"][0]["explanation"] = "Secret explanation."
+    repo.quiz["questions"][0]["correct_answer"] = "A"
+    service = LiveQuizSessionService(repo)
+
+    start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
+    state = await service.get_session_state("session-1", start["participant_token"])
+
+    assert state["status"] == "active"
+    assert state.get("graded_answers") is None
+    # Check the currently active question returned to the participant mid-quiz
+    active_question = state.get("question")
+    assert active_question is not None
+    assert "explanation" not in active_question
+    assert "correct_answer" not in active_question
+    assert active_question["question"] == "What is 2 + 2?"
+    assert active_question["options"] == ["3", "4", "5"]
+
+
+
