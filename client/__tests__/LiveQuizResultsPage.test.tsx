@@ -129,4 +129,32 @@ describe("LiveQuizResultsPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Question Results & Explanations")).not.toBeInTheDocument();
   });
+
+  test("shows withheld message with 'when the assignment closes' when release_answers_at is null", async () => {
+    mockGetSession.mockResolvedValue({
+      session_id: "session-3",
+      quiz_id: "quiz-3",
+      title: "Open-ended Training",
+      participant_name: "Taylor",
+      status: "submitted",
+      score: 8,
+      total_questions: 10,
+      percentage: 80,
+      auto_submitted: false,
+      submitted_at: "2026-10-16T10:00:00Z",
+      answers_released: false,
+      release_answers_at: null,
+      graded_answers: [],
+    });
+
+    render(<LiveQuizResultsPage sessionId="session-3" />);
+
+    expect(await screen.findByText("Quiz result")).toBeInTheDocument();
+    expect(screen.getAllByText("Pending release").length).toBe(2);
+    expect(screen.getByText("Answers Withheld Until Deadline")).toBeInTheDocument();
+    expect(
+      screen.getByText(/detailed answers and explanations will be released when the assignment closes/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Question Results & Explanations")).not.toBeInTheDocument();
+  });
 });

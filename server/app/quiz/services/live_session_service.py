@@ -949,7 +949,7 @@ class LiveQuizSessionService:
             {
                 "question_index": item.get("question_index", idx),
                 "question": item.get("question", ""),
-                "selected_answer": str(item.get("selected_answer", "")),
+                "selected_answer": str(item["selected_answer"]) if item.get("selected_answer") is not None else "",
                 "correct_answer": None,
                 "question_type": str(item.get("question_type", "")),
                 "is_correct": None,
