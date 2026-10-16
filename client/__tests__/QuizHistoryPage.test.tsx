@@ -104,7 +104,7 @@ describe("QuizHistoryPage", () => {
     render(<DisplayQuizHistory openLoginModal={jest.fn()} />);
 
     expect(await screen.findByText("Networking Basics")).toBeInTheDocument();
-    expect(screen.getByText(/multichoice · medium/)).toBeInTheDocument();
+    expect(screen.getByText(/Multiple choice · medium/)).toBeInTheDocument();
     expect(
       screen.getByText(/What protocol serves web pages\?/),
     ).toBeInTheDocument();
