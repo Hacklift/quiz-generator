@@ -78,6 +78,16 @@ test("download failures show feedback rather than success", async () => {
   expect(toast.success).not.toHaveBeenCalled();
 });
 
+test("oversized exports explain the limit instead of implying a successful partial download", async () => {
+  api.downloadCompletionReport.mockRejectedValue({ response: { status: 413 } });
+  render(<TrainingRunDetailPage runId="run-1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Export completion CSV" }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+    "This run exceeds the interactive report limit. Contact support for a complete export.",
+  ));
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
+
 test("closed records are clearly final while legacy thresholds remain unknown", async () => {
   const run = detail();
   run.status = "closed";

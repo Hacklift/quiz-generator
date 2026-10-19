@@ -13,11 +13,13 @@ from pymongo.errors import DuplicateKeyError
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
+from server.app.quiz.schemas.training_runs import TrainingRunDetail
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.identity import normalize_email
 from server.app.quiz.utils.training_completion import (
     assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
     report_timestamp,
+    MAX_COMPLETION_REPORT_ROWS,
 )
 
 
@@ -280,9 +282,9 @@ class TrainingRunService:
         runs = await self.repository.list_runs_for_owner(owner_user_id)
         summaries = []
         for run in runs:
-            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
-            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
-            summaries.append(self._run_summary(run, assignments, sessions))
+            summary = self._run_summary(run, [], [])
+            summary.update(await self.repository.get_run_activity_summary(str(run["_id"])))
+            summaries.append(summary)
         return summaries
 
     async def get_owner_run(self, run_id: str, owner_user_id: str) -> dict:
@@ -293,38 +295,60 @@ class TrainingRunService:
             or run.get("status") not in {"open", "closed"}
         ):
             raise HTTPException(status_code=404, detail="Training run not found")
-        finalized_at = None
-        if run["status"] == "closed":
-            audit = await self.repository.get_closure_audit(run_id)
-            payload = audit.get("payload") if audit else None
-            if not isinstance(payload, dict) or not isinstance(payload.get("completion_register"), list) or not isinstance(payload.get("run"), dict):
-                raise HTTPException(status_code=503, detail="Final completion record is unavailable")
-            # Closed evidence never falls back to mutable assignments or quiz
-            # content. Historical snapshots without a threshold remain unknown.
-            run = {**run, **payload["run"]}
-            run["passing_threshold_percentage"] = payload["run"].get("passing_threshold_percentage")
-            records = payload["completion_register"]
-            finalized_at = report_timestamp(audit.get("occurred_at"))
-        else:
-            assignments = await self.repository.list_assignments_for_run(run_id)
-            sessions = await self.repository.list_sessions_for_run(run_id)
-            records = [
-                *[assignment_snapshot(item) for item in assignments],
-                *[shared_session_snapshot(item) for item in sessions if not item.get("training_assignment_id")],
-            ]
-        rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
-        summary = self._run_summary(run, [], [])
-        completed = [row for row in rows if row["status"] == "completed"]
-        scores = [row["latest_score"] for row in completed if isinstance(row.get("latest_score"), int)]
-        summary.update({
-            "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
-            "started_count": sum(row["status"] != "assigned" for row in rows),
-            "completed_count": len(completed),
-            "average_score": round(sum(scores) / len(scores), 2) if scores else None,
-            "completion_register": rows, "report_is_final": run["status"] == "closed",
-            "report_finalized_at": finalized_at,
-        })
-        return summary
+        try:
+            finalized_at = None
+            if run["status"] == "closed":
+                audit = await self.repository.get_closure_audit(
+                    run_id, report_limit=MAX_COMPLETION_REPORT_ROWS + 1,
+                )
+                payload = audit.get("payload") if audit else None
+                if (
+                    not isinstance(payload, dict)
+                    or not isinstance(payload.get("completion_register"), list)
+                    or not isinstance(payload.get("run"), dict)
+                ):
+                    raise ValueError("Missing or invalid closure payload")
+                # Closed evidence never falls back to mutable assignments or quiz
+                # content. Historical snapshots without a threshold remain unknown.
+                run = {**run, **payload["run"]}
+                run["passing_threshold_percentage"] = payload["run"].get("passing_threshold_percentage")
+                records = payload["completion_register"]
+                finalized_at = report_timestamp(audit.get("occurred_at"))
+            else:
+                assignments = await self.repository.list_assignments_for_run(
+                    run_id, limit=MAX_COMPLETION_REPORT_ROWS + 1,
+                )
+                sessions = await self.repository.list_sessions_for_run(
+                    run_id, limit=max(1, MAX_COMPLETION_REPORT_ROWS + 1 - len(assignments)),
+                    shared_only=True,
+                )
+                records = [
+                    *[assignment_snapshot(item) for item in assignments],
+                    *[shared_session_snapshot(item) for item in sessions if not item.get("training_assignment_id")],
+                ]
+            if len(records) > MAX_COMPLETION_REPORT_ROWS:
+                logger.warning("training_completion_report_limit_exceeded run_id=%s", run_id)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Interactive reports support up to {MAX_COMPLETION_REPORT_ROWS:,} participants. "
+                    "This run exceeds that limit; contact support for a full export. No records were omitted or deleted.",
+                )
+            rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
+            summary = self._run_summary(run, [], [])
+            completed = [row for row in rows if row["status"] == "completed"]
+            scores = [row["latest_score"] for row in completed if isinstance(row.get("latest_score"), int)]
+            summary.update({
+                "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
+                "started_count": sum(row["status"] != "assigned" for row in rows),
+                "completed_count": len(completed),
+                "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+                "completion_register": rows, "report_is_final": run["status"] == "closed",
+                "report_finalized_at": finalized_at,
+            })
+            return TrainingRunDetail.model_validate(summary).model_dump()
+        except (KeyError, TypeError, ValueError, AttributeError):
+            logger.error("training_completion_report_unavailable run_id=%s", run_id)
+            raise HTTPException(status_code=503, detail="Final completion record is unavailable" if run["status"] == "closed" else "Completion record is unavailable") from None
 
     async def close_owner_run(self, run_id: str, owner_user_id: str) -> dict:
         run = await self.repository.get_run(run_id)
@@ -601,7 +625,6 @@ class TrainingRunService:
             "latest_percentage": assignment.get("latest_percentage"),
             "completed_at": assignment.get("completed_at"),
         }
-
 
     async def _generate_unique_code(self) -> str:
         alphabet = string.ascii_uppercase + string.digits

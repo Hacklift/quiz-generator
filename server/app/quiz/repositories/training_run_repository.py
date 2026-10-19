@@ -214,16 +214,72 @@ class TrainingRunRepository:
             },
         )
 
-    async def list_assignments_for_run(self, run_id: str) -> list[dict]:
-        cursor = self.assignments_collection.find({"training_run_id": run_id}).sort("recipient_email", 1)
-        return await cursor.to_list(length=None)
+    async def list_assignments_for_run(self, run_id: str, *, limit: int | None = None) -> list[dict]:
+        projection = {key: 1 for key in (
+            "recipient_email", "recipient_name", "recipient_user_id", "status", "attempts_used",
+            "max_attempts", "due_at", "started_at", "completed_at", "latest_score", "latest_percentage",
+        )} if limit is not None else None
+        cursor = self.assignments_collection.find({"training_run_id": run_id}, projection).sort("recipient_email", 1)
+        return await cursor.to_list(length=limit)
 
-    async def list_sessions_for_run(self, run_id: str) -> list[dict]:
+    async def list_sessions_for_run(
+        self, run_id: str, *, limit: int | None = None, shared_only: bool = False,
+    ) -> list[dict]:
         if self.sessions_collection is None:
             return []
-        cursor = self.sessions_collection.find({"training_run_id": run_id}).sort("created_at", 1)
-        # Reports and immutable closure evidence must not silently truncate runs.
-        return await cursor.to_list(length=None)
+        query = {"training_run_id": run_id}
+        if shared_only:
+            query["training_assignment_id"] = {"$in": [None, ""]}
+        projection = {key: 1 for key in (
+            "participant_name", "participant_email", "status", "started_at", "submitted_at",
+            "score", "percentage", "training_assignment_id",
+        )} if limit is not None else None
+        cursor = self.sessions_collection.find(query, projection).sort("created_at", 1)
+        # Only closure callers omit a limit: retained evidence is never truncated.
+        return await cursor.to_list(length=limit)
+
+    async def get_run_activity_summary(self, run_id: str) -> dict:
+        assignment = await self._activity_counts(
+            self.assignments_collection, {"training_run_id": run_id},
+            completed_status="completed", score_field="latest_score",
+            started_statuses=["in_progress", "incomplete", "completed"],
+        )
+        session = {}
+        if self.sessions_collection is not None:
+            session = await self._activity_counts(
+                self.sessions_collection,
+                {"training_run_id": run_id, "training_assignment_id": {"$in": [None, ""]}},
+                completed_status="submitted", score_field="score",
+            )
+        score_count = assignment.get("score_count", 0) + session.get("score_count", 0)
+        score_sum = assignment.get("score_sum", 0) + session.get("score_sum", 0)
+        return {
+            "assigned_count": assignment.get("total", 0),
+            "started_count": assignment.get("started_count", 0) + session.get("started_count", 0),
+            "completed_count": assignment.get("completed_count", 0) + session.get("completed_count", 0),
+            "average_score": round(score_sum / score_count, 2) if score_count else None,
+        }
+
+    @staticmethod
+    async def _activity_counts(
+        collection, query: dict, *, completed_status: str, score_field: str,
+        started_statuses: list[str] | None = None,
+    ) -> dict:
+        completed = {"$eq": ["$status", completed_status]}
+        scored = {"$and": [completed, {"$isNumber": f"${score_field}"}]}
+        rows = await collection.aggregate([
+            {"$match": query},
+            {"$group": {
+                "_id": None, "total": {"$sum": 1},
+                "started_count": {"$sum": {"$cond": [
+                    {"$in": ["$status", started_statuses]} if started_statuses is not None else True, 1, 0,
+                ]}},
+                "completed_count": {"$sum": {"$cond": [completed, 1, 0]}},
+                "score_count": {"$sum": {"$cond": [scored, 1, 0]}},
+                "score_sum": {"$sum": {"$cond": [scored, f"${score_field}", 0]}},
+            }},
+        ]).to_list(length=1)
+        return rows[0] if rows else {}
 
     async def mark_in_progress_assignments_incomplete(
         self, run_id: str, closed_at: datetime
@@ -436,10 +492,20 @@ class TrainingRunRepository:
             return_document=ReturnDocument.AFTER,
         )
 
-    async def get_closure_audit(self, run_id: str) -> dict | None:
-        return await self.audit_events_collection.find_one({
-            "training_run_id": run_id, "event_type": "run_closed",
-        })
+    async def get_closure_audit(self, run_id: str, *, report_limit: int | None = None) -> dict | None:
+        projection = None
+        if report_limit is not None:
+            projection = {
+                "occurred_at": 1,
+                "payload.run.quiz_id": 1, "payload.run.title": 1, "payload.run.kind": 1,
+                "payload.run.purpose": 1, "payload.run.access_mode": 1,
+                "payload.run.time_limit_minutes": 1, "payload.run.due_at": 1,
+                "payload.run.closes_at": 1, "payload.run.passing_threshold_percentage": 1,
+                "payload.completion_register": {"$slice": report_limit},
+            }
+        return await self.audit_events_collection.find_one(
+            {"training_run_id": run_id, "event_type": "run_closed"}, projection,
+        )
 
     async def create_audit_event(self, event: dict) -> None:
         try:

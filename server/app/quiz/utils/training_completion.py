@@ -7,6 +7,10 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 
+# Interactive reports are synchronous. Closure evidence has no row truncation.
+MAX_COMPLETION_REPORT_ROWS = 10_000
+
+
 def report_timestamp(value: datetime | None) -> datetime | None:
     if value is None:
         return None

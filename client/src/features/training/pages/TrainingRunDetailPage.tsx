@@ -94,8 +94,10 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
         URL.revokeObjectURL(url);
       }
       toast.success("Completion report downloaded.");
-    } catch {
-      toast.error("Could not export the completion report. Please try again.");
+    } catch (error: any) {
+      toast.error(error?.response?.status === 413
+        ? "This run exceeds the interactive report limit. Contact support for a complete export."
+        : "Could not export the completion report. Please try again.");
     } finally {
       setIsExporting(false);
     }

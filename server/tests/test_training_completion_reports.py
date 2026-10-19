@@ -17,7 +17,7 @@ from server.app.quiz.routes import training_runs
 from server.app.quiz.schemas.training_runs import CreateTrainingRunRequest
 from server.app.quiz.services.training_run_service import TrainingRunService
 from server.app.quiz.utils.training_completion import (
-    build_closure_payload, completion_outcome, completion_report_csv,
+    build_closure_payload, completion_outcome, completion_report_csv, completion_row,
 )
 
 
@@ -86,6 +86,16 @@ def test_custom_threshold_changes_creation_intent_without_breaking_default_retri
     assert TrainingRunService._request_fingerprint(request) != TrainingRunService._request_fingerprint(custom)
 
 
+@pytest.mark.parametrize("threshold", [80, 80.0, 70, 70.0, 0, 0.0])
+def test_numeric_threshold_retries_have_stable_server_fingerprints(threshold):
+    request = CreateTrainingRunRequest(
+        quiz_id="quiz-1", closes_at=datetime.now(timezone.utc) + timedelta(days=1),
+        recipient_emails=["learner@example.com"], passing_threshold_percentage=threshold,
+    )
+    retry = request.model_copy(update={"passing_threshold_percentage": float(threshold)})
+    assert TrainingRunService._request_fingerprint(request) == TrainingRunService._request_fingerprint(retry)
+
+
 @pytest.mark.asyncio
 async def test_created_run_persists_custom_threshold_with_existing_creation_flow():
     from server.tests.test_training_run_service import CreateRunRepository
@@ -147,14 +157,70 @@ async def test_legacy_snapshot_does_not_invent_default_threshold_or_rewrite_evid
     assert payload == original
 
 
+@pytest.mark.parametrize("record,kind,state", [
+    ({"assignment_id": "old-assignment", "recipient_email": "absent@example.com", "status": "assigned"}, "assigned", "assigned"),
+    ({"session_id": "old-session", "participant_name": "Guest", "status": "submitted", "percentage": 75, "score": 3}, "shared_link", "completed"),
+    ({"session_id": "old-session", "status": "abandoned"}, "shared_link", "incomplete"),
+])
+def test_legacy_row_discriminator_does_not_require_new_snapshot_fields(record, kind, state):
+    original = deepcopy(record)
+    row = completion_row(record, None)
+    assert row["participant_type"] == kind
+    assert row["status"] == state
+    assert row["outcome"] == ("unknown" if state == "completed" else "not_completed")
+    assert record == original
+
+
 @pytest.mark.asyncio
-async def test_closed_report_missing_snapshot_fails_without_live_fallback():
+async def test_closed_report_missing_snapshot_fails_without_live_fallback(caplog):
     service, repository, run = report_service()
     run["status"] = "closed"
     with pytest.raises(HTTPException) as exc:
         await service.get_owner_run(str(run["_id"]), "owner-1")
     assert exc.value.status_code == 503
     repository.list_assignments_for_run.assert_not_awaited()
+    assert "training_completion_report_unavailable" in caplog.text
+    assert str(run["_id"]) in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("records", [None, [None], [{}], [{"assignment_id": "a", "status": "invalid"}]])
+async def test_malformed_closed_evidence_returns_monitored_503_without_reconstruction(records, caplog):
+    service, repository, run = report_service()
+    run["status"] = "closed"
+    repository.get_closure_audit.return_value = {"payload": {"run": {}, "completion_register": records}}
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert exc.value.status_code == 503
+    assert "training_completion_report_unavailable" in caplog.text
+    repository.list_assignments_for_run.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("closed", [False, True])
+async def test_oversized_report_is_rejected_not_silently_truncated(monkeypatch, closed):
+    import server.app.quiz.services.training_run_service as module
+
+    monkeypatch.setattr(module, "MAX_COMPLETION_REPORT_ROWS", 1)
+    service, repository, run = report_service()
+    if closed:
+        run["status"] = "closed"
+        repository.get_closure_audit.return_value = {"payload": build_closure_payload(run, assignments(), [])}
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert exc.value.status_code == 413
+    assert "No records were omitted or deleted" in exc.value.detail
+    if closed:
+        repository.get_closure_audit.assert_awaited_once_with(str(run["_id"]), report_limit=2)
+    else:
+        repository.list_assignments_for_run.assert_awaited_once_with(str(run["_id"]), limit=2)
+
+
+def test_snapshot_outcomes_remain_authoritative_when_a_threshold_is_changed_out_of_band():
+    run = run_document()
+    payload = build_closure_payload(run, assignments(), [])
+    payload["run"]["passing_threshold_percentage"] = 99
+    assert completion_row(payload["completion_register"][0], 99)["outcome"] == "passed"
 
 
 def test_worker_closure_persists_the_same_threshold_and_outcomes(monkeypatch):
@@ -191,6 +257,19 @@ def test_csv_safely_encodes_untrusted_text_and_keeps_numeric_values(prefix):
     assert parsed[0]["assignee_name"].startswith("'")
     assert parsed[0]["score"] == "4"
     assert parsed[0]["percentage"] == "80"
+
+
+@pytest.mark.parametrize("email", ["+recipient@example.com", "-recipient@example.com"])
+def test_display_safe_csv_does_not_mutate_authoritative_email(email):
+    record = {"assignment_id": "a", "recipient_email": email, "status": "assigned"}
+    report = {
+        "id": "run-1", "quiz_id": "quiz-1", "title": "Safety", "report_is_final": False,
+        "passing_threshold_percentage": 80, "completion_register": [completion_row(record, 80)],
+    }
+    original = deepcopy(report)
+    exported = list(csv.DictReader(io.StringIO(completion_report_csv(report, generated_at=datetime.now(timezone.utc)))))
+    assert exported[0]["assignee_email"] == "'" + email
+    assert report == original
 
 
 @pytest.fixture

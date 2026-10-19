@@ -21,9 +21,35 @@ audit trail (#132). It does not introduce a second live-quiz run collection.
 - Existing runs/snapshots without a recorded threshold remain readable, but
   completed outcomes are **unknown / Not recorded**, not retroactively failed
   or evaluated against today's default. Non-starters are included as not started.
+  This is an intentional release behavior requiring product/reviewer sign-off;
+  the implementation does not claim that historic passing rules can be recovered.
 - Compliance runs remain assigned-only and require verified recipient access.
   Business shared-link participants are labelled separately: their supplied
   names/emails are not verified staff identity.
+
+## Interactive reporting limits and diagnostics
+
+Run details and synchronous CSV downloads support up to **10,000 register rows**.
+Bounded, projected Mongo reads retrieve only the report fields and at most one
+extra row to detect overflow. Oversized reports return **413**, never a partial
+register labelled complete. The run list uses database-side count/score
+aggregation instead of loading all participant records. No Redis cache or
+additional polling schedule is introduced.
+
+This is a limit on interactive reporting, not a participant admission limit.
+Run closure still captures all evidence without silently truncating it. For a
+larger run, a maintainer must arrange a controlled full export; no background
+large-export service is included in #136. The existing single-document audit
+snapshot remains subject to MongoDB's BSON document-size limit; unbounded-scale
+audit storage is not claimed by this PR.
+
+Missing or malformed final evidence returns **503** and logs the event
+`training_completion_report_unavailable` with the run ID, without participant
+PII. Oversized requests log `training_completion_report_limit_exceeded`.
+Operators should alert on the unavailable-record event/503 rate in deployment
+logs and investigate the retained audit document and closure-worker logs.
+The application does not install a hosted monitoring/alerting integration or
+reconstruct missing final evidence from mutable data.
 
 ## Actual retention behavior
 
@@ -39,6 +65,13 @@ sealed or protected from privileged database operators. CSV downloads contain
 personal data; responses disable caching, and recipients must store exports
 according to their organization's approved data-handling policy. Text fields
 are quoted/escaped for CSV and formula-leading input is prefixed as text.
+The CSV is a **display-safe representation, not a byte-exact record**: names,
+titles and even legitimate email addresses beginning with `+` or `-` receive
+a leading apostrophe. Source documents and retained snapshots are not modified.
+Plain `|` and `%` are not treated as formula triggers in
+[OWASP's CSV injection guidance](https://owasp.org/www-community/attacks/CSV_Injection);
+the documented formula/control-character prefixes and CSV cell boundaries
+are handled. Exported CSV must not be used as a lossless identity interchange.
 Spreadsheet behavior differs by application; do not treat downloaded CSV as
 tamper-proof evidence or re-import spreadsheet-resaved files as trusted input.
 
@@ -67,3 +100,6 @@ this PR adds no tenant migration, index replacement, Redis polling or Beat job.
    existing CSV/PDF/text exports must still work unchanged.
 6. Open a pre-feature run: a missing historical threshold/outcome must say
    Not recorded, not claim an 80% policy was in force.
+7. Confirm missing/malformed final evidence produces 503 and a diagnostic event,
+   not a reconstructed or partial report. The automated database tests exercise
+   the report ceiling separately from complete closure capture.

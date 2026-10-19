@@ -29,8 +29,6 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-
-
 def _notification_document(
     *,
     user_id: str,

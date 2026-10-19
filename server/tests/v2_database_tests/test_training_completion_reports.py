@@ -94,3 +94,66 @@ async def test_real_mongo_closure_audit_insert_does_not_overwrite_existing_evide
     await repository.create_audit_event(changed)
     audit = await repository.get_closure_audit(str(run["_id"]))
     assert audit["payload"]["run"]["passing_threshold_percentage"] == 80
+
+
+@pytest.mark.asyncio
+async def test_interactive_reads_are_bounded_but_closure_evidence_is_not(test_db, monkeypatch):
+    import server.app.quiz.services.training_run_service as module
+
+    monkeypatch.setattr(module, "MAX_COMPLETION_REPORT_ROWS", 3)
+    run = run_document()
+    await test_db.training_runs.insert_one(run)
+    run_id = str(run["_id"])
+    await test_db.live_quiz_sessions.insert_many([
+        {
+            "training_run_id": run_id, "status": "submitted", "participant_name": f"Person {i}",
+            "created_at": run["created_at"], "percentage": 80, "score": 4,
+            "quiz_snapshot": {"questions": ["not needed in a report"]},
+        } for i in range(6)
+    ])
+    repository = repository_for(test_db)
+    limited = await repository.list_sessions_for_run(run_id, limit=4, shared_only=True)
+    assert len(limited) == 4
+    assert all("quiz_snapshot" not in row for row in limited)
+    service = TrainingRunService(repository, SimpleNamespace())
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(run_id, "owner-1")
+    assert exc.value.status_code == 413
+    # The list remains usable without loading/truncating participant records.
+    listed = await service.list_owner_runs("owner-1")
+    assert listed[0]["completed_count"] == 6
+    await service.close_owner_run(run_id, "owner-1")
+    full = await repository.get_closure_audit(run_id)
+    assert len(full["payload"]["completion_register"]) == 6
+    limited_audit = await repository.get_closure_audit(run_id, report_limit=4)
+    assert len(limited_audit["payload"]["completion_register"]) == 4
+    assert "quiz_snapshot" not in limited_audit["payload"]["run"]
+    assert limited_audit["payload"]["run"]["passing_threshold_percentage"] == 80
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(run_id, "owner-1")
+    assert exc.value.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_database_activity_summary_matches_existing_count_and_score_semantics(test_db):
+    run_id = "run-1"
+    await test_db.training_assignments.insert_many([
+        {"training_run_id": run_id, "status": "completed", "latest_score": 2},
+        {"training_run_id": run_id, "status": "assigned"},
+        {"training_run_id": run_id, "status": "in_progress", "latest_score": 100},
+        {"training_run_id": run_id, "status": "completed", "latest_score": None},
+        {"training_run_id": "other-run", "status": "completed", "latest_score": 100},
+    ])
+    await test_db.live_quiz_sessions.insert_many([
+        {"training_run_id": run_id, "status": "submitted", "score": 4},
+        {"training_run_id": run_id, "status": "active", "score": 100},
+        {"training_run_id": run_id, "status": "submitted", "score": 100, "training_assignment_id": "assigned-session"},
+        {"training_run_id": "other-run", "status": "submitted", "score": 100},
+    ])
+    repository = repository_for(test_db)
+    assert await repository.get_run_activity_summary(run_id) == {
+        "assigned_count": 4, "started_count": 5, "completed_count": 3, "average_score": 3,
+    }
+    assert await repository.get_run_activity_summary("missing-run") == {
+        "assigned_count": 0, "started_count": 0, "completed_count": 0, "average_score": None,
+    }
