@@ -20,6 +20,7 @@ export interface TrainingRunSummary {
   access_code?: string | null;
   access_url?: string | null;
   time_limit_minutes: number;
+  passing_threshold_percentage?: number | null;
   due_at?: string | null;
   closes_at: string;
   closed_at?: string | null;
@@ -42,10 +43,14 @@ export interface TrainingCompletionRow {
   completed_at?: string | null;
   latest_score?: number | null;
   latest_percentage?: number | null;
+  participant_type?: "assigned" | "shared_link";
+  outcome?: "passed" | "failed" | "not_completed" | "unknown";
 }
 
 export interface TrainingRunDetail extends TrainingRunSummary {
   completion_register: TrainingCompletionRow[];
+  report_is_final?: boolean;
+  report_finalized_at?: string | null;
 }
 
 export interface TrainingAssignment {
@@ -100,6 +105,7 @@ export interface CreateTrainingRunPayload {
   purpose: TrainingPurpose;
   title?: string;
   time_limit_minutes: number;
+  passing_threshold_percentage?: number;
   closes_at: string;
   due_at?: string;
   access_mode: TrainingAccessMode;
@@ -128,6 +134,14 @@ export const trainingRunApi = {
 
   async getRun(runId: string): Promise<TrainingRunDetail> {
     const { data } = await api.get(`/api/v1/training-runs/${runId}`);
+    return data;
+  },
+
+  async downloadCompletionReport(runId: string): Promise<Blob> {
+    const { data } = await api.get<Blob>(
+      `/api/v1/training-runs/${encodeURIComponent(runId)}/completion-report.csv`,
+      { responseType: "blob" },
+    );
     return data;
   },
 

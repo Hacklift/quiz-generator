@@ -15,6 +15,10 @@ from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.identity import normalize_email
+from server.app.quiz.utils.training_completion import (
+    assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
+    report_timestamp,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -127,6 +131,7 @@ class TrainingRunService:
             "status": "provisioning",
             "access_mode": payload.access_mode,
             "time_limit_minutes": payload.time_limit_minutes,
+            "passing_threshold_percentage": payload.passing_threshold_percentage,
             "due_at": due_at,
             "closes_at": closes_at,
             "closed_at": None,
@@ -237,6 +242,10 @@ class TrainingRunService:
             "max_attempts": payload.max_attempts,
             "send_email_invitations": payload.send_email_invitations,
         }
+        # Preserve idempotent retries of default requests issued before #136.
+        # Custom thresholds are a distinct creation intent, never an edit.
+        if payload.passing_threshold_percentage != 80:
+            canonical["passing_threshold_percentage"] = payload.passing_threshold_percentage
         encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -284,17 +293,37 @@ class TrainingRunService:
             or run.get("status") not in {"open", "closed"}
         ):
             raise HTTPException(status_code=404, detail="Training run not found")
-        assignments = await self.repository.list_assignments_for_run(run_id)
-        sessions = await self.repository.list_sessions_for_run(run_id)
-        summary = self._run_summary(run, assignments, sessions)
-        summary["completion_register"] = [
-            *[self._completion_row(assignment) for assignment in assignments],
-            *[
-                self._shared_session_row(session)
-                for session in sessions
-                if not session.get("training_assignment_id")
-            ],
-        ]
+        finalized_at = None
+        if run["status"] == "closed":
+            audit = await self.repository.get_closure_audit(run_id)
+            payload = audit.get("payload") if audit else None
+            if not isinstance(payload, dict) or not isinstance(payload.get("completion_register"), list) or not isinstance(payload.get("run"), dict):
+                raise HTTPException(status_code=503, detail="Final completion record is unavailable")
+            # Closed evidence never falls back to mutable assignments or quiz
+            # content. Historical snapshots without a threshold remain unknown.
+            run = {**run, **payload["run"]}
+            run["passing_threshold_percentage"] = payload["run"].get("passing_threshold_percentage")
+            records = payload["completion_register"]
+            finalized_at = report_timestamp(audit.get("occurred_at"))
+        else:
+            assignments = await self.repository.list_assignments_for_run(run_id)
+            sessions = await self.repository.list_sessions_for_run(run_id)
+            records = [
+                *[assignment_snapshot(item) for item in assignments],
+                *[shared_session_snapshot(item) for item in sessions if not item.get("training_assignment_id")],
+            ]
+        rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
+        summary = self._run_summary(run, [], [])
+        completed = [row for row in rows if row["status"] == "completed"]
+        scores = [row["latest_score"] for row in completed if isinstance(row.get("latest_score"), int)]
+        summary.update({
+            "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
+            "started_count": sum(row["status"] != "assigned" for row in rows),
+            "completed_count": len(completed),
+            "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "completion_register": rows, "report_is_final": run["status"] == "closed",
+            "report_finalized_at": finalized_at,
+        })
         return summary
 
     async def close_owner_run(self, run_id: str, owner_user_id: str) -> dict:
@@ -460,25 +489,7 @@ class TrainingRunService:
                     "actor_user_id": owner_user_id,
                     "occurred_at": closed_at,
                     # No update/delete operation is exposed for a final audit snapshot.
-                    "payload": {
-                        "run": {
-                            "quiz_id": claimed["quiz_id"],
-                            "title": claimed["title"],
-                            "kind": claimed["kind"],
-                            "purpose": claimed["purpose"],
-                            "quiz_content_fingerprint": claimed.get("quiz_content_fingerprint"),
-                            "quiz_snapshot": claimed.get("quiz_snapshot"),
-                            "closes_at": claimed["closes_at"],
-                        },
-                        "completion_register": [
-                            *[self._audit_assignment_row(item) for item in assignments],
-                            *[
-                                self._audit_shared_session_row(session)
-                                for session in sessions
-                                if not session.get("training_assignment_id")
-                            ],
-                        ],
-                    },
+                    "payload": build_closure_payload(claimed, assignments, sessions),
                 }
             )
             closed = await self.repository.finalize_run_closure(
@@ -557,6 +568,7 @@ class TrainingRunService:
             "access_mode": run["access_mode"], "access_code": code,
             "access_url": f"{settings.FRONTEND_BASE_URL}/training-access/{code}" if code else None,
             "time_limit_minutes": run["time_limit_minutes"], "due_at": run.get("due_at"),
+            "passing_threshold_percentage": run.get("passing_threshold_percentage"),
             "closes_at": run["closes_at"], "closed_at": run.get("closed_at"),
             "created_at": run["created_at"], "assigned_count": len(assignments),
             "started_count": len(started) + len(shared_sessions),
@@ -590,61 +602,6 @@ class TrainingRunService:
             "completed_at": assignment.get("completed_at"),
         }
 
-    @staticmethod
-    def _completion_row(assignment: dict) -> dict:
-        return {
-            "assignment_id": str(assignment["_id"]), "recipient_email": assignment["recipient_email"],
-            "recipient_name": assignment.get("recipient_name"), "status": assignment["status"],
-            "due_at": assignment.get("due_at"), "attempts_used": assignment.get("attempts_used", 0),
-            "max_attempts": assignment.get("max_attempts"), "started_at": assignment.get("started_at"),
-            "completed_at": assignment.get("completed_at"), "latest_score": assignment.get("latest_score"),
-            "latest_percentage": assignment.get("latest_percentage"),
-        }
-
-    @staticmethod
-    def _shared_session_row(session: dict) -> dict:
-        return {
-            "assignment_id": str(session["_id"]),
-            "recipient_email": session.get("participant_email"),
-            "recipient_name": session.get("participant_name"),
-            "status": (
-                "completed"
-                if session.get("status") == "submitted"
-                else "incomplete"
-                if session.get("status") == "abandoned"
-                else "in_progress"
-            ),
-            "due_at": None,
-            "attempts_used": 1,
-            "max_attempts": None,
-            "started_at": session.get("started_at"),
-            "completed_at": session.get("submitted_at"),
-            "latest_score": session.get("score"),
-            "latest_percentage": session.get("percentage"),
-        }
-
-    @staticmethod
-    def _audit_assignment_row(assignment: dict) -> dict:
-        return {
-            "assignment_id": str(assignment["_id"]), "recipient_email": assignment["recipient_email"],
-            "status": assignment["status"], "attempts_used": assignment.get("attempts_used", 0),
-            "max_attempts": assignment.get("max_attempts"), "started_at": assignment.get("started_at"),
-            "completed_at": assignment.get("completed_at"), "latest_score": assignment.get("latest_score"),
-            "latest_percentage": assignment.get("latest_percentage"),
-        }
-
-    @staticmethod
-    def _audit_shared_session_row(session: dict) -> dict:
-        return {
-            "session_id": str(session["_id"]),
-            "participant_name": session.get("participant_name"),
-            "participant_email": session.get("participant_email"),
-            "status": session.get("status"),
-            "started_at": session.get("started_at"),
-            "submitted_at": session.get("submitted_at"),
-            "score": session.get("score"),
-            "percentage": session.get("percentage"),
-        }
 
     async def _generate_unique_code(self) -> str:
         alphabet = string.ascii_uppercase + string.digits

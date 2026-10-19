@@ -216,13 +216,14 @@ class TrainingRunRepository:
 
     async def list_assignments_for_run(self, run_id: str) -> list[dict]:
         cursor = self.assignments_collection.find({"training_run_id": run_id}).sort("recipient_email", 1)
-        return await cursor.to_list(length=2_000)
+        return await cursor.to_list(length=None)
 
     async def list_sessions_for_run(self, run_id: str) -> list[dict]:
         if self.sessions_collection is None:
             return []
         cursor = self.sessions_collection.find({"training_run_id": run_id}).sort("created_at", 1)
-        return await cursor.to_list(length=2_000)
+        # Reports and immutable closure evidence must not silently truncate runs.
+        return await cursor.to_list(length=None)
 
     async def mark_in_progress_assignments_incomplete(
         self, run_id: str, closed_at: datetime
@@ -434,6 +435,11 @@ class TrainingRunRepository:
             },
             return_document=ReturnDocument.AFTER,
         )
+
+    async def get_closure_audit(self, run_id: str) -> dict | None:
+        return await self.audit_events_collection.find_one({
+            "training_run_id": run_id, "event_type": "run_closed",
+        })
 
     async def create_audit_event(self, event: dict) -> None:
         try:

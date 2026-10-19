@@ -21,6 +21,7 @@ class CreateTrainingRunRequest(BaseModel):
     purpose: TrainingPurpose = "custom"
     title: Optional[str] = Field(default=None, max_length=180)
     time_limit_minutes: int = Field(default=20, ge=1, le=1440)
+    passing_threshold_percentage: float = Field(default=80, ge=0, le=100, allow_inf_nan=False, strict=True)
     closes_at: datetime
     due_at: Optional[datetime] = None
     access_mode: TrainingAccessMode = "assigned_only"
@@ -90,6 +91,7 @@ class TrainingRunSummary(BaseModel):
     access_code: Optional[str] = None
     access_url: Optional[str] = None
     time_limit_minutes: int
+    passing_threshold_percentage: Optional[float] = None
     due_at: Optional[datetime] = None
     closes_at: datetime
     closed_at: Optional[datetime] = None
@@ -132,10 +134,14 @@ class TrainingCompletionRow(BaseModel):
     completed_at: Optional[datetime] = None
     latest_score: Optional[int] = None
     latest_percentage: Optional[float] = None
+    participant_type: Literal["assigned", "shared_link"] = "assigned"
+    outcome: Literal["passed", "failed", "not_completed", "unknown"] = "unknown"
 
 
 class TrainingRunDetail(TrainingRunSummary):
     completion_register: list[TrainingCompletionRow] = Field(default_factory=list)
+    report_is_final: bool = False
+    report_finalized_at: Optional[datetime] = None
 
 
 class TrainingRunAccessPreview(BaseModel):

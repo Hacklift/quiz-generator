@@ -16,6 +16,13 @@ const completionLabel = (run: TrainingRunDetail) =>
     ? `${run.completed_count}/${run.assigned_count} recipients`
     : `${run.completed_count} completed`;
 
+const outcomeLabels = {
+  passed: "Passed",
+  failed: "Failed",
+  not_completed: "Not completed",
+  unknown: "Not recorded",
+};
+
 export default function TrainingRunDetailPage({ runId }: { runId: string }) {
   return (
     <RequireTrainingManager>
@@ -29,6 +36,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
   const [run, setRun] = useState<TrainingRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const load = useCallback(async () => {
@@ -69,6 +77,30 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
     }
   };
 
+  const exportReport = async () => {
+    if (!run || isExporting) return;
+    setIsExporting(true);
+    try {
+      const blob = await trainingRunApi.downloadCompletionReport(run.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      try {
+        link.href = url;
+        link.download = `training-completion-${run.id}.csv`;
+        document.body.appendChild(link);
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+      toast.success("Completion report downloaded.");
+    } catch {
+      toast.error("Could not export the completion report. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
         <NavBar />
@@ -76,11 +108,13 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
           {isLoading || !run ? <div className="flex min-h-[40vh] items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-brand" /></div> : <>
             <header className="border-b-2 border-divider pb-[28px]">
               <Kicker>{run.kind === "compliance" ? "Compliance register" : "Training completion"}</Kicker>
-              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" onClick={() => router.push(ROUTES.TRAINING_RUNS)} className={BTN_GHOST}>All runs</button>{run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
+              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" disabled={isExporting} onClick={() => void exportReport()} className={`${BTN_PRIMARY} disabled:opacity-50`}>{isExporting ? "Exporting..." : "Export completion CSV"}</button><button type="button" onClick={() => router.push(ROUTES.TRAINING_RUNS)} className={BTN_GHOST}>All runs</button>{run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
             </header>
+            <p role="status" className="mt-[20px] border-l-4 border-brand pl-[14px] text-[14px] leading-[24px] text-ink/75">{run.report_is_final ? `Final audit record, recorded ${displayDate(run.report_finalized_at)}. The register and CSV use the retained closure snapshot.` : "Provisional completion report. Results may change until the run closes."}</p>
+            {run.passing_threshold_percentage == null && <p className="mt-[10px] text-[13px] text-ink/70">No passing threshold was recorded for this historical run. Pass/fail cannot be established.</p>}
             <div className="grid gap-[36px] pt-[36px] lg:grid-cols-[minmax(0,1fr)_300px]">
-              <section aria-labelledby="register-heading"><Kicker>Per-run register</Kicker><h2 id="register-heading" className="text-[20px] font-extrabold">Completion by person</h2><div className="mt-[20px] overflow-x-auto border-2 border-divider"><table className="min-w-full divide-y-2 divide-divider text-left text-[13px]"><thead className="bg-ink text-paper"><tr><th className="px-[14px] py-[12px]">Recipient</th><th className="px-[14px] py-[12px]">State</th><th className="px-[14px] py-[12px]">Submitted</th><th className="px-[14px] py-[12px]">Score</th><th className="px-[14px] py-[12px]">Attempts</th></tr></thead><tbody className="divide-y divide-divider">{run.completion_register.map((row) => <tr key={row.assignment_id}><td className="px-[14px] py-[12px] font-semibold">{row.recipient_email || row.recipient_name || "Shared-link participant"}</td><td className="px-[14px] py-[12px]">{row.status.replace("_", " ")}</td><td className="px-[14px] py-[12px]">{displayDate(row.completed_at)}</td><td className="px-[14px] py-[12px]">{row.latest_percentage != null ? `${row.latest_percentage}%` : "-"}</td><td className="px-[14px] py-[12px]">{row.attempts_used}/{row.max_attempts ?? "∞"}</td></tr>)}{!run.completion_register.length && <tr><td className="px-[14px] py-[20px] text-ink/70" colSpan={5}>No participants have started this run.</td></tr>}</tbody></table></div></section>
-              <aside className="border-2 border-divider bg-paper p-[20px]"><Kicker>Run details</Kicker><dl className="mt-[16px] grid gap-[14px] text-[14px]"><div><dt className="font-extrabold">Completion</dt><dd className="mt-[3px] text-ink/70">{completionLabel(run)}</dd></div><div><dt className="font-extrabold">Duration</dt><dd className="mt-[3px] text-ink/70">{run.time_limit_minutes} minutes</dd></div><div><dt className="font-extrabold">Average score</dt><dd className="mt-[3px] text-ink/70">{run.average_score ?? "-"}</dd></div><div><dt className="font-extrabold">Due date</dt><dd className="mt-[3px] text-ink/70">{displayDate(run.due_at)}</dd></div><div><dt className="font-extrabold">Access</dt><dd className="mt-[3px] text-ink/70">{run.access_mode === "public" ? "Shareable live link" : "Assigned recipients only"}</dd></div></dl>{run.access_mode === "public" && <button type="button" onClick={() => void copyLink()} className={`${BTN_GHOST} mt-[20px] w-full`}>Copy share link</button>}</aside>
+              <section aria-labelledby="register-heading"><Kicker>Per-run register</Kicker><h2 id="register-heading" className="text-[20px] font-extrabold">Completion by person</h2><div className="mt-[20px] overflow-x-auto border-2 border-divider"><table className="min-w-full divide-y-2 divide-divider text-left text-[13px]"><thead className="bg-ink text-paper"><tr><th className="px-[14px] py-[12px]">Recipient</th><th className="px-[14px] py-[12px]">State</th><th className="px-[14px] py-[12px]">Submitted</th><th className="px-[14px] py-[12px]">Score</th><th className="px-[14px] py-[12px]">Outcome</th><th className="px-[14px] py-[12px]">Attempts</th></tr></thead><tbody className="divide-y divide-divider">{run.completion_register.map((row) => <tr key={row.assignment_id}><td className="px-[14px] py-[12px] font-semibold">{row.recipient_email || row.recipient_name || "Shared-link participant"}</td><td className="px-[14px] py-[12px]">{row.status === "assigned" ? "Not started" : row.status.replace("_", " ")}</td><td className="px-[14px] py-[12px]">{displayDate(row.completed_at)}</td><td className="px-[14px] py-[12px]">{row.latest_score != null ? `${row.latest_score} (${row.latest_percentage ?? "-"}%)` : "-"}</td><td className="px-[14px] py-[12px] font-semibold">{outcomeLabels[row.outcome ?? "unknown"]}</td><td className="px-[14px] py-[12px]">{row.attempts_used}/{row.max_attempts ?? "∞"}</td></tr>)}{!run.completion_register.length && <tr><td className="px-[14px] py-[20px] text-ink/70" colSpan={6}>No participants have started this run.</td></tr>}</tbody></table></div></section>
+              <aside className="border-2 border-divider bg-paper p-[20px]"><Kicker>Run details</Kicker><dl className="mt-[16px] grid gap-[14px] text-[14px]"><div><dt className="font-extrabold">Completion</dt><dd className="mt-[3px] text-ink/70">{completionLabel(run)}</dd></div><div><dt className="font-extrabold">Duration</dt><dd className="mt-[3px] text-ink/70">{run.time_limit_minutes} minutes</dd></div><div><dt className="font-extrabold">Passing threshold</dt><dd className="mt-[3px] text-ink/70">{run.passing_threshold_percentage != null ? `${run.passing_threshold_percentage}%` : "Not recorded"}</dd></div><div><dt className="font-extrabold">Average score</dt><dd className="mt-[3px] text-ink/70">{run.average_score ?? "-"}</dd></div><div><dt className="font-extrabold">Due date</dt><dd className="mt-[3px] text-ink/70">{displayDate(run.due_at)}</dd></div><div><dt className="font-extrabold">Access</dt><dd className="mt-[3px] text-ink/70">{run.access_mode === "public" ? "Shareable live link" : "Assigned recipients only"}</dd></div></dl>{run.access_mode === "public" && <p className="mt-[16px] text-[12px] leading-[20px] text-ink/65">Shared-link participant details are self-reported, not verified staff identity.</p>}{run.access_mode === "public" && <button type="button" onClick={() => void copyLink()} className={`${BTN_GHOST} mt-[20px] w-full`}>Copy share link</button>}</aside>
             </div>
             {showCloseConfirm && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 p-[20px]" role="presentation" onClick={() => !isClosing && setShowCloseConfirm(false)}><section role="dialog" aria-modal="true" aria-labelledby="close-run-title" className="w-full max-w-[520px] border-2 border-ink bg-paper p-[28px] shadow-2xl" onClick={(event) => event.stopPropagation()}><Kicker>Irreversible action</Kicker><h2 id="close-run-title" className="mt-[8px] text-[24px] font-extrabold">Close this training run?</h2><p className="mt-[14px] text-[15px] leading-[25px] text-ink/75">Closing stops new starts and submissions. Any participant currently taking the quiz will be unable to submit, and that attempt will not be counted as completed. The completion register becomes the final retained record and cannot be reopened.</p><p className="mt-[12px] border-l-4 border-brand pl-[12px] text-[14px] font-bold">{run.completion_register.filter((row) => row.status !== "completed").length} participant{run.completion_register.filter((row) => row.status !== "completed").length === 1 ? " is" : "s are"} not completed.</p><div className="mt-[24px] flex flex-wrap justify-end gap-[12px]"><button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(false)} className={BTN_GHOST}>Cancel</button><button type="button" disabled={isClosing} onClick={() => void closeRun()} className={`${BTN_PRIMARY} disabled:opacity-50`}>{isClosing ? "Closing..." : "Close run permanently"}</button></div></section></div>}
           </>}

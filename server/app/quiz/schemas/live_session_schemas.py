@@ -77,8 +77,6 @@ class SubmitLiveQuizSessionResponse(BaseModel):
     percentage: float
     submitted_at: datetime
     auto_submitted: bool = False
-    passing_threshold_percentage: float = 80
-    passed: bool = False
 
 
 class LiveQuizAnalyticsRow(BaseModel):
@@ -97,8 +95,6 @@ class LiveQuizAnalyticsRow(BaseModel):
     progress_percentage: Optional[float] = None
     status: str
     auto_submitted: bool = False
-    passing_threshold_percentage: Optional[float] = None
-    passed: Optional[bool] = None
 
 
 class LiveQuizGradedAnswer(BaseModel):

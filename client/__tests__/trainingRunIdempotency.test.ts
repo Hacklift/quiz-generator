@@ -19,6 +19,15 @@ const payload = (): CreateTrainingRunPayload => ({
 });
 
 describe("training run idempotency", () => {
+  it("treats a changed threshold as a distinct intent but normalizes the default", () => {
+    const original = payload();
+    expect(trainingRunIntentFingerprint(original)).toBe(
+      trainingRunIntentFingerprint({ ...original, passing_threshold_percentage: 80 }),
+    );
+    expect(trainingRunIntentFingerprint(original)).not.toBe(
+      trainingRunIntentFingerprint({ ...original, passing_threshold_percentage: 70 }),
+    );
+  });
   it("reuses a key for the same normalized request intent", () => {
     const keys = new Map<string, string>();
     const createKey = jest.fn(() => "key-1");

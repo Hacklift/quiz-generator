@@ -1,0 +1,231 @@
+import csv
+import io
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from bson import ObjectId
+from fastapi import FastAPI, HTTPException
+from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
+
+from server.app.core.dependencies import get_current_user
+from server.app.core.rate_limiter import limiter
+from server.app.quiz.routes import training_runs
+from server.app.quiz.schemas.training_runs import CreateTrainingRunRequest
+from server.app.quiz.services.training_run_service import TrainingRunService
+from server.app.quiz.utils.training_completion import (
+    build_closure_payload, completion_outcome, completion_report_csv,
+)
+
+
+def run_document():
+    now = datetime.now(timezone.utc)
+    return {
+        "_id": ObjectId(), "quiz_id": str(ObjectId()), "owner_user_id": "owner-1",
+        "title": "Safety training", "kind": "compliance", "purpose": "health_and_safety",
+        "status": "open", "access_mode": "assigned_only", "time_limit_minutes": 20,
+        "passing_threshold_percentage": 80, "closes_at": now + timedelta(days=7),
+        "created_at": now, "quiz_snapshot": {"questions": [{"question": "Q", "answer": "A"}]},
+    }
+
+
+def assignments():
+    return [{
+        "_id": ObjectId(), "recipient_email": "learner@example.com", "status": "completed",
+        "latest_score": 4, "latest_percentage": 80, "completed_at": datetime.now(timezone.utc),
+        "attempts_used": 1, "max_attempts": 2,
+    }, {
+        "_id": ObjectId(), "recipient_email": "absent@example.com", "status": "assigned",
+        "attempts_used": 0, "max_attempts": 2,
+    }]
+
+
+def report_service(run=None, rows=None):
+    run = run or run_document()
+    rows = rows if rows is not None else assignments()
+    repository = SimpleNamespace(
+        get_run=AsyncMock(side_effect=lambda identifier: deepcopy(run) if identifier == str(run["_id"]) else None),
+        list_assignments_for_run=AsyncMock(return_value=rows),
+        list_sessions_for_run=AsyncMock(return_value=[]),
+        get_closure_audit=AsyncMock(return_value=None),
+    )
+    return TrainingRunService(repository, SimpleNamespace()), repository, run
+
+
+@pytest.mark.parametrize("percentage,threshold,outcome", [
+    (80, 80, "passed"), (79.99, 80, "failed"), (0, 0, "passed"),
+    (100, 100, "passed"), (99.9, 100, "failed"), (80, None, "unknown"),
+    (None, 80, "unknown"), (float("nan"), 80, "unknown"),
+])
+def test_threshold_boundary_and_unknown_legacy_results(percentage, threshold, outcome):
+    assert completion_outcome("completed", percentage, threshold) == outcome
+    assert completion_outcome("incomplete", percentage, threshold) == "not_completed"
+
+
+@pytest.mark.parametrize("threshold", [-1, 101, float("nan"), float("inf"), True, None, "invalid"])
+def test_creation_rejects_invalid_thresholds(threshold):
+    with pytest.raises(ValidationError):
+        CreateTrainingRunRequest(
+            quiz_id="quiz-1", closes_at=datetime.now(timezone.utc) + timedelta(days=1),
+            recipient_emails=["learner@example.com"], passing_threshold_percentage=threshold,
+        )
+
+
+def test_custom_threshold_changes_creation_intent_without_breaking_default_retries():
+    request = CreateTrainingRunRequest(
+        quiz_id="quiz-1", closes_at=datetime.now(timezone.utc) + timedelta(days=1),
+        recipient_emails=["learner@example.com"],
+    )
+    explicit_default = request.model_copy(update={"passing_threshold_percentage": 80.0})
+    custom = request.model_copy(update={"passing_threshold_percentage": 70.0})
+    assert request.passing_threshold_percentage == 80
+    assert TrainingRunService._request_fingerprint(request) == TrainingRunService._request_fingerprint(explicit_default)
+    assert TrainingRunService._request_fingerprint(request) != TrainingRunService._request_fingerprint(custom)
+
+
+@pytest.mark.asyncio
+async def test_created_run_persists_custom_threshold_with_existing_creation_flow():
+    from server.tests.test_training_run_service import CreateRunRepository
+
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, SimpleNamespace())
+    request = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]), closes_at=datetime.now(timezone.utc) + timedelta(days=1),
+        recipient_emails=["learner@example.com"], passing_threshold_percentage=70,
+    )
+    result = await service.create_run(request, "owner-1", "threshold-test-1")
+    assert result["passing_threshold_percentage"] == 70
+    assert repository.created_run["passing_threshold_percentage"] == 70
+
+
+@pytest.mark.asyncio
+async def test_provisional_register_includes_all_assignees_and_current_outcomes():
+    service, _, run = report_service()
+    report = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert report["report_is_final"] is False
+    assert report["passing_threshold_percentage"] == 80
+    assert [row["outcome"] for row in report["completion_register"]] == ["passed", "not_completed"]
+    csv_rows = list(csv.DictReader(io.StringIO(completion_report_csv(report, generated_at=datetime.now(timezone.utc)))))
+    assert csv_rows[0]["record_status"] == "provisional"
+    assert csv_rows[1]["completion_status"] == "not_started"
+    assert csv_rows[0]["completed_at_utc"].endswith("+00:00")
+
+
+@pytest.mark.asyncio
+async def test_closed_report_uses_snapshot_not_mutated_live_records():
+    rows = assignments()
+    service, repository, run = report_service(rows=rows)
+    payload = build_closure_payload(run, rows, [])
+    run.update(status="closed", passing_threshold_percentage=99, title="Changed after closure")
+    rows[0].update(latest_percentage=0, latest_score=0)
+    repository.get_closure_audit.return_value = {"payload": payload, "occurred_at": run["created_at"]}
+    report = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert report["report_is_final"] is True
+    assert report["title"] == "Safety training"
+    assert report["passing_threshold_percentage"] == 80
+    assert report["completion_register"][0]["latest_percentage"] == 80
+    assert report["completion_register"][0]["outcome"] == "passed"
+    repository.list_assignments_for_run.assert_not_awaited()
+    repository.list_sessions_for_run.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_legacy_snapshot_does_not_invent_default_threshold_or_rewrite_evidence():
+    service, repository, run = report_service()
+    run["status"] = "closed"
+    legacy_run = {key: run[key] for key in ("quiz_id", "title", "kind", "purpose", "closes_at")}
+    from server.app.quiz.utils.training_completion import assignment_snapshot
+    payload = {"run": legacy_run, "completion_register": [assignment_snapshot(item) for item in assignments()]}
+    original = deepcopy(payload)
+    repository.get_closure_audit.return_value = {"payload": payload}
+    report = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert report["passing_threshold_percentage"] is None
+    assert report["completion_register"][0]["outcome"] == "unknown"
+    assert payload == original
+
+
+@pytest.mark.asyncio
+async def test_closed_report_missing_snapshot_fails_without_live_fallback():
+    service, repository, run = report_service()
+    run["status"] = "closed"
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert exc.value.status_code == 503
+    repository.list_assignments_for_run.assert_not_awaited()
+
+
+def test_worker_closure_persists_the_same_threshold_and_outcomes(monkeypatch):
+    import server.app.quiz.tasks.training_run_tasks as tasks
+    from server.tests.test_training_run_tasks import FakeClient, FakeDatabase
+
+    run = run_document()
+    run.update(
+        passing_threshold_percentage=70, closure_in_progress=True, closure_mode="manual",
+        closure_started_at=datetime.now(timezone.utc) - tasks.LOCK_STALE_AFTER,
+    )
+    rows = assignments()
+    database = FakeDatabase(run, rows, [])
+    client = FakeClient(database)
+    monkeypatch.setattr(tasks, "MongoClient", lambda _uri: client)
+    monkeypatch.setattr(tasks, "_utc_now", lambda: datetime.now(timezone.utc))
+    assert tasks.close_expired_training_runs() == 1
+    payload = database.audit_events.documents[0]["payload"]
+    assert payload["run"]["passing_threshold_percentage"] == 70
+    assert [row["outcome"] for row in payload["completion_register"]] == ["passed", "not_completed"]
+    assert client.closed
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@", "\t", "\r", "\n", "  =", "\ufeff=", "＝"])
+def test_csv_safely_encodes_untrusted_text_and_keeps_numeric_values(prefix):
+    from server.app.quiz.utils.training_completion import completion_row, assignment_snapshot
+    row = completion_row(assignment_snapshot(assignments()[0]), 80)
+    row["recipient_name"] = prefix + 'formula,"name"'
+    report = {
+        "id": "run-1", "quiz_id": "quiz-1", "title": "Safety", "report_is_final": False,
+        "passing_threshold_percentage": 80, "completion_register": [row],
+    }
+    parsed = list(csv.DictReader(io.StringIO(completion_report_csv(report, generated_at=datetime.now(timezone.utc)))))
+    assert parsed[0]["assignee_name"].startswith("'")
+    assert parsed[0]["score"] == "4"
+    assert parsed[0]["percentage"] == "80"
+
+
+@pytest.fixture
+def report_app(monkeypatch):
+    service, repository, run = report_service()
+    app = FastAPI()
+    app.include_router(training_runs.router, prefix="/api/v1")
+    user = SimpleNamespace(id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr")
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[training_runs.get_training_run_service] = lambda: service
+    monkeypatch.setattr(limiter, "enabled", False)
+    return app, user, repository, run
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("identity,status", [("owner", 200), ("other", 404), ("employee", 403), ("unverified", 403)])
+async def test_report_route_checks_owner_and_existing_manager_policy(report_app, identity, status):
+    app, user, _, run = report_app
+    if identity == "other":
+        user.id = "other-manager"
+    elif identity == "employee":
+        user.persona_user_type = "employee"
+    elif identity == "unverified":
+        user.is_verified = False
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/training-runs/{run['_id']}/completion-report.csv")
+    assert response.status_code == status
+    if status == 200:
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["content-type"].startswith("text/csv")
+        assert "absent@example.com" in response.text
+
+
+@pytest.mark.asyncio
+async def test_missing_or_malformed_report_is_404(report_app):
+    app, _, _, _ = report_app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        assert (await client.get("/api/v1/training-runs/not-an-objectid/completion-report.csv")).status_code == 404
