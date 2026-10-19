@@ -6,7 +6,9 @@ from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError
-from server.app.quiz.utils.training_completion import STARTED_ASSIGNMENT_STATUSES
+from server.app.quiz.utils.training_completion import (
+    STARTED_ASSIGNMENT_STATUSES, SHARED_SESSION_STATES, REPORT_METADATA_FIELDS, CompletionEvidenceError,
+)
 
 
 class TrainingRunRepository:
@@ -266,21 +268,58 @@ class TrainingRunRepository:
         return {run_id: self._merge_activity_counts(assignments.get(run_id, {}), sessions.get(run_id, {})) for run_id in run_ids}
 
     async def get_closure_activity_summary(self, run_id: str) -> dict:
+        entries = await self.get_closure_report_summaries([run_id])
+        if run_id not in entries:
+            raise CompletionEvidenceError("Closure evidence summary unavailable")
+        return entries[run_id]["activity"]
+
+    async def get_closure_report_summaries(self, run_ids: list[str]) -> dict[str, dict]:
+        if not run_ids:
+            return {}
+        group = self._activity_group(present="$_present")
+        group.update({
+            "run": {"$first": "$run"}, "occurred_at": {"$first": "$occurred_at"},
+            "payload_valid": {"$first": "$_payload_valid"},
+            "invalid_records": {"$sum": {"$cond": [
+                {"$and": ["$_present", {"$not": ["$_record_valid"]}]}, 1, 0,
+            ]}},
+        })
         rows = await self.audit_events_collection.aggregate([
-            {"$match": {"training_run_id": run_id, "event_type": "run_closed"}},
-            {"$unwind": "$payload.completion_register"},
-            {"$project": {"training_run_id": 1, "record": "$payload.completion_register"}},
+            {"$match": {"training_run_id": {"$in": run_ids}, "event_type": "run_closed"}},
+            {"$project": {
+                "training_run_id": 1, "occurred_at": 1,
+                "run": {key: f"$payload.run.{key}" for key in REPORT_METADATA_FIELDS},
+                "record": {"$cond": [{"$isArray": "$payload.completion_register"}, "$payload.completion_register", []]},
+                "_payload_valid": {"$and": [
+                    {"$eq": [{"$type": "$payload"}, "object"]},
+                    {"$eq": [{"$type": "$payload.run"}, "object"]},
+                    {"$isArray": "$payload.completion_register"},
+                ]},
+            }},
+            {"$unwind": {"path": "$record", "preserveNullAndEmptyArrays": True}},
             {"$set": {"shared": {"$ne": [{"$type": "$record.session_id"}, "missing"]}}},
             {"$project": {
-                "training_run_id": 1, "shared": 1,
+                "training_run_id": 1, "shared": 1, "run": 1, "occurred_at": 1, "_payload_valid": 1,
+                "_present": {"$ne": [{"$type": "$record"}, "missing"]},
+                "_record_valid": {"$and": [
+                    {"$eq": [{"$type": "$record"}, "object"]},
+                    {"$ne": ["$record.interpretation_error", True]},
+                    {"$eq": [{"$type": {"$cond": ["$shared", "$record.session_id", "$record.assignment_id"]}}, "string"]},
+                    {"$in": ["$record.status", {"$cond": [
+                        "$shared", list(SHARED_SESSION_STATES), ["assigned", *STARTED_ASSIGNMENT_STATUSES],
+                    ]}]},
+                ]},
                 "status": {"$cond": ["$shared", {"$cond": [
                     {"$eq": ["$record.status", "submitted"]}, "completed", "in_progress",
                 ]}, "$record.status"]},
                 "latest_score": {"$cond": ["$shared", "$record.score", "$record.latest_score"]},
             }},
-            {"$group": self._activity_group()},
-        ]).to_list(length=1)
-        return self._merge_activity_counts(rows[0] if rows else {})
+            {"$group": group},
+        ]).to_list(length=len(run_ids))
+        return {
+            row["_id"]: {"run": row["run"], "activity": self._merge_activity_counts(row)}
+            for row in rows if row["payload_valid"] and not row["invalid_records"]
+        }
 
     @staticmethod
     def _merge_activity_counts(*rows: dict) -> dict:
@@ -294,8 +333,8 @@ class TrainingRunRepository:
         }
 
     @staticmethod
-    def _activity_group() -> dict:
-        completed = {"$eq": ["$status", "completed"]}
+    def _activity_group(*, present=True) -> dict:
+        completed = {"$and": [present, {"$eq": ["$status", "completed"]}]}
         # Match raw_score(): accept nonnegative whole numbers, not bools,
         # fractional scores, NaN, or infinity. $cond guards numeric operators.
         valid_score = {"$cond": [
@@ -307,10 +346,10 @@ class TrainingRunRepository:
         ]}
         scored = {"$and": [completed, valid_score]}
         return {
-            "_id": "$training_run_id", "participant_count": {"$sum": 1},
-            "assigned_count": {"$sum": {"$cond": ["$shared", 0, 1]}},
+            "_id": "$training_run_id", "participant_count": {"$sum": {"$cond": [present, 1, 0]}},
+            "assigned_count": {"$sum": {"$cond": [{"$and": [present, {"$not": ["$shared"]}]}, 1, 0]}},
             "started_count": {"$sum": {"$cond": [
-                {"$or": ["$shared", {"$in": ["$status", list(STARTED_ASSIGNMENT_STATUSES)]}]}, 1, 0,
+                {"$and": [present, {"$or": ["$shared", {"$in": ["$status", list(STARTED_ASSIGNMENT_STATUSES)]}]}]}, 1, 0,
             ]}},
             "completed_count": {"$sum": {"$cond": [completed, 1, 0]}},
             "score_count": {"$sum": {"$cond": [scored, 1, 0]}},

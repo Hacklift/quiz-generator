@@ -18,6 +18,15 @@ audit trail (#132). It does not introduce a second live-quiz run collection.
   threshold, participant records and outcomes. Closed reports read that payload,
   never current assignments or regenerated quiz content. A missing final audit
   record produces 503 rather than fabricated evidence.
+- Capture and interpretation are separate: an unfamiliar record state or invalid
+  timestamp cannot prevent closure. Its raw retained fields are preserved with
+  `outcome: "unknown"` and an interpretation-error marker. Strict report reads
+  remain unavailable until evidence can be interpreted safely. Closure failure
+  from unrelated storage/operational errors still uses the existing recovery.
+- Closed list summaries also use retained evidence, not live participant rows.
+  A missing or uninterpretable snapshot is explicitly labelled **Final evidence
+  unavailable** (`summary_availability: "unavailable"`), not a zero-completion
+  claim, and does not hide other runs from the list.
 - Existing runs/snapshots without a recorded threshold remain readable, but
   completed outcomes are **unknown / Not recorded**, not retroactively failed
   or evaluated against today's default. Non-starters are included as not started.
@@ -39,7 +48,11 @@ participant count, not the absent register. CSV requests return **413**, never a
 partial export labelled complete.
 
 The run list batches count/score aggregation across the owner's selected run IDs:
-two aggregations total, not two per run. Detail and summary calculations treat
+two aggregations for open runs and one for closed snapshots, at most three total,
+not queries per run. The assignment compound index starts with `training_run_id`;
+live sessions have a `training_run_id` index. Bounded sentinel reads are retained
+instead of a separate count-first query, which adds round-trips and does not
+eliminate races with new participants. Detail and summary calculations treat
 `submitting` as in progress and apply the same nonnegative whole-number raw-score
 rule (including integral floats, excluding booleans, fractions and non-finite
 values). Large closed-run summary counts are aggregated from the immutable audit

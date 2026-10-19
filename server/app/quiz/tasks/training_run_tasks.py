@@ -273,7 +273,7 @@ def close_expired_training_runs() -> int:
             try:
                 if run.get("closure_mode") == "manual":
                     assignments.update_many(
-                        {"training_run_id": run_id, "status": "in_progress"},
+                        {"training_run_id": run_id, "status": {"$in": ["in_progress", "submitting"]}},
                         {"$set": {"status": "incomplete", "updated_at": now}},
                     )
                     sessions.update_many(

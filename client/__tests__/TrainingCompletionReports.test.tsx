@@ -139,3 +139,10 @@ test("creation submits the configured threshold on the existing training API", a
     expect.objectContaining({ passing_threshold_percentage: 70, kind: "compliance" }), "creation-key",
   ));
 });
+
+test("the run list does not present unavailable final evidence as zero completion", async () => {
+  api.listRuns.mockResolvedValue([{ ...detail(), status: "closed", summary_availability: "unavailable" }]);
+  render(<TrainingRunsPage />);
+  expect(await screen.findByText("Final evidence unavailable")).toBeInTheDocument();
+  expect(screen.queryByText("0 completed")).toBeNull();
+});

@@ -45,6 +45,7 @@ async def test_training_run_index_migrates_sparse_access_codes_to_string_only_un
         "unique": True,
         "partialFilterExpression": {"access_code": {"$type": "string"}},
     }
+    assert any(keys[0] == ("training_run_id", 1) for keys, _options in assignments.created_indexes)
 
 
 @pytest.mark.asyncio

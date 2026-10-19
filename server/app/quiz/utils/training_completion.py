@@ -2,6 +2,7 @@
 
 import csv
 import io
+import logging
 import math
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -10,10 +11,32 @@ from datetime import datetime, timezone
 # Interactive reports are synchronous. Closure evidence has no row truncation.
 MAX_COMPLETION_REPORT_ROWS = 10_000
 STARTED_ASSIGNMENT_STATUSES = ("in_progress", "submitting", "incomplete", "completed")
+SHARED_SESSION_STATES = {
+    "submitted": "completed", "abandoned": "incomplete", "expired": "incomplete",
+    "active": "in_progress", "joined": "in_progress", "disconnected": "in_progress",
+    "closing": "in_progress",
+}
+REPORT_METADATA_FIELDS = (
+    "quiz_id", "title", "kind", "purpose", "access_mode", "time_limit_minutes",
+    "due_at", "closes_at", "passing_threshold_percentage",
+)
+logger = logging.getLogger(__name__)
 
 
 class CompletionEvidenceError(ValueError):
     """Stored completion evidence cannot be interpreted safely."""
+
+
+def closed_run_metadata(run: dict, snapshot: dict) -> dict:
+    # Optional nulls are evidence (e.g. no due date). Required nulls in older
+    # snapshots are omissions, not overrides of the immutable run configuration.
+    merged = dict(run)
+    for key in REPORT_METADATA_FIELDS:
+        if key in snapshot and (snapshot[key] is not None or key in ("due_at", "passing_threshold_percentage")):
+            merged[key] = snapshot[key]
+    # Never invent a historical passing threshold from the current run document.
+    merged["passing_threshold_percentage"] = snapshot.get("passing_threshold_percentage")
+    return merged
 
 
 def raw_score(value) -> int | None:
@@ -64,10 +87,10 @@ def completion_outcome(status: str, percentage, threshold) -> str:
 def assignment_snapshot(assignment: dict) -> dict:
     return {
         "assignment_id": str(assignment["_id"]),
-        "recipient_email": assignment["recipient_email"],
+        "recipient_email": assignment.get("recipient_email"),
         "recipient_name": assignment.get("recipient_name"),
         "recipient_user_id": assignment.get("recipient_user_id"),
-        "status": assignment["status"],
+        "status": assignment.get("status"),
         "attempts_used": assignment.get("attempts_used", 0),
         "max_attempts": assignment.get("max_attempts"),
         "due_at": assignment.get("due_at"),
@@ -94,20 +117,17 @@ def shared_session_snapshot(session: dict) -> dict:
 def completion_row(record: dict, threshold) -> dict:
     if not isinstance(record, dict):
         raise CompletionEvidenceError("Invalid completion record")
+    if record.get("interpretation_error"):
+        raise CompletionEvidenceError("Uninterpretable retained completion record")
     shared = "session_id" in record
     identifier = record.get("session_id" if shared else "assignment_id")
     if not isinstance(identifier, str) or not identifier:
         raise CompletionEvidenceError("Missing completion record identifier")
     state = record.get("status")
     if shared:
-        states = {
-            "submitted": "completed", "abandoned": "incomplete", "expired": "incomplete",
-            "active": "in_progress", "joined": "in_progress", "disconnected": "in_progress",
-            "closing": "in_progress",
-        }
-        if not isinstance(state, str) or state not in states:
+        if not isinstance(state, str) or state not in SHARED_SESSION_STATES:
             raise CompletionEvidenceError("Invalid shared-session state")
-        state = states[state]
+        state = SHARED_SESSION_STATES[state]
     elif state == "submitting":
         state = "in_progress"
     elif not isinstance(state, str) or state not in ("assigned", *STARTED_ASSIGNMENT_STATUSES):
@@ -136,15 +156,27 @@ def build_closure_payload(run: dict, assignments: list[dict], sessions: list[dic
         *[assignment_snapshot(item) for item in assignments],
         *[shared_session_snapshot(item) for item in sessions if not item.get("training_assignment_id")],
     ]
+    unknown_records = 0
     for record in records:
-        record["outcome"] = completion_row(record, threshold)["outcome"]
+        try:
+            record["outcome"] = completion_row(record, threshold)["outcome"]
+        except CompletionEvidenceError:
+            # Capture must not depend on our ability to interpret legacy/new
+            # states. Preserve the raw values; strict readers remain fail-closed.
+            record["outcome"] = "unknown"
+            record["interpretation_error"] = True
+            unknown_records += 1
+    if unknown_records:
+        logger.warning(
+            "training_closure_uninterpretable_records run_id=%s count=%s", run.get("_id"), unknown_records,
+        )
     return deepcopy({
         "report_schema_version": 1,
         "run": {key: run.get(key) for key in (
             "quiz_id", "title", "kind", "purpose", "access_mode", "time_limit_minutes",
             "due_at", "closes_at", "quiz_content_fingerprint", "quiz_snapshot",
             "passing_threshold_percentage",
-        )},
+        ) if key in run},
         "completion_register": records,
     })
 

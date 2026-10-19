@@ -101,6 +101,7 @@ class TrainingRunSummary(BaseModel):
     completed_count: int = 0
     average_score: Optional[float] = None
     participant_count: int = 0
+    summary_availability: Literal["available", "unavailable"] = "available"
 
 
 class TrainingAssignmentSummary(BaseModel):

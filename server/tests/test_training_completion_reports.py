@@ -1,5 +1,6 @@
 import csv
 import io
+from typing import get_args
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -19,6 +20,7 @@ from server.app.quiz.services.training_run_service import TrainingRunService
 from server.app.quiz.utils.training_completion import (
     build_closure_payload, completion_outcome, completion_report_csv, completion_row,
     completion_summary, assignment_snapshot, MAX_COMPLETION_REPORT_ROWS,
+    CompletionEvidenceError, SHARED_SESSION_STATES, closed_run_metadata,
 )
 
 
@@ -231,6 +233,65 @@ def test_snapshot_outcomes_remain_authoritative_when_a_threshold_is_changed_out_
     payload = build_closure_payload(run, assignments(), [])
     payload["run"]["passing_threshold_percentage"] = 99
     assert completion_row(payload["completion_register"][0], 99)["outcome"] == "passed"
+
+
+@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("state", ["future-state", None, {"unexpected": "state"}])
+def test_closure_capture_preserves_unknown_states_without_blocking_finalization(shared, state, caplog):
+    record = {"_id": ObjectId(), "status": state, "recipient_email": "private@example.com"}
+    run = run_document()
+    payload = build_closure_payload(run, [] if shared else [record], [record] if shared else [])
+    frozen = payload["completion_register"][0]
+    assert frozen["status"] == state
+    assert frozen["outcome"] == "unknown"
+    assert frozen["interpretation_error"] is True
+    assert record["status"] == state
+    assert "private@example.com" not in caplog.text
+    assert "training_closure_uninterpretable_records" in caplog.text
+    with pytest.raises(CompletionEvidenceError):
+        completion_row(frozen, 80)
+
+
+def test_closure_capture_keeps_malformed_timestamps_as_unknown_evidence():
+    row = assignments()[0]
+    row["completed_at"] = "legacy-invalid-time"
+    frozen = build_closure_payload(run_document(), [row], [])["completion_register"][0]
+    assert frozen["completed_at"] == "legacy-invalid-time"
+    assert frozen["outcome"] == "unknown"
+    assert frozen["interpretation_error"] is True
+
+
+def test_shared_state_map_covers_the_live_session_contract_and_internal_states():
+    from server.app.quiz.schemas.live_session_schemas import LiveQuizSessionState
+
+    states = get_args(LiveQuizSessionState.model_fields["status"].annotation)
+    assert set(states) <= SHARED_SESSION_STATES.keys()
+    assert {"closing", "abandoned"} <= SHARED_SESSION_STATES.keys()
+
+
+@pytest.mark.asyncio
+async def test_closed_snapshot_nulls_respect_legacy_required_fields_and_optional_evidence():
+    service, repository, run = report_service()
+    run.update(status="closed", due_at=datetime.now(timezone.utc))
+    payload = build_closure_payload(run, assignments(), [])
+    payload["run"].update(access_mode=None, time_limit_minutes=None, due_at=None, passing_threshold_percentage=None)
+    payload["run"].update(status="open", owner_user_id="another-owner", _id="replacement")
+    repository.get_closure_audit.return_value = {"payload": payload}
+    result = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert result["status"] == "closed"
+    assert result["access_mode"] == "assigned_only"
+    assert result["time_limit_minutes"] == 20
+    assert result["due_at"] is None
+    assert result["passing_threshold_percentage"] is None
+    assert result["id"] == str(run["_id"])
+
+
+def test_closure_builder_does_not_manufacture_null_metadata_for_absent_fields():
+    run = run_document()
+    run.pop("time_limit_minutes")
+    payload = build_closure_payload(run, [], [])
+    assert "time_limit_minutes" not in payload["run"]
+    assert closed_run_metadata({"time_limit_minutes": 30}, payload["run"])["time_limit_minutes"] == 30
 
 
 def test_worker_closure_persists_the_same_threshold_and_outcomes(monkeypatch):

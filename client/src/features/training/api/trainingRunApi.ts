@@ -30,6 +30,7 @@ export interface TrainingRunSummary {
   completed_count: number;
   average_score?: number | null;
   participant_count?: number;
+  summary_availability?: "available" | "unavailable";
 }
 
 export interface TrainingCompletionRow {

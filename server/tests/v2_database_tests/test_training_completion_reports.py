@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock
+from pymongo import MongoClient
 
 import pytest
 from bson import ObjectId
@@ -72,6 +73,11 @@ async def test_real_mongo_report_is_complete_owner_scoped_and_frozen_after_closu
     assert final["report_finalized_at"].tzinfo == timezone.utc
     assert len(final["completion_register"]) == 2002
     assert final["completion_register"][1]["outcome"] == "passed"
+    listed = await service.list_owner_runs("owner-1")
+    assert listed[0]["completed_count"] == final["completed_count"]
+    assert listed[0]["assigned_count"] == final["assigned_count"]
+    assert listed[0]["average_score"] == final["average_score"]
+    assert listed[0]["passing_threshold_percentage"] == 80
     with pytest.raises(HTTPException) as exc:
         await service.get_owner_run("not-an-objectid", "owner-1")
     assert exc.value.status_code == 404
@@ -212,7 +218,7 @@ async def test_database_and_python_summary_rules_match_submitting_and_integer_sc
     assert await repository_for(test_db).get_run_activity_summary("run-1") == expected
     await test_db.training_audit_events.insert_one({
         "training_run_id": "run-1", "event_type": "run_closed",
-        "payload": {"completion_register": records},
+        "payload": {"run": {}, "completion_register": records},
     })
     assert await repository_for(test_db).get_closure_activity_summary("run-1") == expected
 
@@ -237,3 +243,114 @@ async def test_real_default_slice_boundary_keeps_large_closed_run_accessible(tes
     assert result["register_availability"] == "limit_exceeded"
     assert result["participant_count"] == result["completed_count"] == MAX_COMPLETION_REPORT_ROWS + 1
     assert result["report_is_final"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shared", [False, True])
+async def test_manual_close_completes_with_unknown_record_states_and_reports_stay_strict(test_db, shared):
+    run = run_document()
+    run.update(kind="business", purpose="custom", access_mode="public", access_code="TEST999")
+    await test_db.training_runs.insert_one(run)
+    run_id = str(run["_id"])
+    collection = test_db.live_quiz_sessions if shared else test_db.training_assignments
+    source = {
+        "training_run_id": run_id, "status": "new-unsupported-state", "recipient_email": "learner@example.com",
+    }
+    await collection.insert_one(source)
+    service = TrainingRunService(repository_for(test_db), SimpleNamespace())
+    await service.close_owner_run(run_id, "owner-1")
+    stored = await test_db.training_runs.find_one({"_id": run["_id"]})
+    assert stored["status"] == "closed"
+    audit = await test_db.training_audit_events.find_one({"training_run_id": run_id})
+    assert audit["payload"]["completion_register"][0]["status"] == "new-unsupported-state"
+    assert audit["payload"]["completion_register"][0]["outcome"] == "unknown"
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(run_id, "owner-1")
+    assert exc.value.status_code == 503
+    listed = await service.list_owner_runs("owner-1")
+    assert listed[0]["summary_availability"] == "unavailable"
+    with pytest.raises(HTTPException) as exc:
+        await service._get_public_startable_run("TEST999")
+    assert exc.value.status_code == 410
+
+
+@pytest.mark.asyncio
+async def test_scheduled_closure_captures_unknown_records_without_repeated_failure(test_db, mongo_container, monkeypatch):
+    import server.app.quiz.tasks.training_run_tasks as tasks
+
+    run = run_document()
+    run["closes_at"] = datetime.now(timezone.utc) - timedelta(minutes=1)
+    await test_db.training_runs.insert_one(run)
+    run_id = str(run["_id"])
+    await test_db.live_quiz_sessions.insert_one({"training_run_id": run_id, "status": "legacy-unknown-state"})
+    await test_db.training_assignments.insert_one({"training_run_id": run_id, "status": None})
+    monkeypatch.setenv("DB_NAME", test_db.name)
+    monkeypatch.setattr(tasks, "MongoClient", lambda _uri: MongoClient(mongo_container.get_connection_url()))
+    assert tasks.close_expired_training_runs() == 1
+    assert tasks.close_expired_training_runs() == 0
+    audit = await test_db.training_audit_events.find_one({"training_run_id": run_id})
+    assert [row["outcome"] for row in audit["payload"]["completion_register"]] == ["unknown", "unknown"]
+
+
+@pytest.mark.asyncio
+async def test_worker_manual_recovery_terminalizes_submitting_assignments(test_db, mongo_container, monkeypatch):
+    import server.app.quiz.tasks.training_run_tasks as tasks
+
+    run = run_document()
+    run.update(
+        closure_in_progress=True, closure_mode="manual",
+        closure_started_at=datetime.now(timezone.utc) - tasks.LOCK_STALE_AFTER,
+    )
+    await test_db.training_runs.insert_one(run)
+    run_id = str(run["_id"])
+    await test_db.training_assignments.insert_one({
+        "training_run_id": run_id, "recipient_email": "learner@example.com", "status": "submitting",
+    })
+    monkeypatch.setenv("DB_NAME", test_db.name)
+    monkeypatch.setattr(tasks, "MongoClient", lambda _uri: MongoClient(mongo_container.get_connection_url()))
+    assert tasks.close_expired_training_runs() == 1
+    row = await test_db.training_assignments.find_one({"training_run_id": run_id})
+    assert row["status"] == "incomplete"
+
+
+@pytest.mark.asyncio
+async def test_closed_list_batches_snapshots_including_empty_and_missing_evidence(test_db):
+    closed = [run_document() for _ in range(3)]
+    for run in closed:
+        run["status"] = "closed"
+    opened = run_document()
+    await test_db.training_runs.insert_many([*closed, opened])
+    records = [{"assignment_id": "a", "status": "completed", "latest_score": 3}]
+    await test_db.training_audit_events.insert_many([
+        {"training_run_id": str(closed[0]["_id"]), "event_type": "run_closed", "payload": {
+            "run": {"title": "Frozen title", "access_mode": None, "time_limit_minutes": None},
+            "completion_register": records,
+        }},
+        {"training_run_id": str(closed[1]["_id"]), "event_type": "run_closed", "payload": {
+            "run": {}, "completion_register": [],
+        }},
+    ])
+    # Live rows for closed runs must never influence their final counters.
+    await test_db.training_assignments.insert_many([
+        {"training_run_id": str(run["_id"]), "status": "completed", "latest_score": 999}
+        for run in closed
+    ])
+    repository = repository_for(test_db)
+    assignment_aggregate = Mock(wraps=test_db.training_assignments.aggregate)
+    session_aggregate = Mock(wraps=test_db.live_quiz_sessions.aggregate)
+    audit_aggregate = Mock(wraps=test_db.training_audit_events.aggregate)
+    repository.assignments_collection = SimpleNamespace(aggregate=assignment_aggregate)
+    repository.sessions_collection = SimpleNamespace(aggregate=session_aggregate)
+    repository.audit_events_collection = SimpleNamespace(aggregate=audit_aggregate)
+    listed = await TrainingRunService(repository, SimpleNamespace()).list_owner_runs("owner-1")
+    by_id = {item["id"]: item for item in listed}
+    assert by_id[str(closed[0]["_id"])]["title"] == "Frozen title"
+    assert by_id[str(closed[0]["_id"])]["average_score"] == 3
+    assert by_id[str(closed[1]["_id"])]["participant_count"] == 0
+    assert by_id[str(closed[1]["_id"])]["summary_availability"] == "available"
+    assert by_id[str(closed[2]["_id"])]["summary_availability"] == "unavailable"
+    for aggregate in (assignment_aggregate, session_aggregate):
+        aggregate.assert_called_once()
+        assert aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"] == [str(opened["_id"])]
+    audit_aggregate.assert_called_once()
+    assert set(audit_aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"]) == {str(run["_id"]) for run in closed}

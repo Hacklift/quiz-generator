@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
-from server.app.quiz.schemas.training_runs import TrainingRunDetail
+from server.app.quiz.schemas.training_runs import TrainingRunDetail, TrainingRunSummary
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.identity import normalize_email
 from server.app.quiz.utils.training_completion import (
@@ -22,6 +22,7 @@ from server.app.quiz.utils.training_completion import (
     report_timestamp,
     MAX_COMPLETION_REPORT_ROWS,
     CompletionEvidenceError, completion_summary, raw_score, STARTED_ASSIGNMENT_STATUSES,
+    closed_run_metadata,
 )
 
 
@@ -282,11 +283,32 @@ class TrainingRunService:
 
     async def list_owner_runs(self, owner_user_id: str) -> list[dict]:
         runs = await self.repository.list_runs_for_owner(owner_user_id)
-        activity = await self.repository.get_run_activity_summaries([str(run["_id"]) for run in runs])
+        activity = await self.repository.get_run_activity_summaries([
+            str(run["_id"]) for run in runs if run["status"] == "open"
+        ])
+        closed = await self.repository.get_closure_report_summaries([
+            str(run["_id"]) for run in runs if run["status"] == "closed"
+        ])
         summaries = []
         for run in runs:
             summary = self._run_summary(run, [], [])
-            summary.update(activity[str(run["_id"])])
+            run_id = str(run["_id"])
+            if run["status"] == "closed":
+                evidence = closed.get(run_id)
+                if evidence:
+                    candidate = self._run_summary(closed_run_metadata(run, evidence["run"]), [], [])
+                    candidate.update(evidence["activity"])
+                    try:
+                        summary = TrainingRunSummary.model_validate(candidate).model_dump()
+                    except ValidationError:
+                        evidence = None
+                if not evidence:
+                    # One unavailable audit must not hide other runs or invent
+                    # final counters from mutable assignment/session rows.
+                    summary["summary_availability"] = "unavailable"
+                    logger.error("training_completion_report_unavailable run_id=%s", run_id)
+            else:
+                summary.update(activity[run_id])
             summaries.append(summary)
         return summaries
 
@@ -314,8 +336,7 @@ class TrainingRunService:
                     raise CompletionEvidenceError("Missing or invalid closure payload")
                 # Closed evidence never falls back to mutable assignments or quiz
                 # content. Historical snapshots without a threshold remain unknown.
-                run = {**run, **payload["run"]}
-                run["passing_threshold_percentage"] = payload["run"].get("passing_threshold_percentage")
+                run = closed_run_metadata(run, payload["run"])
                 records = payload["completion_register"]
                 finalized_at = report_timestamp(audit.get("occurred_at"))
             else:

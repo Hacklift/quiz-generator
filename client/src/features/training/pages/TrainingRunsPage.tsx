@@ -44,7 +44,7 @@ const PURPOSES: Record<TrainingKind, Array<[TrainingPurpose, string]>> = {
 const DURATIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
 
 const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
+  run.summary_availability === "unavailable" ? "Final evidence unavailable" : run.assigned_count
     ? `${run.completed_count}/${run.assigned_count} complete`
     : `${run.completed_count} completed`;
 
