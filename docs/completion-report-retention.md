@@ -47,16 +47,23 @@ and keeps the irreversible Close control available. Its warning uses the full
 participant count, not the absent register. CSV requests return **413**, never a
 partial export labelled complete.
 
-The run list batches count/score aggregation across the owner's selected run IDs:
-two aggregations for open runs and one for closed snapshots, at most three total,
-not queries per run. The assignment compound index starts with `training_run_id`;
+The run list batches work across the owner's selected run IDs. Open runs use two
+aggregations. New closure payloads (report schema version 2) store `summary`
+counters alongside their frozen register, so closed lists read only projected
+metadata and counters, never the full register. Missing/uninterpretable counters
+are unavailable, not recomputed from live data. Version 1 and older snapshots
+without stored counters retain one batched legacy aggregation; readers do not
+rewrite retained snapshots. A mixed list therefore needs at most two open-run
+aggregations, one projected closure lookup and one legacy aggregation, independent
+of the number of runs. The assignment compound index starts with `training_run_id`;
 live sessions have a `training_run_id` index. Bounded sentinel reads are retained
 instead of a separate count-first query, which adds round-trips and does not
 eliminate races with new participants. Detail and summary calculations treat
 `submitting` as in progress and apply the same nonnegative whole-number raw-score
 rule (including integral floats, excluding booleans, fractions and non-finite
-values). Large closed-run summary counts are aggregated from the immutable audit
-register, not current assignments or sessions. No Redis cache or additional
+values). Large closed-run summary counts use retained counters or the legacy
+audit-register fallback, never current assignments or sessions. Shared-session
+state mappings are reused by both Mongo and detail reporting. No Redis cache or additional
 polling schedule is introduced.
 
 This is a limit on interactive reporting, not a participant admission limit.
@@ -72,6 +79,8 @@ PII. The evidence parsing stack is retained with a sanitized exception rather
 than validation input values. Unexpected implementation/DB failures are not
 reclassified as malformed evidence; the standard error handler retains their
 tracebacks. Oversized requests log `training_completion_report_limit_exceeded`.
+CSV export errors distinguish an unavailable evidence record (503) from a generic
+transport failure; neither produces a partial download.
 Operators should alert on the unavailable-record event/503 rate in deployment
 logs and investigate the retained audit document and closure-worker logs.
 The application does not install a hosted monitoring/alerting integration or

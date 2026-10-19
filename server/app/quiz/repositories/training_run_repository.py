@@ -6,8 +6,11 @@ from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError
+from pydantic import ValidationError
+from server.app.quiz.schemas.training_runs import CompletionActivitySummary
 from server.app.quiz.utils.training_completion import (
     STARTED_ASSIGNMENT_STATUSES, SHARED_SESSION_STATES, REPORT_METADATA_FIELDS, CompletionEvidenceError,
+    COMPLETION_OUTCOMES,
 )
 
 
@@ -259,7 +262,7 @@ class TrainingRunRepository:
                 {"$match": {"training_run_id": {"$in": run_ids}, "training_assignment_id": {"$in": [None, ""]}}},
                 {"$project": {
                     "training_run_id": 1, "shared": {"$literal": True}, "latest_score": "$score",
-                    "status": {"$cond": [{"$eq": ["$status", "submitted"]}, "completed", "in_progress"]},
+                    "status": self._shared_session_state("$status"),
                 }},
                 {"$group": self._activity_group()},
             ]).to_list(length=len(run_ids))
@@ -276,6 +279,36 @@ class TrainingRunRepository:
     async def get_closure_report_summaries(self, run_ids: list[str]) -> dict[str, dict]:
         if not run_ids:
             return {}
+        # Project out the register and quiz snapshot entirely for current
+        # closures. Only legacy payloads need the per-record aggregation.
+        documents = await self.audit_events_collection.find(
+            {"training_run_id": {"$in": run_ids}, "event_type": "run_closed"},
+            {
+                "training_run_id": 1, "payload.report_schema_version": 1, "payload.summary": 1,
+                **{f"payload.run.{key}": 1 for key in REPORT_METADATA_FIELDS},
+            },
+        ).to_list(length=len(run_ids))
+        result = {}
+        legacy_ids = []
+        for document in documents:
+            payload = document.get("payload")
+            if not isinstance(payload, dict) or not isinstance(payload.get("run"), dict):
+                continue
+            if "summary" in payload:
+                if payload.get("report_schema_version") != 2:
+                    continue
+                try:
+                    activity = CompletionActivitySummary.model_validate(payload["summary"]).model_dump()
+                except ValidationError:
+                    continue
+                result[document["training_run_id"]] = {"run": payload["run"], "activity": activity}
+            elif payload.get("report_schema_version") in (None, 1):
+                legacy_ids.append(document["training_run_id"])
+        if legacy_ids:
+            result.update(await self._aggregate_legacy_closure_summaries(legacy_ids))
+        return result
+
+    async def _aggregate_legacy_closure_summaries(self, run_ids: list[str]) -> dict[str, dict]:
         group = self._activity_group(present="$_present")
         group.update({
             "run": {"$first": "$run"}, "occurred_at": {"$first": "$occurred_at"},
@@ -304,14 +337,16 @@ class TrainingRunRepository:
                 "_record_valid": {"$and": [
                     {"$eq": [{"$type": "$record"}, "object"]},
                     {"$ne": ["$record.interpretation_error", True]},
+                    {"$or": [
+                        {"$in": [{"$type": "$record.outcome"}, ["missing", "null"]]},
+                        {"$in": ["$record.outcome", list(COMPLETION_OUTCOMES)]},
+                    ]},
                     {"$eq": [{"$type": {"$cond": ["$shared", "$record.session_id", "$record.assignment_id"]}}, "string"]},
                     {"$in": ["$record.status", {"$cond": [
                         "$shared", list(SHARED_SESSION_STATES), ["assigned", *STARTED_ASSIGNMENT_STATUSES],
                     ]}]},
                 ]},
-                "status": {"$cond": ["$shared", {"$cond": [
-                    {"$eq": ["$record.status", "submitted"]}, "completed", "in_progress",
-                ]}, "$record.status"]},
+                "status": {"$cond": ["$shared", self._shared_session_state("$record.status"), "$record.status"]},
                 "latest_score": {"$cond": ["$shared", "$record.score", "$record.latest_score"]},
             }},
             {"$group": group},
@@ -320,6 +355,16 @@ class TrainingRunRepository:
             row["_id"]: {"run": row["run"], "activity": self._merge_activity_counts(row)}
             for row in rows if row["payload_valid"] and not row["invalid_records"]
         }
+
+    @staticmethod
+    def _shared_session_state(field: str) -> dict:
+        return {"$switch": {
+            "branches": [
+                {"case": {"$eq": [field, source]}, "then": target}
+                for source, target in SHARED_SESSION_STATES.items()
+            ],
+            "default": None,
+        }}
 
     @staticmethod
     def _merge_activity_counts(*rows: dict) -> dict:

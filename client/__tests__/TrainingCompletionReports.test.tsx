@@ -88,6 +88,16 @@ test("oversized exports explain the limit instead of implying a successful parti
   expect(URL.createObjectURL).not.toHaveBeenCalled();
 });
 
+test("unavailable audit evidence is distinguished from transient export failures", async () => {
+  api.downloadCompletionReport.mockRejectedValue({ response: { status: 503, data: new Blob(["error"]) } });
+  render(<TrainingRunDetailPage runId="run-1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Export completion CSV" }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+    "Completion evidence is unavailable. Contact support; no CSV was generated.",
+  ));
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
+
 test("a large register keeps management available and uses complete counts in close confirmation", async () => {
   const run = detail();
   run.register_availability = "limit_exceeded";

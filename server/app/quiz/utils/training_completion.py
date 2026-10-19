@@ -4,6 +4,7 @@ import csv
 import io
 import logging
 import math
+from collections.abc import Iterable
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -11,6 +12,7 @@ from datetime import datetime, timezone
 # Interactive reports are synchronous. Closure evidence has no row truncation.
 MAX_COMPLETION_REPORT_ROWS = 10_000
 STARTED_ASSIGNMENT_STATUSES = ("in_progress", "submitting", "incomplete", "completed")
+COMPLETION_OUTCOMES = ("passed", "failed", "not_completed", "unknown")
 SHARED_SESSION_STATES = {
     "submitted": "completed", "abandoned": "incomplete", "expired": "incomplete",
     "active": "in_progress", "joined": "in_progress", "disconnected": "in_progress",
@@ -47,19 +49,20 @@ def raw_score(value) -> int | None:
     return int(value)
 
 
-def completion_summary(rows: list[dict]) -> dict:
-    completed = [row for row in rows if row["status"] == "completed"]
-    scores = [score for row in completed if (score := raw_score(row.get("latest_score"))) is not None]
-    return {
-        "participant_count": len(rows),
-        "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
-        "started_count": sum(
-            row["participant_type"] == "shared_link" or row["status"] in STARTED_ASSIGNMENT_STATUSES
-            for row in rows
-        ),
-        "completed_count": len(completed),
-        "average_score": round(sum(scores) / len(scores), 2) if scores else None,
-    }
+def completion_summary(rows: Iterable[dict]) -> dict:
+    counts = {key: 0 for key in ("participant_count", "assigned_count", "started_count", "completed_count")}
+    score_sum = score_count = 0
+    for row in rows:
+        counts["participant_count"] += 1
+        counts["assigned_count"] += row["participant_type"] == "assigned"
+        counts["started_count"] += row["participant_type"] == "shared_link" or row["status"] in STARTED_ASSIGNMENT_STATUSES
+        if row["status"] == "completed":
+            counts["completed_count"] += 1
+            score = raw_score(row.get("latest_score"))
+            if score is not None:
+                score_sum += score
+                score_count += 1
+    return {**counts, "average_score": round(score_sum / score_count, 2) if score_count else None}
 
 
 def report_timestamp(value: datetime | None) -> datetime | None:
@@ -133,6 +136,9 @@ def completion_row(record: dict, threshold) -> dict:
     elif not isinstance(state, str) or state not in ("assigned", *STARTED_ASSIGNMENT_STATUSES):
         raise CompletionEvidenceError("Invalid assignment state")
     percentage = record.get("percentage" if shared else "latest_percentage")
+    outcome = record.get("outcome")
+    if outcome is not None and (not isinstance(outcome, str) or outcome not in COMPLETION_OUTCOMES):
+        raise CompletionEvidenceError("Invalid stored completion outcome")
     return {
         "assignment_id": identifier,
         "recipient_email": record.get("participant_email" if shared else "recipient_email"),
@@ -146,7 +152,7 @@ def completion_row(record: dict, threshold) -> dict:
         "completed_at": report_timestamp(record.get("submitted_at" if shared else "completed_at")),
         "latest_score": raw_score(record.get("score" if shared else "latest_score")),
         "latest_percentage": percentage,
-        "outcome": record.get("outcome") or completion_outcome(state, percentage, threshold),
+        "outcome": outcome if outcome is not None else completion_outcome(state, percentage, threshold),
     }
 
 
@@ -171,13 +177,18 @@ def build_closure_payload(run: dict, assignments: list[dict], sessions: list[dic
             "training_closure_uninterpretable_records run_id=%s count=%s", run.get("_id"), unknown_records,
         )
     return deepcopy({
-        "report_schema_version": 1,
+        "report_schema_version": 2,
         "run": {key: run.get(key) for key in (
             "quiz_id", "title", "kind", "purpose", "access_mode", "time_limit_minutes",
             "due_at", "closes_at", "quiz_content_fingerprint", "quiz_snapshot",
             "passing_threshold_percentage",
         ) if key in run},
         "completion_register": records,
+        # Captured atomically with the register. None deliberately marks
+        # uninterpretable evidence; readers must not synthesize final counters.
+        "summary": None if unknown_records else completion_summary(
+            completion_row(record, threshold) for record in records
+        ),
     })
 
 

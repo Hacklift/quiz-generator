@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 TrainingRunKind = Literal["business", "compliance"]
@@ -77,6 +77,26 @@ class CreateTrainingRunRequest(BaseModel):
         # Compliance evidence must be attributable to a verified recipient.
         if self.kind == "compliance" and self.access_mode != "assigned_only":
             raise ValueError("compliance training must be assigned to recipients")
+        return self
+
+
+class CompletionActivitySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    participant_count: int = Field(ge=0, strict=True)
+    assigned_count: int = Field(ge=0, strict=True)
+    started_count: int = Field(ge=0, strict=True)
+    completed_count: int = Field(ge=0, strict=True)
+    average_score: Optional[float] = Field(ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def counts_are_consistent(self):
+        if not 0 <= self.completed_count <= self.started_count <= self.participant_count:
+            raise ValueError("completion counts are inconsistent")
+        if self.assigned_count > self.participant_count:
+            raise ValueError("assigned count exceeds participant count")
+        if not self.completed_count and self.average_score is not None:
+            raise ValueError("a score average requires completed participants")
         return self
 
 

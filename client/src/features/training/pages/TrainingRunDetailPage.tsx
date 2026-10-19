@@ -101,6 +101,8 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
     } catch (error: any) {
       toast.error(error?.response?.status === 413
         ? "This run exceeds the interactive report limit. Contact support for a complete export."
+        : error?.response?.status === 503
+        ? "Completion evidence is unavailable. Contact support; no CSV was generated."
         : "Could not export the completion report. Please try again.");
     } finally {
       setIsExporting(false);

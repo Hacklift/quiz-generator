@@ -294,6 +294,27 @@ def test_closure_builder_does_not_manufacture_null_metadata_for_absent_fields():
     assert closed_run_metadata({"time_limit_minutes": 30}, payload["run"])["time_limit_minutes"] == 30
 
 
+def test_closure_materializes_the_same_frozen_counters_as_its_register():
+    run = run_document()
+    payload = build_closure_payload(run, assignments(), [])
+    assert payload["report_schema_version"] == 2
+    assert payload["summary"] == completion_summary(
+        completion_row(record, 80) for record in payload["completion_register"]
+    )
+    assert payload["summary"]["participant_count"] == 2
+    assert payload["summary"]["completed_count"] == 1
+    assert build_closure_payload(run, [], [])["summary"] == {
+        "participant_count": 0, "assigned_count": 0, "started_count": 0,
+        "completed_count": 0, "average_score": None,
+    }
+
+
+@pytest.mark.parametrize("outcome", ["unexpected", "", 0, [], "Passed"])
+def test_invalid_stored_outcomes_raise_an_explicit_evidence_error(outcome):
+    with pytest.raises(CompletionEvidenceError, match="Invalid stored completion outcome"):
+        completion_row({"assignment_id": "a", "status": "completed", "outcome": outcome}, 80)
+
+
 def test_worker_closure_persists_the_same_threshold_and_outcomes(monkeypatch):
     import server.app.quiz.tasks.training_run_tasks as tasks
     from server.tests.test_training_run_tasks import FakeClient, FakeDatabase

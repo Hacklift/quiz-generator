@@ -5,10 +5,13 @@ from pymongo import MongoClient
 
 import pytest
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, FastAPI
+from httpx import AsyncClient, ASGITransport
 
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.services.training_run_service import TrainingRunService
+from server.app.quiz.routes import training_runs
+from server.app.core.dependencies import get_current_user
 from server.app.quiz.utils.training_completion import build_closure_payload, MAX_COMPLETION_REPORT_ROWS, completion_row, completion_summary
 from server.tests.test_training_completion_reports import run_document
 
@@ -339,9 +342,12 @@ async def test_closed_list_batches_snapshots_including_empty_and_missing_evidenc
     assignment_aggregate = Mock(wraps=test_db.training_assignments.aggregate)
     session_aggregate = Mock(wraps=test_db.live_quiz_sessions.aggregate)
     audit_aggregate = Mock(wraps=test_db.training_audit_events.aggregate)
+    audit_find = Mock(wraps=test_db.training_audit_events.find)
     repository.assignments_collection = SimpleNamespace(aggregate=assignment_aggregate)
     repository.sessions_collection = SimpleNamespace(aggregate=session_aggregate)
-    repository.audit_events_collection = SimpleNamespace(aggregate=audit_aggregate)
+    repository.audit_events_collection = SimpleNamespace(
+        aggregate=audit_aggregate, find=audit_find,
+    )
     listed = await TrainingRunService(repository, SimpleNamespace()).list_owner_runs("owner-1")
     by_id = {item["id"]: item for item in listed}
     assert by_id[str(closed[0]["_id"])]["title"] == "Frozen title"
@@ -353,4 +359,122 @@ async def test_closed_list_batches_snapshots_including_empty_and_missing_evidenc
         aggregate.assert_called_once()
         assert aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"] == [str(opened["_id"])]
     audit_aggregate.assert_called_once()
-    assert set(audit_aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"]) == {str(run["_id"]) for run in closed}
+    # The bounded lookup sees all selected closed runs; aggregation is only
+    # needed for the two existing legacy payloads, not the absent audit.
+    audit_find.assert_called_once()
+    assert set(audit_find.call_args.args[0]["training_run_id"]["$in"]) == {str(run["_id"]) for run in closed}
+    assert set(audit_aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"]) == {str(run["_id"]) for run in closed[:2]}
+
+
+@pytest.mark.asyncio
+async def test_materialized_summaries_do_not_read_or_aggregate_current_registers(test_db):
+    runs = [run_document() for _ in range(2)]
+    for run in runs:
+        run["status"] = "closed"
+    payloads = [build_closure_payload(run, [], []) for run in runs]
+    payloads[1].pop("summary")
+    payloads[1]["report_schema_version"] = 1
+    await test_db.training_audit_events.insert_many([
+        {"training_run_id": str(run["_id"]), "event_type": "run_closed", "payload": payload}
+        for run, payload in zip(runs, payloads)
+    ])
+    find = Mock(wraps=test_db.training_audit_events.find)
+    aggregate = Mock(wraps=test_db.training_audit_events.aggregate)
+    repository = repository_for(test_db)
+    repository.audit_events_collection = SimpleNamespace(find=find, aggregate=aggregate)
+    ids = [str(run["_id"]) for run in runs]
+    result = await repository.get_closure_report_summaries(ids)
+    assert set(result) == set(ids)
+    find.assert_called_once()
+    projection = find.call_args.args[1]
+    assert projection["payload.summary"] == 1
+    assert "payload.completion_register" not in projection
+    assert "payload.run.quiz_snapshot" not in projection
+    aggregate.assert_called_once()
+    assert aggregate.call_args.args[0][0]["$match"]["training_run_id"]["$in"] == [ids[1]]
+    aggregate.reset_mock()
+    await repository.get_closure_report_summaries([ids[0]])
+    aggregate.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("summary", [None, {}, {"participant_count": True}, {
+    "participant_count": 1, "assigned_count": 1, "started_count": 0,
+    "completed_count": 2, "average_score": 1,
+}])
+async def test_malformed_materialized_summaries_are_not_recomputed_as_legacy(test_db, summary):
+    run = run_document()
+    payload = build_closure_payload(run, [], [])
+    payload["summary"] = summary
+    await test_db.training_audit_events.insert_one({
+        "training_run_id": str(run["_id"]), "event_type": "run_closed", "payload": payload,
+    })
+    aggregate = Mock(wraps=test_db.training_audit_events.aggregate)
+    repository = repository_for(test_db)
+    repository.audit_events_collection = SimpleNamespace(find=test_db.training_audit_events.find, aggregate=aggregate)
+    assert await repository.get_closure_report_summaries([str(run["_id"])]) == {}
+    aggregate.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_mixed_bad_evidence_only_marks_its_own_run_unavailable_on_the_list_endpoint(test_db, legacy):
+    good, bad = run_document(), run_document()
+    good["status"] = bad["status"] = "closed"
+    await test_db.training_runs.insert_many([good, bad])
+    valid = {"_id": ObjectId(), "recipient_email": "learner@example.com", "status": "completed", "latest_score": 4}
+    invalid = {"_id": ObjectId(), "recipient_email": "other@example.com", "status": "future-state"}
+    good_payload = build_closure_payload(good, [valid], [])
+    bad_payload = build_closure_payload(bad, [valid, invalid], [])
+    assert bad_payload["summary"] is None
+    assert len(bad_payload["completion_register"]) == 2
+    assert bad_payload["completion_register"][1]["interpretation_error"] is True
+    if legacy:
+        for payload in (good_payload, bad_payload):
+            payload.pop("summary")
+            payload["report_schema_version"] = 1
+    await test_db.training_audit_events.insert_many([
+        {"training_run_id": str(run["_id"]), "event_type": "run_closed", "payload": payload}
+        for run, payload in ((good, good_payload), (bad, bad_payload))
+    ])
+    app = FastAPI()
+    app.include_router(training_runs.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr",
+    )
+    service = TrainingRunService(repository_for(test_db), SimpleNamespace())
+    app.dependency_overrides[training_runs.get_training_run_service] = lambda: service
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/training-runs")
+    assert response.status_code == 200
+    by_id = {item["id"]: item for item in response.json()}
+    assert len(by_id) == 2
+    assert by_id[str(good["_id"])]["summary_availability"] == "available"
+    assert by_id[str(good["_id"])]["completed_count"] == 1
+    assert by_id[str(bad["_id"])]["summary_availability"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_shared_state_mapping_is_identical_for_live_frozen_and_legacy_summaries(test_db):
+    from server.app.quiz.utils.training_completion import SHARED_SESSION_STATES
+
+    run = run_document()
+    run_id = str(run["_id"])
+    sessions = [{
+        "_id": ObjectId(), "training_run_id": run_id, "status": state,
+        "score": 3, "percentage": 75,
+    } for state in SHARED_SESSION_STATES]
+    await test_db.live_quiz_sessions.insert_many(sessions)
+    payload = build_closure_payload(run, [], sessions)
+    expected = payload["summary"]
+    repository = repository_for(test_db)
+    assert await repository.get_run_activity_summary(run_id) == expected
+    event = {"training_run_id": run_id, "event_type": "run_closed", "payload": payload}
+    await test_db.training_audit_events.insert_one(event)
+    assert await repository.get_closure_activity_summary(run_id) == expected
+    await test_db.training_audit_events.update_one({"_id": event["_id"]}, {
+        "$unset": {"payload.summary": ""}, "$set": {"payload.report_schema_version": 1},
+    })
+    assert await repository.get_closure_activity_summary(run_id) == expected
+    expression = repository._shared_session_state("$status")
+    assert {branch["case"]["$eq"][1]: branch["then"] for branch in expression["$switch"]["branches"]} == SHARED_SESSION_STATES
