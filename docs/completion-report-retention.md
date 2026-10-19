@@ -29,12 +29,22 @@ audit trail (#132). It does not introduce a second live-quiz run collection.
 
 ## Interactive reporting limits and diagnostics
 
-Run details and synchronous CSV downloads support up to **10,000 register rows**.
+Interactive registers and synchronous CSV downloads support up to **10,000 rows**.
 Bounded, projected Mongo reads retrieve only the report fields and at most one
-extra row to detect overflow. Oversized reports return **413**, never a partial
-register labelled complete. The run list uses database-side count/score
-aggregation instead of loading all participant records. No Redis cache or
-additional polling schedule is introduced.
+extra row to detect overflow. Larger runs remain viewable and manageable: detail
+returns **200** with `register_availability: "limit_exceeded"`, full summary
+counts, and no participant rows. The UI displays that distinction, disables CSV,
+and keeps the irreversible Close control available. Its warning uses the full
+participant count, not the absent register. CSV requests return **413**, never a
+partial export labelled complete.
+
+The run list batches count/score aggregation across the owner's selected run IDs:
+two aggregations total, not two per run. Detail and summary calculations treat
+`submitting` as in progress and apply the same nonnegative whole-number raw-score
+rule (including integral floats, excluding booleans, fractions and non-finite
+values). Large closed-run summary counts are aggregated from the immutable audit
+register, not current assignments or sessions. No Redis cache or additional
+polling schedule is introduced.
 
 This is a limit on interactive reporting, not a participant admission limit.
 Run closure still captures all evidence without silently truncating it. For a
@@ -45,7 +55,10 @@ audit storage is not claimed by this PR.
 
 Missing or malformed final evidence returns **503** and logs the event
 `training_completion_report_unavailable` with the run ID, without participant
-PII. Oversized requests log `training_completion_report_limit_exceeded`.
+PII. The evidence parsing stack is retained with a sanitized exception rather
+than validation input values. Unexpected implementation/DB failures are not
+reclassified as malformed evidence; the standard error handler retains their
+tracebacks. Oversized requests log `training_completion_report_limit_exceeded`.
 Operators should alert on the unavailable-record event/503 rate in deployment
 logs and investigate the retained audit document and closure-worker logs.
 The application does not install a hosted monitoring/alerting integration or
@@ -102,4 +115,5 @@ this PR adds no tenant migration, index replacement, Redis polling or Beat job.
    Not recorded, not claim an 80% policy was in force.
 7. Confirm missing/malformed final evidence produces 503 and a diagnostic event,
    not a reconstructed or partial report. The automated database tests exercise
-   the report ceiling separately from complete closure capture.
+   the report ceiling separately from complete closure capture. For oversized
+   runs, detail and Close remain usable while the CSV endpoint returns 413.

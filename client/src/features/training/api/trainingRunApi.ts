@@ -29,6 +29,7 @@ export interface TrainingRunSummary {
   started_count: number;
   completed_count: number;
   average_score?: number | null;
+  participant_count?: number;
 }
 
 export interface TrainingCompletionRow {
@@ -51,6 +52,7 @@ export interface TrainingRunDetail extends TrainingRunSummary {
   completion_register: TrainingCompletionRow[];
   report_is_final?: boolean;
   report_finalized_at?: string | null;
+  register_availability?: "available" | "limit_exceeded";
 }
 
 export interface TrainingAssignment {

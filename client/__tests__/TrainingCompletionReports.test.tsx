@@ -88,6 +88,27 @@ test("oversized exports explain the limit instead of implying a successful parti
   expect(URL.createObjectURL).not.toHaveBeenCalled();
 });
 
+test("a large register keeps management available and uses complete counts in close confirmation", async () => {
+  const run = detail();
+  run.register_availability = "limit_exceeded";
+  run.participant_count = 10002;
+  run.assigned_count = 0;
+  run.completed_count = 10000;
+  run.completion_register = [];
+  api.getRun.mockResolvedValueOnce(run).mockResolvedValue({ ...run, status: "closed", report_is_final: true });
+  api.closeRun.mockResolvedValue({ ...run, status: "closed" });
+  render(<TrainingRunDetailPage runId="run-1" />);
+  expect(await screen.findByRole("note")).toHaveTextContent("run management remain available");
+  expect(screen.getByRole("button", { name: "Export completion CSV" })).toBeDisabled();
+  expect(screen.queryByText("No participants have started this run.")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close run" }));
+  const dialog = screen.getByRole("dialog");
+  expect(dialog).toHaveTextContent("2 participants are not completed.");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close run permanently" }));
+  await waitFor(() => expect(api.closeRun).toHaveBeenCalledWith("run-1"));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Close run" })).toBeNull());
+});
+
 test("closed records are clearly final while legacy thresholds remain unknown", async () => {
   const run = detail();
   run.status = "closed";

@@ -9,11 +9,41 @@ from datetime import datetime, timezone
 
 # Interactive reports are synchronous. Closure evidence has no row truncation.
 MAX_COMPLETION_REPORT_ROWS = 10_000
+STARTED_ASSIGNMENT_STATUSES = ("in_progress", "submitting", "incomplete", "completed")
+
+
+class CompletionEvidenceError(ValueError):
+    """Stored completion evidence cannot be interpreted safely."""
+
+
+def raw_score(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value < 0 or (isinstance(value, float) and (not math.isfinite(value) or not value.is_integer())):
+        return None
+    return int(value)
+
+
+def completion_summary(rows: list[dict]) -> dict:
+    completed = [row for row in rows if row["status"] == "completed"]
+    scores = [score for row in completed if (score := raw_score(row.get("latest_score"))) is not None]
+    return {
+        "participant_count": len(rows),
+        "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
+        "started_count": sum(
+            row["participant_type"] == "shared_link" or row["status"] in STARTED_ASSIGNMENT_STATUSES
+            for row in rows
+        ),
+        "completed_count": len(completed),
+        "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+    }
 
 
 def report_timestamp(value: datetime | None) -> datetime | None:
     if value is None:
         return None
+    if not isinstance(value, datetime):
+        raise CompletionEvidenceError("Invalid evidence timestamp")
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
@@ -62,13 +92,29 @@ def shared_session_snapshot(session: dict) -> dict:
 
 
 def completion_row(record: dict, threshold) -> dict:
+    if not isinstance(record, dict):
+        raise CompletionEvidenceError("Invalid completion record")
     shared = "session_id" in record
-    state = record["status"]
+    identifier = record.get("session_id" if shared else "assignment_id")
+    if not isinstance(identifier, str) or not identifier:
+        raise CompletionEvidenceError("Missing completion record identifier")
+    state = record.get("status")
     if shared:
-        state = "completed" if state == "submitted" else "incomplete" if state == "abandoned" else "in_progress"
+        states = {
+            "submitted": "completed", "abandoned": "incomplete", "expired": "incomplete",
+            "active": "in_progress", "joined": "in_progress", "disconnected": "in_progress",
+            "closing": "in_progress",
+        }
+        if not isinstance(state, str) or state not in states:
+            raise CompletionEvidenceError("Invalid shared-session state")
+        state = states[state]
+    elif state == "submitting":
+        state = "in_progress"
+    elif not isinstance(state, str) or state not in ("assigned", *STARTED_ASSIGNMENT_STATUSES):
+        raise CompletionEvidenceError("Invalid assignment state")
     percentage = record.get("percentage" if shared else "latest_percentage")
     return {
-        "assignment_id": record["session_id"] if shared else record["assignment_id"],
+        "assignment_id": identifier,
         "recipient_email": record.get("participant_email" if shared else "recipient_email"),
         "recipient_name": record.get("participant_name" if shared else "recipient_name"),
         "participant_type": "shared_link" if shared else "assigned",
@@ -78,7 +124,7 @@ def completion_row(record: dict, threshold) -> dict:
         "max_attempts": None if shared else record.get("max_attempts"),
         "started_at": report_timestamp(record.get("started_at")),
         "completed_at": report_timestamp(record.get("submitted_at" if shared else "completed_at")),
-        "latest_score": record.get("score" if shared else "latest_score"),
+        "latest_score": raw_score(record.get("score" if shared else "latest_score")),
         "latest_percentage": percentage,
         "outcome": record.get("outcome") or completion_outcome(state, percentage, threshold),
     }

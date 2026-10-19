@@ -18,6 +18,7 @@ from server.app.quiz.schemas.training_runs import CreateTrainingRunRequest
 from server.app.quiz.services.training_run_service import TrainingRunService
 from server.app.quiz.utils.training_completion import (
     build_closure_payload, completion_outcome, completion_report_csv, completion_row,
+    completion_summary, assignment_snapshot, MAX_COMPLETION_REPORT_ROWS,
 )
 
 
@@ -51,6 +52,12 @@ def report_service(run=None, rows=None):
         list_assignments_for_run=AsyncMock(return_value=rows),
         list_sessions_for_run=AsyncMock(return_value=[]),
         get_closure_audit=AsyncMock(return_value=None),
+        get_run_activity_summary=AsyncMock(return_value=completion_summary([
+            completion_row(assignment_snapshot(row), 80) for row in rows
+        ])),
+        get_closure_activity_summary=AsyncMock(return_value=completion_summary([
+            completion_row(assignment_snapshot(row), 80) for row in rows
+        ])),
     )
     return TrainingRunService(repository, SimpleNamespace()), repository, run
 
@@ -198,7 +205,7 @@ async def test_malformed_closed_evidence_returns_monitored_503_without_reconstru
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("closed", [False, True])
-async def test_oversized_report_is_rejected_not_silently_truncated(monkeypatch, closed):
+async def test_oversized_details_remain_manageable_without_a_partial_register(monkeypatch, closed):
     import server.app.quiz.services.training_run_service as module
 
     monkeypatch.setattr(module, "MAX_COMPLETION_REPORT_ROWS", 1)
@@ -206,12 +213,15 @@ async def test_oversized_report_is_rejected_not_silently_truncated(monkeypatch, 
     if closed:
         run["status"] = "closed"
         repository.get_closure_audit.return_value = {"payload": build_closure_payload(run, assignments(), [])}
-    with pytest.raises(HTTPException) as exc:
-        await service.get_owner_run(str(run["_id"]), "owner-1")
-    assert exc.value.status_code == 413
-    assert "No records were omitted or deleted" in exc.value.detail
+    result = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert result["register_availability"] == "limit_exceeded"
+    assert result["completion_register"] == []
+    assert result["participant_count"] == 2
+    assert result["completed_count"] == 1
     if closed:
         repository.get_closure_audit.assert_awaited_once_with(str(run["_id"]), report_limit=2)
+        repository.get_closure_activity_summary.assert_awaited_once()
+        repository.get_run_activity_summary.assert_not_awaited()
     else:
         repository.list_assignments_for_run.assert_awaited_once_with(str(run["_id"]), limit=2)
 
@@ -308,3 +318,75 @@ async def test_missing_or_malformed_report_is_404(report_app):
     app, _, _, _ = report_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/v1/training-runs/not-an-objectid/completion-report.csv")).status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("closed", [False, True])
+async def test_csv_route_refuses_oversized_reports_but_detail_returns_summary(report_app, monkeypatch, closed):
+    import server.app.quiz.services.training_run_service as module
+
+    monkeypatch.setattr(module, "MAX_COMPLETION_REPORT_ROWS", 1)
+    app, _, repository, run = report_app
+    if closed:
+        run["status"] = "closed"
+        repository.get_closure_audit.return_value = {"payload": build_closure_payload(run, assignments(), [])}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        detail = await client.get(f"/api/v1/training-runs/{run['_id']}")
+        csv_response = await client.get(f"/api/v1/training-runs/{run['_id']}/completion-report.csv")
+    assert detail.status_code == 200
+    assert detail.json()["register_availability"] == "limit_exceeded"
+    assert detail.json()["participant_count"] == 2
+    assert csv_response.status_code == 413
+    assert "no partial CSV" in csv_response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_register_at_exact_ceiling_is_available():
+    rows = [assignments()[0]] * MAX_COMPLETION_REPORT_ROWS
+    service, _, run = report_service(rows=rows)
+    result = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert result["register_availability"] == "available"
+    assert len(result["completion_register"]) == MAX_COMPLETION_REPORT_ROWS
+
+
+@pytest.mark.asyncio
+async def test_submitting_is_a_started_assignment_not_a_report_failure():
+    rows = assignments()
+    rows[0]["status"] = "submitting"
+    service, _, run = report_service(rows=rows)
+    result = await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert result["completion_register"][0]["status"] == "in_progress"
+    assert result["started_count"] == 1
+    assert result["completed_count"] == 0
+    assert rows[0]["status"] == "submitting"
+
+
+@pytest.mark.parametrize("score,expected", [(2, 2), (2.0, 2), (2.5, None), (True, None), (-1, None), (float("nan"), None), (float("inf"), None)])
+def test_raw_score_contract_is_consistent_for_rows_and_summaries(score, expected):
+    row = completion_row({"assignment_id": "a", "status": "completed", "latest_score": score}, 80)
+    assert row["latest_score"] == expected
+    assert completion_summary([row])["average_score"] == expected
+
+
+@pytest.mark.asyncio
+async def test_unexpected_repository_errors_are_not_mislabeled_as_corrupt_evidence():
+    service, repository, run = report_service()
+    repository.list_assignments_for_run.side_effect = TypeError("Unexpected implementation defect")
+    with pytest.raises(TypeError, match="Unexpected implementation defect"):
+        await service.get_owner_run(str(run["_id"]), "owner-1")
+
+
+@pytest.mark.asyncio
+async def test_validation_diagnostics_keep_the_stack_without_participant_values(caplog):
+    service, repository, run = report_service()
+    run["status"] = "closed"
+    repository.get_closure_audit.return_value = {"payload": {
+        "run": {}, "completion_register": [{
+            "assignment_id": "a", "status": "assigned", "recipient_email": "private-invalid-email",
+        }],
+    }}
+    with pytest.raises(HTTPException) as exc:
+        await service.get_owner_run(str(run["_id"]), "owner-1")
+    assert exc.value.status_code == 503
+    assert "private-invalid-email" not in caplog.text
+    assert "Traceback" in caplog.text

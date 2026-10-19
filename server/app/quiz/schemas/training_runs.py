@@ -100,6 +100,7 @@ class TrainingRunSummary(BaseModel):
     started_count: int = 0
     completed_count: int = 0
     average_score: Optional[float] = None
+    participant_count: int = 0
 
 
 class TrainingAssignmentSummary(BaseModel):
@@ -142,6 +143,7 @@ class TrainingRunDetail(TrainingRunSummary):
     completion_register: list[TrainingCompletionRow] = Field(default_factory=list)
     report_is_final: bool = False
     report_finalized_at: Optional[datetime] = None
+    register_availability: Literal["available", "limit_exceeded"] = "available"
 
 
 class TrainingRunAccessPreview(BaseModel):

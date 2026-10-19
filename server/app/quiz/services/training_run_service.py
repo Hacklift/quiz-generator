@@ -10,6 +10,7 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import DuplicateKeyError
+from pydantic import ValidationError
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
@@ -20,6 +21,7 @@ from server.app.quiz.utils.training_completion import (
     assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
     report_timestamp,
     MAX_COMPLETION_REPORT_ROWS,
+    CompletionEvidenceError, completion_summary, raw_score, STARTED_ASSIGNMENT_STATUSES,
 )
 
 
@@ -280,10 +282,11 @@ class TrainingRunService:
 
     async def list_owner_runs(self, owner_user_id: str) -> list[dict]:
         runs = await self.repository.list_runs_for_owner(owner_user_id)
+        activity = await self.repository.get_run_activity_summaries([str(run["_id"]) for run in runs])
         summaries = []
         for run in runs:
             summary = self._run_summary(run, [], [])
-            summary.update(await self.repository.get_run_activity_summary(str(run["_id"])))
+            summary.update(activity[str(run["_id"])])
             summaries.append(summary)
         return summaries
 
@@ -295,6 +298,7 @@ class TrainingRunService:
             or run.get("status") not in {"open", "closed"}
         ):
             raise HTTPException(status_code=404, detail="Training run not found")
+        run_id = str(run["_id"])
         try:
             finalized_at = None
             if run["status"] == "closed":
@@ -307,7 +311,7 @@ class TrainingRunService:
                     or not isinstance(payload.get("completion_register"), list)
                     or not isinstance(payload.get("run"), dict)
                 ):
-                    raise ValueError("Missing or invalid closure payload")
+                    raise CompletionEvidenceError("Missing or invalid closure payload")
                 # Closed evidence never falls back to mutable assignments or quiz
                 # content. Historical snapshots without a threshold remain unknown.
                 run = {**run, **payload["run"]}
@@ -328,27 +332,39 @@ class TrainingRunService:
                 ]
             if len(records) > MAX_COMPLETION_REPORT_ROWS:
                 logger.warning("training_completion_report_limit_exceeded run_id=%s", run_id)
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Interactive reports support up to {MAX_COMPLETION_REPORT_ROWS:,} participants. "
-                    "This run exceeds that limit; contact support for a full export. No records were omitted or deleted.",
+                activity = (
+                    await self.repository.get_closure_activity_summary(run_id)
+                    if run["status"] == "closed"
+                    else await self.repository.get_run_activity_summary(run_id)
                 )
-            rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
+                rows = []
+                availability = "limit_exceeded"
+            else:
+                rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
+                activity = completion_summary(rows)
+                availability = "available"
             summary = self._run_summary(run, [], [])
-            completed = [row for row in rows if row["status"] == "completed"]
-            scores = [row["latest_score"] for row in completed if isinstance(row.get("latest_score"), int)]
             summary.update({
-                "assigned_count": sum(row["participant_type"] == "assigned" for row in rows),
-                "started_count": sum(row["status"] != "assigned" for row in rows),
-                "completed_count": len(completed),
-                "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+                **activity, "register_availability": availability,
                 "completion_register": rows, "report_is_final": run["status"] == "closed",
                 "report_finalized_at": finalized_at,
             })
-            return TrainingRunDetail.model_validate(summary).model_dump()
-        except (KeyError, TypeError, ValueError, AttributeError):
-            logger.error("training_completion_report_unavailable run_id=%s", run_id)
+            return self._validate_report(summary)
+        except CompletionEvidenceError as error:
+            # Retain the parsing stack without logging ValidationError inputs,
+            # recipient identities, or the original exception's data values.
+            logger.error(
+                "training_completion_report_unavailable run_id=%s", run_id,
+                exc_info=(CompletionEvidenceError, CompletionEvidenceError("Invalid completion evidence"), error.__traceback__),
+            )
             raise HTTPException(status_code=503, detail="Final completion record is unavailable" if run["status"] == "closed" else "Completion record is unavailable") from None
+
+    @staticmethod
+    def _validate_report(summary: dict) -> dict:
+        try:
+            return TrainingRunDetail.model_validate(summary).model_dump()
+        except ValidationError:
+            raise CompletionEvidenceError("Invalid completion report fields") from None
 
     async def close_owner_run(self, run_id: str, owner_user_id: str) -> dict:
         run = await self.repository.get_run(run_id)
@@ -577,13 +593,13 @@ class TrainingRunService:
         started = [
             item
             for item in assignments
-            if item.get("status") in {"in_progress", "incomplete", "completed"}
+            if item.get("status") in STARTED_ASSIGNMENT_STATUSES
         ]
         shared_sessions = [item for item in sessions if not item.get("training_assignment_id")]
         shared_completed = [item for item in shared_sessions if item.get("status") == "submitted"]
         scores = [
-            *[item["latest_score"] for item in completed if isinstance(item.get("latest_score"), int)],
-            *[item["score"] for item in shared_completed if isinstance(item.get("score"), int)],
+            *[score for item in completed if (score := raw_score(item.get("latest_score"))) is not None],
+            *[score for item in shared_completed if (score := raw_score(item.get("score"))) is not None],
         ]
         code = run.get("access_code")
         return {
@@ -595,6 +611,7 @@ class TrainingRunService:
             "passing_threshold_percentage": run.get("passing_threshold_percentage"),
             "closes_at": run["closes_at"], "closed_at": run.get("closed_at"),
             "created_at": run["created_at"], "assigned_count": len(assignments),
+            "participant_count": len(assignments) + len(shared_sessions),
             "started_count": len(started) + len(shared_sessions),
             "completed_count": len(completed) + len(shared_completed),
             "average_score": round(sum(scores) / len(scores), 2) if scores else None,

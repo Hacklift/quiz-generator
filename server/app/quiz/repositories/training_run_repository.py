@@ -6,6 +6,7 @@ from bson.errors import InvalidId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError
+from server.app.quiz.utils.training_completion import STARTED_ASSIGNMENT_STATUSES
 
 
 class TrainingRunRepository:
@@ -239,47 +240,82 @@ class TrainingRunRepository:
         return await cursor.to_list(length=limit)
 
     async def get_run_activity_summary(self, run_id: str) -> dict:
-        assignment = await self._activity_counts(
-            self.assignments_collection, {"training_run_id": run_id},
-            completed_status="completed", score_field="latest_score",
-            started_statuses=["in_progress", "incomplete", "completed"],
-        )
-        session = {}
+        summaries = await self.get_run_activity_summaries([run_id])
+        return summaries[run_id]
+
+    async def get_run_activity_summaries(self, run_ids: list[str]) -> dict[str, dict]:
+        if not run_ids:
+            return {}
+        assignment_rows = await self.assignments_collection.aggregate([
+            {"$match": {"training_run_id": {"$in": run_ids}}},
+            {"$project": {"training_run_id": 1, "status": 1, "latest_score": 1, "shared": {"$literal": False}}},
+            {"$group": self._activity_group()},
+        ]).to_list(length=len(run_ids))
+        session_rows = []
         if self.sessions_collection is not None:
-            session = await self._activity_counts(
-                self.sessions_collection,
-                {"training_run_id": run_id, "training_assignment_id": {"$in": [None, ""]}},
-                completed_status="submitted", score_field="score",
-            )
-        score_count = assignment.get("score_count", 0) + session.get("score_count", 0)
-        score_sum = assignment.get("score_sum", 0) + session.get("score_sum", 0)
+            session_rows = await self.sessions_collection.aggregate([
+                {"$match": {"training_run_id": {"$in": run_ids}, "training_assignment_id": {"$in": [None, ""]}}},
+                {"$project": {
+                    "training_run_id": 1, "shared": {"$literal": True}, "latest_score": "$score",
+                    "status": {"$cond": [{"$eq": ["$status", "submitted"]}, "completed", "in_progress"]},
+                }},
+                {"$group": self._activity_group()},
+            ]).to_list(length=len(run_ids))
+        assignments = {row["_id"]: row for row in assignment_rows}
+        sessions = {row["_id"]: row for row in session_rows}
+        return {run_id: self._merge_activity_counts(assignments.get(run_id, {}), sessions.get(run_id, {})) for run_id in run_ids}
+
+    async def get_closure_activity_summary(self, run_id: str) -> dict:
+        rows = await self.audit_events_collection.aggregate([
+            {"$match": {"training_run_id": run_id, "event_type": "run_closed"}},
+            {"$unwind": "$payload.completion_register"},
+            {"$project": {"training_run_id": 1, "record": "$payload.completion_register"}},
+            {"$set": {"shared": {"$ne": [{"$type": "$record.session_id"}, "missing"]}}},
+            {"$project": {
+                "training_run_id": 1, "shared": 1,
+                "status": {"$cond": ["$shared", {"$cond": [
+                    {"$eq": ["$record.status", "submitted"]}, "completed", "in_progress",
+                ]}, "$record.status"]},
+                "latest_score": {"$cond": ["$shared", "$record.score", "$record.latest_score"]},
+            }},
+            {"$group": self._activity_group()},
+        ]).to_list(length=1)
+        return self._merge_activity_counts(rows[0] if rows else {})
+
+    @staticmethod
+    def _merge_activity_counts(*rows: dict) -> dict:
+        score_count = sum(row.get("score_count", 0) for row in rows)
+        score_sum = sum(row.get("score_sum", 0) for row in rows)
         return {
-            "assigned_count": assignment.get("total", 0),
-            "started_count": assignment.get("started_count", 0) + session.get("started_count", 0),
-            "completed_count": assignment.get("completed_count", 0) + session.get("completed_count", 0),
+            **{field: sum(row.get(field, 0) for row in rows) for field in (
+                "participant_count", "assigned_count", "started_count", "completed_count",
+            )},
             "average_score": round(score_sum / score_count, 2) if score_count else None,
         }
 
     @staticmethod
-    async def _activity_counts(
-        collection, query: dict, *, completed_status: str, score_field: str,
-        started_statuses: list[str] | None = None,
-    ) -> dict:
-        completed = {"$eq": ["$status", completed_status]}
-        scored = {"$and": [completed, {"$isNumber": f"${score_field}"}]}
-        rows = await collection.aggregate([
-            {"$match": query},
-            {"$group": {
-                "_id": None, "total": {"$sum": 1},
-                "started_count": {"$sum": {"$cond": [
-                    {"$in": ["$status", started_statuses]} if started_statuses is not None else True, 1, 0,
-                ]}},
-                "completed_count": {"$sum": {"$cond": [completed, 1, 0]}},
-                "score_count": {"$sum": {"$cond": [scored, 1, 0]}},
-                "score_sum": {"$sum": {"$cond": [scored, f"${score_field}", 0]}},
-            }},
-        ]).to_list(length=1)
-        return rows[0] if rows else {}
+    def _activity_group() -> dict:
+        completed = {"$eq": ["$status", "completed"]}
+        # Match raw_score(): accept nonnegative whole numbers, not bools,
+        # fractional scores, NaN, or infinity. $cond guards numeric operators.
+        valid_score = {"$cond": [
+            {"$in": [{"$type": "$latest_score"}, ["int", "long", "double"]]},
+            {"$and": [
+                {"$gte": ["$latest_score", 0]}, {"$lt": ["$latest_score", float("inf")]},
+                {"$eq": ["$latest_score", {"$trunc": "$latest_score"}]},
+            ]}, False,
+        ]}
+        scored = {"$and": [completed, valid_score]}
+        return {
+            "_id": "$training_run_id", "participant_count": {"$sum": 1},
+            "assigned_count": {"$sum": {"$cond": ["$shared", 0, 1]}},
+            "started_count": {"$sum": {"$cond": [
+                {"$or": ["$shared", {"$in": ["$status", list(STARTED_ASSIGNMENT_STATUSES)]}]}, 1, 0,
+            ]}},
+            "completed_count": {"$sum": {"$cond": [completed, 1, 0]}},
+            "score_count": {"$sum": {"$cond": [scored, 1, 0]}},
+            "score_sum": {"$sum": {"$cond": [scored, "$latest_score", 0]}},
+        }
 
     async def mark_in_progress_assignments_incomplete(
         self, run_id: str, closed_at: datetime
