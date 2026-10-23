@@ -9,6 +9,12 @@ from server.app.organizations.dependencies import get_optional_active_organizati
 from server.app.organizations.models import OrganizationContext
 from server.app.core.config import settings
 from server.app.db.core.connection import get_live_quiz_invitations_collection
+from server.app.db.core.connection import get_product_events_collection
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    QUIZ_GENERATED,
+    record_product_event_safely,
+)
 from server.app.email_platform.deps import get_email_service
 from server.app.email_platform.service import EmailService
 from server.app.quiz.repositories.v2.repositories.live_quiz_invitation_repository import (
@@ -52,4 +58,23 @@ async def get_quiz(
     }
     if isinstance(organization, OrganizationContext):
         generation_kwargs["organization_id"] = organization.organization_id
-    return await get_questions(payload, **generation_kwargs)
+    result = await get_questions(payload, **generation_kwargs)
+    access_code_created = result.pop("_access_code_created", False)
+    if current_user is not None:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=QUIZ_GENERATED,
+            user_id=current_user.id,
+            user=current_user,
+            quiz_id=result.get("quiz_id"),
+            origin="rest",
+        )
+        if access_code_created:
+            await record_product_event_safely(
+                get_product_events_collection,
+                event_type=LIVE_QUIZ_ENABLED,
+                user_id=current_user.id,
+                user=current_user,
+                quiz_id=result.get("quiz_id"),
+            )
+    return result

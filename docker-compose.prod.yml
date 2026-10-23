@@ -109,6 +109,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tenancy-migrate:
+        condition: service_completed_successfully
 
   mongodb:
     image: mongo:7

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from datetime import datetime, timezone
+from copy import deepcopy
 
 import pytest
 from bson import ObjectId
@@ -15,6 +16,11 @@ from server.scripts.migrations.organizations.backfill_resource_organizations imp
     validate_cleanup_authorization,
 )
 from server.scripts.migrations.organizations.backfill_organizations import backfill_organizations
+from server.app.quiz.utils.training_completion import build_closure_payload
+from server.app.quiz.services.training_run_service import TrainingRunService
+from server.app.organizations.models import OrganizationDocument
+from server.tests.test_training_completion_reports import run_document
+from server.tests.v2_database_tests.test_training_completion_reports import repository_for
 
 
 def _cleanup_args(**overrides):
@@ -53,6 +59,106 @@ def test_production_deployment_paths_never_invoke_destructive_resource_cleanup()
         contents = (repository_root / relative_path).read_text(encoding="utf-8")
         assert "tenancy-resource-cleanup" not in contents
         assert "--purge-unresolvable" not in contents
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("personal_active", [True, False])
+async def test_protocol_b_uses_personal_ownership_not_a_changed_default(test_db, personal_active):
+    user_id = str(ObjectId())
+    await test_db.users.insert_one({"_id": ObjectId(user_id), "username": "manager"})
+    await backfill_organizations(dry_run=False, strict=True, database_instance=test_db)
+    user = await test_db.users.find_one({"_id": ObjectId(user_id)})
+    personal_id = user["default_organization_id"]
+    shared = OrganizationDocument(kind="corporate", name="Shared workspace")
+    await test_db.organizations.insert_one(shared.model_dump(by_alias=True))
+    await test_db.users.update_one(
+        {"_id": ObjectId(user_id)}, {"$set": {"default_organization_id": str(shared.id)}}
+    )
+    if not personal_active:
+        await test_db.organizations.update_one(
+            {"_id": ObjectId(personal_id)}, {"$set": {"status": "suspended"}}
+        )
+    quiz_id, attempt_id, history_id = ObjectId(), ObjectId(), ObjectId()
+    await test_db.quizzes_v2.insert_one({"_id": quiz_id, "owner_user_id": user_id, "source": "manual"})
+    await test_db.quiz_attempts_v2.insert_one({"_id": attempt_id, "user_id": user_id, "quiz_id": str(quiz_id)})
+    await test_db.quiz_history_v2.insert_one({"_id": history_id, "user_id": user_id, "quiz_id": str(quiz_id)})
+    if personal_active:
+        report = await backfill_resource_organizations(
+            dry_run=False, strict=True, force=True, database_instance=test_db
+        )
+        assert report.unresolved == 0
+    else:
+        with pytest.raises(ResourceBackfillBlockedError):
+            await backfill_resource_organizations(
+                dry_run=False, strict=True, force=True, database_instance=test_db
+            )
+    for collection, identifier in (
+        ("quizzes_v2", quiz_id), ("quiz_attempts_v2", attempt_id), ("quiz_history_v2", history_id),
+    ):
+        document = await test_db[collection].find_one({"_id": identifier})
+        assert document.get("organization_id") == (personal_id if personal_active else None)
+    assert (await test_db.users.find_one({"_id": ObjectId(user_id)}))["default_organization_id"] == str(shared.id)
+
+
+@pytest.mark.asyncio
+async def test_protocol_b_preserves_frozen_completion_reports(test_db):
+    user_id = str(ObjectId())
+    await test_db.users.insert_one({"_id": ObjectId(user_id), "username": "manager"})
+    await backfill_organizations(dry_run=False, strict=True, database_instance=test_db)
+    user = await test_db.users.find_one({"_id": ObjectId(user_id)})
+    organization_id = user["default_organization_id"]
+    quiz_id = str(ObjectId())
+    await test_db.quizzes_v2.insert_one({
+        "_id": ObjectId(quiz_id), "owner_user_id": user_id, "source": "manual",
+    })
+    run = run_document()
+    run.update(owner_user_id=user_id, quiz_id=quiz_id, status="closed", passing_threshold_percentage=70)
+    await test_db.training_runs.insert_one(run)
+    assignment = {
+        "_id": ObjectId(), "training_run_id": str(run["_id"]),
+        "status": "completed", "recipient_email": "learner@example.com",
+        "latest_score": 4, "latest_percentage": 80,
+    }
+    await test_db.training_assignments.insert_one(assignment)
+    session = {
+        "_id": ObjectId(), "training_run_id": str(run["_id"]), "quiz_id": quiz_id,
+        "status": "submitted", "guest_id": "legitimate-public-participant",
+        "participant_name": "Guest participant", "score": 3, "percentage": 60,
+    }
+    await test_db.live_quiz_sessions.insert_one(session)
+    audit_id = ObjectId()
+    await test_db.training_audit_events.insert_one({
+        "_id": audit_id, "training_run_id": str(run["_id"]), "event_type": "run_closed",
+        "payload": build_closure_payload(run, [assignment], [session]),
+    })
+    before = await test_db.training_audit_events.find_one({"_id": audit_id})
+    frozen_payload = deepcopy(before["payload"])
+
+    await backfill_resource_organizations(dry_run=True, strict=True, database_instance=test_db)
+    assert await test_db.training_audit_events.find_one({"_id": audit_id}) == before
+    report = await backfill_resource_organizations(
+        dry_run=False, strict=True, force=True, database_instance=test_db
+    )
+    assert report.unresolved == 0
+    for collection, identifier in (
+        ("training_runs", run["_id"]), ("training_assignments", assignment["_id"]),
+        ("live_quiz_sessions", session["_id"]), ("training_audit_events", audit_id),
+    ):
+        document = await test_db[collection].find_one({"_id": identifier})
+        assert document["organization_id"] == organization_id
+        assert document["created_by_user_id"] == user_id
+    audit = await test_db.training_audit_events.find_one({"_id": audit_id})
+    assert audit["payload"] == frozen_payload
+    service = TrainingRunService(repository_for(test_db), None)
+    detail = await service.get_owner_run(str(run["_id"]), user_id, organization_id)
+    assert detail["report_is_final"] is True
+    assert detail["passing_threshold_percentage"] == 70
+    assert detail["completed_count"] == 2
+    assert [row["outcome"] for row in detail["completion_register"]] == ["passed", "failed"]
+    summary = await service.list_owner_runs(user_id, organization_id)
+    assert summary[0]["completed_count"] == detail["completed_count"]
+    await backfill_resource_organizations(dry_run=False, strict=True, force=True, database_instance=test_db)
+    assert (await test_db.training_audit_events.find_one({"_id": audit_id}))["payload"] == frozen_payload
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 # Organization dependencies compose the normal authenticated-user dependency,
 # which loads application settings. Keep this module independently runnable in
@@ -19,6 +20,7 @@ import pytest
 from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
+from pymongo.errors import DuplicateKeyError
 
 from server.app.organizations.dependencies import (
     get_active_organization_context,
@@ -89,6 +91,32 @@ class FakeUsersCollection:
         self.updated.append((query, update))
         self.default_organization_id = update["$set"]["default_organization_id"]
         return type("Result", (), {"matched_count": 1})()
+
+
+@pytest.mark.asyncio
+async def test_personal_membership_provisioning_recovers_a_concurrent_insert():
+    membership = {
+        "organization_id": str(ObjectId()),
+        "user_id": str(ObjectId()),
+        "role": "owner",
+        "status": "active",
+    }
+    collection = AsyncMock()
+    collection.find_one_and_update.side_effect = DuplicateKeyError("concurrent insert")
+    collection.find_one.return_value = membership
+
+    result = await OrganizationMembershipRepository(
+        collection
+    ).ensure_personal_owner_membership_if_missing(
+        organization_id=membership["organization_id"],
+        user_id=membership["user_id"],
+    )
+
+    assert result == membership
+    collection.find_one.assert_awaited_once_with({
+        "organization_id": membership["organization_id"],
+        "user_id": membership["user_id"],
+    })
 
 
 @pytest.mark.asyncio
@@ -175,6 +203,33 @@ async def test_normal_personal_provisioning_does_not_reactivate_a_disabled_membe
 
     assert membership["role"] == "owner"
     assert membership["status"] == "suspended"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("organization_status", ["suspended", "archived"])
+async def test_personal_provisioning_does_not_return_a_disabled_organization(
+    organization_status,
+):
+    organizations = FakeOrganizationsCollection()
+    memberships = FakeMembershipsCollection()
+    users = FakeUsersCollection()
+    user_id = str(ObjectId())
+    service = OrganizationProvisioningService(
+        organizations_collection=organizations,
+        memberships_collection=memberships,
+        users_collection=users,
+    )
+    organization = await service.ensure_personal_organization(
+        user_id=user_id, organization_name="Ada"
+    )
+    organization["status"] = organization_status
+    users.updated.clear()
+
+    with pytest.raises(PersonalOrganizationMembershipInactiveError, match="organization is not active"):
+        await service.ensure_personal_organization(user_id=user_id, organization_name="Ada")
+
+    assert users.updated == []
+    assert organization["status"] == organization_status
 
 
 @pytest.mark.asyncio

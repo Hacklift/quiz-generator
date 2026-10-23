@@ -12,7 +12,7 @@ import { ROUTES } from "@shared/config/patterns/routes";
 const formatDate = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString() : "No deadline";
 const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
+  run.summary_availability === "unavailable" ? "Final evidence unavailable" : run.assigned_count
     ? `${run.completed_count}/${run.assigned_count} complete`
     : `${run.completed_count} completed`;
 
