@@ -37,6 +37,7 @@ async def get_mcp_request_context(
         is_verified=bool(user.is_verified),
         role=user.role,
         scopes=required_scopes or set(),
+        user=user,
     )
 
     if require_verified and not context.is_verified:

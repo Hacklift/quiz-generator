@@ -76,7 +76,7 @@ async def backfill_organizations(
     if limit is not None and limit < 1:
         raise ValueError("limit must be at least one when provided")
 
-    db = database_instance or database
+    db = database if database_instance is None else database_instance
     run_id = run_id or str(uuid.uuid4())
     report = OrganizationBackfillReport(run_id=run_id, dry_run=dry_run)
 

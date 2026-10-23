@@ -264,10 +264,12 @@ class QuizV2Repository:
             return None
         return QuizDocumentV2(**updated) if updated else None
 
-    async def enable_live_quiz(
+    async def claim_live_quiz_activation(
         self,
         quiz_id: str,
         *,
+        creator_id: str,
+        observed_at: datetime,
         access_code: str,
         time_limit_minutes: int,
         access_code_expires_at: datetime,
@@ -276,7 +278,18 @@ class QuizV2Repository:
     ) -> Optional[QuizDocumentV2]:
         try:
             updated = await self.collection.find_one_and_update(
-                {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}},
+                {
+                    "_id": ObjectId(quiz_id),
+                    "status": {"$ne": "deleted"},
+                    "owner_user_id": creator_id,
+                    "$or": [
+                        {"live_quiz_enabled": {"$ne": True}},
+                        {"access_code": None},
+                        {"access_code": ""},
+                        {"access_code_expires_at": None},
+                        {"access_code_expires_at": {"$lte": observed_at}},
+                    ],
+                },
                 {
                     "$set": {
                         "live_quiz_enabled": True,

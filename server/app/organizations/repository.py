@@ -141,12 +141,19 @@ class OrganizationMembershipRepository:
             status="active",
             joined_at=utcnow(),
         ).model_dump(by_alias=True)
-        result = await self.collection.find_one_and_update(
-            {"organization_id": organization_id, "user_id": user_id},
-            {"$setOnInsert": document},
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
+        query = {"organization_id": organization_id, "user_id": user_id}
+        try:
+            result = await self.collection.find_one_and_update(
+                query,
+                {"$setOnInsert": document},
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            # Concurrent registration/login repair may insert this exact
+            # relationship first. Read it without reviving disabled state;
+            # the provisioning service still validates role and status.
+            result = await self.collection.find_one(query)
         if result is None:
             raise RuntimeError("organization membership upsert did not return a document")
         return result

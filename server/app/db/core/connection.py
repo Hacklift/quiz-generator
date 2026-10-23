@@ -31,6 +31,7 @@ user_sessions_collection = database["user_sessions"]
 auth_events_collection = database["auth_events"]
 organizations_collection = database["organizations"]
 organization_memberships_collection = database["organization_memberships"]
+product_events_collection = database["product_events"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
@@ -51,6 +52,7 @@ folders_v2_collection = database["folders_v2"]
 folder_items_v2_collection = database["folder_items_v2"]
 saved_quizzes_v2_collection = database["saved_quizzes_v2"]
 quiz_history_v2_collection = database["quiz_history_v2"]
+quiz_attempts_v2_collection = database["quiz_attempts_v2"]
 document_rag_cache_collection = database["document_rag_cache"]
 
 
@@ -122,6 +124,16 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index(
         [("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
         name="creator_quiz_submitted_at",
+    )
+
+
+async def ensure_product_event_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index([("event_type", 1), ("created_at", -1)])
+    await collection.create_index(
+        [("persona_category", 1), ("persona_user_type", 1), ("created_at", -1)]
+    )
+    await collection.create_index(
+        [("user_id", 1), ("event_type", 1), ("created_at", -1)]
     )
 
 
@@ -285,6 +297,7 @@ async def startUp():
     await ensure_user_tokens_indexes(user_tokens_collection)
     await ensure_notification_indexes(notifications_collection)
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
+    await ensure_product_event_indexes(product_events_collection)
     await ensure_document_rag_cache_indexes(document_rag_cache_collection)
     await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
     await ensure_training_run_indexes(
@@ -300,6 +313,7 @@ async def startUp():
         folder_items_v2_collection,
         saved_quizzes_v2_collection,
         quiz_history_v2_collection,
+        quiz_attempts_v2_collection,
     )
     from server.app.quiz.services.quiz_user_library_service import QuizUserLibraryService
 
@@ -331,6 +345,12 @@ def get_organizations_collection() -> AsyncIOMotorCollection:
 
 def get_organization_memberships_collection() -> AsyncIOMotorCollection:
     return organization_memberships_collection
+
+
+def get_product_events_collection() -> AsyncIOMotorCollection:
+    if product_events_collection is None:
+        raise RuntimeError("[DB Error] product_events_collection has not been initialized properly.")
+    return product_events_collection
 
 def get_quizzes_collection() -> AsyncIOMotorCollection:
     if quizzes_collection is None:
@@ -422,6 +442,12 @@ def get_quiz_history_v2_collection() -> AsyncIOMotorCollection:
     if quiz_history_v2_collection is None:
         raise RuntimeError("[DB Error] quiz_history_v2_collection has not been initialized properly.")
     return quiz_history_v2_collection
+
+
+def get_quiz_attempts_v2_collection() -> AsyncIOMotorCollection:
+    if quiz_attempts_v2_collection is None:
+        raise RuntimeError("[DB Error] quiz_attempts_v2_collection has not been initialized properly.")
+    return quiz_attempts_v2_collection
 
 
 def get_document_rag_cache_collection() -> AsyncIOMotorCollection:
