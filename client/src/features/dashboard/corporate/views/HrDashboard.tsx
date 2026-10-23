@@ -10,7 +10,7 @@ import type { DashboardViewProps } from "@features/dashboard/types/dashboard";
 import { ROUTES } from "@shared/config/patterns/routes";
 
 const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
+  run.summary_availability === "unavailable" ? "Final evidence unavailable" : run.assigned_count
     ? `${run.completed_count}/${run.assigned_count} complete`
     : `${run.completed_count} completed`;
 

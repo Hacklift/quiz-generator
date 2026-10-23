@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 TrainingRunKind = Literal["business", "compliance"]
@@ -21,6 +21,7 @@ class CreateTrainingRunRequest(BaseModel):
     purpose: TrainingPurpose = "custom"
     title: Optional[str] = Field(default=None, max_length=180)
     time_limit_minutes: int = Field(default=20, ge=1, le=1440)
+    passing_threshold_percentage: float = Field(default=80, ge=0, le=100, allow_inf_nan=False, strict=True)
     closes_at: datetime
     due_at: Optional[datetime] = None
     access_mode: TrainingAccessMode = "assigned_only"
@@ -79,6 +80,26 @@ class CreateTrainingRunRequest(BaseModel):
         return self
 
 
+class CompletionActivitySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    participant_count: int = Field(ge=0, strict=True)
+    assigned_count: int = Field(ge=0, strict=True)
+    started_count: int = Field(ge=0, strict=True)
+    completed_count: int = Field(ge=0, strict=True)
+    average_score: Optional[float] = Field(ge=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def counts_are_consistent(self):
+        if not 0 <= self.completed_count <= self.started_count <= self.participant_count:
+            raise ValueError("completion counts are inconsistent")
+        if self.assigned_count > self.participant_count:
+            raise ValueError("assigned count exceeds participant count")
+        if not self.completed_count and self.average_score is not None:
+            raise ValueError("a score average requires completed participants")
+        return self
+
+
 class TrainingRunSummary(BaseModel):
     id: str
     quiz_id: str
@@ -90,6 +111,7 @@ class TrainingRunSummary(BaseModel):
     access_code: Optional[str] = None
     access_url: Optional[str] = None
     time_limit_minutes: int
+    passing_threshold_percentage: Optional[float] = None
     due_at: Optional[datetime] = None
     closes_at: datetime
     closed_at: Optional[datetime] = None
@@ -98,6 +120,8 @@ class TrainingRunSummary(BaseModel):
     started_count: int = 0
     completed_count: int = 0
     average_score: Optional[float] = None
+    participant_count: int = 0
+    summary_availability: Literal["available", "unavailable"] = "available"
 
 
 class TrainingAssignmentSummary(BaseModel):
@@ -132,10 +156,15 @@ class TrainingCompletionRow(BaseModel):
     completed_at: Optional[datetime] = None
     latest_score: Optional[int] = None
     latest_percentage: Optional[float] = None
+    participant_type: Literal["assigned", "shared_link"] = "assigned"
+    outcome: Literal["passed", "failed", "not_completed", "unknown"] = "unknown"
 
 
 class TrainingRunDetail(TrainingRunSummary):
     completion_register: list[TrainingCompletionRow] = Field(default_factory=list)
+    report_is_final: bool = False
+    report_finalized_at: Optional[datetime] = None
+    register_availability: Literal["available", "limit_exceeded"] = "available"
 
 
 class TrainingRunAccessPreview(BaseModel):
