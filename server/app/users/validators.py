@@ -60,6 +60,7 @@ async def ensure_user_indexes(users_collection: AsyncIOMotorCollection):
     await users_collection.create_index("created_at")
     await users_collection.create_index("last_login_at")
     await users_collection.create_index("is_active")
+    await users_collection.create_index("default_organization_id", sparse=True)
     await users_collection.create_index("stripe_customer_id", sparse=True)
     await users_collection.create_index("stripe_subscription_id", sparse=True)
     # Persona adoption reporting (#137) aggregates on these.
@@ -95,6 +96,7 @@ async def ensure_users_validator(database):
                 "is_verified": {"bsonType": "bool"},
                 "is_active": {"bsonType": "bool"},
                 "role": {"bsonType": "string"},
+                "default_organization_id": {"bsonType": ["string", "null"]},
                 "stripe_customer_id": {"bsonType": ["string", "null"]},
                 "stripe_subscription_id": {"bsonType": ["string", "null"]},
                 "subscription_plan": {"bsonType": ["string", "null"]},
@@ -147,6 +149,10 @@ async def ensure_user_session_indexes(user_sessions_collection: AsyncIOMotorColl
     await user_sessions_collection.create_index("jti", unique=True)
     await user_sessions_collection.create_index("user_id")
     await user_sessions_collection.create_index([("user_id", 1), ("revoked_at", 1)])
+    await user_sessions_collection.create_index(
+        [("user_id", 1), ("active_organization_id", 1)],
+        name="user_session_active_organization",
+    )
     await user_sessions_collection.create_index("expires_at", expireAfterSeconds=0)
 
 
@@ -177,6 +183,7 @@ async def ensure_user_session_validator(database):
                 "device_info": {"bsonType": ["object", "null"]},
                 "ip_address": {"bsonType": ["string", "null"]},
                 "user_agent": {"bsonType": ["string", "null"]},
+                "active_organization_id": {"bsonType": ["string", "null"]},
             },
         }
     }

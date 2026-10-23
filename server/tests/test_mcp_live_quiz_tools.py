@@ -20,6 +20,8 @@ os.environ.setdefault("mongo_url", "mongodb://localhost:27017")
 import server.app.mcp.tools.live_quiz_tools as live_quiz_tools
 from server.app.analytics.product_events import record_product_event_safely
 from server.app.mcp.auth import McpAuthenticationError
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from fastapi import HTTPException
 
 
 ACTIVE_EXPIRES_AT = datetime.now(timezone.utc) + timedelta(hours=2)
@@ -35,6 +37,10 @@ def product_event_recorder(monkeypatch):
     recorder = AsyncMock()
     monkeypatch.setattr(live_quiz_tools, "record_product_event_safely", recorder)
     return recorder
+
+
+def _context() -> SimpleNamespace:
+    return SimpleNamespace(user_id="user-1", user=AUTHENTICATED_USER, tenant_id="organization-1")
 
 
 def active_quiz(**overrides: Any) -> dict[str, Any]:
@@ -90,7 +96,7 @@ async def test_live_quiz_create_access_link_reuses_active_existing_link(
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", FailingLiveQuizSessionService)
 
@@ -116,7 +122,7 @@ async def test_live_quiz_create_access_link_creates_when_existing_link_expired(
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((expired_quiz, "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((expired_quiz, _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", lambda *_args, **_kwargs: service)
@@ -140,6 +146,7 @@ async def test_live_quiz_create_access_link_creates_when_existing_link_expired(
         user=AUTHENTICATED_USER,
         quiz_id="quiz-1",
         origin="mcp",
+        organization_id="organization-1",
     )
 
 
@@ -148,13 +155,7 @@ async def test_live_quiz_create_access_link_requires_positive_duration(monkeypat
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return(
-            (
-                active_quiz(access_code=None, live_quiz_enabled=False),
-                "user-1",
-                AUTHENTICATED_USER,
-            )
-        ),
+        lambda _quiz_id: _async_return((active_quiz(access_code=None, live_quiz_enabled=False), _context())),
     )
 
     with pytest.raises(ValueError, match="duration must be positive"):
@@ -171,7 +172,7 @@ async def test_live_quiz_ensure_access_link_reuses_active_without_duration(
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", FailingLiveQuizSessionService)
 
@@ -190,7 +191,7 @@ async def test_live_quiz_ensure_access_link_requires_duration_when_no_active_lin
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
 
     result = await live_quiz_tools.live_quiz_ensure_access_link(quiz_id="quiz-1")
@@ -209,7 +210,7 @@ async def test_live_quiz_ensure_access_link_creates_when_duration_supplied(
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(live_quiz_tools, "LiveQuizSessionService", lambda *_args, **_kwargs: service)
@@ -241,7 +242,7 @@ async def test_service_level_reuse_is_reported_without_analytics(
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(
@@ -273,7 +274,7 @@ async def test_failed_activation_records_no_event(monkeypatch, product_event_rec
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
     monkeypatch.setattr(
@@ -304,14 +305,21 @@ async def test_unauthorized_activation_records_no_event(
 @pytest.mark.asyncio
 async def test_non_owner_activation_records_no_event(monkeypatch, product_event_recorder):
     class Repository:
-        async def get_quiz_by_id(self, _quiz_id):
-            return active_quiz(owner_user_id="another-user")
+        async def get_quiz_by_id_for_organization(self, _quiz_id, organization_id):
+            return active_quiz(
+                owner_user_id="another-user", created_by_user_id="another-user",
+                organization_id=organization_id,
+            )
 
     context = SimpleNamespace(
         user_id="user-1",
         is_authenticated=True,
         is_verified=True,
         user=AUTHENTICATED_USER,
+        organization_context=OrganizationContext(
+            organization_id="organization-1", organization_kind="school", membership_role="author",
+            principal=OrganizationPrincipal(user_id="user-1", session_id="session-1"), membership={},
+        ),
     )
     monkeypatch.setattr(
         live_quiz_tools,
@@ -320,9 +328,10 @@ async def test_non_owner_activation_records_no_event(monkeypatch, product_event_
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", Repository)
 
-    with pytest.raises(PermissionError, match="ownership"):
+    with pytest.raises(HTTPException) as denied:
         await live_quiz_tools.live_quiz_create_access_link("quiz-1", 20)
 
+    assert denied.value.status_code == 403
     product_event_recorder.assert_not_awaited()
 
 
@@ -340,7 +349,7 @@ async def test_missing_persona_is_normalized_for_mcp_activation(monkeypatch):
         live_quiz_tools,
         "_owned_quiz_for_context",
         lambda _quiz_id: _async_return(
-            (inactive_quiz, "user-1", user_without_persona)
+            (inactive_quiz, SimpleNamespace(user_id="user-1", user=user_without_persona, tenant_id="organization-1"))
         ),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
@@ -376,7 +385,7 @@ async def test_analytics_collection_failure_does_not_break_mcp_activation(monkey
         live_quiz_tools,
         "_owned_quiz_for_context",
         lambda _quiz_id: _async_return(
-            (inactive_quiz, "user-1", AUTHENTICATED_USER)
+            (inactive_quiz, _context())
         ),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
@@ -418,7 +427,7 @@ async def test_analytics_timeout_does_not_delay_mcp_activation(monkeypatch):
         live_quiz_tools,
         "_owned_quiz_for_context",
         lambda _quiz_id: _async_return(
-            (inactive_quiz, "user-1", AUTHENTICATED_USER)
+            (inactive_quiz, _context())
         ),
     )
     monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: object())
@@ -454,7 +463,7 @@ async def test_live_quiz_send_invites_sends_to_deduped_recipients(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     monkeypatch.setattr(live_quiz_tools, "build_email_service", lambda _background: email_service)
 
@@ -480,7 +489,7 @@ async def test_live_quiz_send_invites_rejects_recipient_cap(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
     recipients = [f"user{i}@example.com" for i in range(live_quiz_tools.MAX_LIVE_QUIZ_INVITE_RECIPIENTS + 1)]
 
@@ -496,7 +505,7 @@ async def test_live_quiz_send_invites_rejects_invalid_email(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
 
     with pytest.raises(ValidationError):
@@ -512,7 +521,7 @@ async def test_live_quiz_send_invites_requires_active_live_link(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((inactive_quiz, "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((inactive_quiz, _context())),
     )
 
     with pytest.raises(ValueError, match="Create a live quiz link"):
@@ -527,7 +536,7 @@ async def test_live_quiz_send_invites_rejects_stale_supplied_link(monkeypatch):
     monkeypatch.setattr(
         live_quiz_tools,
         "_owned_quiz_for_context",
-        lambda _quiz_id: _async_return((active_quiz(), "user-1", AUTHENTICATED_USER)),
+        lambda _quiz_id: _async_return((active_quiz(), _context())),
     )
 
     with pytest.raises(ValueError, match="no longer current"):

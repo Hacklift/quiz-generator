@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from server.app.db.core.connection import ensure_notification_indexes
-from server.app.notifications.repository import create_notification
+from server.app.notifications.repository import _active_notification_query, create_notification
 from server.app.notifications.schemas import NotificationCreate
 
 
@@ -61,6 +61,27 @@ async def test_notification_without_dedupe_key_omits_the_field():
     assert "dedupe_key" not in collection.documents[0]
 
 
+def test_shared_organization_notification_queries_never_include_legacy_rows():
+    query = _active_notification_query(
+        "user-1",
+        organization_id="organization-1",
+        allow_legacy_personal=False,
+    )
+
+    assert query["$and"][1] == {"organization_id": "organization-1"}
+
+
+def test_personal_organization_notification_queries_allow_legacy_rows_during_cutover():
+    query = _active_notification_query(
+        "user-1",
+        organization_id="organization-1",
+        allow_legacy_personal=True,
+    )
+
+    assert {"organization_id": "organization-1"} in query["$and"][1]["$or"]
+    assert {"organization_id": {"$exists": False}} in query["$and"][1]["$or"]
+
+
 @pytest.mark.asyncio
 async def test_notification_index_migrates_sparse_unique_to_partial_unique():
     collection = FakeNotificationsCollection()
@@ -68,7 +89,11 @@ async def test_notification_index_migrates_sparse_unique_to_partial_unique():
     await ensure_notification_indexes(collection)
 
     assert collection.dropped_indexes == ["notification_dedupe_key"]
-    _, options = collection.created_indexes[-1]
+    options = next(
+        options
+        for _keys, options in collection.created_indexes
+        if options.get("name") == "notification_dedupe_key"
+    )
     assert options["name"] == "notification_dedupe_key"
     assert options["unique"] is True
     assert options["partialFilterExpression"] == {"dedupe_key": {"$type": "string"}}

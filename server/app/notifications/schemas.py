@@ -15,6 +15,8 @@ class NotificationType(str, Enum):
 
 class NotificationCreate(BaseModel):
     user_id: str
+    organization_id: Optional[str] = None
+    created_by_user_id: Optional[str] = None
     title: str = Field(..., min_length=1, max_length=120)
     message: str = Field(..., min_length=1, max_length=1000)
     type: NotificationType = NotificationType.SYSTEM

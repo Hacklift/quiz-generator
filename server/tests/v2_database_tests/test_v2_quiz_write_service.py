@@ -17,6 +17,7 @@ async def test_create_quiz_v2_stores_canonical_document(test_db):
             quiz_type="multichoice",
             description="Service layer test",
             owner_user_id="user-123",
+            organization_id="organization-user-123",
             source="manual",
             tags=[" backend ", "", "api"],
             questions=[
@@ -48,6 +49,7 @@ async def test_update_quiz_metadata_v2_only_changes_allowed_fields(test_db):
             title="Initial title",
             quiz_type="open-ended",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Explain idempotency.",
@@ -78,6 +80,7 @@ async def test_update_quiz_questions_v2_replaces_question_set(test_db):
             title="Question update",
             quiz_type="true-false",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Python is compiled only.",
@@ -115,6 +118,7 @@ async def test_soft_delete_quiz_v2_marks_quiz_as_deleted(test_db):
             title="Soft delete target",
             quiz_type="multichoice",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Which layer owns writes?",

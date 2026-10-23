@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import toast from "react-hot-toast";
-import RequireTrainingManager from "@features/training/components/RequireTrainingManager";
+import RequireTrainingManager, { canManageTrainingRuns } from "@features/training/components/RequireTrainingManager";
+import { useOrganization } from "@features/organizations/context/organizationContext";
 import NavBar from "@features/quiz/components/NavBar";
 import Footer from "@features/quiz/components/Footer";
 import { trainingRunApi, type TrainingRunDetail } from "@features/training/api/trainingRunApi";
@@ -25,7 +26,7 @@ const outcomeLabels = {
 
 export default function TrainingRunDetailPage({ runId }: { runId: string }) {
   return (
-    <RequireTrainingManager>
+    <RequireTrainingManager access="report">
       <TrainingRunDetailContent runId={runId} />
     </RequireTrainingManager>
   );
@@ -33,6 +34,8 @@ export default function TrainingRunDetailPage({ runId }: { runId: string }) {
 
 function TrainingRunDetailContent({ runId }: { runId: string }) {
   const router = useRouter();
+  const { activeOrganization } = useOrganization();
+  const canManage = canManageTrainingRuns(activeOrganization?.role ?? null);
   const [run, setRun] = useState<TrainingRunDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
@@ -58,6 +61,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const closeRun = async () => {
+    if (!canManage) return;
     try {
       setIsClosing(true);
       await trainingRunApi.closeRun(runId);
@@ -116,7 +120,7 @@ function TrainingRunDetailContent({ runId }: { runId: string }) {
           {isLoading || !run ? <div className="flex min-h-[40vh] items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-b-2 border-t-2 border-brand" /></div> : <>
             <header className="border-b-2 border-divider pb-[28px]">
               <Kicker>{run.kind === "compliance" ? "Compliance register" : "Training completion"}</Kicker>
-              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" disabled={isExporting || registerLimited} onClick={() => void exportReport()} className={`${BTN_PRIMARY} disabled:opacity-50`}>{isExporting ? "Exporting..." : "Export completion CSV"}</button><button type="button" onClick={() => router.push(ROUTES.TRAINING_RUNS)} className={BTN_GHOST}>All runs</button>{run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
+              <div className="flex flex-wrap items-end justify-between gap-[16px]"><div><h1 className="text-[clamp(28px,3.6vw,40px)] font-extrabold leading-[1.08] tracking-[-0.02em]">{run.title}</h1><p className="mt-[12px] max-w-[58ch] text-[15.5px] leading-[28px] text-ink/[0.78]">{run.status === "closed" ? `Closed ${displayDate(run.closed_at)}. This completion register is retained as the final record.` : `Open until ${displayDate(run.closes_at)}.`}</p></div><div className="flex flex-wrap gap-[12px]"><button type="button" disabled={isExporting || registerLimited} onClick={() => void exportReport()} className={`${BTN_PRIMARY} disabled:opacity-50`}>{isExporting ? "Exporting..." : "Export completion CSV"}</button>{canManage && <button type="button" onClick={() => router.push(ROUTES.TRAINING_RUNS)} className={BTN_GHOST}>All runs</button>}{canManage && run.status === "open" && <button type="button" disabled={isClosing} onClick={() => setShowCloseConfirm(true)} className={`${BTN_PRIMARY} disabled:opacity-50`}>Close run</button>}</div></div>
             </header>
             <p role="status" className="mt-[20px] border-l-4 border-brand pl-[14px] text-[14px] leading-[24px] text-ink/75">{run.report_is_final ? `Final audit record, recorded ${displayDate(run.report_finalized_at)}. The register and CSV use the retained closure snapshot.` : "Provisional completion report. Results may change until the run closes."}</p>
             {run.passing_threshold_percentage == null && <p className="mt-[10px] text-[13px] text-ink/70">No passing threshold was recorded for this historical run. Pass/fail cannot be established.</p>}

@@ -78,6 +78,18 @@ async def test_product_event_is_minimal_and_snapshots_persona_at_event_time():
 
 
 @pytest.mark.asyncio
+async def test_product_event_carries_validated_tenant_and_actor():
+    collection = SimpleNamespace(insert_one=AsyncMock())
+    await record_product_event(
+        collection, event_type=QUIZ_GENERATED, user_id="user-1", user=None,
+        organization_id="organization-1",
+    )
+    saved = collection.insert_one.await_args.args[0]
+    assert saved["organization_id"] == "organization-1"
+    assert saved["created_by_user_id"] == saved["user_id"] == "user-1"
+
+
+@pytest.mark.asyncio
 async def test_product_event_timeout_is_bounded_and_does_not_raise(monkeypatch, caplog):
     attempts = 0
 

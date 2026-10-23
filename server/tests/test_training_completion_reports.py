@@ -14,6 +14,8 @@ from pydantic import ValidationError
 
 from server.app.core.dependencies import get_current_user
 from server.app.core.rate_limiter import limiter
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.quiz.routes import training_runs
 from server.app.quiz.schemas.training_runs import CreateTrainingRunRequest
 from server.app.quiz.services.training_run_service import TrainingRunService
@@ -49,8 +51,26 @@ def assignments():
 def report_service(run=None, rows=None):
     run = run or run_document()
     rows = rows if rows is not None else assignments()
+
+    async def get_run_for_owner(identifier, owner_user_id, organization_id, allow_legacy_personal):
+        legacy = run.get("organization_id") is None and allow_legacy_personal
+        if (
+            identifier == str(run["_id"])
+            and owner_user_id == run["owner_user_id"]
+            and (run.get("organization_id") == organization_id or legacy)
+        ):
+            return deepcopy(run)
+        return None
+
+    async def get_run_for_organization(identifier, organization_id):
+        if identifier == str(run["_id"]) and run.get("organization_id") == organization_id:
+            return deepcopy(run)
+        return None
+
     repository = SimpleNamespace(
         get_run=AsyncMock(side_effect=lambda identifier: deepcopy(run) if identifier == str(run["_id"]) else None),
+        get_run_for_owner=AsyncMock(side_effect=get_run_for_owner),
+        get_run_for_organization=AsyncMock(side_effect=get_run_for_organization),
         list_assignments_for_run=AsyncMock(return_value=rows),
         list_sessions_for_run=AsyncMock(return_value=[]),
         get_closure_audit=AsyncMock(return_value=None),
@@ -367,18 +387,29 @@ def test_display_safe_csv_does_not_mutate_authoritative_email(email):
 @pytest.fixture
 def report_app(monkeypatch):
     service, repository, run = report_service()
+    run.update(organization_id="organization-1", created_by_user_id="owner-1")
     app = FastAPI()
     app.include_router(training_runs.router, prefix="/api/v1")
     user = SimpleNamespace(id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr")
     app.dependency_overrides[get_current_user] = lambda: user
+    app.state.membership_role = "owner"
+    app.dependency_overrides[get_active_organization_context] = lambda: OrganizationContext(
+        organization_id="organization-1", organization_kind="personal",
+        membership_role=app.state.membership_role,
+        principal=OrganizationPrincipal(user_id=user.id, session_id="session-1"), membership={},
+    )
     app.dependency_overrides[training_runs.get_training_run_service] = lambda: service
     monkeypatch.setattr(limiter, "enabled", False)
     return app, user, repository, run
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("identity,status", [("owner", 200), ("other", 404), ("employee", 403), ("unverified", 403)])
-async def test_report_route_checks_owner_and_existing_manager_policy(report_app, identity, status):
+@pytest.mark.parametrize("identity,status", [
+    ("owner", 200), ("other", 200), ("employee", 200), ("unverified", 403),
+    ("auditor", 200), ("learner", 403), ("author", 403),
+    ("facilitator", 200), ("other_facilitator", 403),
+])
+async def test_report_route_uses_membership_policy_not_persona(report_app, identity, status):
     app, user, _, run = report_app
     if identity == "other":
         user.id = "other-manager"
@@ -386,6 +417,11 @@ async def test_report_route_checks_owner_and_existing_manager_policy(report_app,
         user.persona_user_type = "employee"
     elif identity == "unverified":
         user.is_verified = False
+    elif identity == "other_facilitator":
+        user.id = "other-facilitator"
+        app.state.membership_role = "facilitator"
+    elif identity in {"auditor", "learner", "author", "facilitator"}:
+        app.state.membership_role = identity
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(f"/api/v1/training-runs/{run['_id']}/completion-report.csv")
     assert response.status_code == status
@@ -400,6 +436,15 @@ async def test_missing_or_malformed_report_is_404(report_app):
     app, _, _, _ = report_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/v1/training-runs/not-an-objectid/completion-report.csv")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_csv_report_rejects_same_owners_run_in_another_organization(report_app):
+    app, _, _, run = report_app
+    run["organization_id"] = "another-organization"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/training-runs/{run['_id']}/completion-report.csv")
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

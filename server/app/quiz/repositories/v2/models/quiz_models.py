@@ -74,6 +74,8 @@ class QuizCreateV2(BaseModel):
     questions: List[QuizQuestionV2]
     description: Optional[str] = None
     owner_user_id: Optional[str] = None
+    organization_id: str
+    created_by_user_id: Optional[str] = None
     visibility: QuizVisibilityV2 = QuizVisibilityV2.PRIVATE
     status: QuizStatusV2 = QuizStatusV2.ACTIVE
     source: QuizSourceV2 = QuizSourceV2.MANUAL
@@ -121,6 +123,8 @@ class QuizDocumentV2(BaseModel):
     questions: List[QuizQuestionV2]
     description: Optional[str] = None
     owner_user_id: Optional[str] = None
+    organization_id: str
+    created_by_user_id: Optional[str] = None
     visibility: QuizVisibilityV2 = QuizVisibilityV2.PRIVATE
     status: QuizStatusV2 = QuizStatusV2.ACTIVE
     source: QuizSourceV2 = QuizSourceV2.MANUAL

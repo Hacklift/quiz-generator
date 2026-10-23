@@ -12,6 +12,15 @@ from server.app.quiz.repositories.training_run_repository import TrainingRunRepo
 from server.app.quiz.services.training_run_service import TrainingRunService
 from server.app.quiz.routes import training_runs
 from server.app.core.dependencies import get_current_user
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.auth.utils import create_access_token
+from server.app.db.core.connection import (
+    get_users_collection, get_user_sessions_collection,
+    get_organizations_collection, get_organization_memberships_collection,
+)
+from server.app.organizations.models import (
+    OrganizationDocument, OrganizationMembershipDocument, OrganizationContext, OrganizationPrincipal,
+)
 from server.app.quiz.utils.training_completion import build_closure_payload, MAX_COMPLETION_REPORT_ROWS, completion_row, completion_summary
 from server.tests.test_training_completion_reports import run_document
 
@@ -21,6 +30,77 @@ def repository_for(database):
         database.quizzes_v2, database.training_runs, database.training_assignments,
         database.training_audit_events, database.live_quiz_sessions,
     )
+
+
+@pytest.mark.asyncio
+async def test_report_routes_follow_real_authenticated_session_scope(test_db, monkeypatch):
+    owner_id = str(ObjectId())
+    organizations = [OrganizationDocument(kind="corporate", name=name) for name in ("A", "B")]
+    organization_a, organization_b = (str(organization.id) for organization in organizations)
+    await test_db.organizations.insert_many([
+        organization.model_dump(by_alias=True) for organization in organizations
+    ])
+    await test_db.organization_memberships.insert_many([
+        OrganizationMembershipDocument(
+            organization_id=str(organization.id), user_id=owner_id, role="owner"
+        ).model_dump(by_alias=True)
+        for organization in organizations
+    ])
+    await test_db.users.insert_one({
+        "_id": ObjectId(owner_id), "username": "manager", "email": "manager@example.com",
+        "is_verified": True, "status": "active", "default_organization_id": organization_a,
+        "profile": {"persona": {"category": "corporate", "user_type": "hr"}},
+    })
+    await test_db.user_sessions.insert_one({
+        "session_id": "report-session", "user_id": owner_id, "revoked_at": None,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+        "active_organization_id": organization_a,
+    })
+    run_a, run_b = run_document(), run_document()
+    for run, organization_id in ((run_a, organization_a), (run_b, organization_b)):
+        run.update(owner_user_id=owner_id, organization_id=organization_id, created_by_user_id=owner_id)
+    run_b["status"] = "closed"
+    await test_db.training_runs.insert_many([run_a, run_b])
+    evidence = build_closure_payload(run_b, [{
+        "_id": ObjectId(), "status": "completed", "recipient_email": "private-b@example.com",
+        "latest_score": 4, "latest_percentage": 80,
+    }], [])
+    await test_db.training_audit_events.insert_one({
+        "training_run_id": str(run_b["_id"]), "organization_id": organization_b,
+        "event_type": "run_closed", "payload": evidence,
+    })
+    app = FastAPI()
+    app.include_router(training_runs.router, prefix="/api/v1")
+    app.dependency_overrides.update({
+        get_users_collection: lambda: test_db.users,
+        get_user_sessions_collection: lambda: test_db.user_sessions,
+        get_organizations_collection: lambda: test_db.organizations,
+        get_organization_memberships_collection: lambda: test_db.organization_memberships,
+    })
+    service = TrainingRunService(repository_for(test_db), SimpleNamespace())
+    app.dependency_overrides[training_runs.get_training_run_service] = lambda: service
+    monkeypatch.setattr(training_runs.limiter, "enabled", False)
+    token = create_access_token({"sub": owner_id}, session_id="report-session")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
+        listing = await client.get("/api/v1/training-runs")
+        assert listing.status_code == 200
+        assert [row["id"] for row in listing.json()] == [str(run_a["_id"])]
+        for suffix in ("", "/completion-report.csv"):
+            response = await client.get(f"/api/v1/training-runs/{run_b['_id']}{suffix}")
+            assert response.status_code == 404
+            assert "private-b@example.com" not in response.text
+        assert (await client.get(f"/api/v1/training-runs/{run_a['_id']}/completion-report.csv")).status_code == 200
+        await test_db.user_sessions.update_one(
+            {"session_id": "report-session"}, {"$set": {"active_organization_id": organization_b}}
+        )
+        export = await client.get(f"/api/v1/training-runs/{run_b['_id']}/completion-report.csv")
+        assert export.status_code == 200
+        assert "private-b@example.com" in export.text
+        assert "passed" in export.text
+        assert (await client.get(f"/api/v1/training-runs/{run_a['_id']}")).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -420,6 +500,8 @@ async def test_malformed_materialized_summaries_are_not_recomputed_as_legacy(tes
 @pytest.mark.parametrize("legacy", [False, True])
 async def test_mixed_bad_evidence_only_marks_its_own_run_unavailable_on_the_list_endpoint(test_db, legacy):
     good, bad = run_document(), run_document()
+    organization_id = str(ObjectId())
+    good["organization_id"] = bad["organization_id"] = organization_id
     good["status"] = bad["status"] = "closed"
     await test_db.training_runs.insert_many([good, bad])
     valid = {"_id": ObjectId(), "recipient_email": "learner@example.com", "status": "completed", "latest_score": 4}
@@ -441,6 +523,10 @@ async def test_mixed_bad_evidence_only_marks_its_own_run_unavailable_on_the_list
     app.include_router(training_runs.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr",
+    )
+    app.dependency_overrides[get_active_organization_context] = lambda: OrganizationContext(
+        organization_id=organization_id, organization_kind="corporate", membership_role="owner",
+        principal=OrganizationPrincipal(user_id="owner-1", session_id="session-1"), membership={},
     )
     service = TrainingRunService(repository_for(test_db), SimpleNamespace())
     app.dependency_overrides[training_runs.get_training_run_service] = lambda: service

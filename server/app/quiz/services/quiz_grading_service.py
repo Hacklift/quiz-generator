@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from fastapi import HTTPException
+from server.app.organizations.models import OrganizationContext
 
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
@@ -28,6 +29,7 @@ from server.app.quiz.repositories.v2.repositories.attempt_repository import Quiz
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 from server.app.quiz.utils.grading import grade_answers
+from server.app.quiz.services.quiz_practice_access import QuizPracticeAccess
 
 
 logger = logging.getLogger(__name__)
@@ -116,6 +118,7 @@ class QuizGradingService:
         quiz_repository: Optional[QuizV2Repository] = None,
         reference_repository: Optional[ReferenceV2Repository] = None,
         attempt_repository: Optional[QuizAttemptV2Repository] = None,
+        quiz_access: QuizPracticeAccess | None = None,
     ):
         self.quiz_repository = (
             quiz_repository
@@ -137,6 +140,7 @@ class QuizGradingService:
             if attempt_repository is not None
             else QuizAttemptV2Repository(get_quiz_attempts_v2_collection())
         )
+        self.quiz_access = quiz_access or QuizPracticeAccess()
 
     @staticmethod
     def _build_attempt_summary(graded_results: list[dict[str, Any]]) -> tuple[int, float]:
@@ -161,6 +165,7 @@ class QuizGradingService:
         self,
         *,
         user_id: str,
+        organization_id: str,
         quiz_id: str,
         graded_results: list[dict[str, Any]],
         stored_questions: list[dict[str, Any]],
@@ -172,6 +177,8 @@ class QuizGradingService:
         await self.attempt_repository.insert_attempt(
             QuizAttemptDocumentV2(
                 user_id=user_id,
+                organization_id=organization_id,
+                created_by_user_id=user_id,
                 quiz_id=quiz_id,
                 question_results=[
                     QuizAttemptQuestionResultV2(
@@ -190,12 +197,22 @@ class QuizGradingService:
             )
         )
 
-    async def _resolve_quiz(self, quiz_id: str) -> Optional[QuizDocumentV2]:
-        quiz_doc = await self.quiz_repository.find_by_id(quiz_id)
-        if not quiz_doc:
-            saved_reference = await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
+    async def _resolve_quiz(
+        self, quiz_id: str, *, user_id: str | None, organization_id: str | None,
+    ) -> Optional[QuizDocumentV2]:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            [quiz_id], organization_id=organization_id,
+        )
+        quiz_doc = next(iter(quizzes), None)
+        if not quiz_doc and user_id is not None and organization_id:
+            saved_reference = await self.reference_repository.get_saved_quiz_for_attempt(
+                quiz_id, user_id=user_id, organization_id=organization_id,
+            )
             if saved_reference:
-                quiz_doc = await self.quiz_repository.find_by_id(saved_reference.quiz_id)
+                quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+                    [saved_reference.quiz_id], organization_id=organization_id,
+                )
+                quiz_doc = next(iter(quizzes), None)
         return quiz_doc
 
     async def grade_submission(
@@ -205,17 +222,23 @@ class QuizGradingService:
         *,
         source: str = "mock",
         user_id: str | None = None,
+        organization_id: str | None = None,
+        organization: OrganizationContext | None = None,
     ) -> GradedQuizSubmission | None:
         """Return scores and independent persistence status, or None if missing."""
-        quiz_doc = await self._resolve_quiz(quiz_id)
+        if user_id is not None and not organization_id:
+            raise HTTPException(status_code=409, detail="Organization context has not been provisioned")
+        if organization is not None and (
+            organization.principal.user_id != user_id
+            or organization.organization_id != organization_id
+        ):
+            raise HTTPException(status_code=403, detail="Organization access denied")
+        quiz_doc = await self._resolve_quiz(
+            quiz_id, user_id=user_id, organization_id=organization_id,
+        )
         if quiz_doc is None or quiz_doc.status.value == "deleted":
             return None
-        if (
-            quiz_doc.visibility.value == "private"
-            and quiz_doc.owner_user_id
-            and quiz_doc.owner_user_id != user_id
-        ):
-            raise HTTPException(status_code=404, detail="Quiz not found")
+        await self.quiz_access.require_readable(quiz_doc, organization)
 
         stored_questions = [
             {
@@ -236,6 +259,7 @@ class QuizGradingService:
             try:
                 await self._store_attempt(
                     user_id=user_id,
+                    organization_id=organization_id,
                     quiz_id=str(quiz_doc.id),
                     graded_results=graded_results,
                     stored_questions=stored_questions,

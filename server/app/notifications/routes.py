@@ -14,6 +14,8 @@ from server.app.notifications.schemas import (
     NotificationResponse,
 )
 from server.app.users.models import UserOut
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.notifications.services import (
     broadcast_admin_notification,
     create_admin_notification,
@@ -33,6 +35,7 @@ async def get_notifications(
     limit: int = Query(default=20, ge=1, le=50),
     skip: int = Query(default=0, ge=0),
     current_user: UserOut = Depends(get_current_user),
+    organization_context: OrganizationContext = Depends(get_active_organization_context),
     notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
 ):
     return await get_notifications_for_user(
@@ -40,6 +43,8 @@ async def get_notifications(
         user=current_user,
         limit=limit,
         skip=skip,
+        organization_id=organization_context.organization_id,
+        allow_legacy_personal=False,
     )
 
 
@@ -76,11 +81,14 @@ async def broadcast_notification(
 @router.patch("/read-all", response_model=NotificationMutationResponse)
 async def mark_all_read(
     current_user: UserOut = Depends(get_current_user),
+    organization_context: OrganizationContext = Depends(get_active_organization_context),
     notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
 ):
     return await mark_user_notifications_read(
         notifications_collection=notifications_collection,
         user=current_user,
+        organization_id=organization_context.organization_id,
+        allow_legacy_personal=False,
     )
 
 
@@ -88,12 +96,15 @@ async def mark_all_read(
 async def mark_one_read(
     notification_id: str,
     current_user: UserOut = Depends(get_current_user),
+    organization_context: OrganizationContext = Depends(get_active_organization_context),
     notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
 ):
     return await mark_user_notification_read(
         notifications_collection=notifications_collection,
         notification_id=notification_id,
         user=current_user,
+        organization_id=organization_context.organization_id,
+        allow_legacy_personal=False,
     )
 
 
@@ -101,10 +112,13 @@ async def mark_one_read(
 async def delete_one_notification(
     notification_id: str,
     current_user: UserOut = Depends(get_current_user),
+    organization_context: OrganizationContext = Depends(get_active_organization_context),
     notifications_collection: AsyncIOMotorCollection = Depends(get_notifications_collection),
 ):
     return await delete_user_notification(
         notifications_collection=notifications_collection,
         notification_id=notification_id,
         user=current_user,
+        organization_id=organization_context.organization_id,
+        allow_legacy_personal=False,
     )
