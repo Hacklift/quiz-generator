@@ -4,26 +4,34 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/router";
 import RequireAuth from "@features/auth/components/RequireAuth";
 import { useAuth } from "@features/auth/context/authContext";
+import { useOrganization } from "@features/organizations/context/organizationContext";
 import { ROUTES } from "@shared/config/patterns/routes";
 
 interface RequireTrainingManagerProps {
   children: ReactNode;
+  access?: "manage" | "report";
 }
 
-const canManageTrainingRuns = (category: string | null, userType: string | null) =>
-  category === "corporate" && (userType === "business" || userType === "hr");
+const canManageTrainingRuns = (role: string | null) =>
+  role === "owner" || role === "admin" || role === "facilitator";
+
+const canReadTrainingReports = (role: string | null) =>
+  canManageTrainingRuns(role) || role === "auditor";
 
 export default function RequireTrainingManager({
   children,
+  access = "manage",
 }: RequireTrainingManagerProps) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
-  // URL and local-storage personas tailor the product, but only the persisted
-  // authenticated profile may grant a training-management capability.
-  const isAllowed = canManageTrainingRuns(
-    user?.persona_category ?? null,
-    user?.persona_user_type ?? null,
-  );
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { activeOrganization, isLoading: organizationLoading } = useOrganization();
+  const isLoading = authLoading || organizationLoading;
+  const role = activeOrganization?.role ?? null;
+  // Client guards only reflect server-proven membership; every request still
+  // rechecks the central backend policy, including resource relationships.
+  const isAllowed = access === "report"
+    ? canReadTrainingReports(role)
+    : canManageTrainingRuns(role);
 
   useEffect(() => {
     if (isAuthenticated && !isLoading && !isAllowed) {
@@ -47,4 +55,4 @@ export default function RequireTrainingManager({
   );
 }
 
-export { canManageTrainingRuns };
+export { canManageTrainingRuns, canReadTrainingReports };

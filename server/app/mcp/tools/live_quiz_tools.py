@@ -6,8 +6,16 @@ from typing import Any
 
 from pydantic import EmailStr, TypeAdapter
 
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    record_product_event_safely,
+)
 from server.app.core.config import settings
-from server.app.db.core.connection import get_live_quiz_sessions_collection, get_quizzes_v2_collection
+from server.app.db.core.connection import (
+    get_live_quiz_sessions_collection,
+    get_product_events_collection,
+    get_quizzes_v2_collection,
+)
 from server.app.email_platform.service import build_email_service
 from server.app.mcp.auth import get_mcp_request_context
 from server.app.organizations.policy import (
@@ -39,10 +47,6 @@ def _frontend_live_quiz_link(access_code: str) -> str:
 
 def _serialize_datetime(value: datetime | None) -> str | None:
     return _as_utc(value).isoformat() if value else None
-
-
-def _quiz_owner_id(quiz: dict[str, Any]) -> str | None:
-    return quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
 
 
 def _valid_existing_live_link(quiz: dict[str, Any]) -> dict[str, Any] | None:
@@ -168,6 +172,17 @@ async def live_quiz_create_access_link(
         time_limit_minutes=int(duration),
         authorized_quiz=quiz,
     )
+    access_code_created = response.pop("_access_code_created", False)
+    if access_code_created:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=LIVE_QUIZ_ENABLED,
+            user_id=context.user_id,
+            user=context.user,
+            quiz_id=response["quiz_id"],
+            origin="mcp",
+            organization_id=context.tenant_id,
+        )
     return {
         "found": True,
         "quiz_id": response["quiz_id"],
@@ -177,7 +192,7 @@ async def live_quiz_create_access_link(
         "duration": response["time_limit_minutes"],
         "time_limit_minutes": response["time_limit_minutes"],
         "access_code_expires_at": _serialize_datetime(response["access_code_expires_at"]),
-        "reused_existing": False,
+        "reused_existing": not access_code_created,
     }
 
 
@@ -214,6 +229,17 @@ async def live_quiz_ensure_access_link(
         time_limit_minutes=int(duration),
         authorized_quiz=quiz,
     )
+    access_code_created = response.pop("_access_code_created", False)
+    if access_code_created:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=LIVE_QUIZ_ENABLED,
+            user_id=context.user_id,
+            user=context.user,
+            quiz_id=response["quiz_id"],
+            origin="mcp",
+            organization_id=context.tenant_id,
+        )
     return {
         "found": True,
         "requires_duration": False,
@@ -224,7 +250,7 @@ async def live_quiz_ensure_access_link(
         "duration": response["time_limit_minutes"],
         "time_limit_minutes": response["time_limit_minutes"],
         "access_code_expires_at": _serialize_datetime(response["access_code_expires_at"]),
-        "reused_existing": False,
+        "reused_existing": not access_code_created,
     }
 
 

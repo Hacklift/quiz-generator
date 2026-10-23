@@ -32,6 +32,7 @@ auth_events_collection = database["auth_events"]
 organizations_collection = database["organizations"]
 organization_memberships_collection = database["organization_memberships"]
 organization_invitations_collection = database["organization_invitations"]
+product_events_collection = database["product_events"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
 live_quiz_sessions_collection = database["live_quiz_sessions"]
@@ -135,6 +136,20 @@ async def ensure_live_quiz_session_indexes(
     await live_quiz_sessions_collection.create_index(
         [("organization_id", 1), ("creator_user_id", 1), ("quiz_id", 1), ("submitted_at", -1)],
         name="organization_creator_quiz_submitted_at",
+    )
+
+
+async def ensure_product_event_indexes(collection: AsyncIOMotorCollection):
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1), ("event_type", 1), ("created_at", -1)],
+        name="product_event_organization_user_type_created",
+    )
+    await collection.create_index([("event_type", 1), ("created_at", -1)])
+    await collection.create_index(
+        [("persona_category", 1), ("persona_user_type", 1), ("created_at", -1)]
+    )
+    await collection.create_index(
+        [("user_id", 1), ("event_type", 1), ("created_at", -1)]
     )
 
 
@@ -342,6 +357,7 @@ async def startUp():
     await ensure_user_tokens_indexes(user_tokens_collection)
     await ensure_notification_indexes(notifications_collection)
     await ensure_live_quiz_session_indexes(live_quiz_sessions_collection)
+    await ensure_product_event_indexes(product_events_collection)
     await ensure_document_rag_cache_indexes(document_rag_cache_collection)
     await ensure_live_quiz_invitation_indexes(live_quiz_invitations_collection)
     await ensure_training_run_indexes(
@@ -393,6 +409,12 @@ def get_organization_memberships_collection() -> AsyncIOMotorCollection:
 
 def get_organization_invitations_collection() -> AsyncIOMotorCollection:
     return organization_invitations_collection
+
+
+def get_product_events_collection() -> AsyncIOMotorCollection:
+    if product_events_collection is None:
+        raise RuntimeError("[DB Error] product_events_collection has not been initialized properly.")
+    return product_events_collection
 
 def get_quizzes_collection() -> AsyncIOMotorCollection:
     if quizzes_collection is None:

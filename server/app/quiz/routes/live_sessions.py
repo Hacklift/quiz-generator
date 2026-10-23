@@ -22,6 +22,12 @@ from server.app.db.core.connection import (
     get_users_collection,
     get_organization_memberships_collection,
     get_organizations_collection,
+    get_product_events_collection,
+)
+from server.app.analytics.product_events import (
+    LIVE_QUIZ_ENABLED,
+    RESULTS_EXPORTED,
+    record_product_event_safely,
 )
 from server.app.core.config import settings
 from server.app.users.models import UserOut
@@ -181,7 +187,7 @@ async def generate_quiz_access_code(
         action=OrganizationAction.CONTENT_SHARE,
         service=service,
     )
-    return await service.generate_access_code(
+    result = await service.generate_access_code(
         quiz_id=quiz_id,
         access_code_expires_at=payload.access_code_expires_at,
         creator_id=current_user.id,
@@ -193,6 +199,17 @@ async def generate_quiz_access_code(
         email_service=email_service,
         authorized_quiz=quiz,
     )
+    created = result.pop("_access_code_created", False)
+    if created:
+        await record_product_event_safely(
+            get_product_events_collection,
+            event_type=LIVE_QUIZ_ENABLED,
+            organization_id=organization.organization_id,
+            user_id=current_user.id,
+            user=current_user,
+            quiz_id=quiz_id,
+        )
+    return result
 
 
 @router.get("/quizzes/access/{code}", response_model=QuizAccessPreview)
@@ -388,6 +405,15 @@ async def export_live_quiz_results(
     response = Response(content=generator(payload).getvalue(), media_type=media_type)
     filename = build_download_filename(f'{payload["title"]} results', format)
     response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    await record_product_event_safely(
+        get_product_events_collection,
+        event_type=RESULTS_EXPORTED,
+        organization_id=organization.organization_id,
+        user_id=current_user.id,
+        user=current_user,
+        quiz_id=quiz_id,
+        export_format=format,
+    )
     return response
 
 

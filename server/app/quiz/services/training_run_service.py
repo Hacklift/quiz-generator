@@ -10,11 +10,20 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import DuplicateKeyError
+from pydantic import ValidationError
 
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
+from server.app.quiz.schemas.training_runs import TrainingRunDetail, TrainingRunSummary
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.identity import normalize_email
+from server.app.quiz.utils.training_completion import (
+    assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
+    report_timestamp,
+    MAX_COMPLETION_REPORT_ROWS,
+    CompletionEvidenceError, completion_summary, raw_score, STARTED_ASSIGNMENT_STATUSES,
+    closed_run_metadata,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -173,6 +182,7 @@ class TrainingRunService:
             "status": "provisioning",
             "access_mode": payload.access_mode,
             "time_limit_minutes": payload.time_limit_minutes,
+            "passing_threshold_percentage": payload.passing_threshold_percentage,
             "due_at": due_at,
             "closes_at": closes_at,
             "closed_at": None,
@@ -293,6 +303,10 @@ class TrainingRunService:
             "max_attempts": payload.max_attempts,
             "send_email_invitations": payload.send_email_invitations,
         }
+        # Preserve idempotent retries of default requests issued before #136.
+        # Custom thresholds are a distinct creation intent, never an edit.
+        if payload.passing_threshold_percentage != 80:
+            canonical["passing_threshold_percentage"] = payload.passing_threshold_percentage
         encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -337,20 +351,41 @@ class TrainingRunService:
             organization_id=organization_id,
             allow_legacy_personal=allow_legacy_personal,
         )
-        summaries = []
-        for run in runs:
-            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
-            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
-            summaries.append(self._run_summary(run, assignments, sessions))
-        return summaries
+        return await self._summarize_runs(runs)
 
     async def list_organization_runs(self, organization_id: str) -> list[dict]:
         runs = await self.repository.list_runs_for_organization(organization_id)
+        return await self._summarize_runs(runs)
+
+    async def _summarize_runs(self, runs: list[dict]) -> list[dict]:
+        """Use the same bounded, frozen evidence for every authorized run list."""
+        activity = await self.repository.get_run_activity_summaries([
+            str(run["_id"]) for run in runs if run["status"] == "open"
+        ])
+        closed = await self.repository.get_closure_report_summaries([
+            str(run["_id"]) for run in runs if run["status"] == "closed"
+        ])
         summaries = []
         for run in runs:
-            assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
-            sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
-            summaries.append(self._run_summary(run, assignments, sessions))
+            summary = self._run_summary(run, [], [])
+            run_id = str(run["_id"])
+            if run["status"] == "closed":
+                evidence = closed.get(run_id)
+                if evidence:
+                    candidate = self._run_summary(closed_run_metadata(run, evidence["run"]), [], [])
+                    candidate.update(evidence["activity"])
+                    try:
+                        summary = TrainingRunSummary.model_validate(candidate).model_dump()
+                    except ValidationError:
+                        evidence = None
+                if not evidence:
+                    # One unavailable audit must not hide other runs or invent
+                    # final counters from mutable assignment/session rows.
+                    summary["summary_availability"] = "unavailable"
+                    logger.error("training_completion_report_unavailable run_id=%s", run_id)
+            else:
+                summary.update(activity[run_id])
+            summaries.append(summary)
         return summaries
 
     async def get_owner_run(
@@ -377,35 +412,82 @@ class TrainingRunService:
             or run.get("status") not in {"open", "closed"}
         ):
             raise HTTPException(status_code=404, detail="Training run not found")
-        assignments = await self.repository.list_assignments_for_run(run_id)
-        sessions = await self.repository.list_sessions_for_run(run_id)
-        summary = self._run_summary(run, assignments, sessions)
-        summary["completion_register"] = [
-            *[self._completion_row(assignment) for assignment in assignments],
-            *[
-                self._shared_session_row(session)
-                for session in sessions
-                if not session.get("training_assignment_id")
-            ],
-        ]
-        return summary
+        return await self._completion_report(run)
 
     async def get_organization_run(self, run_id: str, organization_id: str) -> dict:
         run = await self.repository.get_run_for_organization(run_id, organization_id)
-        if not run:
+        if not run or run.get("status") not in {"open", "closed"}:
             raise HTTPException(status_code=404, detail="Training run not found")
-        assignments = await self.repository.list_assignments_for_run(run_id)
-        sessions = await self.repository.list_sessions_for_run(run_id)
-        summary = self._run_summary(run, assignments, sessions)
-        summary["completion_register"] = [
-            *[self._completion_row(assignment) for assignment in assignments],
-            *[
-                self._shared_session_row(session)
-                for session in sessions
-                if not session.get("training_assignment_id")
-            ],
-        ]
-        return summary
+        return await self._completion_report(run)
+
+    async def _completion_report(self, run: dict) -> dict:
+        """Render only a previously authorized parent, never mutable final evidence."""
+        run_id = str(run["_id"])
+        try:
+            finalized_at = None
+            if run["status"] == "closed":
+                audit = await self.repository.get_closure_audit(
+                    run_id, report_limit=MAX_COMPLETION_REPORT_ROWS + 1,
+                )
+                payload = audit.get("payload") if audit else None
+                if (
+                    not isinstance(payload, dict)
+                    or not isinstance(payload.get("completion_register"), list)
+                    or not isinstance(payload.get("run"), dict)
+                ):
+                    raise CompletionEvidenceError("Missing or invalid closure payload")
+                # Closed evidence never falls back to mutable assignments or quiz
+                # content. Historical snapshots without a threshold remain unknown.
+                run = closed_run_metadata(run, payload["run"])
+                records = payload["completion_register"]
+                finalized_at = report_timestamp(audit.get("occurred_at"))
+            else:
+                assignments = await self.repository.list_assignments_for_run(
+                    run_id, limit=MAX_COMPLETION_REPORT_ROWS + 1,
+                )
+                sessions = await self.repository.list_sessions_for_run(
+                    run_id, limit=max(1, MAX_COMPLETION_REPORT_ROWS + 1 - len(assignments)),
+                    shared_only=True,
+                )
+                records = [
+                    *[assignment_snapshot(item) for item in assignments],
+                    *[shared_session_snapshot(item) for item in sessions if not item.get("training_assignment_id")],
+                ]
+            if len(records) > MAX_COMPLETION_REPORT_ROWS:
+                logger.warning("training_completion_report_limit_exceeded run_id=%s", run_id)
+                activity = (
+                    await self.repository.get_closure_activity_summary(run_id)
+                    if run["status"] == "closed"
+                    else await self.repository.get_run_activity_summary(run_id)
+                )
+                rows = []
+                availability = "limit_exceeded"
+            else:
+                rows = [completion_row(record, run.get("passing_threshold_percentage")) for record in records]
+                activity = completion_summary(rows)
+                availability = "available"
+            summary = self._run_summary(run, [], [])
+            summary.update({
+                **activity, "register_availability": availability,
+                "completion_register": rows, "report_is_final": run["status"] == "closed",
+                "report_finalized_at": finalized_at,
+            })
+            return self._validate_report(summary)
+        except CompletionEvidenceError as error:
+            # Retain the parsing stack without logging ValidationError inputs,
+            # recipient identities, or the original exception's data values.
+            logger.error(
+                "training_completion_report_unavailable run_id=%s", run_id,
+                exc_info=(CompletionEvidenceError, CompletionEvidenceError("Invalid completion evidence"), error.__traceback__),
+            )
+            raise HTTPException(status_code=503, detail="Final completion record is unavailable" if run["status"] == "closed" else "Completion record is unavailable") from None
+
+    @staticmethod
+    def _validate_report(summary: dict) -> dict:
+        try:
+            return TrainingRunDetail.model_validate(summary).model_dump()
+        except ValidationError:
+            raise CompletionEvidenceError("Invalid completion report fields") from None
 
     async def close_owner_run(
         self,
@@ -681,25 +763,7 @@ class TrainingRunService:
                     "created_by_user_id": claimed.get("created_by_user_id") or claimed.get("owner_user_id") or owner_user_id,
                     "occurred_at": closed_at,
                     # No update/delete operation is exposed for a final audit snapshot.
-                    "payload": {
-                        "run": {
-                            "quiz_id": claimed["quiz_id"],
-                            "title": claimed["title"],
-                            "kind": claimed["kind"],
-                            "purpose": claimed["purpose"],
-                            "quiz_content_fingerprint": claimed.get("quiz_content_fingerprint"),
-                            "quiz_snapshot": claimed.get("quiz_snapshot"),
-                            "closes_at": claimed["closes_at"],
-                        },
-                        "completion_register": [
-                            *[self._audit_assignment_row(item) for item in assignments],
-                            *[
-                                self._audit_shared_session_row(session)
-                                for session in sessions
-                                if not session.get("training_assignment_id")
-                            ],
-                        ],
-                    },
+                    "payload": build_closure_payload(claimed, assignments, sessions),
                 }
             )
             closed = (
@@ -787,13 +851,13 @@ class TrainingRunService:
         started = [
             item
             for item in assignments
-            if item.get("status") in {"in_progress", "incomplete", "completed"}
+            if item.get("status") in STARTED_ASSIGNMENT_STATUSES
         ]
         shared_sessions = [item for item in sessions if not item.get("training_assignment_id")]
         shared_completed = [item for item in shared_sessions if item.get("status") == "submitted"]
         scores = [
-            *[item["latest_score"] for item in completed if isinstance(item.get("latest_score"), int)],
-            *[item["score"] for item in shared_completed if isinstance(item.get("score"), int)],
+            *[score for item in completed if (score := raw_score(item.get("latest_score"))) is not None],
+            *[score for item in shared_completed if (score := raw_score(item.get("score"))) is not None],
         ]
         code = run.get("access_code")
         return {
@@ -802,8 +866,10 @@ class TrainingRunService:
             "access_mode": run["access_mode"], "access_code": code,
             "access_url": f"{settings.FRONTEND_BASE_URL}/training-access/{code}" if code else None,
             "time_limit_minutes": run["time_limit_minutes"], "due_at": run.get("due_at"),
+            "passing_threshold_percentage": run.get("passing_threshold_percentage"),
             "closes_at": run["closes_at"], "closed_at": run.get("closed_at"),
             "created_at": run["created_at"], "assigned_count": len(assignments),
+            "participant_count": len(assignments) + len(shared_sessions),
             "started_count": len(started) + len(shared_sessions),
             "completed_count": len(completed) + len(shared_completed),
             "average_score": round(sum(scores) / len(scores), 2) if scores else None,
@@ -833,62 +899,6 @@ class TrainingRunService:
             "latest_score": assignment.get("latest_score"),
             "latest_percentage": assignment.get("latest_percentage"),
             "completed_at": assignment.get("completed_at"),
-        }
-
-    @staticmethod
-    def _completion_row(assignment: dict) -> dict:
-        return {
-            "assignment_id": str(assignment["_id"]), "recipient_email": assignment["recipient_email"],
-            "recipient_name": assignment.get("recipient_name"), "status": assignment["status"],
-            "due_at": assignment.get("due_at"), "attempts_used": assignment.get("attempts_used", 0),
-            "max_attempts": assignment.get("max_attempts"), "started_at": assignment.get("started_at"),
-            "completed_at": assignment.get("completed_at"), "latest_score": assignment.get("latest_score"),
-            "latest_percentage": assignment.get("latest_percentage"),
-        }
-
-    @staticmethod
-    def _shared_session_row(session: dict) -> dict:
-        return {
-            "assignment_id": str(session["_id"]),
-            "recipient_email": session.get("participant_email"),
-            "recipient_name": session.get("participant_name"),
-            "status": (
-                "completed"
-                if session.get("status") == "submitted"
-                else "incomplete"
-                if session.get("status") == "abandoned"
-                else "in_progress"
-            ),
-            "due_at": None,
-            "attempts_used": 1,
-            "max_attempts": None,
-            "started_at": session.get("started_at"),
-            "completed_at": session.get("submitted_at"),
-            "latest_score": session.get("score"),
-            "latest_percentage": session.get("percentage"),
-        }
-
-    @staticmethod
-    def _audit_assignment_row(assignment: dict) -> dict:
-        return {
-            "assignment_id": str(assignment["_id"]), "recipient_email": assignment["recipient_email"],
-            "status": assignment["status"], "attempts_used": assignment.get("attempts_used", 0),
-            "max_attempts": assignment.get("max_attempts"), "started_at": assignment.get("started_at"),
-            "completed_at": assignment.get("completed_at"), "latest_score": assignment.get("latest_score"),
-            "latest_percentage": assignment.get("latest_percentage"),
-        }
-
-    @staticmethod
-    def _audit_shared_session_row(session: dict) -> dict:
-        return {
-            "session_id": str(session["_id"]),
-            "participant_name": session.get("participant_name"),
-            "participant_email": session.get("participant_email"),
-            "status": session.get("status"),
-            "started_at": session.get("started_at"),
-            "submitted_at": session.get("submitted_at"),
-            "score": session.get("score"),
-            "percentage": session.get("percentage"),
         }
 
     async def _generate_unique_code(self) -> str:

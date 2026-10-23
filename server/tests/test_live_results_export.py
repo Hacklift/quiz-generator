@@ -1,13 +1,16 @@
+import asyncio
 import csv
 from datetime import datetime, timezone
 from io import StringIO
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 from pypdf import PdfReader
 
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.app.quiz.routes import live_sessions as live_sessions_routes
 from server.app.quiz.routes.live_sessions import export_live_quiz_results
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.utils.live_results_export import (
@@ -17,8 +20,8 @@ from server.app.quiz.utils.live_results_export import (
 )
 
 
-def _owner_context() -> OrganizationContext:
-    principal = OrganizationPrincipal(user_id="teacher-1", session_id="session-1")
+def _owner_context(user_id="teacher-1") -> OrganizationContext:
+    principal = OrganizationPrincipal(user_id=user_id, session_id="session-1")
     return OrganizationContext(
         organization_id="organization-1",
         organization_kind="personal",
@@ -26,6 +29,17 @@ def _owner_context() -> OrganizationContext:
         principal=principal,
         membership={"role": "owner", "status": "active"},
     )
+
+
+class ExportRouteService:
+    class Repository:
+        async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+            return {
+                "_id": quiz_id, "organization_id": organization_id,
+                "created_by_user_id": "teacher-1",
+            }
+
+    repository = Repository()
 
 
 class ResultsRepository:
@@ -182,24 +196,85 @@ async def test_ownerless_or_other_owner_cannot_export_results():
 
 
 @pytest.mark.asyncio
-async def test_authenticated_creator_route_exports_csv():
+@pytest.mark.parametrize(
+    ("export_format", "expected_media_type"),
+    [
+        ("csv", "text/csv"),
+        ("pdf", "application/pdf"),
+        ("txt", "text/plain"),
+    ],
+)
+async def test_authenticated_creator_route_records_one_successful_export_event(
+    monkeypatch, export_format, expected_media_type
+):
     payload = {"title": "Class Results", "question_count": 0, "participants": []}
 
-    class Service:
-        class Repository:
-            async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
-                return {
-                    "_id": quiz_id,
-                    "organization_id": organization_id,
-                    "created_by_user_id": "teacher-1",
-                }
-
-        repository = Repository()
-
+    class Service(ExportRouteService):
         async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             assert (quiz_id, requester_id) == ("quiz-1", "teacher-1")
             assert authorized_quiz["organization_id"] == "organization-1"
             return payload
+
+    record_event = AsyncMock()
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+    current_user = SimpleNamespace(
+        id="teacher-1",
+        persona_category="school",
+        persona_user_type="teacher",
+    )
+
+    response = await export_live_quiz_results(
+        "quiz-1",
+        export_format,
+        current_user,
+        organization=_owner_context(),
+        service=Service(),
+    )
+    body = response.body
+    if export_format == "csv":
+        assert body.decode() == "Participant,Score,Percentage\n"
+    elif export_format == "txt":
+        assert "No completed participants." in body.decode()
+    else:
+        assert body.startswith(b"%PDF")
+    assert response.media_type == expected_media_type
+    assert response.headers["content-disposition"] == (
+        f'attachment; filename="Class Results results.{export_format}"'
+    )
+    record_event.assert_awaited_once_with(
+        live_sessions_routes.get_product_events_collection,
+        event_type="results_exported",
+        user_id="teacher-1",
+        user=current_user,
+        quiz_id="quiz-1",
+        export_format=export_format,
+        organization_id="organization-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_response_is_not_delayed_by_slow_telemetry(monkeypatch):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
+            return {"title": "Class Results", "question_count": 0, "participants": []}
+
+    async def slow_insert(_event):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: SimpleNamespace(insert_one=slow_insert),
+    )
+    current_user = SimpleNamespace(id="teacher-1")
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
 
     response = await export_live_quiz_results(
         quiz_id="quiz-1",
@@ -208,11 +283,93 @@ async def test_authenticated_creator_route_exports_csv():
         organization=_owner_context(),
         service=Service(),
     )
-    body = response.body.decode()
-    assert body == "Participant,Score,Percentage\n"
+
     assert response.media_type == "text/csv"
-    assert response.headers["content-type"] == "text/csv; charset=utf-8"
-    assert response.headers["content-disposition"] == 'attachment; filename="Class Results results.csv"'
+    assert loop.time() - started_at < 0.2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [403, 404])
+async def test_rejected_export_does_not_record_product_event(monkeypatch, status_code):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
+            raise HTTPException(status_code=status_code, detail="Rejected")
+
+    record_event = AsyncMock()
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await export_live_quiz_results(
+            "quiz-1",
+            "csv",
+            SimpleNamespace(id="teacher-2"),
+            organization=_owner_context("teacher-2"),
+            service=Service(),
+        )
+
+    assert error.value.status_code == status_code
+    record_event.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invalid_export_format_does_not_record_product_event(monkeypatch):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
+            return {
+                "title": "Class Results",
+                "question_count": 0,
+                "participants": [],
+            }
+
+    record_event = AsyncMock()
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+
+    with pytest.raises(KeyError):
+        await export_live_quiz_results(
+            "quiz-1",
+            "json",
+            SimpleNamespace(id="teacher-1"),
+            organization=_owner_context(),
+            service=Service(),
+        )
+
+    record_event.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_failed_export_generation_does_not_record_product_event(monkeypatch):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
+            return {
+                "title": "Class Results",
+                "question_count": 0,
+                "participants": [],
+            }
+
+    def fail_generation(payload):
+        raise RuntimeError("export generation failed")
+
+    record_event = AsyncMock()
+    monkeypatch.setattr(live_sessions_routes, "generate_live_results_csv", fail_generation)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+
+    with pytest.raises(RuntimeError, match="export generation failed"):
+        await export_live_quiz_results(
+            "quiz-1",
+            "csv",
+            SimpleNamespace(id="teacher-1"),
+            organization=_owner_context(),
+            service=Service(),
+        )
+
+    record_event.assert_not_awaited()
+
 
 def test_empty_text_and_pdf_exports_are_valid():
     payload = {"title": "Empty Results", "question_count": 2, "participants": []}

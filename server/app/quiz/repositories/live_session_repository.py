@@ -73,19 +73,22 @@ class LiveQuizSessionRepository:
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def enable_live_quiz(
+    async def claim_live_quiz_activation(
         self,
         quiz_id: str,
         access_code: str,
         time_limit_minutes: int,
         access_code_expires_at: datetime,
         creator_id: str,
+        observed_at: datetime,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[List[str]] = None,
         organization_id: str | None = None,
     ) -> Optional[Dict[str, Any]]:
-        updated = await self.quiz_repository.enable_live_quiz(
+        updated = await self.quiz_repository.claim_live_quiz_activation(
             quiz_id,
+            creator_id=creator_id,
+            observed_at=observed_at,
             access_code=access_code,
             time_limit_minutes=time_limit_minutes,
             access_code_expires_at=access_code_expires_at,

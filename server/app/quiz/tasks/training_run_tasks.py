@@ -10,6 +10,7 @@ from server.celery_config import celery_app
 from server.app.notifications.documents import build_notification_document
 from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.quiz.utils.session_grading import grade_live_session
+from server.app.quiz.utils.training_completion import build_closure_payload
 
 
 logger = logging.getLogger(__name__)
@@ -26,33 +27,6 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
-
-
-def _assignment_snapshot(assignment: dict) -> dict:
-    return {
-        "assignment_id": str(assignment["_id"]),
-        "recipient_email": assignment["recipient_email"],
-        "status": assignment["status"],
-        "attempts_used": assignment.get("attempts_used", 0),
-        "max_attempts": assignment.get("max_attempts"),
-        "started_at": assignment.get("started_at"),
-        "completed_at": assignment.get("completed_at"),
-        "latest_score": assignment.get("latest_score"),
-        "latest_percentage": assignment.get("latest_percentage"),
-    }
-
-
-def _shared_session_snapshot(session: dict) -> dict:
-    return {
-        "session_id": str(session["_id"]),
-        "participant_name": session.get("participant_name"),
-        "participant_email": session.get("participant_email"),
-        "status": session.get("status"),
-        "started_at": session.get("started_at"),
-        "submitted_at": session.get("submitted_at"),
-        "score": session.get("score"),
-        "percentage": session.get("percentage"),
-    }
 
 
 def _notification_document(
@@ -307,7 +281,7 @@ def close_expired_training_runs() -> int:
             try:
                 if run.get("closure_mode") == "manual":
                     assignments.update_many(
-                        {"training_run_id": run_id, "status": "in_progress"},
+                        {"training_run_id": run_id, "status": {"$in": ["in_progress", "submitting"]}},
                         {"$set": {"status": "incomplete", "updated_at": now}},
                     )
                     sessions.update_many(
@@ -370,26 +344,10 @@ def close_expired_training_runs() -> int:
                             "training_run_id": run_id,
                             "event_type": "run_closed",
                             "actor_user_id": run.get("closure_actor_user_id"),
+                            "organization_id": run.get("organization_id"),
+                            "created_by_user_id": run.get("created_by_user_id") or run.get("owner_user_id"),
                             "occurred_at": now,
-                            "payload": {
-                                "run": {
-                                    "quiz_id": run["quiz_id"],
-                                    "title": run["title"],
-                                    "kind": run["kind"],
-                                    "purpose": run["purpose"],
-                                    "quiz_content_fingerprint": run.get("quiz_content_fingerprint"),
-                                    "quiz_snapshot": run.get("quiz_snapshot"),
-                                    "closes_at": run["closes_at"],
-                                },
-                                "completion_register": [
-                                    *[_assignment_snapshot(item) for item in assignment_rows],
-                                    *[
-                                        _shared_session_snapshot(item)
-                                        for item in session_rows
-                                        if not item.get("training_assignment_id")
-                                    ],
-                                ],
-                            },
+                            "payload": build_closure_payload(run, assignment_rows, session_rows),
                         }
                     },
                     upsert=True,

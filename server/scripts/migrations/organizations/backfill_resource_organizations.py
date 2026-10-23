@@ -32,6 +32,7 @@ RESOURCE_COLLECTIONS = (
     "ai_generated_quizzes",
     "training_runs",
     "notifications",
+    "product_events",
     "folder_items_v2",
     "training_assignments",
     "training_audit_events",
@@ -199,7 +200,6 @@ async def verify_resource_organization_scope(
         )
 
     lock = MigrationLockService(db)
-    await lock.ensure_indexes()
     if not await lock.get_latest_completed_run(MIGRATION_NAME):
         raise ResourceScopeVerificationError(
             "Protocol B has no completed migration run; execute the controlled backfill first"
@@ -519,7 +519,7 @@ async def backfill_resource_organizations(
 ) -> ResourceBackfillReport:
     """Backfill tenant and authorship fields without changing access policy.
 
-    This must run only after Protocol A has established a trustworthy default
+    This must run only after Protocol A has established a trustworthy
     personal organization for every user. Ambiguous records are reported and
     left untouched; PR 3 never treats an unresolved legacy record as shared.
     """
@@ -626,17 +626,23 @@ def _mongo_ids(values: list[Any]) -> list[Any]:
 
 
 async def _user_organizations_for_batch(db, owner_ids: list[Any]) -> dict[str, str]:
-    normalized_ids = _mongo_ids(owner_ids)
-    if not normalized_ids:
+    # Defaults are navigation preferences, not evidence of legacy ownership.
+    # A user may now default to a shared tenant; historic private resources
+    # must remain in the personal tenant identified by its immutable owner.
+    existing_user_ids = await _existing_user_ids(db, owner_ids)
+    if not existing_user_ids:
         return {}
-    users = await db["users"].find(
-        {"_id": {"$in": normalized_ids}},
-        projection={"_id": 1, "default_organization_id": 1},
-    ).to_list(length=len(normalized_ids))
+    organizations = await db["organizations"].find(
+        {
+            "kind": "personal",
+            "status": "active",
+            "personal_owner_user_id": {"$in": list(existing_user_ids)},
+        },
+        projection={"_id": 1, "personal_owner_user_id": 1},
+    ).to_list(length=len(existing_user_ids))
     return {
-        str(user["_id"]): user["default_organization_id"]
-        for user in users
-        if user.get("default_organization_id")
+        organization["personal_owner_user_id"]: str(organization["_id"])
+        for organization in organizations
     }
 
 
@@ -916,6 +922,7 @@ async def _backfill_all(
 
     await process_owner_collection("training_runs", "owner_user_id")
     await process_owner_collection("notifications", "user_id")
+    await process_owner_collection("product_events", "user_id")
 
     await _backfill_by_parent(
         db,

@@ -49,7 +49,7 @@ services:
 
   # One-shot, Mongo-only migration gate. It runs before application processes
   # on `docker compose up`, then exits. Completion is recorded in Mongo, so
-  # subsequent Compose starts do not rescan users.
+  # subsequent runs reconcile only users still missing a default organization.
   tenancy-migrate:
     build:
       context: .
@@ -160,6 +160,8 @@ services:
         condition: service_healthy
       tenancy-migrate:
         condition: service_completed_successfully
+      tenancy-resource-migrate:
+        condition: service_completed_successfully
 
   mongodb:
     image: mongo:latest
@@ -188,6 +190,8 @@ services:
       mongodb:
         condition: service_healthy
       tenancy-migrate:
+        condition: service_completed_successfully
+      tenancy-resource-migrate:
         condition: service_completed_successfully
 
   redis:

@@ -21,7 +21,7 @@ class OrganizationProvisioningConflictError(RuntimeError):
 
 
 class PersonalOrganizationMembershipInactiveError(RuntimeError):
-    """A personal membership exists but was deliberately disabled."""
+    """A personal organization or its membership was deliberately disabled."""
 
 
 def personal_workspace_name(display_name: str | None) -> str:
@@ -61,6 +61,10 @@ class OrganizationProvisioningService:
             name=personal_workspace_name(organization_name),
         )
         organization_id = str(organization["_id"])
+        if organization.get("status") != "active":
+            raise PersonalOrganizationMembershipInactiveError(
+                "Personal organization is not active"
+            )
         if repair_membership:
             membership = await self.memberships.ensure_personal_owner_membership(
                 organization_id=organization_id,

@@ -39,6 +39,8 @@ from server.app.organizations.policy import (
     OrganizationAction,
     require_organization_permission,
 )
+from server.app.users.identity import now_utc
+from server.app.quiz.utils.training_completion import completion_report_csv, MAX_COMPLETION_REPORT_ROWS
 
 
 router = APIRouter()
@@ -200,6 +202,41 @@ async def close_training_run(
         run_id,
         organization.organization_id,
         str(current_user.id),
+    )
+
+
+@router.get("/training-runs/{run_id}/completion-report.csv")
+@limiter.limit("10/minute")
+async def export_training_completion_report(
+    run_id: str,
+    request: Request,
+    current_user: UserOut = Depends(get_verified_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
+    service: TrainingRunService = Depends(get_training_run_service),
+):
+    run = await service.repository.get_run_for_organization(run_id, organization.organization_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    require_organization_permission(
+        context=organization,
+        action=OrganizationAction.REPORT_READ,
+        resource=run,
+    )
+    report = await service.get_organization_run(run_id, organization.organization_id)
+    if report["register_availability"] == "limit_exceeded":
+        raise HTTPException(
+            status_code=413,
+            detail=f"CSV exports support up to {MAX_COMPLETION_REPORT_ROWS:,} participants. "
+            "Contact support for a complete export; no partial CSV was generated.",
+        )
+    return Response(
+        content=completion_report_csv(report, generated_at=now_utc()),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="training-completion-{report["id"]}.csv"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
