@@ -110,14 +110,24 @@ are handled. Exported CSV must not be used as a lossless identity interchange.
 Spreadsheet behavior differs by application; do not treat downloaded CSV as
 tamper-proof evidence or re-import spreadsheet-resaved files as trusted input.
 
-## Rollout before organization tenancy
+## Organization tenancy integration
 
-This backlog PR targets current master's user-owned training architecture.
-After it merges, update the tenancy resource-scope and policy-cutover branches
-before their rollout: preserve threshold/outcome fields in Protocol B snapshots,
-apply organization policy to the new export route, and add cross-organization
-export isolation tests. Existing training collections remain the source of truth;
-this PR adds no tenant migration, index replacement, Redis polling or Beat job.
+The resource-scope rollout filters training-run lists, details and CSV exports
+by the server-resolved active organization, in addition to existing manager and
+owner checks. Owning runs in two organizations does not allow exporting one
+while acting in the other. The policy-cutover rollout subsequently replaces
+persona-based management assumptions with membership permissions.
+
+Protocol B adds tenant/authorship metadata to the existing training collections
+without rewriting retained closure payloads. Thresholds, outcomes, completion
+registers and materialized final summaries remain unchanged. New closure audits
+carry organization context from their run in both HTTP and worker paths.
+
+Legacy unscoped runs are readable only by their owner in a personal context
+during the additive rollout. Complete the controlled Protocol B migration before
+strict policy cutover. Local Docker gates development startup on its migration;
+Protocol B is not automatically run on Render. This reporting integration adds
+no Redis polling or periodic jobs.
 
 ## Manual verification
 
@@ -133,6 +143,8 @@ this PR adds no tenant migration, index replacement, Redis polling or Beat job.
 5. Verify another manager cannot view/export the run, and an Employee account
    cannot use the manager export endpoint. Public live quizzes and their
    existing CSV/PDF/text exports must still work unchanged.
+   Also switch between two organizations as the same manager: runs and exports
+   must follow the selected workspace, including direct requests by guessed ID.
 6. Open a pre-feature run: a missing historical threshold/outcome must say
    Not recorded, not claim an 80% policy was in force.
 7. Confirm missing/malformed final evidence produces 503 and a diagnostic event,

@@ -161,6 +161,7 @@ class QuizGradingService:
         self,
         *,
         user_id: str,
+        organization_id: str,
         quiz_id: str,
         graded_results: list[dict[str, Any]],
         stored_questions: list[dict[str, Any]],
@@ -172,6 +173,8 @@ class QuizGradingService:
         await self.attempt_repository.insert_attempt(
             QuizAttemptDocumentV2(
                 user_id=user_id,
+                organization_id=organization_id,
+                created_by_user_id=user_id,
                 quiz_id=quiz_id,
                 question_results=[
                     QuizAttemptQuestionResultV2(
@@ -190,12 +193,26 @@ class QuizGradingService:
             )
         )
 
-    async def _resolve_quiz(self, quiz_id: str) -> Optional[QuizDocumentV2]:
-        quiz_doc = await self.quiz_repository.find_by_id(quiz_id)
+    async def _resolve_quiz(
+        self, quiz_id: str, *, user_id: str | None, organization_id: str | None,
+        allow_legacy_personal: bool,
+    ) -> Optional[QuizDocumentV2]:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            [quiz_id], user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        quiz_doc = next(iter(quizzes), None)
         if not quiz_doc:
             saved_reference = await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
-            if saved_reference:
-                quiz_doc = await self.quiz_repository.find_by_id(saved_reference.quiz_id)
+            if saved_reference and saved_reference.user_id == user_id and (
+                saved_reference.organization_id == organization_id
+                or (allow_legacy_personal and saved_reference.organization_id is None)
+            ):
+                quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+                    [saved_reference.quiz_id], user_id=user_id, organization_id=organization_id,
+                    allow_legacy_personal=allow_legacy_personal,
+                )
+                quiz_doc = next(iter(quizzes), None)
         return quiz_doc
 
     async def grade_submission(
@@ -205,9 +222,16 @@ class QuizGradingService:
         *,
         source: str = "mock",
         user_id: str | None = None,
+        organization_id: str | None = None,
+        allow_legacy_personal: bool = False,
     ) -> GradedQuizSubmission | None:
         """Return scores and independent persistence status, or None if missing."""
-        quiz_doc = await self._resolve_quiz(quiz_id)
+        if user_id is not None and not organization_id:
+            raise HTTPException(status_code=409, detail="Organization context has not been provisioned")
+        quiz_doc = await self._resolve_quiz(
+            quiz_id, user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         if quiz_doc is None or quiz_doc.status.value == "deleted":
             return None
         if (
@@ -236,6 +260,7 @@ class QuizGradingService:
             try:
                 await self._store_attempt(
                     user_id=user_id,
+                    organization_id=organization_id,
                     quiz_id=str(quiz_doc.id),
                     graded_results=graded_results,
                     stored_questions=stored_questions,

@@ -19,6 +19,17 @@ class FakeQuizRepository:
     async def find_many_by_ids(self, quiz_ids: list[str]):
         return [self.quizzes[quiz_id] for quiz_id in quiz_ids if quiz_id in self.quizzes]
 
+    async def find_attempt_source_quizzes(
+        self, quiz_ids, *, organization_id, user_id, allow_legacy_personal=False,
+    ):
+        return [quiz for quiz in await self.find_many_by_ids(quiz_ids) if (
+            quiz.status.value != "deleted" and (
+                quiz.visibility.value in {"public", "unlisted"}
+                or (organization_id and quiz.organization_id == organization_id)
+                or (organization_id and allow_legacy_personal and quiz.organization_id is None and quiz.owner_user_id == user_id)
+            )
+        )]
+
 
 class FakeReferenceRepository:
     async def get_saved_quiz_by_public_id(self, quiz_id: str):
@@ -34,24 +45,29 @@ class FakeAttemptRepository:
         self.attempts.append(attempt)
         return attempt
 
-    async def list_attempts_for_user(self, user_id: str, *, quiz_id: str | None = None, limit: int = 100):
+    async def list_attempts_for_user(self, user_id: str, *, organization_id, allow_legacy_personal=False, quiz_id: str | None = None, limit: int = 100):
         self.last_list_args = {"user_id": user_id, "quiz_id": quiz_id, "limit": limit}
         filtered = [
             attempt
             for attempt in self.attempts
             if attempt.user_id == user_id and (quiz_id is None or attempt.quiz_id == quiz_id)
+            and (attempt.organization_id == organization_id or (allow_legacy_personal and attempt.organization_id is None))
         ]
         return sorted(filtered, key=lambda attempt: attempt.submitted_at, reverse=True)[:limit]
 
-    async def get_attempt_by_id(self, attempt_id: str, *, user_id: str | None = None):
+    async def get_attempt_by_id(self, attempt_id: str, *, user_id: str, organization_id, allow_legacy_personal=False):
         for attempt in self.attempts:
-            if str(attempt.id) == attempt_id and (user_id is None or attempt.user_id == user_id):
+            if str(attempt.id) == attempt_id and attempt.user_id == user_id and (
+                attempt.organization_id == organization_id or (allow_legacy_personal and attempt.organization_id is None)
+            ):
                 return attempt
         return None
 
-    async def soft_delete_attempt_by_id(self, attempt_id: str, *, user_id: str | None = None):
+    async def soft_delete_attempt_by_id(self, attempt_id: str, *, user_id: str, organization_id, allow_legacy_personal=False):
         for index, attempt in enumerate(self.attempts):
-            if str(attempt.id) == attempt_id and (user_id is None or attempt.user_id == user_id):
+            if str(attempt.id) == attempt_id and attempt.user_id == user_id and (
+                attempt.organization_id == organization_id or (allow_legacy_personal and attempt.organization_id is None)
+            ):
                 self.attempts.pop(index)
                 return 1
         return 0
@@ -67,6 +83,9 @@ def build_quiz_document() -> QuizDocumentV2:
     return QuizDocumentV2(
         _id=quiz_id,
         title="Networking Basics",
+        organization_id="org-1",
+        created_by_user_id="user-1",
+        visibility="public",
         quiz_type="multichoice",
         source="manual",
         questions=[
@@ -102,6 +121,7 @@ async def test_grade_submission_persists_attempt_for_authenticated_user():
         ],
         source="mock",
         user_id="user-1",
+        organization_id="org-1",
     )
 
     assert len(results.results) == 2
@@ -109,6 +129,8 @@ async def test_grade_submission_persists_attempt_for_authenticated_user():
     assert len(attempt_repository.attempts) == 1
     attempt = attempt_repository.attempts[0]
     assert attempt.user_id == "user-1"
+    assert attempt.organization_id == "org-1"
+    assert attempt.created_by_user_id == "user-1"
     assert attempt.quiz_id == str(quiz.id)
     assert attempt.score == 1
     assert attempt.percentage == 50.0
@@ -158,6 +180,7 @@ async def test_grade_submission_returns_scores_when_attempt_persistence_fails(ca
         ],
         source="mock",
         user_id="user-1",
+        organization_id="org-1",
     )
 
     assert result.attempt_saved is False
@@ -168,7 +191,7 @@ async def test_grade_submission_returns_scores_when_attempt_persistence_fails(ca
 @pytest.mark.asyncio
 async def test_duplicate_question_options_are_snapshotted_in_order():
     quiz = QuizDocumentV2(
-        title="Repeated prompts", quiz_type="multichoice", questions=[
+        title="Repeated prompts", quiz_type="multichoice", visibility="public", questions=[
             {"question": "Choose", "correct_answer": "A", "options": ["A", "B"]},
             {"question": "Choose", "correct_answer": "C", "options": ["C", "D"]},
         ],
@@ -181,7 +204,7 @@ async def test_duplicate_question_options_are_snapshotted_in_order():
     result = await service.grade_submission(str(quiz.id), [
         {"question": "Choose", "user_answer": "A"},
         {"question": "Choose", "user_answer": "C"},
-    ], user_id="user-1")
+    ], user_id="user-1", organization_id="org-1")
     assert result.attempt_saved is True
     assert attempts.attempts[0].score == 2
     assert [question.options for question in attempts.attempts[0].question_results] == [["A", "B"], ["C", "D"]]
@@ -193,6 +216,7 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
     quiz_two = QuizDocumentV2(
         _id=ObjectId(),
         title="Storage Basics",
+        visibility="public",
         quiz_type="short-answer",
         source="manual",
         questions=[
@@ -206,6 +230,8 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
         attempts=[
             QuizAttemptDocumentV2(
                 user_id="user-1",
+                organization_id="org-1",
+                created_by_user_id="user-1",
                 quiz_id=str(quiz.id),
                 question_results=[
                     {
@@ -223,6 +249,8 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
             ),
             QuizAttemptDocumentV2(
                 user_id="user-1",
+                organization_id="org-1",
+                created_by_user_id="user-1",
                 quiz_id=str(quiz_two.id),
                 question_results=[
                     {
@@ -251,7 +279,7 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
         attempt_repository=attempt_repository,
     )
 
-    payload = await service.list_attempts(user_id="user-1", quiz_id=str(quiz_two.id))
+    payload = await service.list_attempts(user_id="user-1", organization_id="org-1", quiz_id=str(quiz_two.id))
 
     assert attempt_repository.last_list_args == {
         "user_id": "user-1",
@@ -271,6 +299,8 @@ async def test_attempt_history_backfills_options_from_the_quiz_for_legacy_attemp
     attempt = QuizAttemptDocumentV2(
         _id=ObjectId(),
         user_id="user-1",
+        organization_id="org-1",
+        created_by_user_id="user-1",
         quiz_id=str(quiz.id),
         question_results=[
             {
@@ -290,7 +320,7 @@ async def test_attempt_history_backfills_options_from_the_quiz_for_legacy_attemp
         attempt_repository=FakeAttemptRepository(attempts=[attempt]),
     )
 
-    payload = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
+    payload = await service.get_attempt(user_id="user-1", organization_id="org-1", attempt_id=str(attempt.id))
 
     assert payload is not None
     assert payload["question_results"][0]["options"] == ["HTTP", "SSH"]
@@ -301,6 +331,7 @@ async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_th
     quiz = QuizDocumentV2(
         _id=ObjectId(),
         title="Science Facts",
+        visibility="public",
         quiz_type="true-false",
         source="manual",
         questions=[
@@ -313,6 +344,8 @@ async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_th
     attempt = QuizAttemptDocumentV2(
         _id=ObjectId(),
         user_id="user-1",
+        organization_id="org-1",
+        created_by_user_id="user-1",
         quiz_id=str(quiz.id),
         question_results=[
             {
@@ -332,7 +365,7 @@ async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_th
         attempt_repository=FakeAttemptRepository(attempts=[attempt]),
     )
 
-    payload = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
+    payload = await service.get_attempt(user_id="user-1", organization_id="org-1", attempt_id=str(attempt.id))
 
     assert payload is not None
     assert payload["question_results"][0]["options"] == ["True", "False"]
@@ -344,6 +377,8 @@ async def test_get_and_delete_attempt_use_user_scope():
     attempt = QuizAttemptDocumentV2(
         _id=ObjectId(),
         user_id="user-1",
+        organization_id="org-1",
+        created_by_user_id="user-1",
         quiz_id=str(quiz.id),
         question_results=[
             {
@@ -364,9 +399,9 @@ async def test_get_and_delete_attempt_use_user_scope():
         attempt_repository=attempt_repository,
     )
 
-    payload = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
-    deleted = await service.delete_attempt(user_id="user-1", attempt_id=str(attempt.id))
-    missing = await service.get_attempt(user_id="user-1", attempt_id=str(attempt.id))
+    payload = await service.get_attempt(user_id="user-1", organization_id="org-1", attempt_id=str(attempt.id))
+    deleted = await service.delete_attempt(user_id="user-1", organization_id="org-1", attempt_id=str(attempt.id))
+    missing = await service.get_attempt(user_id="user-1", organization_id="org-1", attempt_id=str(attempt.id))
 
     assert payload is not None
     assert payload["quiz_title"] == "Networking Basics"

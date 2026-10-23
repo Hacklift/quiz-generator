@@ -410,6 +410,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     older = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
             quiz_id="quiz-1",
             question_results=[
                 {
@@ -429,6 +431,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     newer = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
             quiz_id="quiz-2",
             question_results=[
                 {
@@ -448,6 +452,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
     await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-2",
+            organization_id="org-1",
+            created_by_user_id="user-2",
             quiz_id="quiz-1",
             question_results=[
                 {
@@ -465,8 +471,8 @@ async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
         )
     )
 
-    attempts = await repository.list_attempts_for_user("user-1")
-    filtered_attempts = await repository.list_attempts_for_user("user-1", quiz_id="quiz-1")
+    attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1")
+    filtered_attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1", quiz_id="quiz-1")
 
     assert [str(attempt.id) for attempt in attempts] == [str(newer.id), str(older.id)]
     assert len(filtered_attempts) == 1
@@ -480,6 +486,8 @@ async def test_quiz_attempt_repository_soft_delete(test_db):
     attempt = await repository.insert_attempt(
         QuizAttemptDocumentV2(
             user_id="user-delete",
+            organization_id="org-1",
+            created_by_user_id="user-delete",
             quiz_id="quiz-delete",
             question_results=[
                 {
@@ -496,15 +504,16 @@ async def test_quiz_attempt_repository_soft_delete(test_db):
         )
     )
 
-    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user") is None
-    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user") == 0
-    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete") is None
-    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete") == 0
+    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") == 0
+    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") == 0
     deleted_count = await repository.soft_delete_attempt_by_id(
         str(attempt.id),
         user_id="user-delete",
+        organization_id="org-1",
     )
-    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete")
+    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete", organization_id="org-1")
 
     assert deleted_count == 1
     assert fetched is None

@@ -125,6 +125,11 @@ async def test_fingerprint_lookup_only_adds_owner_scope_when_requested():
     await repository.find_by_content_fingerprint("legacy-fingerprint")
     await repository.find_by_content_fingerprint("owned-fingerprint", "parent-1")
     await repository.find_by_content_fingerprint("ownerless-fingerprint", None)
+    await repository.find_by_content_fingerprint(
+        "organization-fingerprint",
+        "parent-1",
+        "organization-1",
+    )
 
     assert collection.queries == [
         {"content_fingerprint": "legacy-fingerprint"},
@@ -133,6 +138,11 @@ async def test_fingerprint_lookup_only_adds_owner_scope_when_requested():
             "owner_user_id": "parent-1",
         },
         {"content_fingerprint": "ownerless-fingerprint", "owner_user_id": None},
+        {
+            "content_fingerprint": "organization-fingerprint",
+            "owner_user_id": "parent-1",
+            "organization_id": "organization-1",
+        },
     ]
 
 

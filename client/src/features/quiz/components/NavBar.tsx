@@ -20,6 +20,7 @@ import {
 import { ROUTES } from "@shared/config/patterns/routes";
 import NotificationBell from "@features/notifications/components/NotificationBell";
 import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
+import OrganizationSwitcher from "@features/organizations/components/OrganizationSwitcher";
 
 /**
  * Primary navigation, in the Quizwerk design language.
@@ -144,6 +145,7 @@ const NavBar: React.FC = () => {
                 {isAuthenticated ? (
                   <>
                     <NotificationBell />
+                    <OrganizationSwitcher />
                     <span className="text-[15px] text-ink">
                       Hi, {user?.username || "User"}
                       {personaDefinition ? (
@@ -223,6 +225,7 @@ const NavBar: React.FC = () => {
               <>
                 {isAuthenticated ? (
                   <>
+                    <OrganizationSwitcher className="self-center" />
                     <span className="text-center text-[15px] text-ink">
                       Hi, {user?.username || "User"}
                     </span>

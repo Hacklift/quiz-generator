@@ -18,6 +18,8 @@ def _trusted_context():
         is_authenticated=True,
         is_verified=True,
         role="user",
+        tenant_id="organization-1",
+        tenant_kind="school",
         user=user,
     )
 
@@ -48,6 +50,10 @@ async def test_successful_mcp_generation_records_one_attributed_event(monkeypatc
     result = await quiz_tools.quiz_generate("Physics", 1, "multichoice")
 
     assert result["quiz_id"] == "quiz-1"
+    assert quiz_tools.get_questions.await_args.kwargs["organization_id"] == context.tenant_id
+    history_payload = history_service.create_quiz_history.await_args.args[0]
+    assert history_payload["organization_id"] == context.tenant_id
+    assert history_payload["created_by_user_id"] == context.user_id
     events.insert_one.assert_awaited_once()
     event = events.insert_one.await_args.args[0]
     assert event["event_type"] == "quiz_generated"
