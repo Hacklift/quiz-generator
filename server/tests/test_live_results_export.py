@@ -207,10 +207,7 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
         current_user,
         Service(),
     )
-    chunks = [chunk async for chunk in response.body_iterator]
-    body = b"".join(
-        chunk if isinstance(chunk, bytes) else chunk.encode() for chunk in chunks
-    )
+    body = response.body
     if export_format == "csv":
         assert body.decode() == "Participant,Score,Percentage\n"
     elif export_format == "txt":

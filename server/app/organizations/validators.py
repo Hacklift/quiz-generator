@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.errors import OperationFailure
+
+
+async def ensure_organization_collections(
+    database,
+    organizations_collection: AsyncIOMotorCollection,
+    memberships_collection: AsyncIOMotorCollection,
+) -> None:
+    await _ensure_collection_validator(
+        database,
+        "organizations",
+        _organization_validator(),
+    )
+    await _ensure_collection_validator(
+        database,
+        "organization_memberships",
+        _membership_validator(),
+    )
+    await _ensure_organization_indexes(organizations_collection)
+    await _ensure_membership_indexes(memberships_collection)
+
+
+async def _ensure_collection_validator(database, name: str, validator: dict) -> None:
+    try:
+        await database.command(
+            {
+                "collMod": name,
+                "validator": validator,
+                "validationLevel": "moderate",
+                "validationAction": "error",
+            }
+        )
+    except OperationFailure as exc:
+        if exc.code != 26:
+            raise
+        await database.create_collection(
+            name,
+            validator=validator,
+            validationLevel="moderate",
+            validationAction="error",
+        )
+
+
+async def _ensure_organization_indexes(collection: AsyncIOMotorCollection) -> None:
+    await collection.create_index(
+        "personal_owner_user_id",
+        name="organization_personal_owner_unique",
+        unique=True,
+        partialFilterExpression={"personal_owner_user_id": {"$type": "string"}},
+    )
+    await collection.create_index(
+        "system_key",
+        name="organization_system_key_unique",
+        unique=True,
+        partialFilterExpression={"system_key": {"$type": "string"}},
+    )
+    await collection.create_index(
+        [("status", 1), ("kind", 1)],
+        name="organization_status_kind",
+    )
+
+
+async def _ensure_membership_indexes(collection: AsyncIOMotorCollection) -> None:
+    await collection.create_index(
+        [("organization_id", 1), ("user_id", 1)],
+        name="organization_membership_unique",
+        unique=True,
+    )
+    await collection.create_index(
+        [("user_id", 1), ("status", 1)],
+        name="organization_membership_user_status",
+    )
+    await collection.create_index(
+        [("organization_id", 1), ("status", 1), ("role", 1)],
+        name="organization_membership_scope_status_role",
+    )
+
+
+def _organization_validator() -> dict:
+    return {
+        "$and": [
+            {
+                "$jsonSchema": {
+                    "bsonType": "object",
+                    "required": [
+                        "kind",
+                        "name",
+                        "status",
+                        "settings",
+                        "personal_owner_user_id",
+                        "system_key",
+                        "created_by_user_id",
+                        "created_at",
+                        "updated_at",
+                    ],
+                    "properties": {
+                        "kind": {"enum": ["personal", "school", "tutoring", "corporate"]},
+                        "name": {"bsonType": "string", "minLength": 1, "maxLength": 160},
+                        "status": {"enum": ["active", "suspended", "archived"]},
+                        "settings": {"bsonType": "object"},
+                        "personal_owner_user_id": {
+                            "bsonType": ["string", "null"],
+                            "minLength": 1,
+                        },
+                        "system_key": {"enum": ["platform_library", None]},
+                        "created_by_user_id": {"bsonType": ["string", "null"]},
+                        "created_at": {"bsonType": "date"},
+                        "updated_at": {"bsonType": "date"},
+                    },
+                }
+            },
+            # Personal organizations are always user-owned, except for the
+            # one deliberate platform tenant used by curated content.
+            {
+                "$or": [
+                    {"kind": {"$ne": "personal"}},
+                    {"personal_owner_user_id": {"$type": "string"}},
+                    {"system_key": "platform_library"},
+                ]
+            },
+            # `system_key` is a platform-reserved identity, never a flag that
+            # can be attached to a customer organization.
+            {
+                "$or": [
+                    {"system_key": {"$exists": False}},
+                    {"system_key": None},
+                    {
+                        "$and": [
+                            {"kind": "personal"},
+                            {"system_key": "platform_library"},
+                            {"personal_owner_user_id": None},
+                            {"created_by_user_id": None},
+                        ]
+                    },
+                ]
+            },
+        ]
+    }
+
+
+def _membership_validator() -> dict:
+    return {
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": [
+                "organization_id",
+                "user_id",
+                "role",
+                "status",
+                "joined_at",
+                "invited_by_user_id",
+                "created_at",
+                "updated_at",
+            ],
+            "properties": {
+                "organization_id": {"bsonType": "string", "minLength": 1},
+                "user_id": {"bsonType": "string", "minLength": 1},
+                "role": {
+                    "enum": [
+                        "owner",
+                        "admin",
+                        "author",
+                        "facilitator",
+                        "learner",
+                        "guardian",
+                        "auditor",
+                    ]
+                },
+                "status": {"enum": ["invited", "active", "suspended", "removed"]},
+                "joined_at": {"bsonType": ["date", "null"]},
+                "invited_by_user_id": {"bsonType": ["string", "null"]},
+                "created_at": {"bsonType": "date"},
+                "updated_at": {"bsonType": "date"},
+            },
+        }
+    }
