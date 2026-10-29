@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 OrganizationKind = Literal["personal", "school", "tutoring", "corporate"]
-OrganizationStatus = Literal["active", "suspended", "archived"]
+OrganizationStatus = Literal["provisioning", "active", "suspended", "archived"]
 MembershipRole = Literal[
     "owner",
     "admin",
@@ -19,6 +19,15 @@ MembershipRole = Literal[
     "auditor",
 ]
 MembershipStatus = Literal["invited", "active", "suspended", "removed"]
+InvitationStatus = Literal[
+    "invited",
+    "accepting",
+    "accepted",
+    "declined",
+    "revoked",
+    "expired",
+]
+InvitationDeliveryStatus = Literal["pending", "sent", "failed"]
 
 
 def utcnow() -> datetime:
@@ -96,6 +105,47 @@ class OrganizationMembershipDocument(BaseModel):
     )
 
 
+class OrganizationInvitationDocument(BaseModel):
+    """One-time email invitation; the raw token is never persisted."""
+
+    id: ObjectId = Field(default_factory=ObjectId, alias="_id")
+    organization_id: str = Field(min_length=1)
+    email: str = Field(min_length=3, max_length=320)
+    email_normalized: str = Field(min_length=3, max_length=320)
+    role: MembershipRole
+    status: InvitationStatus = "invited"
+    token_hash: str = Field(min_length=64, max_length=64)
+    invited_by_user_id: str = Field(min_length=1)
+    accepted_by_user_id: str | None = None
+    acceptance_claim_id: str | None = None
+    acceptance_lease_expires_at: datetime | None = None
+    expires_at: datetime
+    accepted_at: datetime | None = None
+    declined_at: datetime | None = None
+    revoked_at: datetime | None = None
+    # This records dispatch to the configured provider, not final mailbox
+    # delivery. It lets an inviter retry a failed dispatch without exposing
+    # provider error details to other organization members.
+    email_delivery_status: InvitationDeliveryStatus = "pending"
+    email_delivery_attempted_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+        extra="forbid",
+    )
+
+    @field_validator("role")
+    @classmethod
+    def reject_owner_role(cls, value: MembershipRole) -> MembershipRole:
+        if value == "owner":
+            raise ValueError("owner role cannot be granted by invitation")
+        return value
+
+
 class OrganizationPrincipal(BaseModel):
     """Validated authenticated identity used by organization policy checks."""
 
@@ -114,5 +164,6 @@ class OrganizationContext(BaseModel):
     membership_role: MembershipRole
     principal: OrganizationPrincipal
     membership: dict[str, Any]
+    active_scope_recovered: bool = False
 
     model_config = ConfigDict(extra="forbid")

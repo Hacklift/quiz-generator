@@ -10,9 +10,9 @@ Graded results have separate list and detail pages at `/quiz_attempts`.
 `POST /api/quizzes/{quiz_id}/grade` keeps its array response. All callers must
 submit exactly one answer for each stored question. Missing, extra, or unknown
 questions return `400`; this is a deliberate tightening of guest submissions too.
-Correct answers always come from the server. Deleted quizzes and another user's
-private quizzes return `404`. Public/unlisted and ownerless guest quizzes remain
-available for practice.
+Correct answers always come from the server. Deleted quizzes and inaccessible
+private quizzes return `404`. Public/unlisted quizzes remain available for guest
+practice; an ownerless private record is not a public capability.
 
 `X-Quiz-Attempt-Status` describes persistence separately from grading:
 
@@ -26,7 +26,9 @@ available for practice.
 
 The header is exposed through CORS. Guests use the public HTTP client; signed-in
 users use the authenticated client. Duplicate clicks are blocked while grading.
-History reads, details, and soft deletion are scoped to the authenticated user.
+History reads, details, and soft deletion require both the authenticated user and
+the server-resolved active organization. Organization failures on authenticated
+grading return an error rather than silently discarding persistence as a guest.
 The list currently shows the latest 100 attempts, newest first.
 
 ## Manual testing
@@ -42,7 +44,7 @@ The list currently shows the latest 100 attempts, newest first.
    quiz and other attempts remain.
 5. Sign in with a second account. The first account's attempts must be absent;
    requesting its attempt identifier must return `404` for read and delete.
-6. Sign out. Generate a guest quiz or open a public quiz, complete it, and grade.
+6. Sign out. Open a public quiz, complete it, and grade.
    Scores must display without a login redirect or an attempt being saved.
 7. Inspect the grading response header in browser Network tools. Confirm `saved`
    for authenticated submissions and `not-requested` for guests. Repeat with
@@ -50,37 +52,20 @@ The list currently shows the latest 100 attempts, newest first.
 
 ## Tenancy rollout
 
-This PR is intended to merge into the current user-scoped master before the
-organization-tenancy rollout. Its authorization boundary is the authenticated
-user: attempt list, detail, and deletion queries require the caller's `user_id`.
-Organization-based authorization is delivered by the tenancy PRs, which must be
-updated against master after this feature merges. This sequencing keeps the
-attempt feature usable under the current architecture while giving the tenancy
-cutover the final resource schema to migrate and enforce.
+The resource-scope integration writes `organization_id` and `created_by_user_id`
+on new attempts, adds organization-first indexes, and scopes reads and deletes
+by organization plus user. Personal results do not become organization-wide
+reports. A public quiz's source organization does not become the learner's
+attempt organization: results belong to the active context at submission time.
 
 Protocol B already includes `quiz_attempts_v2` and resolves existing attempts
 through `user_id` into each user's personal organization. That collection-level
-coverage must be verified against the complete attempt documents introduced by
-this PR, including question results, scores, options, and soft-deleted records.
+coverage is tested against complete attempt documents, preserving question
+results, scores, options, and soft-deleted records.
 
-Before deploying tenancy enforcement, the tenancy resource-scope and policy
-cutover PRs must complete these integration steps under #181, #182, and #183:
-
-1. Merge the updated master and reconcile attempt collection setup with the
-   tenancy models, Mongo validators, and indexes.
-2. Add `organization_id` and `created_by_user_id` to attempt documents, and resolve
-   the authenticated organization context for every new attempt write.
-3. Scope list, detail, deletion, and quiz lookups through organization policy and
-   repositories, retaining the user-level privacy checks on personal results.
-4. Add indexes beginning with `organization_id`, followed by the user, quiz, and
-   ordering fields used by the queries.
-5. Run migration reconciliation and cross-organization isolation tests using
-   actual persisted attempts. Verify that backfill preserves grades and deletion
-   state and that subsequent writes remain scoped after cutover.
-6. Complete the controlled Protocol B backfill and its verification before
-   enabling strict tenant enforcement in the target environment.
-
-These are release prerequisites for the tenancy rollout. Merging this PR alone
-does not enable tenancy or claim organization isolation for attempts. Backfill
-handles historical records; the integrated writers and readers must maintain
-the boundary for all records created afterward.
+During the additive resource-scope rollout, legacy unscoped attempts are readable
+only by their user in a personal organization. Shared contexts never use that
+fallback. The policy-cutover rollout removes the fallback and requires tenant
+fields on persisted models and Mongo validators. Complete the controlled Protocol
+B backfill and its verification before enabling that strict enforcement. Local
+Docker's existing migration gate handles the development database separately.

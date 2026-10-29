@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from server.app.core.dependencies import get_current_user
+from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.quiz.schemas.quiz_management_schemas import (
     DeleteResourceResponse,
     QuizAttemptResponse,
@@ -16,9 +18,12 @@ quiz_attempt_service = QuizAttemptService()
 async def get_quiz_attempts(
     quiz_id: str | None = Query(default=None),
     current_user=Depends(get_current_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     return await quiz_attempt_service.list_attempts(
         user_id=str(current_user.id),
+        organization_id=organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
         quiz_id=quiz_id,
     )
 
@@ -27,9 +32,12 @@ async def get_quiz_attempts(
 async def get_quiz_attempt(
     attempt_id: str,
     current_user=Depends(get_current_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     attempt = await quiz_attempt_service.get_attempt(
         user_id=str(current_user.id),
+        organization_id=organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
         attempt_id=attempt_id,
     )
     if attempt is None:
@@ -41,9 +49,12 @@ async def get_quiz_attempt(
 async def delete_quiz_attempt(
     attempt_id: str,
     current_user=Depends(get_current_user),
+    organization: OrganizationContext = Depends(get_active_organization_context),
 ):
     deleted = await quiz_attempt_service.delete_attempt(
         user_id=str(current_user.id),
+        organization_id=organization.organization_id,
+        allow_legacy_personal=organization.organization_kind == "personal",
         attempt_id=attempt_id,
     )
     if not deleted:

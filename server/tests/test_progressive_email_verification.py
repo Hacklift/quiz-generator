@@ -16,6 +16,7 @@ from server.app.organizations.service import (
     OrganizationProvisioningConflictError,
     PersonalOrganizationMembershipInactiveError,
 )
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
 from server.app.users.schemas import NewUserSchema, UserRegisterSchema
@@ -471,6 +472,11 @@ async def test_standard_generation_records_live_event_only_for_new_activation(
         token=None,
     )
     current_user = _user(is_verified=True)
+    organization = OrganizationContext(
+        organization_id="organization-1", organization_kind="school", membership_role="owner",
+        principal=OrganizationPrincipal(user_id=current_user.id, session_id="session-1"),
+        membership={"role": "owner", "status": "active"},
+    )
     generated = {
         "source": "mock",
         "questions": [],
@@ -482,14 +488,15 @@ async def test_standard_generation_records_live_event_only_for_new_activation(
     with patch(
         "server.app.quiz.routes.generation.get_questions",
         new=AsyncMock(return_value=generated),
-    ), patch(
+    ) as get_questions_mock, patch(
         "server.app.quiz.routes.generation.record_product_event_safely",
         new=AsyncMock(),
     ) as record_event_mock:
         result = await get_quiz(
-            MagicMock(), Response(), request, current_user=current_user
+            MagicMock(), Response(), request, current_user=current_user, organization=organization
         )
 
+    assert get_questions_mock.await_args.kwargs["organization_id"] == organization.organization_id
     assert "_access_code_created" not in result
     assert record_event_mock.await_count == expected_event_count
     event_types = [

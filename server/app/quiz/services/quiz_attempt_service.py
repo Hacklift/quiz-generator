@@ -67,23 +67,36 @@ class QuizAttemptService:
             ],
         }
 
-    async def _get_quizzes_by_ids(self, quiz_ids: list[str]) -> dict[str, QuizDocumentV2]:
-        quizzes = await self.quiz_repository.find_many_by_ids(quiz_ids)
+    async def _get_quizzes_by_ids(
+        self, quiz_ids: list[str], *, user_id: str, organization_id: str,
+        allow_legacy_personal: bool,
+    ) -> dict[str, QuizDocumentV2]:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            quiz_ids, user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
         return {str(quiz.id): quiz for quiz in quizzes}
 
     async def list_attempts(
         self,
         *,
         user_id: str,
+        organization_id: str,
+        allow_legacy_personal: bool = False,
         quiz_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         attempts = await self.attempt_repository.list_attempts_for_user(
             user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
             quiz_id=quiz_id,
             limit=limit,
         )
-        quizzes_by_id = await self._get_quizzes_by_ids([attempt.quiz_id for attempt in attempts])
+        quizzes_by_id = await self._get_quizzes_by_ids(
+            [attempt.quiz_id for attempt in attempts], user_id=user_id,
+            organization_id=organization_id, allow_legacy_personal=allow_legacy_personal,
+        )
 
         payloads: list[dict[str, Any]] = []
         for attempt in attempts:
@@ -91,20 +104,34 @@ class QuizAttemptService:
             payloads.append(self._attempt_payload(attempt, quiz=quiz))
         return payloads
 
-    async def get_attempt(self, *, user_id: str, attempt_id: str) -> dict[str, Any] | None:
+    async def get_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+        allow_legacy_personal: bool = False,
+    ) -> dict[str, Any] | None:
         attempt = await self.attempt_repository.get_attempt_by_id(
             attempt_id,
             user_id=user_id,
+            organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
         )
         if attempt is None:
             return None
-        quiz = await self.quiz_repository.find_by_id(attempt.quiz_id)
+        quizzes = await self._get_quizzes_by_ids(
+            [attempt.quiz_id], user_id=user_id, organization_id=organization_id,
+            allow_legacy_personal=allow_legacy_personal,
+        )
+        quiz = quizzes.get(attempt.quiz_id)
         return self._attempt_payload(attempt, quiz=quiz)
 
-    async def delete_attempt(self, *, user_id: str, attempt_id: str) -> bool:
+    async def delete_attempt(
+        self, *, user_id: str, attempt_id: str, organization_id: str,
+        allow_legacy_personal: bool = False,
+    ) -> bool:
         return (
             await self.attempt_repository.soft_delete_attempt_by_id(
                 attempt_id,
                 user_id=user_id,
+                organization_id=organization_id,
+                allow_legacy_personal=allow_legacy_personal,
             )
         ) > 0

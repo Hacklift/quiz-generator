@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 # Organization dependencies compose the normal authenticated-user dependency,
@@ -21,7 +22,10 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 
-from server.app.organizations.dependencies import get_active_organization_context
+from server.app.organizations.dependencies import (
+    get_active_organization_context,
+    get_optional_active_organization_context,
+)
 from server.app.organizations.models import OrganizationDocument, OrganizationPrincipal
 from server.app.organizations.repository import OrganizationMembershipRepository
 from server.app.organizations.service import (
@@ -379,6 +383,14 @@ class FakeSessionsCollection:
 
     async def update_one(self, query, update):
         self.updated = (query, update)
+        if (
+            query.get("session_id") == self.session["session_id"]
+            and query.get("revoked_at") == self.session["revoked_at"]
+            and query.get("active_organization_id") == self.session.get("active_organization_id")
+        ):
+            self.session.update(update["$set"])
+            return type("Result", (), {"matched_count": 1})()
+        return type("Result", (), {"matched_count": 0})()
 
 
 def _user(default_organization_id: str) -> UserOut:
@@ -472,7 +484,57 @@ async def test_active_context_recovers_a_stale_session_selector_to_valid_default
     )
 
     assert context.organization_id == default_organization_id
+    assert context.active_scope_recovered is True
     assert sessions.updated[1]["$set"]["active_organization_id"] == default_organization_id
+
+
+@pytest.mark.asyncio
+async def test_active_context_rejects_a_concurrent_scope_switch_during_fallback():
+    default_organization_id = str(ObjectId())
+    stale_organization_id = str(ObjectId())
+    user = _user(default_organization_id)
+    principal = OrganizationPrincipal(user_id=user.id, session_id="session-1")
+
+    class ConcurrentSwitchSessions(FakeSessionsCollection):
+        async def update_one(self, query, update):
+            self.updated = (query, update)
+            self.session["active_organization_id"] = "newly-selected-organization"
+            return type("Result", (), {"matched_count": 0})()
+
+    sessions = ConcurrentSwitchSessions(
+        {
+            "session_id": "session-1",
+            "user_id": user.id,
+            "revoked_at": None,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
+            "active_organization_id": stale_organization_id,
+        }
+    )
+    organizations = FakeOrganizationsCollection()
+    organizations.documents["default"] = {
+        "_id": ObjectId(default_organization_id),
+        "kind": "personal",
+        "status": "active",
+    }
+    memberships = FakeMembershipsCollection()
+    memberships.documents[(default_organization_id, user.id)] = {
+        "organization_id": default_organization_id,
+        "user_id": user.id,
+        "role": "owner",
+        "status": "active",
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_active_organization_context(
+            principal=principal,
+            current_user=user,
+            sessions_collection=sessions,
+            organizations_collection=organizations,
+            memberships_collection=memberships,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert sessions.session["active_organization_id"] == "newly-selected-organization"
 
 
 @pytest.mark.asyncio
@@ -506,3 +568,41 @@ async def test_active_context_denies_a_user_without_membership():
         )
 
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_optional_context_treats_an_identity_without_session_scope_as_anonymous():
+    assert await get_optional_active_organization_context(
+        current_user=SimpleNamespace(session_id=None),
+        sessions_collection=object(),
+        organizations_collection=object(),
+        memberships_collection=object(),
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_optional_context_propagates_tenant_resolution_failures_for_authenticated_users(monkeypatch):
+    import server.app.organizations.dependencies as organization_dependencies
+
+    async def no_active_tenant(**_kwargs):
+        raise HTTPException(status_code=403, detail="Organization access denied")
+
+    monkeypatch.setattr(
+        organization_dependencies,
+        "resolve_active_organization_context",
+        no_active_tenant,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_optional_active_organization_context(
+            current_user=SimpleNamespace(
+                id="user-1",
+                session_id="session-1",
+                role="user",
+            ),
+            sessions_collection=object(),
+            organizations_collection=object(),
+            memberships_collection=object(),
+        )
+
+    assert exc_info.value.status_code == 403

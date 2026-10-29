@@ -13,6 +13,7 @@ from server.app.organizations.models import (
 class OrganizationAction(StrEnum):
     ORGANIZATION_MANAGE = "organization.manage"
     MEMBERSHIP_MANAGE = "membership.manage"
+    MEMBERSHIP_ADMIN_MANAGE = "membership.admin.manage"
     BILLING_MANAGE = "billing.manage"
     CONTENT_CREATE = "content.create"
     CONTENT_READ = "content.read"
@@ -77,6 +78,7 @@ _RESOURCELESS_ACTIONS = frozenset(
     {
         OrganizationAction.ORGANIZATION_MANAGE,
         OrganizationAction.MEMBERSHIP_MANAGE,
+        OrganizationAction.MEMBERSHIP_ADMIN_MANAGE,
         OrganizationAction.BILLING_MANAGE,
         OrganizationAction.CONTENT_CREATE,
     }

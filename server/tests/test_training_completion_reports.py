@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from server.app.core.dependencies import get_current_user
 from server.app.core.rate_limiter import limiter
+from server.app.organizations.dependencies import get_active_organization_context
 from server.app.quiz.routes import training_runs
 from server.app.quiz.schemas.training_runs import CreateTrainingRunRequest
 from server.app.quiz.services.training_run_service import TrainingRunService
@@ -49,8 +50,20 @@ def assignments():
 def report_service(run=None, rows=None):
     run = run or run_document()
     rows = rows if rows is not None else assignments()
+
+    async def get_run_for_owner(identifier, owner_user_id, organization_id, allow_legacy_personal):
+        legacy = run.get("organization_id") is None and allow_legacy_personal
+        if (
+            identifier == str(run["_id"])
+            and owner_user_id == run["owner_user_id"]
+            and (run.get("organization_id") == organization_id or legacy)
+        ):
+            return deepcopy(run)
+        return None
+
     repository = SimpleNamespace(
         get_run=AsyncMock(side_effect=lambda identifier: deepcopy(run) if identifier == str(run["_id"]) else None),
+        get_run_for_owner=AsyncMock(side_effect=get_run_for_owner),
         list_assignments_for_run=AsyncMock(return_value=rows),
         list_sessions_for_run=AsyncMock(return_value=[]),
         get_closure_audit=AsyncMock(return_value=None),
@@ -371,6 +384,9 @@ def report_app(monkeypatch):
     app.include_router(training_runs.router, prefix="/api/v1")
     user = SimpleNamespace(id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr")
     app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_active_organization_context] = lambda: SimpleNamespace(
+        organization_id="organization-1", organization_kind="personal"
+    )
     app.dependency_overrides[training_runs.get_training_run_service] = lambda: service
     monkeypatch.setattr(limiter, "enabled", False)
     return app, user, repository, run
@@ -400,6 +416,15 @@ async def test_missing_or_malformed_report_is_404(report_app):
     app, _, _, _ = report_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/v1/training-runs/not-an-objectid/completion-report.csv")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_csv_report_rejects_same_owners_run_in_another_organization(report_app):
+    app, _, _, run = report_app
+    run["organization_id"] = "another-organization"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/training-runs/{run['_id']}/completion-report.csv")
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
