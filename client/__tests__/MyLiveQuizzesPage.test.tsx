@@ -251,4 +251,62 @@ describe("LiveQuizCreatorDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "All live quizzes" }));
     expect(mockPush).toHaveBeenCalledWith("/my-live-quizzes");
   });
+
+  test("shows an error instead of an empty dashboard when the first load fails", async () => {
+    mockedService.listParticipants.mockRejectedValue(new Error("Network Error"));
+    render(<LiveQuizCreatorDashboard quizId="quiz-1" />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load participants.",
+    );
+    expect(screen.queryByText("Who has joined")).not.toBeInTheDocument();
+  });
+
+  test("keeps the participant list visible when a refresh fails", async () => {
+    render(<LiveQuizCreatorDashboard quizId="quiz-1" />);
+    await screen.findAllByText("Ada");
+
+    mockedService.listParticipants.mockRejectedValueOnce(new Error("Network Error"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+    );
+    expect(mockedService.listParticipants).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText("Ada").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  test("ignores a slow response for a quiz the user has navigated away from", async () => {
+    let resolveFirst: (rows: any[]) => void = () => {};
+    mockedService.listParticipants
+      .mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce([
+        {
+          session_id: "s-new",
+          participant_name: "Cara",
+          total_questions: 5,
+          status: "joined",
+          auto_submitted: false,
+        },
+      ] as any);
+
+    const { rerender } = render(<LiveQuizCreatorDashboard quizId="quiz-old" />);
+    rerender(<LiveQuizCreatorDashboard quizId="quiz-new" />);
+    await screen.findAllByText("Cara");
+
+    resolveFirst([
+      {
+        session_id: "s-old",
+        participant_name: "Stale",
+        total_questions: 5,
+        status: "joined",
+        auto_submitted: false,
+      },
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText("Stale")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Cara").length).toBeGreaterThan(0);
+  });
 });

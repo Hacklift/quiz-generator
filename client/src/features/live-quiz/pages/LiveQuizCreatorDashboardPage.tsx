@@ -123,6 +123,8 @@ export const LiveQuizCreatorDashboard: React.FC<
   const [exportFormat, setExportFormat] =
     useState<LiveResultsExportFormat>("csv");
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const requestIdRef = useRef(0);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -141,34 +143,41 @@ export const LiveQuizCreatorDashboard: React.FC<
     });
   }, []);
 
+  /**
+   * The initial load replaces the page with an error on failure; a refresh
+   * keeps the current list on screen and only reports the failure.
+   */
   const fetchParticipants = useCallback(
-    async (showLoading = false) => {
-      if (showLoading) setLoading(true);
-      setError(null);
+    async ({ initial }: { initial: boolean }) => {
+      const requestId = ++requestIdRef.current;
+      // Ignore responses that arrive after unmount or after a newer request.
+      const isCurrent = () =>
+        mountedRef.current && requestId === requestIdRef.current;
+      if (initial) {
+        setLoading(true);
+        setError(null);
+        setIsRefreshing(false);
+      } else {
+        setIsRefreshing(true);
+      }
       try {
         const data = await liveQuizService.listParticipants(quizId);
-        if (mountedRef.current) {
-          setParticipants(data);
-        }
+        if (isCurrent()) setParticipants(data);
       } catch (err: any) {
+        if (!isCurrent()) return;
         if (err?.response?.status === 403) {
           setError("You are not the owner of this quiz.");
-          return;
-        }
-        if (err?.response?.status === 404) {
+        } else if (err?.response?.status === 404) {
           setError("Quiz not found.");
-          return;
-        }
-        if (!mountedRef.current) return;
-        if (showLoading) {
-          // Keep the current list visible; just report the failed refresh.
-          toast.error("Could not refresh participants. Try again.");
-        } else {
+        } else if (initial) {
           setError("Could not load participants.");
+        } else {
+          toast.error("Could not refresh participants. Try again.");
         }
       } finally {
-        if (mountedRef.current && showLoading) {
-          setLoading(false);
+        if (isCurrent()) {
+          if (initial) setLoading(false);
+          else setIsRefreshing(false);
         }
       }
     },
@@ -179,7 +188,7 @@ export const LiveQuizCreatorDashboard: React.FC<
     mountedRef.current = true;
     shouldReconnectRef.current = true;
     reconnectAttemptRef.current = 0;
-    void fetchParticipants(true);
+    void fetchParticipants({ initial: true });
 
     const scheduleReconnect = () => {
       if (!shouldReconnectRef.current || reconnectTimerRef.current !== null) {
@@ -259,7 +268,7 @@ export const LiveQuizCreatorDashboard: React.FC<
   }, [fetchParticipants, quizId, upsertParticipant]);
 
   const handleRefreshClick = () => {
-    fetchParticipants(true);
+    void fetchParticipants({ initial: false });
   };
 
   const handleExport = async () => {
@@ -385,9 +394,10 @@ export const LiveQuizCreatorDashboard: React.FC<
             <button
               type="button"
               onClick={handleRefreshClick}
-              className={`${BTN_GHOST} ${BTN_COMPACT}`}
+              disabled={isRefreshing}
+              className={`${BTN_GHOST} ${BTN_COMPACT} disabled:cursor-wait disabled:opacity-50`}
             >
-              Refresh
+              {isRefreshing ? "Refreshing…" : "Refresh"}
             </button>
             <BackToLiveQuizzes />
           </div>
