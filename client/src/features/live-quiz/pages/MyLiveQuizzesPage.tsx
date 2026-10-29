@@ -453,6 +453,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                               <button
                                 type="button"
                                 aria-label={`More actions for ${quiz.title}`}
+                                aria-haspopup="menu"
                                 aria-expanded={isMenuOpen}
                                 onClick={() =>
                                   setOpenActionsQuizId((current) =>
@@ -467,8 +468,15 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                 &#8942;
                               </button>
                               {isMenuOpen && (
-                                <div className="absolute right-0 z-20 mt-[6px] w-[180px] border-2 border-ink bg-paper py-[8px] text-left">
-                                  <p className="px-[14px] pb-[6px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60">
+                                <div
+                                  role="menu"
+                                  aria-label={`Export results for ${quiz.title}`}
+                                  className="absolute right-0 z-20 mt-[6px] w-[180px] border-2 border-ink bg-paper py-[8px] text-left"
+                                >
+                                  <p
+                                    aria-hidden="true"
+                                    className="px-[14px] pb-[6px] text-[11px] font-extrabold uppercase tracking-[0.1em] text-ink/60"
+                                  >
                                     Export results
                                   </p>
                                   {(["csv", "pdf", "txt"] as const).map(
@@ -476,6 +484,7 @@ export const MyLiveQuizzesPage: React.FC = () => {
                                       <button
                                         key={format}
                                         type="button"
+                                        role="menuitem"
                                         onClick={() =>
                                           exportResults(quiz, format)
                                         }

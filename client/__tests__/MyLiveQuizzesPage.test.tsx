@@ -110,11 +110,11 @@ describe("MyLiveQuizzesPage", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "More actions for Biology Session" }),
     );
-    expect(screen.getByRole("button", { name: "CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "CSV" })).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
-    expect(screen.queryByRole("button", { name: "CSV" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "CSV" })).not.toBeInTheDocument();
   });
 
   test("closes the export menu on an outside click", async () => {
@@ -122,11 +122,11 @@ describe("MyLiveQuizzesPage", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "More actions for Biology Session" }),
     );
-    expect(screen.getByRole("button", { name: "CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "CSV" })).toBeInTheDocument();
 
     fireEvent.mouseDown(document.body);
 
-    expect(screen.queryByRole("button", { name: "CSV" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "CSV" })).not.toBeInTheDocument();
   });
 
   test("access code dialog focuses the duration field and closes on Escape", async () => {

@@ -143,7 +143,7 @@ describe("live quiz results export", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "More actions for Biology Session" }),
     );
-    fireEvent.mouseDown(screen.getByRole("heading", { name: "Live Quizzes" }));
+    fireEvent.mouseDown(screen.getByRole("heading", { name: "Your live sessions" }));
 
     expect(
       screen.queryByRole("menu", { name: "Export results for Biology Session" }),
