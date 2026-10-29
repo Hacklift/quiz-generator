@@ -1,12 +1,18 @@
+import asyncio
+from datetime import datetime, timedelta, timezone
+
 import pytest
+from datetime import datetime, timedelta
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2, QuizMetadataUpdateV2
 from ...app.quiz.repositories.v2.models.reference_models import (
     FolderDocumentV2,
     FolderItemDocumentV2,
+    QuizAttemptDocumentV2,
     QuizHistoryDocumentV2,
     SavedQuizDocumentV2,
 )
+from ...app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
 from ...app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from ...app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 
@@ -18,6 +24,7 @@ async def test_quiz_v2_repository_insert_and_get(test_db):
         title="Repository insert",
         quiz_type="multichoice",
         source="manual",
+        organization_id="organization-1",
         questions=[
             {
                 "question": "What is MongoDB?",
@@ -42,6 +49,7 @@ async def test_quiz_v2_repository_update_metadata(test_db):
             title="Original",
             quiz_type="open-ended",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "What is scaling?",
@@ -62,6 +70,117 @@ async def test_quiz_v2_repository_update_metadata(test_db):
 
 
 @pytest.mark.asyncio
+async def test_quiz_v2_repository_atomically_claims_live_activation(test_db):
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    created = await repository.insert_quiz(
+        QuizDocumentV2(
+            title="Concurrent activation",
+            organization_id="organization-1",
+            quiz_type="multichoice",
+            source="manual",
+            owner_user_id="owner-1",
+            questions=[
+                {
+                    "question": "What is atomicity?",
+                    "options": ["One transition", "Many transitions"],
+                    "correct_answer": "One transition",
+                }
+            ],
+        )
+    )
+    observed_at = datetime.now(timezone.utc)
+
+    first, second = await asyncio.gather(
+        repository.claim_live_quiz_activation(
+            str(created.id),
+            creator_id="owner-1",
+            observed_at=observed_at,
+            access_code="FIRST1",
+            time_limit_minutes=20,
+            access_code_expires_at=observed_at + timedelta(hours=1),
+        ),
+        repository.claim_live_quiz_activation(
+            str(created.id),
+            creator_id="owner-1",
+            observed_at=observed_at,
+            access_code="SECOND",
+            time_limit_minutes=30,
+            access_code_expires_at=observed_at + timedelta(hours=1),
+        ),
+    )
+
+    winners = [result for result in (first, second) if result is not None]
+    assert len(winners) == 1
+    persisted = await repository.find_by_id(str(created.id))
+    assert persisted is not None
+    assert persisted.access_code == winners[0].access_code
+    assert persisted.time_limit_minutes == winners[0].time_limit_minutes
+
+
+@pytest.mark.asyncio
+async def test_live_activation_is_tenant_scoped_even_for_non_owner_actors(test_db):
+    repository = QuizV2Repository(test_db.quizzes_v2)
+    created = await repository.insert_quiz(QuizDocumentV2(
+        title="Tenant activation", organization_id="organization-1", owner_user_id="author-1",
+        created_by_user_id="author-1", quiz_type="true-false", source="manual",
+        questions=[{"question": "Q", "correct_answer": "True"}],
+    ))
+    now = datetime.now(timezone.utc)
+    kwargs = {
+        "creator_id": "admin-1", "observed_at": now, "access_code": "ADMIN1",
+        "time_limit_minutes": 20, "access_code_expires_at": now + timedelta(hours=1),
+    }
+    assert await repository.claim_live_quiz_activation(
+        str(created.id), organization_id="another-organization", **kwargs,
+    ) is None
+    winner = await repository.claim_live_quiz_activation(
+        str(created.id), organization_id="organization-1", **kwargs,
+    )
+    assert winner.access_code == "ADMIN1"
+    assert await repository.claim_live_quiz_activation(
+        str(created.id), organization_id="organization-1", **{**kwargs, "creator_id": "admin-2"},
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_quiz_v2_repository_allows_new_activation_after_expiry(test_db):
+    repository = QuizV2Repository(test_db["quizzes_v2"])
+    created = await repository.insert_quiz(
+        QuizDocumentV2(
+            title="Expired activation",
+            organization_id="organization-1",
+            quiz_type="true-false",
+            source="manual",
+            owner_user_id="owner-1",
+            live_quiz_enabled=True,
+            access_code="OLD123",
+            access_code_expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            time_limit_minutes=10,
+            questions=[
+                {
+                    "question": "Expired codes can be replaced.",
+                    "options": ["True", "False"],
+                    "correct_answer": "True",
+                }
+            ],
+        )
+    )
+    observed_at = datetime.now(timezone.utc)
+
+    replacement = await repository.claim_live_quiz_activation(
+        str(created.id),
+        creator_id="owner-1",
+        observed_at=observed_at,
+        access_code="NEW123",
+        time_limit_minutes=15,
+        access_code_expires_at=observed_at + timedelta(hours=1),
+    )
+
+    assert replacement is not None
+    assert replacement.access_code == "NEW123"
+
+
+@pytest.mark.asyncio
 async def test_quiz_v2_repository_soft_delete(test_db):
     repository = QuizV2Repository(test_db["quizzes_v2"])
     created = await repository.insert_quiz(
@@ -69,6 +188,7 @@ async def test_quiz_v2_repository_soft_delete(test_db):
             title="Delete me",
             quiz_type="multichoice",
             source="manual",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "What is cleanup?",
@@ -99,6 +219,7 @@ async def test_reference_repository_saved_quiz_soft_delete_and_revive(test_db):
         SavedQuizDocumentV2(
             user_id="user-1",
             quiz_id="quiz-1",
+            organization_id="organization-user-1",
             display_title="Saved quiz",
         ),
         revive_deleted=True,
@@ -113,6 +234,7 @@ async def test_reference_repository_saved_quiz_soft_delete_and_revive(test_db):
         SavedQuizDocumentV2(
             user_id="user-1",
             quiz_id="quiz-1",
+            organization_id="organization-user-1",
             display_title="Saved quiz revived",
         ),
         revive_deleted=True,
@@ -136,6 +258,7 @@ async def test_reference_repository_saved_quiz_legacy_upsert_preserves_deleted_s
         SavedQuizDocumentV2(
             user_id="user-legacy",
             quiz_id="quiz-legacy",
+            organization_id="organization-user-legacy",
             display_title="Legacy saved",
             legacy_saved_quiz_id="legacy-saved-1",
         ),
@@ -147,6 +270,7 @@ async def test_reference_repository_saved_quiz_legacy_upsert_preserves_deleted_s
         SavedQuizDocumentV2(
             user_id="user-legacy",
             quiz_id="quiz-legacy",
+            organization_id="organization-user-legacy",
             display_title="Legacy saved updated",
             legacy_saved_quiz_id="legacy-saved-1",
         ),
@@ -169,6 +293,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
     folder = await repository.insert_folder(
         FolderDocumentV2(
             user_id="user-folder",
+            organization_id="organization-user-folder",
             name="Backend",
         )
     )
@@ -176,6 +301,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-1",
+            organization_id="organization-user-folder",
             display_title="Quiz one",
             position=0,
         ),
@@ -192,6 +318,7 @@ async def test_reference_repository_folder_soft_delete_cascades_to_items_and_rev
     revived_folder = await repository.insert_folder(
         FolderDocumentV2(
             user_id="user-folder",
+            organization_id="organization-user-folder",
             name="Backend",
         )
     )
@@ -208,11 +335,18 @@ async def test_reference_repository_folder_item_soft_delete_and_revive(test_db):
         test_db["quiz_history_v2"],
     )
 
-    folder = await repository.insert_folder(FolderDocumentV2(user_id="user-folder", name="Systems"))
+    folder = await repository.insert_folder(
+        FolderDocumentV2(
+            user_id="user-folder",
+            organization_id="organization-user-folder",
+            name="Systems",
+        )
+    )
     item = await repository.upsert_folder_item_by_legacy_id(
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Quiz two",
             position=0,
         ),
@@ -226,6 +360,7 @@ async def test_reference_repository_folder_item_soft_delete_and_revive(test_db):
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Quiz two revived",
             position=0,
         ),
@@ -246,11 +381,18 @@ async def test_reference_repository_backfills_folder_item_saved_quiz_id(test_db)
         test_db["quiz_history_v2"],
     )
 
-    folder = await repository.insert_folder(FolderDocumentV2(user_id="user-folder", name="Systems"))
+    folder = await repository.insert_folder(
+        FolderDocumentV2(
+            user_id="user-folder",
+            organization_id="organization-user-folder",
+            name="Systems",
+        )
+    )
     saved = await repository.upsert_saved_quiz(
         SavedQuizDocumentV2(
             user_id="user-folder",
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Saved quiz title",
         ),
         revive_deleted=True,
@@ -259,6 +401,7 @@ async def test_reference_repository_backfills_folder_item_saved_quiz_id(test_db)
         FolderItemDocumentV2(
             folder_id=str(folder.id),
             quiz_id="quiz-2",
+            organization_id="organization-user-folder",
             display_title="Stale folder title",
             position=0,
         ),
@@ -288,6 +431,7 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
         QuizHistoryDocumentV2(
             user_id="user-history",
             quiz_id="quiz-hist",
+            organization_id="organization-user-history",
             action="generated",
             metadata={"topic": "Caching"},
             legacy_history_id="legacy-history-1",
@@ -302,6 +446,7 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
         QuizHistoryDocumentV2(
             user_id="user-history",
             quiz_id="quiz-hist",
+            organization_id="organization-user-history",
             action="generated",
             metadata={"topic": "Caching updated"},
             legacy_history_id="legacy-history-1",
@@ -311,3 +456,119 @@ async def test_reference_repository_quiz_history_soft_delete_and_preserve_legacy
     assert str(preserved.id) == str(history.id)
     assert preserved.deleted_at is not None
     assert await repository.list_quiz_history_for_user("user-history") == []
+
+
+@pytest.mark.asyncio
+async def test_quiz_attempt_repository_lists_newest_first_and_filters(test_db):
+    repository = QuizAttemptV2Repository(test_db["quiz_attempts_v2"])
+
+    older = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
+            quiz_id="quiz-1",
+            question_results=[
+                {
+                    "question": "Older question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+            submitted_at=datetime.utcnow() - timedelta(minutes=5),
+        )
+    )
+    newer = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-1",
+            organization_id="org-1",
+            created_by_user_id="user-1",
+            quiz_id="quiz-2",
+            question_results=[
+                {
+                    "question": "Newer question",
+                    "user_answer": "B",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": False,
+                    "result": "Incorrect",
+                }
+            ],
+            score=0,
+            percentage=0.0,
+            submitted_at=datetime.utcnow(),
+        )
+    )
+    await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-2",
+            organization_id="org-1",
+            created_by_user_id="user-2",
+            quiz_id="quiz-1",
+            question_results=[
+                {
+                    "question": "Other user question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+            submitted_at=datetime.utcnow() + timedelta(minutes=1),
+        )
+    )
+
+    attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1")
+    filtered_attempts = await repository.list_attempts_for_user("user-1", organization_id="org-1", quiz_id="quiz-1")
+
+    assert [str(attempt.id) for attempt in attempts] == [str(newer.id), str(older.id)]
+    assert len(filtered_attempts) == 1
+    assert str(filtered_attempts[0].id) == str(older.id)
+
+
+@pytest.mark.asyncio
+async def test_quiz_attempt_repository_soft_delete(test_db):
+    repository = QuizAttemptV2Repository(test_db["quiz_attempts_v2"])
+
+    attempt = await repository.insert_attempt(
+        QuizAttemptDocumentV2(
+            user_id="user-delete",
+            organization_id="org-1",
+            created_by_user_id="user-delete",
+            quiz_id="quiz-delete",
+            question_results=[
+                {
+                    "question": "Delete question",
+                    "user_answer": "A",
+                    "correct_answer": "A",
+                    "question_type": "multichoice",
+                    "is_correct": True,
+                    "result": "Correct",
+                }
+            ],
+            score=1,
+            percentage=100.0,
+        )
+    )
+
+    assert await repository.get_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id(str(attempt.id), user_id="another-user", organization_id="org-1") == 0
+    assert await repository.get_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") is None
+    assert await repository.soft_delete_attempt_by_id("not-an-object-id", user_id="user-delete", organization_id="org-1") == 0
+    deleted_count = await repository.soft_delete_attempt_by_id(
+        str(attempt.id),
+        user_id="user-delete",
+        organization_id="org-1",
+    )
+    fetched = await repository.get_attempt_by_id(str(attempt.id), user_id="user-delete", organization_id="org-1")
+
+    assert deleted_count == 1
+    assert fetched is None

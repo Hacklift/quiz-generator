@@ -6,6 +6,7 @@ from server.app.db.core.connection import (
     database,
     get_folder_items_v2_collection,
     get_folders_v2_collection,
+    get_quiz_attempts_v2_collection,
     get_quiz_history_v2_collection,
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
@@ -13,6 +14,7 @@ from server.app.db.core.connection import (
 from server.app.quiz.repositories.v2.setup import ensure_v2_collections_and_validators, ensure_v2_indexes
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 from server.app.quiz.services.canonical_quiz_service import CanonicalQuizWriteService
+from server.app.organizations.repository import OrganizationRepository
 from server.app.quiz.services.category_taxonomy_service import (
     SEED_CATEGORIES_DIR,
     TaxonomyEntry,
@@ -84,6 +86,7 @@ class CategorySeedService:
             get_folder_items_v2_collection(),
             get_saved_quizzes_v2_collection(),
             get_quiz_history_v2_collection(),
+            get_quiz_attempts_v2_collection(),
         )
 
         stats = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0, "errors": 0}
@@ -133,6 +136,15 @@ class CategorySeedService:
             method="seed_path",
             confidence=1.0,
         )
+        organizations = self.canonical_service.repository.collection.database["organizations"]
+        platform_library = await organizations.find_one(
+            {"system_key": "platform_library", "status": "active"},
+            projection={"_id": 1},
+        )
+        if platform_library is None:
+            platform_library = await OrganizationRepository(
+                organizations
+            ).ensure_platform_library_organization()
         quiz_document = self.canonical_service.build_quiz_document(
             title=build_seed_title(entry, quiz_type),
             description=build_seed_description(entry, quiz_type),
@@ -140,6 +152,7 @@ class CategorySeedService:
             visibility="public",
             status="active",
             source="seed",
+            organization_id=str(platform_library["_id"]),
             questions=questions,
             tags=list(classification.tags),
             category=classification.category,

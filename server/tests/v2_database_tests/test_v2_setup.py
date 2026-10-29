@@ -10,7 +10,14 @@ async def test_v2_collection_setup_is_idempotent(test_db):
     await ensure_v2_collections_and_validators(test_db)
 
     names = set(await test_db.list_collection_names())
-    assert {"quizzes_v2", "folders_v2", "folder_items_v2", "saved_quizzes_v2", "quiz_history_v2"} <= names
+    assert {
+        "quizzes_v2",
+        "folders_v2",
+        "folder_items_v2",
+        "saved_quizzes_v2",
+        "quiz_history_v2",
+        "quiz_attempts_v2",
+    } <= names
 
 
 @pytest.mark.asyncio
@@ -22,15 +29,21 @@ async def test_v2_indexes_are_created(test_db):
         test_db["folder_items_v2"],
         test_db["saved_quizzes_v2"],
         test_db["quiz_history_v2"],
+        test_db["quiz_attempts_v2"],
     )
 
     quizzes_indexes = await test_db["quizzes_v2"].index_information()
     saved_indexes = await test_db["saved_quizzes_v2"].index_information()
+    attempts_indexes = await test_db["quiz_attempts_v2"].index_information()
 
     assert "owner_user_id_1_created_at_-1" in quizzes_indexes
+    assert "organization_quiz_owner_created_v2" in quizzes_indexes
     assert "category_browse_v2" in quizzes_indexes
     assert "tags_status_visibility_v2" in quizzes_indexes
-    assert "user_id_1_quiz_id_1" in saved_indexes
+    assert "organization_user_saved_quiz_unique_v2" in saved_indexes
+    assert "user_id_1_submitted_at_-1" in attempts_indexes
+    assert "organization_attempt_user_submitted_v2" in attempts_indexes
+    assert "organization_attempt_user_quiz_submitted_v2" in attempts_indexes
 
 
 @pytest.mark.asyncio
@@ -59,6 +72,7 @@ async def test_v2_validators_accept_uncategorized_quiz_documents(test_db):
             "visibility": "private",
             "status": "active",
             "source": "manual",
+            "organization_id": "organization-1",
             "tags": [],
             "category": None,
             "category_slug": None,

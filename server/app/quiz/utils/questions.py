@@ -2,6 +2,11 @@ import logging
 import random
 from fastapi import HTTPException
 from typing import Dict
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.utils.huggingface_utils import generate_quiz_with_huggingface
 from server.app.quiz.utils.mock_quiz_generator import get_mock_questions_by_type
@@ -21,9 +26,22 @@ from server.app.quiz.services.live_session_service import LiveQuizSessionService
 async def get_questions(
     request: QuizRequest,
     user_id: str | None = None,
+    organization_id: str | None = None,
+    organization_context: OrganizationContext | None = None,
     invitation_repository=None,
     email_service=None,
 ) -> Dict:
+
+    if user_id and not organization_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Organization context is required to persist a generated quiz",
+        )
+    if (
+        organization_context is not None
+        and organization_context.organization_id != organization_id
+    ):
+        raise ValueError("Organization context does not match the persistence scope")
 
     ai_down = False
     notification_message = None
@@ -31,6 +49,7 @@ async def get_questions(
     final_questions = []
     quiz_id = None  
     live_access_code = None
+    live_access_code_created = False
     live_access_code_expires_at = None
     live_time_limit_minutes = None
     category_metadata = {
@@ -56,6 +75,8 @@ async def get_questions(
         "custom_instruction": request.custom_instruction,
         "token": request.token,
         "user_id": user_id,
+        "organization_id": organization_id,
+        "created_by_user_id": user_id,
     }
 
     try:
@@ -180,6 +201,18 @@ async def get_questions(
                 get_live_quiz_sessions_collection(),
             )
         )
+        authorized_quiz = await live_service.repository.get_quiz_by_id_for_organization(
+            quiz_id,
+            organization_id or "",
+        )
+        if authorized_quiz is None:
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        if organization_context is not None:
+            require_organization_permission(
+                context=organization_context,
+                action=OrganizationAction.CONTENT_SHARE,
+                resource=authorized_quiz,
+            )
         if invitation_repository is None:
             invitation_repository = LiveQuizInvitationRepository(
                 get_live_quiz_invitations_collection()
@@ -194,8 +227,10 @@ async def get_questions(
             send_email_invitations=request.send_email_invitations,
             invitation_repository=invitation_repository,
             email_service=email_service,
+            authorized_quiz=authorized_quiz,
         )
         live_access_code = live_config["access_code"]
+        live_access_code_created = live_config.pop("_access_code_created", False)
         live_access_code_expires_at = live_config["access_code_expires_at"]
         live_time_limit_minutes = live_config["time_limit_minutes"]
         live_participant_access_mode = live_config["participant_access_mode"]
@@ -228,6 +263,8 @@ async def get_questions(
         "invitations_delivered": live_invitations_delivered,
         "invitations_queued": live_invitations_queued,
     }
+    if request.live_quiz_enabled:
+        result["_access_code_created"] = live_access_code_created
 
     logging.warning(f"Final API Response: {result}")
     return result

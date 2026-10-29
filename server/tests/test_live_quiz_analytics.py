@@ -8,8 +8,10 @@ Tests cover:
 - score appears after submission
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import jwt
 import pytest
@@ -17,11 +19,28 @@ from bson import ObjectId
 from fastapi import HTTPException
 from starlette.websockets import WebSocketDisconnect
 
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 import server.app.quiz.services.live_session_service as live_quiz_session_service
+from server.app.mcp.tools import live_quiz_tools
 from server.app.core.config import settings
 from server.app.quiz.routes import live_sessions as live_sessions_routes
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.users.models import UserOut
+
+
+def _owner_context(user_id: str = "creator-1") -> OrganizationContext:
+    principal = OrganizationPrincipal(user_id=user_id, session_id="session-1")
+    return OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="personal",
+        membership_role="owner",
+        principal=principal,
+        membership={"role": "owner", "status": "active"},
+    )
+
+
+async def _async_return(value):
+    return value
 
 
 class FakeAnalyticsRepository:
@@ -67,6 +86,9 @@ class FakeAnalyticsRepository:
 
     async def get_quiz_by_id(self, quiz_id):
         return self.quiz
+
+    async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+        return self.quiz if organization_id == "organization-1" else None
 
     async def update_session(self, session_id, updates):
         if session_id in self.sessions:
@@ -391,6 +413,7 @@ class FakeAccessCodeRepository:
             "_id": "quiz-1",
             "title": "Invitation Quiz",
             "owner_user_id": "creator-1",
+            "organization_id": "organization-1",
             "questions": [{"question": "Q1", "answer": "A"}],
         }
         self.updated = None
@@ -399,10 +422,13 @@ class FakeAccessCodeRepository:
     async def get_quiz_by_id(self, quiz_id):
         return self.quiz
 
+    async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+        return self.quiz if organization_id == self.quiz["organization_id"] else None
+
     async def access_code_exists(self, access_code):
         return False
 
-    async def enable_live_quiz(self, **kwargs):
+    async def claim_live_quiz_activation(self, **kwargs):
         self.enable_calls += 1
         self.updated = kwargs
         self.quiz = {
@@ -439,6 +465,36 @@ class FakeAccessCodeLifecycleRepository(FakeExistingAccessCodeRepository):
         return None
 
 
+class ConcurrentActivationRepository(FakeAccessCodeRepository):
+    def __init__(self):
+        super().__init__()
+        self._initial_reads = 0
+        self._initial_reads_ready = asyncio.Event()
+        self._claim_lock = asyncio.Lock()
+
+    async def get_quiz_by_id(self, quiz_id):
+        self._initial_reads += 1
+        if self._initial_reads <= 2:
+            snapshot = dict(self.quiz)
+            if self._initial_reads == 2:
+                self._initial_reads_ready.set()
+            await self._initial_reads_ready.wait()
+            return snapshot
+        return dict(self.quiz)
+
+    async def claim_live_quiz_activation(self, **kwargs):
+        async with self._claim_lock:
+            expiration = self.quiz.get("access_code_expires_at")
+            if (
+                self.quiz.get("live_quiz_enabled")
+                and self.quiz.get("access_code")
+                and expiration
+                and expiration > kwargs["observed_at"]
+            ):
+                return None
+            return await super().claim_live_quiz_activation(**kwargs)
+
+
 class FakeCreatorLiveQuizzesRepository:
     def __init__(self):
         self.quizzes = [
@@ -473,7 +529,9 @@ class FakeCreatorLiveQuizzesRepository:
             },
         ]
 
-    async def list_live_quizzes_by_creator(self, creator_user_id):
+    async def list_live_quizzes_by_creator(self, creator_user_id, organization_id=None):
+        self.creator_user_id = creator_user_id
+        self.organization_id = organization_id
         return self.quizzes
 
     async def list_quiz_sessions(self, quiz_id):
@@ -538,6 +596,7 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
     )
 
     assert response["invitations_created"] == 2
+    assert response["_access_code_created"] is True
     assert response["invitations_queued"] == 2
     assert response["invitations_delivered"] == 0
     assert response["invited_emails"] == ["ada@example.com", "grace@example.com"]
@@ -548,7 +607,7 @@ async def test_generate_access_code_creates_and_sends_invitations(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_access_code_route_uses_configured_frontend_url(monkeypatch):
+async def test_generate_access_code_route_records_event_only_for_new_code(monkeypatch):
     fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
     monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
     monkeypatch.setattr(
@@ -556,10 +615,17 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
         "FRONTEND_BASE_URL",
         "https://trusted.example",
     )
+    product_events = SimpleNamespace(insert_one=AsyncMock())
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: product_events,
+    )
 
     invitation_repository = FakeInvitationRepository()
     email_service = FakeEmailService()
-    service = LiveQuizSessionService(FakeAccessCodeRepository())
+    repository = FakeAccessCodeRepository()
+    service = LiveQuizSessionService(repository)
     payload = live_sessions_routes.AccessCodeCreateRequest(
         time_limit_minutes=15,
         access_code_expires_at=fixed_now + timedelta(days=1),
@@ -575,10 +641,20 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
         status="active",
     )
 
-    await live_sessions_routes.generate_quiz_access_code(
+    first_response = await live_sessions_routes.generate_quiz_access_code(
         quiz_id="quiz-1",
         payload=payload,
         current_user=current_user,
+        organization=_owner_context(),
+        service=service,
+        invitation_repository=invitation_repository,
+        email_service=email_service,
+    )
+    second_response = await live_sessions_routes.generate_quiz_access_code(
+        quiz_id="quiz-1",
+        payload=payload,
+        current_user=current_user,
+        organization=_owner_context(),
         service=service,
         invitation_repository=invitation_repository,
         email_service=email_service,
@@ -587,6 +663,14 @@ async def test_generate_access_code_route_uses_configured_frontend_url(monkeypat
     body = email_service.sent[0]["template_vars"]["body"]
     assert "https://trusted.example/quiz-access/" in body
     assert "https://attacker.example" not in body
+    assert first_response["access_code"] == second_response["access_code"]
+    assert "_access_code_created" not in first_response
+    assert "_access_code_created" not in second_response
+    assert repository.enable_calls == 1
+    assert product_events.insert_one.await_count == 1
+    event = product_events.insert_one.await_args.args[0]
+    assert event["event_type"] == "live_quiz_enabled"
+    assert event["quiz_id"] == "quiz-1"
 
 
 class FakeWebSocket:
@@ -630,7 +714,33 @@ async def test_live_quiz_websocket_rejects_missing_auth_message():
 
 
 @pytest.mark.asyncio
-async def test_live_quiz_websocket_authenticates_with_first_message():
+async def test_live_quiz_websocket_closes_cleanly_when_setup_fails(monkeypatch):
+    websocket = FakeWebSocket({"type": "authenticate", "token": "valid-token"})
+
+    async def fail_authentication(*_args, **_kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "_get_verified_user_from_websocket_token",
+        fail_authentication,
+    )
+
+    await live_sessions_routes.live_quiz_participants_ws(
+        websocket,
+        "quiz-1",
+        service=object(),
+        users_collection=object(),
+        sessions_collection=object(),
+    )
+
+    assert websocket.accepted is True
+    assert websocket.close_code == 1011
+    assert websocket.sent_json == []
+
+
+@pytest.mark.asyncio
+async def test_live_quiz_websocket_authenticates_with_first_message(monkeypatch):
     user_id = ObjectId()
     user = {
         "_id": user_id,
@@ -666,12 +776,28 @@ async def test_live_quiz_websocket_authenticates_with_first_message():
             return None
 
     class FakeLiveQuizService:
-        async def list_analytics(self, quiz_id, creator_id):
+        class Repository:
+            async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+                return {
+                    "_id": quiz_id,
+                    "organization_id": organization_id,
+                    "created_by_user_id": str(user_id),
+                }
+
+        repository = Repository()
+
+        async def list_analytics(self, quiz_id, creator_id, *, authorized_quiz):
             assert quiz_id == "quiz-1"
             assert creator_id == str(user_id)
+            assert authorized_quiz["organization_id"] == "organization-1"
             return []
 
     websocket = FakeWebSocket({"type": "authenticate", "token": token})
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "resolve_active_organization_context",
+        lambda **_kwargs: _async_return(_owner_context(str(user_id))),
+    )
 
     await live_sessions_routes.live_quiz_participants_ws(
         websocket,
@@ -707,6 +833,7 @@ async def test_generate_access_code_returns_existing_code_without_regenerating(m
     )
 
     assert response["access_code"] == "KEEP42"
+    assert response["_access_code_created"] is False
     assert response["time_limit_minutes"] == 20
     assert repository.enable_calls == 0
 
@@ -731,6 +858,7 @@ async def test_expired_access_code_is_replaced_only_by_explicit_generation(monke
     )
 
     assert response["access_code"] != "KEEP42"
+    assert response["_access_code_created"] is True
     assert repository.enable_calls == 1
 
     replacement = await service.validate_access_code(response["access_code"])
@@ -739,6 +867,152 @@ async def test_expired_access_code_is_replaced_only_by_explicit_generation(monke
     with pytest.raises(HTTPException) as old_code:
         await service.validate_access_code("KEEP42")
     assert old_code.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_concurrent_activation_has_one_winner_and_returns_persisted_code(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = ConcurrentActivationRepository()
+    service = LiveQuizSessionService(repository)
+
+    first, second = await asyncio.gather(
+        service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(hours=1),
+            creator_id="creator-1",
+            time_limit_minutes=20,
+        ),
+        service.generate_access_code(
+            quiz_id="quiz-1",
+            access_code_expires_at=fixed_now + timedelta(hours=1),
+            creator_id="creator-1",
+            time_limit_minutes=20,
+        ),
+    )
+
+    assert sorted(
+        [first["_access_code_created"], second["_access_code_created"]]
+    ) == [False, True]
+    assert first["access_code"] == second["access_code"] == repository.quiz["access_code"]
+    assert repository.enable_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "channels",
+    [("rest", "rest"), ("mcp", "mcp"), ("rest", "mcp")],
+)
+async def test_concurrent_entry_points_record_one_activation_event(
+    monkeypatch, channels
+):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+    repository = ConcurrentActivationRepository()
+    service = LiveQuizSessionService(repository)
+    events = []
+
+    async def record_event(_provider, **event):
+        events.append(event)
+
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
+    monkeypatch.setattr(live_quiz_tools, "record_product_event_safely", record_event)
+    monkeypatch.setattr(
+        live_quiz_tools,
+        "_owned_quiz_for_context",
+        lambda _quiz_id: _async_return(
+            (
+                dict(repository.quiz),
+                SimpleNamespace(
+                    user_id="creator-1",
+                    tenant_id="organization-1",
+                    organization_context=_owner_context(),
+                    user=SimpleNamespace(
+                        id="creator-1", persona_category="school", persona_user_type="teacher",
+                    ),
+                ),
+            )
+        ),
+    )
+    monkeypatch.setattr(live_quiz_tools, "_live_quiz_repository", lambda: repository)
+    monkeypatch.setattr(
+        live_quiz_tools,
+        "LiveQuizSessionService",
+        lambda *_args, **_kwargs: service,
+    )
+    current_user = UserOut(
+        id="creator-1",
+        username="creator",
+        email="creator@example.com",
+        is_verified=True,
+        status="active",
+    )
+    payload = live_sessions_routes.AccessCodeCreateRequest(
+        time_limit_minutes=20,
+        access_code_expires_at=fixed_now + timedelta(hours=1),
+    )
+
+    async def invoke(channel):
+        if channel == "rest":
+            return await live_sessions_routes.generate_quiz_access_code(
+                quiz_id="quiz-1",
+                payload=payload,
+                current_user=current_user,
+                organization=_owner_context(),
+                service=service,
+                invitation_repository=FakeInvitationRepository(),
+                email_service=FakeEmailService(),
+            )
+        return await live_quiz_tools.live_quiz_create_access_link(
+            quiz_id="quiz-1",
+            duration=20,
+            access_code_expires_at=(fixed_now + timedelta(hours=1)).isoformat(),
+        )
+
+    first, second = await asyncio.gather(*(invoke(channel) for channel in channels))
+
+    assert first["access_code"] == second["access_code"] == repository.quiz["access_code"]
+    assert "_access_code_created" not in first
+    assert "_access_code_created" not in second
+    assert repository.enable_calls == 1
+    assert len(events) == 1
+    assert events[0]["event_type"] == "live_quiz_enabled"
+
+
+@pytest.mark.asyncio
+async def test_two_tenant_admins_converge_on_one_live_activation(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    class ScopedConcurrentRepository(ConcurrentActivationRepository):
+        async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+            quiz = await self.get_quiz_by_id(quiz_id)
+            return quiz if quiz["organization_id"] == organization_id else None
+
+    repository = ScopedConcurrentRepository()
+    service = LiveQuizSessionService(repository)
+    recorder = AsyncMock()
+    monkeypatch.setattr(live_sessions_routes, "record_product_event_safely", recorder)
+    payload = live_sessions_routes.AccessCodeCreateRequest(
+        time_limit_minutes=20, access_code_expires_at=fixed_now + timedelta(hours=1),
+    )
+
+    async def activate(user_id):
+        context = _owner_context(user_id)
+        context.membership_role = "admin"
+        return await live_sessions_routes.generate_quiz_access_code(
+            quiz_id="quiz-1", payload=payload, current_user=SimpleNamespace(id=user_id),
+            organization=context, service=service,
+            invitation_repository=FakeInvitationRepository(), email_service=FakeEmailService(),
+        )
+
+    first, second = await asyncio.gather(activate("admin-1"), activate("admin-2"))
+    assert first["access_code"] == second["access_code"] == repository.quiz["access_code"]
+    assert repository.enable_calls == 1
+    recorder.assert_awaited_once()
+    assert recorder.await_args.kwargs["organization_id"] == "organization-1"
 
 
 @pytest.mark.asyncio
@@ -760,3 +1034,20 @@ async def test_creator_can_list_live_quizzes_with_stats(monkeypatch):
     assert rows[0]["participant_count"] == 2
     assert rows[0]["completed_count"] == 1
     assert rows[0]["average_score"] == 2
+
+
+@pytest.mark.asyncio
+async def test_creator_live_quiz_list_preserves_organization_scope(monkeypatch):
+    fixed_now = datetime(2025, 6, 1, 10, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(live_quiz_session_service, "_utc_now", lambda: fixed_now)
+
+    repository = FakeCreatorLiveQuizzesRepository()
+    service = LiveQuizSessionService(repository)
+
+    await service.list_creator_live_quizzes(
+        "creator-1",
+        organization_id="organization-1",
+    )
+
+    assert repository.creator_user_id == "creator-1"
+    assert repository.organization_id == "organization-1"

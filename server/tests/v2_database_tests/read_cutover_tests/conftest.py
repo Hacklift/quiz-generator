@@ -28,6 +28,7 @@ async def read_cutover_db(test_db):
         test_db["folder_items_v2"],
         test_db["saved_quizzes_v2"],
         test_db["quiz_history_v2"],
+        test_db["quiz_attempts_v2"],
     )
     return test_db
 
@@ -52,6 +53,7 @@ def read_service_factory(read_cutover_db):
 def shared_read_service_factory(read_cutover_db):
     def factory():
         return SharedQuizReadService(
+            organizations_collection=read_cutover_db["organizations"],
             quiz_repository=QuizV2Repository(read_cutover_db["quizzes_v2"]),
             reference_repository=ReferenceV2Repository(
                 read_cutover_db["folders_v2"],

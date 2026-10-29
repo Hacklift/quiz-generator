@@ -31,9 +31,7 @@ describe("QuizwerkHomePage", () => {
     mockRouterPush.mockClear();
   });
 
-  // Guards the design-system extraction: this snapshot is taken before the
-  // Quizwerk primitives move to @shared/ui/quizwerk, so the refactor has to
-  // leave the rendered markup byte-identical.
+  // Guards the shared Quizwerk design-system markup and typography class.
   test("renders the full page markup", () => {
     const { container } = render(<QuizwerkHomePage />);
     expect(container).toMatchSnapshot();

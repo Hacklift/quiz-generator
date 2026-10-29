@@ -41,6 +41,7 @@ def serialize_user_document(user: dict[str, Any]) -> dict[str, Any]:
         "is_verified": user.get("is_verified", False),
         "status": coerce_user_status(user),
         "role": user.get("role", "user"),
+        "default_organization_id": user.get("default_organization_id"),
         "created_at": user.get("created_at"),
         "updated_at": user.get("updated_at"),
     }
@@ -65,6 +66,7 @@ def build_user_out_payload(user: dict[str, Any]) -> dict[str, Any]:
         "persona_user_type": persona.get("user_type"),
         "persona_set_at": persona_set_at,
         "role": user.get("role", "user"),
+        "default_organization_id": user.get("default_organization_id"),
         "status": coerce_user_status(user),
         "is_active": user.get("is_active", True),
         "is_verified": user.get("is_verified", False),
@@ -377,6 +379,7 @@ async def create_user_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
     device_info: dict[str, Any] | None = None,
+    active_organization_id: str | None = None,
 ) -> dict[str, Any]:
     now = now_utc()
     session_doc = {
@@ -393,6 +396,7 @@ async def create_user_session(
         "device_info": device_info,
         "ip_address": ip_address,
         "user_agent": user_agent,
+        "active_organization_id": active_organization_id,
     }
     await sessions_collection.insert_one(session_doc)
     return session_doc
@@ -473,7 +477,16 @@ async def record_auth_event(
     ip_address: str | None = None,
     user_agent: str | None = None,
     metadata: dict[str, Any] | None = None,
+    user: Any = None,
 ) -> None:
+    from server.app.users.persona import analytics_persona_snapshot
+
+    snapshot = analytics_persona_snapshot(user)
+    event_metadata = dict(metadata or {})
+    event_metadata["persona"] = {
+        "category": snapshot["persona_category"],
+        "user_type": snapshot["persona_user_type"],
+    }
     try:
         await auth_events_collection.insert_one(
             {
@@ -482,7 +495,7 @@ async def record_auth_event(
                 "status": status,
                 "ip_address": ip_address,
                 "user_agent": user_agent,
-                "metadata": metadata or {},
+                "metadata": event_metadata,
                 "created_at": now_utc(),
             }
         )

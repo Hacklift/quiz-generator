@@ -1,6 +1,7 @@
 from .constants import (
     FOLDER_ITEMS_V2_COLLECTION,
     FOLDERS_V2_COLLECTION,
+    QUIZ_ATTEMPTS_V2_COLLECTION,
     QUIZ_HISTORY_V2_COLLECTION,
     QUIZZES_V2_COLLECTION,
     SAVED_QUIZZES_V2_COLLECTION,
@@ -19,6 +20,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "visibility",
                     "status",
                     "source",
+                    "organization_id",
                     "schema_version",
                     "created_at",
                     "updated_at",
@@ -27,6 +29,8 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "title": {"bsonType": "string", "minLength": 1},
                     "description": {"bsonType": ["string", "null"]},
                     "owner_user_id": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
                     "quiz_type": {"enum": ["multichoice", "true-false", "open-ended", "short-answer"]},
                     "visibility": {"enum": ["private", "public", "unlisted"]},
                     "status": {"enum": ["active", "archived", "deleted"]},
@@ -79,9 +83,11 @@ def get_v2_collection_validators() -> dict[str, dict]:
         FOLDERS_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "name", "created_at", "updated_at"],
+                "required": ["user_id", "organization_id", "name", "created_at", "updated_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
                     "name": {"bsonType": "string", "minLength": 1},
                     "description": {"bsonType": ["string", "null"]},
                     "legacy_folder_id": {"bsonType": ["string", "null"]},
@@ -94,12 +100,14 @@ def get_v2_collection_validators() -> dict[str, dict]:
         FOLDER_ITEMS_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["folder_id", "quiz_id", "created_at"],
+                "required": ["folder_id", "quiz_id", "organization_id", "created_at"],
                 "properties": {
                     "folder_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
                     "saved_quiz_id": {"bsonType": ["string", "null"]},
                     "added_by": {"bsonType": ["string", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
                     "position": {"bsonType": ["int", "null"]},
                     "display_title": {"bsonType": ["string", "null"]},
                     "legacy_folder_item_id": {"bsonType": ["string", "null"]},
@@ -111,10 +119,12 @@ def get_v2_collection_validators() -> dict[str, dict]:
         SAVED_QUIZZES_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "quiz_id", "saved_at"],
+                "required": ["user_id", "quiz_id", "organization_id", "saved_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
                     "display_title": {"bsonType": ["string", "null"]},
                     "legacy_saved_quiz_id": {"bsonType": ["string", "null"]},
                     "saved_at": {"bsonType": "date"},
@@ -125,15 +135,60 @@ def get_v2_collection_validators() -> dict[str, dict]:
         QUIZ_HISTORY_V2_COLLECTION: {
             "$jsonSchema": {
                 "bsonType": "object",
-                "required": ["user_id", "quiz_id", "action", "created_at"],
+                "required": ["user_id", "quiz_id", "action", "organization_id", "created_at"],
                 "properties": {
                     "user_id": {"bsonType": "string", "minLength": 1},
                     "quiz_id": {"bsonType": "string", "minLength": 1},
                     "action": {"bsonType": "string", "minLength": 1},
                     "metadata": {"bsonType": ["object", "null"]},
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
                     "legacy_history_id": {"bsonType": ["string", "null"]},
                     "created_at": {"bsonType": "date"},
                     "deleted_at": {"bsonType": ["date", "null"]},
+                },
+            }
+        },
+        QUIZ_ATTEMPTS_V2_COLLECTION: {
+            "$jsonSchema": {
+                "bsonType": "object",
+                "required": ["user_id", "quiz_id", "organization_id", "question_results", "score", "percentage", "submitted_at"],
+                "properties": {
+                    "organization_id": {"bsonType": "string", "minLength": 1},
+                    "created_by_user_id": {"bsonType": ["string", "null"]},
+                    "user_id": {"bsonType": "string", "minLength": 1},
+                    "quiz_id": {"bsonType": "string", "minLength": 1},
+                    "score": {"bsonType": ["int", "long"]},
+                    "percentage": {"bsonType": ["double", "int", "long", "decimal"]},
+                    "submitted_at": {"bsonType": "date"},
+                    "deleted_at": {"bsonType": ["date", "null"]},
+                    "question_results": {
+                        "bsonType": "array",
+                        "items": {
+                            "bsonType": "object",
+                            "required": [
+                                "question",
+                                "question_type",
+                                "is_correct",
+                                "result",
+                            ],
+                            "properties": {
+                                "question": {"bsonType": "string", "minLength": 1},
+                                "user_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "correct_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "options": {
+                                    "bsonType": ["array", "null"],
+                                    "items": {"bsonType": "string"},
+                                },
+                                "question_type": {"bsonType": "string", "minLength": 1},
+                                "accuracy_percentage": {
+                                    "bsonType": ["double", "int", "long", "decimal", "null"]
+                                },
+                                "is_correct": {"bsonType": "bool"},
+                                "result": {"bsonType": "string", "minLength": 1},
+                            },
+                        },
+                    },
                 },
             }
         },
