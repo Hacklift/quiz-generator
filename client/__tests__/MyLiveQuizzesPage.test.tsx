@@ -60,7 +60,7 @@ describe("MyLiveQuizzesPage", () => {
         access_code_expires_at: future,
         participant_count: 3,
         completed_count: 1,
-        average_score: 70,
+        average_score: 3.666,
       },
       {
         quiz_id: "quiz-expired",
@@ -81,6 +81,8 @@ describe("MyLiveQuizzesPage", () => {
     expect(screen.getByText("BIO123")).toBeInTheDocument();
     expect(statValue("Open access codes")).toBe("1");
     expect(statValue("Participants")).toBe("5");
+    // average_score is a mean count of correct answers, shown to one decimal.
+    expect(statValue("Avg correct")).toBe("3.7");
     // Only the quiz with an expired code offers a replacement code.
     expect(screen.getAllByRole("button", { name: "New access code" })).toHaveLength(1);
   });

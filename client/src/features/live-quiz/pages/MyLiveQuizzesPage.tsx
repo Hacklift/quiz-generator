@@ -535,7 +535,13 @@ export const MyLiveQuizzesPage: React.FC = () => {
                           {[
                             ["Joined", quiz.participant_count],
                             ["Completed", quiz.completed_count],
-                            ["Avg score", quiz.average_score ?? "—"],
+                            // average_score is the mean number of correct answers, not a percentage.
+                            [
+                              "Avg correct",
+                              quiz.average_score != null
+                                ? Number(quiz.average_score.toFixed(1))
+                                : "—",
+                            ],
                           ].map(([label, value]) => (
                             <div key={label} className="min-w-0">
                               <dt className={STAT_LABEL}>{label}</dt>
