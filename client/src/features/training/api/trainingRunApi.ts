@@ -21,6 +21,7 @@ export interface TrainingRunSummary {
   access_url?: string | null;
   time_limit_minutes: number;
   passing_threshold_percentage?: number | null;
+  release_answers?: "immediate" | "after_close";
   due_at?: string | null;
   closes_at: string;
   closed_at?: string | null;
