@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -49,6 +49,34 @@ async def test_completion_notification_includes_the_assignment_score(monkeypatch
     assert notification.title == "Training completed"
     assert "80%" in notification.message
     assert notification.dedupe_key == "training-assignment:assignment-1:completed"
+
+
+@pytest.mark.asyncio
+async def test_completion_notification_omits_score_while_answers_are_withheld(monkeypatch):
+    create_notification = AsyncMock()
+    monkeypatch.setattr(notification_module, "create_notification", create_notification)
+    runs = AsyncMock()
+    runs.find_one.return_value = {
+        "title": "Security basics",
+        "owner_user_id": "owner-1",
+        "status": "open",
+        "closes_at": datetime.now(timezone.utc) + timedelta(days=1),
+        "release_answers": "after_close",
+    }
+    service = TrainingNotificationService(None, object(), runs)
+
+    await service.notify_completion(
+        {
+            "_id": "assignment-1",
+            "recipient_user_id": "user-1",
+            "training_run_id": "64c13ab08edf48a008793cac",
+            "latest_percentage": 80,
+        }
+    )
+
+    notification = create_notification.await_args.args[1]
+    assert "80%" not in notification.message
+    assert "score" not in notification.message.lower()
 
 
 @pytest.mark.asyncio

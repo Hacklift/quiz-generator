@@ -236,12 +236,15 @@ async def test_session_state_releases_answers_and_explanations_immediately_by_de
 
     start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
     await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="A")
-    await service.submit_session("session-1", start["participant_token"])
+    submitted = await service.submit_session("session-1", start["participant_token"])
+    assert submitted["answers_released"] is True
+    assert submitted["score"] == 1
 
     state = await service.get_session_state("session-1", start["participant_token"])
     assert state["status"] == "submitted"
     assert state["answers_released"] is True
     assert state["release_answers_at"] is None
+    assert state["score"] == 1
     assert len(state["graded_answers"]) == 1
     assert state["graded_answers"][0]["is_correct"] is True
     assert state["graded_answers"][0]["correct_answer"] == "A"
@@ -266,17 +269,27 @@ async def test_session_state_withholds_answers_when_assignment_window_is_open(mo
     start = await service.start_session(code="ABC123", participant_name="Sam", participant_email=None)
     repo.session["training_run_id"] = "run-1"
     await service.save_answer("session-1", start["participant_token"], question_index=0, selected_answer="B")
-    await service.submit_session("session-1", start["participant_token"])
+    submitted = await service.submit_session("session-1", start["participant_token"])
+    resubmitted = await service.submit_session("session-1", start["participant_token"])
+
+    for response in (submitted, resubmitted):
+        assert response["answers_released"] is False
+        assert response["score"] is None
+        assert response["percentage"] is None
 
     state = await service.get_session_state("session-1", start["participant_token"])
     assert state["status"] == "submitted"
     assert state["answers_released"] is False
     assert state["release_answers_at"] == window_close
+    assert state["score"] is None
+    assert state["percentage"] is None
     assert len(state["graded_answers"]) == 1
     # Answers and explanations are withheld with None
     assert state["graded_answers"][0]["correct_answer"] is None
     assert state["graded_answers"][0]["is_correct"] is None
     assert state["graded_answers"][0]["explanation"] is None
+    # The stored grade is untouched; only the participant view is masked.
+    assert repo.session["score"] == 0
 
 
 @pytest.mark.asyncio

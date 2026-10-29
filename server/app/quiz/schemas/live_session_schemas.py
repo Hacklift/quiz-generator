@@ -85,11 +85,12 @@ class SaveLiveQuizAnswerResponse(BaseModel):
 
 class SubmitLiveQuizSessionResponse(BaseModel):
     status: Literal["submitted", "already_submitted"]
-    score: int
+    score: Optional[int] = None
     total_questions: int
-    percentage: float
+    percentage: Optional[float] = None
     submitted_at: datetime
     auto_submitted: bool = False
+    answers_released: bool = True
 
 
 class LiveQuizAnalyticsRow(BaseModel):

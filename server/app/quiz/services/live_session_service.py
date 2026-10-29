@@ -32,6 +32,21 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def training_run_is_open(run: Dict[str, Any], now: datetime) -> bool:
+    """A run is open while its status is open, it is not closing, and its deadline has not passed."""
+    closes_at = _as_utc(run["closes_at"]) if run.get("closes_at") else None
+    return (
+        run.get("status") == "open"
+        and not run.get("closure_in_progress")
+        and (closes_at is None or closes_at > now)
+    )
+
+
+def training_run_withholds_results(run: Dict[str, Any], now: datetime) -> bool:
+    """Participant scores, answers and explanations stay hidden until an after_close run closes."""
+    return run.get("release_answers") == "after_close" and training_run_is_open(run, now)
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -469,8 +484,8 @@ class LiveQuizSessionService:
             await self._ensure_training_run_open(session)
 
         training_run = None
-        if session.get("status") == "submitted" and session.get("training_run_id") and self.assignment_repository:
-            training_run = await self.assignment_repository.get_run(session["training_run_id"])
+        if session.get("status") == "submitted":
+            training_run = await self._load_submitted_training_run(session)
 
         return self._build_session_state(session, quiz, training_run=training_run)
 
@@ -540,7 +555,7 @@ class LiveQuizSessionService:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
         if session.get("status") == "submitted":
-            return self._submission_response(session, already_submitted=True)
+            return await self._released_submission_response(session, already_submitted=True)
 
         is_expired = self._is_expired(session)
         if not is_expired:
@@ -588,7 +603,7 @@ class LiveQuizSessionService:
             str(finalized["_id"]),
             "participant_submitted",
         )
-        return self._submission_response(finalized)
+        return await self._released_submission_response(finalized)
 
     async def mark_disconnected(
         self,
@@ -864,15 +879,7 @@ class LiveQuizSessionService:
         if not run_id or not self.assignment_repository:
             return
         run = await self.assignment_repository.get_run(run_id)
-        if not run:
-            raise HTTPException(status_code=409, detail="Training run is closed")
-        closes_at_raw = run.get("closes_at")
-        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
-        if (
-            run.get("status") != "open"
-            or run.get("closure_in_progress")
-            or (closes_at and closes_at <= _utc_now())
-        ):
+        if not run or not training_run_is_open(run, _utc_now()):
             raise HTTPException(status_code=409, detail="Training run is closed")
 
     async def _ensure_training_expiry_can_finalize(
@@ -1044,18 +1051,17 @@ class LiveQuizSessionService:
             # Fail-closed: session has a training_run_id but the run could not be resolved
             return False, None
 
-        closes_at_raw = training_run.get("closes_at")
-        closes_at = _as_utc(closes_at_raw) if closes_at_raw else None
-        # Match _ensure_training_run_open:
-        # A run is open if status is 'open', closure is not in progress, and deadline has not passed.
-        is_open = (
-            training_run.get("status") == "open"
-            and not bool(training_run.get("closure_in_progress"))
-            and (closes_at is None or closes_at > server_now)
-        )
-        if training_run.get("release_answers") == "after_close" and is_open:
-            return False, closes_at
+        if training_run_withholds_results(training_run, server_now):
+            closes_at = training_run.get("closes_at")
+            return False, _as_utc(closes_at) if closes_at else None
         return True, None
+
+    async def _load_submitted_training_run(
+        self, session: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        if session.get("training_run_id") and self.assignment_repository:
+            return await self.assignment_repository.get_run(session["training_run_id"])
+        return None
 
     def _build_session_state(
         self,
@@ -1105,6 +1111,9 @@ class LiveQuizSessionService:
             else:
                 graded_answers = raw_graded
 
+        score = session.get("score") if answers_released else None
+        percentage = session.get("percentage") if answers_released else None
+
         return {
             "session_id": str(session["_id"]),
             "quiz_id": session["quiz_id"],
@@ -1126,8 +1135,8 @@ class LiveQuizSessionService:
             "remaining_seconds": self._remaining_seconds(expires_at, server_now),
             "question": question,
             "answers": session.get("answers", []),
-            "score": session.get("score"),
-            "percentage": session.get("percentage"),
+            "score": score,
+            "percentage": percentage,
             "auto_submitted": session.get("auto_submitted", False),
             "graded_answers": graded_answers,
             "answers_released": answers_released,
@@ -1154,16 +1163,33 @@ class LiveQuizSessionService:
             "selected_answer": selected_answer,
         }
 
-    def _submission_response(
+    async def _released_submission_response(
         self,
         session: Dict[str, Any],
         already_submitted: bool = False,
     ) -> Dict[str, Any]:
+        training_run = await self._load_submitted_training_run(session)
+        answers_released, _ = self._determine_answers_released(
+            session, training_run, _utc_now()
+        )
+        return self._submission_response(
+            session,
+            already_submitted=already_submitted,
+            answers_released=answers_released,
+        )
+
+    def _submission_response(
+        self,
+        session: Dict[str, Any],
+        already_submitted: bool = False,
+        answers_released: bool = True,
+    ) -> Dict[str, Any]:
         return {
             "status": "already_submitted" if already_submitted else "submitted",
-            "score": session["score"],
+            "score": session["score"] if answers_released else None,
             "total_questions": session["total_questions"],
-            "percentage": session["percentage"],
+            "percentage": session["percentage"] if answers_released else None,
+            "answers_released": answers_released,
             "submitted_at": _as_utc(session["submitted_at"]),
             "auto_submitted": session.get("auto_submitted", False),
             "duration_used_seconds": session.get("duration_used_seconds"),

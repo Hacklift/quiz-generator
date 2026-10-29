@@ -65,11 +65,12 @@ export interface LiveQuizSessionState {
 
 export interface LiveQuizResult {
   status: "submitted" | "already_submitted";
-  score: number;
+  score: number | null;
   total_questions: number;
-  percentage: number;
+  percentage: number | null;
   submitted_at: string;
   auto_submitted: boolean;
+  answers_released?: boolean;
 }
 
 export interface ParticipantRow {

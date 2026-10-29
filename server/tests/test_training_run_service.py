@@ -657,6 +657,37 @@ def test_assignment_is_not_presented_as_startable_at_the_exact_close_boundary(mo
     assert summary["can_retry"] is False
 
 
+@pytest.mark.parametrize("run_status,score_visible", [("open", False), ("closed", True)])
+def test_assignment_score_is_hidden_until_an_after_close_run_closes(run_status, score_visible):
+    now = datetime.now(timezone.utc)
+    service = TrainingRunService(repository=None, live_quiz_service=None)
+    summary = service._assignment_summary(
+        {
+            "_id": "assignment-1",
+            "training_run_id": "run-1",
+            "quiz_id": "quiz-1",
+            "status": "completed",
+            "attempts_used": 1,
+            "max_attempts": 1,
+            "latest_score": 4,
+            "latest_percentage": 80.0,
+        },
+        {
+            "_id": "run-1",
+            "title": "Training",
+            "kind": "business",
+            "purpose": "onboarding",
+            "status": run_status,
+            "time_limit_minutes": 20,
+            "closes_at": now + timedelta(hours=1),
+            "release_answers": "after_close",
+        },
+    )
+
+    assert summary["latest_score"] == (4 if score_visible else None)
+    assert summary["latest_percentage"] == (80.0 if score_visible else None)
+
+
 @pytest.mark.asyncio
 async def test_new_run_requires_a_full_duration_before_its_close_time(monkeypatch):
     now = datetime(2026, 9, 3, tzinfo=timezone.utc)
