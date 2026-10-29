@@ -15,6 +15,7 @@ def build_document_fingerprint(text: str) -> str:
 
 def _build_cache_query(
     *,
+    organization_id: str,
     document_fingerprint: str,
     embedding_model: str,
     chunk_size_chars: int,
@@ -22,6 +23,7 @@ def _build_cache_query(
     chunk_limit: int,
 ) -> dict[str, Any]:
     return {
+        "organization_id": organization_id,
         "document_fingerprint": document_fingerprint,
         "embedding_model": embedding_model,
         "chunk_size_chars": chunk_size_chars,
@@ -102,10 +104,16 @@ async def get_cached_document_embeddings(
     chunk_size_chars: int,
     chunk_overlap_chars: int,
     chunk_limit: int,
+    organization_id: str | None,
 ) -> Optional[list[list[float]]]:
+    # Guest document generation is ephemeral. Persisting raw uploaded content
+    # in a shared cache would create a cross-user data channel.
+    if not organization_id:
+        return None
     collection = get_document_rag_cache_collection()
     document_fingerprint = build_document_fingerprint(document.text)
     cache_query = _build_cache_query(
+        organization_id=organization_id,
         document_fingerprint=document_fingerprint,
         embedding_model=embedding_model,
         chunk_size_chars=chunk_size_chars,
@@ -142,10 +150,14 @@ async def upsert_document_embeddings(
     chunk_size_chars: int,
     chunk_overlap_chars: int,
     chunk_limit: int,
+    organization_id: str | None,
 ) -> None:
+    if not organization_id:
+        return
     collection = get_document_rag_cache_collection()
     document_fingerprint = build_document_fingerprint(document.text)
     cache_query = _build_cache_query(
+        organization_id=organization_id,
         document_fingerprint=document_fingerprint,
         embedding_model=embedding_model,
         chunk_size_chars=chunk_size_chars,
@@ -162,6 +174,7 @@ async def upsert_document_embeddings(
         cache_query,
         {
             "$set": {
+                "organization_id": organization_id,
                 "document_title": document.title,
                 "source_document_name": document.source_document_name,
                 "source_document_type": document.source_document_type,

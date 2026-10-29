@@ -106,4 +106,18 @@ describe("Corporate persona dashboards", () => {
     expect(screen.getByText("Health & safety")).toBeInTheDocument();
     expect(screen.getByText("Completion register")).toBeInTheDocument();
   });
+
+  test.each([["business", BusinessDashboard], ["hr", HrDashboard]] as const)(
+    "%s dashboard labels unavailable retained evidence instead of showing zero completion",
+    async (userType, View) => {
+      listRuns.mockResolvedValue([{
+        id: "run-1", title: "Completed training", kind: userType === "hr" ? "compliance" : "business",
+        status: "closed", assigned_count: 0, completed_count: 0,
+        closes_at: "2026-10-19T10:00:00Z", summary_availability: "unavailable",
+      }]);
+      render(<View persona={{ category: "corporate", userType }} user={user} />);
+      expect(await screen.findByText("Final evidence unavailable")).toBeInTheDocument();
+      expect(screen.queryByText("0 completed")).toBeNull();
+    },
+  );
 });

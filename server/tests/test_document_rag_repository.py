@@ -41,6 +41,7 @@ async def test_upsert_document_embeddings_avoids_conflicting_access_count_update
         chunk_size_chars=800,
         chunk_overlap_chars=100,
         chunk_limit=12,
+        organization_id="organization-1",
     )
 
     collection.update_one.assert_awaited_once()

@@ -167,6 +167,8 @@ def test_closure_worker_recovers_a_stale_manual_close_without_reopening_the_run(
         "closure_started_at": now - training_tasks.LOCK_STALE_AFTER,
         "closure_mode": "manual",
         "closure_actor_user_id": "owner-1",
+        "organization_id": "organization-1",
+        "created_by_user_id": "owner-1",
     }
     assignments = [{"_id": "assignment-1", "recipient_email": "learner@example.com", "status": "in_progress"}]
     sessions = [{"_id": "session-1", "training_run_id": "run-1", "status": "active"}]
@@ -184,6 +186,8 @@ def test_closure_worker_recovers_a_stale_manual_close_without_reopening_the_run(
     assert sessions[0]["status"] == "abandoned"
     assert database.audit_events.documents[0]["payload"]["completion_register"][0]["status"] == "incomplete"
     assert database.audit_events.documents[0]["actor_user_id"] == "owner-1"
+    assert database.audit_events.documents[0]["organization_id"] == "organization-1"
+    assert database.audit_events.documents[0]["created_by_user_id"] == "owner-1"
     assert client.closed is True
 
 

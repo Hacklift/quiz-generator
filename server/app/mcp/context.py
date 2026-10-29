@@ -2,6 +2,8 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from typing import Any
 
+from server.app.organizations.models import OrganizationContext
+
 
 _authorization_header: ContextVar[str | None] = ContextVar(
     "mcp_authorization_header",
@@ -17,6 +19,8 @@ class McpRequestContext:
     role: str | None = None
     scopes: set[str] = field(default_factory=set)
     tenant_id: str | None = None
+    tenant_kind: str | None = None
+    organization_context: OrganizationContext | None = None
     user: Any = field(default=None, repr=False, compare=False)
 
 

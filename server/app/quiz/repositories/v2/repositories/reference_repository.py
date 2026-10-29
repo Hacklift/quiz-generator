@@ -333,6 +333,7 @@ class ReferenceV2Repository:
         quiz_id: Optional[str] = None,
         saved_quiz_id: Optional[str] = None,
         added_by: Optional[str] = None,
+        organization_id: Optional[str] = None,
         position: Optional[int] = None,
         display_title: Optional[str] = None,
     ) -> FolderItemDocumentV2 | None:
@@ -343,6 +344,7 @@ class ReferenceV2Repository:
                 "quiz_id": quiz_id,
                 "saved_quiz_id": saved_quiz_id,
                 "added_by": added_by,
+                "organization_id": organization_id,
                 "position": position,
                 "display_title": display_title,
             }.items()
@@ -568,6 +570,22 @@ class ReferenceV2Repository:
         document = await self.saved_quizzes_collection.find_one(
             {"$and": [query, self._active_query()]}
         )
+        return SavedQuizDocumentV2(**document) if document else None
+
+    async def get_saved_quiz_for_attempt(
+        self, saved_quiz_id: str, *, organization_id: str, user_id: str,
+    ) -> SavedQuizDocumentV2 | None:
+        identifiers = [{"legacy_saved_quiz_id": saved_quiz_id}]
+        try:
+            identifiers.append({"_id": ObjectId(saved_quiz_id)})
+        except InvalidId:
+            pass
+        document = await self.saved_quizzes_collection.find_one({
+            "$and": [
+                {"organization_id": organization_id, "user_id": user_id},
+                {"$or": identifiers}, self._active_query(),
+            ],
+        })
         return SavedQuizDocumentV2(**document) if document else None
 
     async def get_saved_quiz_by_public_id(

@@ -34,6 +34,7 @@ async def record_product_event(
     quiz_id: str | None = None,
     export_format: str | None = None,
     origin: str | None = None,
+    organization_id: str | None = None,
 ) -> None:
     """Best-effort event persistence using persona from a trusted user object."""
     if event_type not in PRODUCT_EVENT_TYPES:
@@ -51,6 +52,9 @@ async def record_product_event(
         event["export_format"] = export_format
     if origin is not None:
         event["origin"] = origin
+    if organization_id is not None:
+        event["organization_id"] = organization_id
+        event["created_by_user_id"] = str(user_id)
 
     try:
         await asyncio.wait_for(

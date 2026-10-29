@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 from server.app.core.dependencies import get_current_user_optional
 from server.app.core.rate_limiter import RateLimits, limiter
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
 from server.app.quiz.services.quiz_grading_service import (
     QuizGradingService,
     SubmissionMismatchError,
@@ -32,6 +34,7 @@ async def grade_quiz_submission(
     payload: GradeQuizRequest,
     source: str = Query("mock", enum=["mock", "ai"]),
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(get_optional_active_organization_context),
 ):
     """Grade a submission against the stored quiz.
 
@@ -45,6 +48,8 @@ async def grade_quiz_submission(
             [answer.model_dump() for answer in payload.answers],
             source=source,
             user_id=str(current_user.id) if current_user is not None else None,
+            organization_id=organization.organization_id if organization else None,
+            organization=organization,
         )
     except SubmissionMismatchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

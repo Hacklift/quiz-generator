@@ -6,6 +6,7 @@ import pytest
 from fastapi import Response
 
 from server.app.quiz.routes import document_quiz
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +53,9 @@ async def test_document_generation_records_live_event_only_for_new_activation(
 
     class LiveService:
         def __init__(self, _repository):
-            pass
+            self.repository = SimpleNamespace(get_quiz_by_id_for_organization=AsyncMock(return_value={
+                "_id": "quiz-1", "organization_id": "organization-1", "created_by_user_id": "user-1",
+            }))
 
         async def generate_access_code(self, **kwargs):
             return {
@@ -107,6 +110,10 @@ async def test_document_generation_records_live_event_only_for_new_activation(
         access_code_expires_at=expiration,
         document_file=None,
         current_user=current_user,
+        organization=OrganizationContext(
+            organization_id="organization-1", organization_kind="school", membership_role="owner",
+            principal=OrganizationPrincipal(user_id=current_user.id, session_id="session-1"), membership={},
+        ),
     )
 
     assert result.live_quiz_enabled is True

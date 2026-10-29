@@ -44,7 +44,7 @@ const PURPOSES: Record<TrainingKind, Array<[TrainingPurpose, string]>> = {
 const DURATIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
 
 const completionLabel = (run: TrainingRunSummary) =>
-  run.assigned_count
+  run.summary_availability === "unavailable" ? "Final evidence unavailable" : run.assigned_count
     ? `${run.completed_count}/${run.assigned_count} complete`
     : `${run.completed_count} completed`;
 
@@ -66,6 +66,7 @@ function TrainingRunsContent() {
   const [recipients, setRecipients] = useState("");
   const [accessMode, setAccessMode] = useState<TrainingAccessMode>("assigned_only");
   const [timeLimitMinutes, setTimeLimitMinutes] = useState(20);
+  const [passingThreshold, setPassingThreshold] = useState("80");
   const [dueAt, setDueAt] = useState(localDateTime(7));
   const [closesAt, setClosesAt] = useState(localDateTime(14));
   const [maxAttempts, setMaxAttempts] = useState("1");
@@ -134,6 +135,11 @@ function TrainingRunsContent() {
       toast.error("The due date cannot be after the run closes.");
       return;
     }
+    const threshold = Number(passingThreshold);
+    if (!passingThreshold.trim() || !Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+      toast.error("Choose a passing threshold between 0 and 100 percent.");
+      return;
+    }
     try {
       setIsCreating(true);
       const payload: CreateTrainingRunPayload = {
@@ -141,6 +147,7 @@ function TrainingRunsContent() {
         kind,
         purpose,
         time_limit_minutes: timeLimitMinutes,
+        passing_threshold_percentage: threshold,
         closes_at: closesAtDate.toISOString(),
         due_at: dueAtDate?.toISOString(),
         access_mode: accessMode,
@@ -206,6 +213,8 @@ function TrainingRunsContent() {
                 {accessMode === "assigned_only" ? <><label className="block text-[13px] font-extrabold">Recipients<input value={recipients} onChange={(event) => setRecipients(event.target.value)} placeholder="name@example.com, team@example.com" className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium" /></label><p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">Required. Separate addresses with commas, spaces, or new lines. Recipients sign in with this verified email to access the training.</p></> : <p className="text-[12px] leading-[18px] text-ink/65">Anyone with the link can take this training. Their name and optional email are self-reported in the completion register.</p>}
                 <div className="grid gap-[16px] sm:grid-cols-2"><label className="block text-[13px] font-extrabold">Due date<input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium" /></label><label className="block text-[13px] font-extrabold">Run closes<input type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium" /></label></div>
                 <label className="block text-[13px] font-extrabold">Quiz duration<select value={timeLimitMinutes} onChange={(event) => setTimeLimitMinutes(Number(event.target.value))} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium">{DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</select></label>
+                <label className="block text-[13px] font-extrabold">Passing threshold (%)<input type="number" min="0" max="100" step="any" required value={passingThreshold} onChange={(event) => setPassingThreshold(event.target.value)} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium" /></label>
+                <p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">Saved for this run and retained with its completion evidence. It cannot be changed after creation.</p>
                 <p className="-mt-[10px] text-[12px] leading-[18px] text-ink/65">Participants can only start when enough time remains to finish before the run closes.</p>
                 <label className="block text-[13px] font-extrabold">Attempts<select value={maxAttempts} onChange={(event) => setMaxAttempts(event.target.value)} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium"><option value="1">One attempt</option><option value="2">Two attempts</option><option value="unlimited">Unlimited attempts</option></select></label>
                 <label className="block text-[13px] font-extrabold">Release answers<select value={releaseAnswers} onChange={(event) => setReleaseAnswers(event.target.value as "immediate" | "after_close")} className="mt-[6px] block w-full border-2 border-ink bg-paper px-[12px] py-[10px] font-medium"><option value="immediate">Immediately upon submission</option><option value="after_close">Withhold until assignment window closes</option></select></label>

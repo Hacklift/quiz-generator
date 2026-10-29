@@ -26,7 +26,7 @@ class FakeLibraryService:
     def __init__(self, quiz):
         self.quiz = quiz
 
-    async def get_owned_or_library_quiz(self, *, user_id: str, quiz_id: str):
+    async def get_owned_or_library_quiz(self, **_kwargs):
         return self.quiz
 
 
@@ -36,6 +36,8 @@ def make_quiz(*, quiz_type: QuizTypeV2) -> QuizDocumentV2:
         title="Systems Design",
         quiz_type=quiz_type,
         owner_user_id="user-1",
+        organization_id="organization-1",
+        created_by_user_id="user-1",
         source=QuizSourceV2.AI,
         questions=[
             QuizQuestionV2(

@@ -407,6 +407,7 @@ async def test_download_quiz_by_id_reads_canonical_v2_quiz_and_normalizes_answer
         response = await download_quiz_by_id(
             quiz_id="69e78f93594339fd166131ea",
             file_format="txt",
+            organization_id="organization-1",
         )
 
     assert isinstance(response, StreamingResponse)
