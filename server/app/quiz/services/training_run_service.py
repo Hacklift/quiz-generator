@@ -308,6 +308,8 @@ class TrainingRunService:
         # Custom thresholds are a distinct creation intent, never an edit.
         if payload.passing_threshold_percentage != 80:
             canonical["passing_threshold_percentage"] = payload.passing_threshold_percentage
+        if payload.release_answers != "immediate":
+            canonical["release_answers"] = payload.release_answers
         encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

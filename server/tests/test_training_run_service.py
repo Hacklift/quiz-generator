@@ -870,6 +870,24 @@ async def test_manual_close_wins_submission_race_without_mutating_final_register
 
 
 @pytest.mark.asyncio
+async def test_idempotency_key_cannot_be_reused_with_a_different_answer_release():
+    repository = CreateRunRepository()
+    service = TrainingRunService(repository, live_quiz_service=None)
+    closes_at = datetime.now(timezone.utc) + timedelta(days=2)
+    first = CreateTrainingRunRequest(
+        quiz_id=str(repository.quiz["_id"]), closes_at=closes_at,
+        recipient_emails=["learner@example.com"],
+    )
+    changed = first.model_copy(update={"release_answers": "after_close"})
+
+    await service.create_run(first, "owner-1", "stable-request-key")
+    with pytest.raises(HTTPException) as error:
+        await service.create_run(changed, "owner-1", "stable-request-key")
+
+    assert error.value.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_training_run_owner_endpoints_hide_other_owners_runs():
     run = {"_id": "run-1", "owner_user_id": "owner-1"}
     service = TrainingRunService(
