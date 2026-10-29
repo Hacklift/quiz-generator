@@ -27,12 +27,16 @@ export function filenameFromContentDisposition(
   return plain ? plain[1].trim() : null;
 }
 
-/** Replace characters that are unsafe in filenames and cap the length. */
+/**
+ * Replace characters that are unsafe in filenames, drop leading dots (hidden
+ * files, "..") and cap the length.
+ */
 export function sanitizeFilename(name: string): string {
   const cleaned = name
     .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/^\.+/, "")
     .slice(0, 150);
   return cleaned || DEFAULT_FILENAME;
 }

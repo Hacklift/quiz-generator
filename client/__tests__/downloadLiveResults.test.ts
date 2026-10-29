@@ -50,6 +50,11 @@ describe("sanitizeFilename", () => {
   test("falls back to a default name when nothing usable remains", () => {
     expect(sanitizeFilename("   ")).toBe("live-quiz-results");
   });
+
+  test("drops leading dots so names cannot be hidden files or '..'", () => {
+    expect(sanitizeFilename(".hidden-results.csv")).toBe("hidden-results.csv");
+    expect(sanitizeFilename("..")).toBe("live-quiz-results");
+  });
 });
 
 describe("downloadLiveResults", () => {
