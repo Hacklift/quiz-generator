@@ -266,6 +266,7 @@ Rules:
 - Keep the quiz at {difficulty_level} difficulty for {audience_type} learners.
 - Generate exactly {num_questions} {question_type} questions.
 - {options_rule}
+- Keep each explanation to one or two short sentences (under 300 characters) saying why the answer is correct.
 - Return ONLY valid JSON.
 
 JSON format:
