@@ -12,6 +12,8 @@ export const ROUTES = {
   NOTIFICATIONS: "/notifications",
   ADMIN_NOTIFICATIONS: "/admin/notifications",
   CATEGORIES: "/categories",
+  GENERATE: "/generate",
+  MY_LIVE_QUIZZES: "/my-live-quizzes",
 
   TRAINING_RUNS: "/training-runs",
   ASSIGNED_TRAINING: "/assigned-training",
@@ -20,6 +22,10 @@ export const ROUTES = {
   trainingRun: (runId: string) => `/training-runs/${encodeURIComponent(runId)}`,
   trainingAccess: (accessCode: string) =>
     `/training-access/${encodeURIComponent(accessCode)}`,
+  myLiveQuiz: (quizId: string) =>
+    `/my-live-quizzes/${encodeURIComponent(quizId)}`,
+  myLiveQuizAttempt: (quizId: string, sessionId: string) =>
+    `/my-live-quizzes/${encodeURIComponent(quizId)}/attempts/${encodeURIComponent(sessionId)}`,
 
   NOT_FOUND: "/404",
 };

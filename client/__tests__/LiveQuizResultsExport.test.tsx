@@ -7,8 +7,8 @@ import {
   within,
 } from "@testing-library/react";
 
-import { LiveQuizCreatorDashboard } from "../pages/my-live-quizzes/[quizId]";
-import { MyLiveQuizzesPage } from "../pages/my-live-quizzes";
+import { LiveQuizCreatorDashboard } from "@features/live-quiz/pages/LiveQuizCreatorDashboardPage";
+import { MyLiveQuizzesPage } from "@features/live-quiz/pages/MyLiveQuizzesPage";
 import { liveQuizService } from "@features/live-quiz/api/liveQuizService";
 import { usePersona } from "@features/persona/context/personaContext";
 
@@ -143,7 +143,7 @@ describe("live quiz results export", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "More actions for Biology Session" }),
     );
-    fireEvent.mouseDown(screen.getByRole("heading", { name: "Live Quizzes" }));
+    fireEvent.mouseDown(screen.getByRole("heading", { name: "Your live sessions" }));
 
     expect(
       screen.queryByRole("menu", { name: "Export results for Biology Session" }),
