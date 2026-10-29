@@ -5,7 +5,7 @@ from typing import List, Optional
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..constants import QUIZ_SCHEMA_VERSION
+from ..constants import MAX_EXPLANATION_LENGTH, QUIZ_SCHEMA_VERSION
 
 
 class QuizTypeV2(str, Enum):
@@ -55,7 +55,7 @@ class QuizQuestionV2(BaseModel):
     question: str
     correct_answer: str
     options: Optional[List[str]] = None
-    explanation: Optional[str] = Field(default=None, max_length=5000)
+    explanation: Optional[str] = Field(default=None, max_length=MAX_EXPLANATION_LENGTH)
 
     model_config = ConfigDict(extra="forbid")
 

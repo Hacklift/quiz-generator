@@ -17,6 +17,7 @@ from server.app.quiz.repositories.document_rag_repository import (
     upsert_document_embeddings,
 )
 from server.app.quiz.repositories.token_repository import get_user_token
+from server.app.quiz.repositories.v2.constants import MAX_EXPLANATION_LENGTH
 from server.app.quiz.utils.chunk_text import TextChunk
 from server.app.quiz.utils.extract_text import ExtractedDocument
 
@@ -383,7 +384,8 @@ def _normalize_generated_questions(
 
         question = str(raw_question.get("question", "")).strip()
         answer = str(raw_question.get("answer", "")).strip()
-        explanation = str(raw_question.get("explanation", "")).strip() or None
+        # Capped to the stored QuizQuestionV2 limit so one long explanation cannot fail the whole quiz save.
+        explanation = str(raw_question.get("explanation", "")).strip()[:MAX_EXPLANATION_LENGTH] or None
         options = raw_question.get("options")
 
         if not question or not answer:

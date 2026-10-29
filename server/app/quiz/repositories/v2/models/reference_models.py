@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..constants import MAX_EXPLANATION_LENGTH
+
 class FolderCreateV2(BaseModel):
     user_id: str
     organization_id: str
@@ -135,7 +137,7 @@ class QuizAttemptQuestionResultV2(BaseModel):
     accuracy_percentage: float | None = None
     is_correct: bool
     result: str
-    explanation: Optional[str] = None
+    explanation: Optional[str] = Field(default=None, max_length=MAX_EXPLANATION_LENGTH)
 
     model_config = ConfigDict(extra="forbid")
 

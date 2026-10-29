@@ -405,3 +405,16 @@ async def test_live_get_questions_creates_invitations_and_uses_frontend_base_url
     body = email_service.sent[0]["template_vars"]["body"]
     assert "https://trusted.example/quiz-access/" in body
     assert "https://attacker.example" not in body
+
+
+def test_generated_explanation_is_capped_to_the_stored_limit():
+    from server.app.quiz.repositories.v2.constants import MAX_EXPLANATION_LENGTH
+    from server.app.quiz.utils.ai_generate import _normalize_generated_questions
+
+    questions = _normalize_generated_questions(
+        {"questions": [{"question": "Q?", "answer": "A", "explanation": "x" * (MAX_EXPLANATION_LENGTH + 50)}]},
+        question_type="open-ended",
+        num_questions=1,
+    )
+
+    assert len(questions[0]["explanation"]) == MAX_EXPLANATION_LENGTH
