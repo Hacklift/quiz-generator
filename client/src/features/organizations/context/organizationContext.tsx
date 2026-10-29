@@ -29,8 +29,12 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [memberships, setMemberships] = useState<OrganizationMembership[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
   const [scopeVersion, setScopeVersion] = useState(0);
   const requestVersion = useRef(0);
+  const currentUserId = useRef(user?.id);
+  const switchInFlight = useRef(false);
+  currentUserId.current = user?.id;
 
   useEffect(() => {
     const version = ++requestVersion.current;
@@ -39,6 +43,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     }
     if (!isAuthenticated || !user?.id) {
       setMemberships([]);
+      setResolvedUserId(null);
       setIsLoading(false);
       return;
     }
@@ -63,11 +68,18 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       .finally(() => {
         if (requestVersion.current === version) {
           setIsLoading(false);
+          setResolvedUserId(user.id);
         }
       });
+    return () => { requestVersion.current += 1; };
   }, [authLoading, isAuthenticated, user?.id]);
 
   const activeOrganization = memberships.find((membership) => membership.is_active) ?? null;
+  // Account transitions must not authorize UI from the previous identity's
+  // memberships while the next server-backed membership lookup is pending.
+  const scopeLoading = authLoading || isLoading || Boolean(
+    isAuthenticated && user?.id && resolvedUserId !== user.id,
+  );
   // A browser session can change accounts without remounting _app. Include the
   // account identity so scoped page state cannot survive that transition.
   const scopeKey = `${user?.id ?? "anonymous"}:${scopeVersion}`;
@@ -76,19 +88,26 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     if (organizationId === activeOrganization?.organization_id) {
       return;
     }
-    const selected = await organizationsApi.selectActiveOrganization(organizationId);
+    if (!isAuthenticated || !user?.id || switchInFlight.current) {
+      throw new Error("A workspace change cannot be started right now.");
+    }
+    const userId = user.id;
+    const version = ++requestVersion.current;
+    const isCurrent = () => currentUserId.current === userId && requestVersion.current === version;
+    const assertCurrent = () => {
+      if (!isCurrent()) throw new Error("The account changed during the workspace switch.");
+    };
+    switchInFlight.current = true;
+    setIsLoading(true);
     try {
-      const nextMemberships = await organizationsApi.listMemberships();
-      setMemberships(nextMemberships.map((membership) => ({
-        ...membership,
-        is_active: membership.organization_id === selected.organization_id,
-      })));
-    } catch {
-      // The server has already proved and selected this scope. Preserve that
-      // state locally even if the refresh endpoint is momentarily unavailable.
+      const selected = await organizationsApi.selectActiveOrganization(organizationId);
+      assertCurrent();
+      // Switch page scope immediately after the server commits, rather than
+      // leaving old forms mounted during the optional membership refresh.
       setMemberships((current) => {
         const currentSelection = current.map((membership) => ({
           ...membership,
+          ...(membership.organization_id === selected.organization_id ? selected : {}),
           is_active: membership.organization_id === selected.organization_id,
         }));
         return currentSelection.some((membership) => membership.is_active)
@@ -100,9 +119,25 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
               active_scope_recovered: false,
             }];
       });
+      setScopeVersion((current) => current + 1);
+      try {
+        const nextMemberships = await organizationsApi.listMemberships();
+        assertCurrent();
+        setMemberships(nextMemberships.map((membership) => ({
+          ...membership,
+          is_active: membership.organization_id === selected.organization_id,
+        })));
+      } catch (error) {
+        // A failed refresh never rolls back an already proven selection.
+        if (!isCurrent()) throw error;
+      }
+    } finally {
+      switchInFlight.current = false;
+      if (isCurrent()) {
+        setResolvedUserId(userId);
+        setIsLoading(false);
+      }
     }
-    // A new scope must tear down page-level subscriptions and reload scoped data.
-    setScopeVersion((current) => current + 1);
   };
 
   return (
@@ -110,7 +145,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       value={{
         memberships,
         activeOrganization,
-        isLoading,
+        isLoading: scopeLoading,
         scopeVersion,
         scopeKey,
         switchOrganization,

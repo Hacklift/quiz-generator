@@ -13,7 +13,10 @@ from server.app.quiz.utils.session_grading import grade_live_session
 from server.app.quiz.repositories.live_session_repository import (
     LiveQuizSessionRepository,
 )
-from server.app.quiz.services.live_quiz_realtime import LiveQuizRealtimeBroadcaster
+from server.app.quiz.services.live_quiz_realtime import (
+    LiveQuizRealtimeBroadcaster,
+    live_quiz_channel_key,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -61,13 +64,15 @@ class LiveQuizSessionService:
         send_email_invitations: bool = False,
         invitation_repository=None,
         email_service=None,
+        authorized_quiz: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        quiz = authorized_quiz or await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
-        owner_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
-        if not owner_id or str(owner_id) != creator_id:
-            raise HTTPException(status_code=403, detail="Not allowed")
+        if authorized_quiz is None:
+            owner_id = quiz.get("owner_user_id") or quiz.get("created_by") or quiz.get("owner_id")
+            if not owner_id or str(owner_id) != creator_id:
+                raise HTTPException(status_code=403, detail="Not allowed")
 
         existing_access_code = quiz.get("access_code")
         existing_expiration = quiz.get("access_code_expires_at")
@@ -122,9 +127,16 @@ class LiveQuizSessionService:
             observed_at=activation_started_at,
             participant_access_mode=participant_access_mode,
             invited_participant_emails=normalized_invited_emails,
+            organization_id=quiz.get("organization_id"),
         )
         if not updated_quiz:
-            winning_quiz = await self.repository.get_quiz_by_id(quiz_id)
+            winning_quiz = (
+                await self.repository.get_quiz_by_id_for_organization(
+                    quiz_id, quiz["organization_id"]
+                )
+                if quiz.get("organization_id")
+                else await self.repository.get_quiz_by_id(quiz_id)
+            )
             if not winning_quiz:
                 raise HTTPException(status_code=404, detail="Quiz not found")
             winning_owner_id = (
@@ -132,7 +144,9 @@ class LiveQuizSessionService:
                 or winning_quiz.get("created_by")
                 or winning_quiz.get("owner_id")
             )
-            if not winning_owner_id or str(winning_owner_id) != creator_id:
+            if authorized_quiz is None and (
+                not winning_owner_id or str(winning_owner_id) != creator_id
+            ):
                 raise HTTPException(status_code=403, detail="Not allowed")
             winning_code = winning_quiz.get("access_code")
             winning_expiration = winning_quiz.get("access_code_expires_at")
@@ -595,16 +609,23 @@ class LiveQuizSessionService:
         current = await self.repository.get_session(session_id)
         return {"status": current.get("status") if current else session.get("status")}
 
-    async def list_analytics(self, quiz_id: str, requester_id: str) -> List[Dict[str, Any]]:
-        quiz = await self.repository.get_quiz_by_id(quiz_id)
+    async def list_analytics(
+        self,
+        quiz_id: str,
+        requester_id: str,
+        *,
+        authorized_quiz: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        quiz = authorized_quiz or await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
-        owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
-        if not owner_id or str(owner_id) != requester_id:
-            raise HTTPException(status_code=403, detail="Not allowed")
+        if authorized_quiz is None:
+            owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
+            if not owner_id or str(owner_id) != requester_id:
+                raise HTTPException(status_code=403, detail="Not allowed")
 
-        sessions = await self.repository.list_quiz_sessions(quiz_id)
+        sessions = await self._list_quiz_sessions(quiz_id, quiz.get("organization_id"))
         return [self._analytics_row(session) for session in sessions]
 
     async def get_attempt_detail(
@@ -612,19 +633,26 @@ class LiveQuizSessionService:
         quiz_id: str,
         session_id: str,
         requester_id: str,
+        *,
+        authorized_quiz: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        quiz = authorized_quiz or await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
-        owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
-        if not owner_id or str(owner_id) != requester_id:
-            raise HTTPException(status_code=403, detail="Not allowed")
+        if authorized_quiz is None:
+            owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
+            if not owner_id or str(owner_id) != requester_id:
+                raise HTTPException(status_code=403, detail="Not allowed")
 
-        session = await self.repository.get_session_by_id_and_creator(
-            session_id,
-            requester_id,
-            quiz_id,
+        session = (
+            await self.repository.get_session(session_id)
+            if authorized_quiz is not None
+            else await self.repository.get_session_by_id_and_creator(
+                session_id,
+                requester_id,
+                quiz_id,
+            )
         )
         if not session:
             raise HTTPException(status_code=404, detail="Completed attempt not found")
@@ -654,18 +682,23 @@ class LiveQuizSessionService:
         self,
         quiz_id: str,
         requester_id: str,
+        *,
+        authorized_quiz: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        quiz = await self.repository.get_quiz_by_id(quiz_id)
+        quiz = authorized_quiz or await self.repository.get_quiz_by_id(quiz_id)
         if not quiz:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
-        owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
-        if not owner_id or str(owner_id) != requester_id:
-            raise HTTPException(status_code=403, detail="Not allowed")
+        if authorized_quiz is None:
+            owner_id = quiz.get("created_by") or quiz.get("owner_id") or quiz.get("owner_user_id")
+            if not owner_id or str(owner_id) != requester_id:
+                raise HTTPException(status_code=403, detail="Not allowed")
 
         questions = quiz.get("questions") or []
         participants = []
-        for session in await self.repository.list_quiz_sessions(quiz_id):
+        for session in await self._list_quiz_sessions(
+            quiz_id, quiz.get("organization_id")
+        ):
             if session.get("status") != "submitted" or not session.get("submitted_at"):
                 continue
             if isinstance(session.get("graded_answers"), list):
@@ -699,12 +732,24 @@ class LiveQuizSessionService:
     async def list_creator_live_quizzes(
         self,
         creator_user_id: str,
+        organization_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        quizzes = await self.repository.list_live_quizzes_by_creator(creator_user_id)
+        quizzes = await self.repository.list_live_quizzes_by_creator(
+            creator_user_id,
+            organization_id=organization_id,
+        )
+        return await self._build_live_quiz_summary_rows(quizzes)
+
+    async def _build_live_quiz_summary_rows(
+        self,
+        quizzes: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
         rows = []
         for quiz in quizzes:
             quiz_id = str(quiz["_id"])
-            sessions = await self.repository.list_quiz_sessions(quiz_id)
+            sessions = await self._list_quiz_sessions(
+                quiz_id, quiz.get("organization_id")
+            )
             completed = [
                 session
                 for session in sessions
@@ -747,6 +792,24 @@ class LiveQuizSessionService:
                 }
             )
         return rows
+
+    async def list_organization_live_quizzes(
+        self,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Return live-quiz reporting rows for an already authorized tenant."""
+        quizzes = await self.repository.list_live_quizzes_by_organization(organization_id)
+        return await self._build_live_quiz_summary_rows(quizzes)
+
+    async def _list_quiz_sessions(
+        self,
+        quiz_id: str,
+        organization_id: str | None,
+    ) -> List[Dict[str, Any]]:
+        """Use the tenant predicate whenever the persisted quiz carries scope."""
+        if organization_id is None:
+            return await self.repository.list_quiz_sessions(quiz_id)
+        return await self.repository.list_quiz_sessions(quiz_id, organization_id)
 
     async def _generate_unique_code(self) -> str:
         alphabet = string.ascii_uppercase + string.digits
@@ -1139,11 +1202,18 @@ class LiveQuizSessionService:
             session = await self.repository.get_session(session_id)
             if not session:
                 return
+            organization_id = session.get("organization_id")
+            if not organization_id:
+                logger.warning(
+                    "Skipping realtime event for unscoped live session %s", session_id
+                )
+                return
             await self.broadcaster.publish(
-                quiz_id,
+                live_quiz_channel_key(organization_id, quiz_id),
                 {
                     "type": event_type,
                     "quiz_id": quiz_id,
+                    "organization_id": organization_id,
                     "participant": self._analytics_row(session),
                 },
             )

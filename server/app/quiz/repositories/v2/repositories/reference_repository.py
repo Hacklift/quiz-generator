@@ -572,6 +572,22 @@ class ReferenceV2Repository:
         )
         return SavedQuizDocumentV2(**document) if document else None
 
+    async def get_saved_quiz_for_attempt(
+        self, saved_quiz_id: str, *, organization_id: str, user_id: str,
+    ) -> SavedQuizDocumentV2 | None:
+        identifiers = [{"legacy_saved_quiz_id": saved_quiz_id}]
+        try:
+            identifiers.append({"_id": ObjectId(saved_quiz_id)})
+        except InvalidId:
+            pass
+        document = await self.saved_quizzes_collection.find_one({
+            "$and": [
+                {"organization_id": organization_id, "user_id": user_id},
+                {"$or": identifiers}, self._active_query(),
+            ],
+        })
+        return SavedQuizDocumentV2(**document) if document else None
+
     async def get_saved_quiz_by_public_id(
         self,
         saved_quiz_id: str,

@@ -18,7 +18,7 @@ async def folder_list() -> list[dict]:
     return await QuizUserLibraryService().list_folders(
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -28,7 +28,7 @@ async def folder_get(folder_id: str) -> dict:
         folder_id=folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if folder is None:
         return {
@@ -47,7 +47,7 @@ async def folder_get_by_name(name: str) -> dict:
         user_id=context.user_id,
         name=name,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if folder is None:
         return {
@@ -66,7 +66,7 @@ async def folder_find_quiz_by_title(title: str) -> dict:
         user_id=context.user_id,
         title=title,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -94,7 +94,7 @@ async def folder_add_saved_quiz(folder_id: str, saved_quiz_id: str) -> dict:
         saved_quiz_id=saved_quiz_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     return {
         "id": str(item.id),
@@ -115,7 +115,7 @@ async def folder_rename(folder_id: str, new_name: str) -> dict:
         user_id=context.user_id,
         new_name=new_name,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if folder is None:
         raise ValueError("Folder not found")
@@ -134,13 +134,13 @@ async def folder_delete(folder_id: str) -> dict:
         folder_id=folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     deleted = await service.delete_folder(
         folder_id=folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not deleted:
         raise ValueError("Folder not found")
@@ -159,7 +159,7 @@ async def folder_remove_quiz(folder_id: str, folder_item_id: str) -> dict:
         folder_id=folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     quiz_item = _find_folder_quiz_item(folder, folder_item_id)
     removed = await service.remove_folder_item(
@@ -167,7 +167,7 @@ async def folder_remove_quiz(folder_id: str, folder_item_id: str) -> dict:
         folder_item_id=folder_item_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not removed:
         raise ValueError("Folder quiz item not found")
@@ -188,13 +188,13 @@ async def folder_move_quiz(folder_item_id: str, source_folder_id: str, target_fo
         folder_id=source_folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     target_folder = await service.get_folder(
         folder_id=target_folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     quiz_item = _find_folder_quiz_item(source_folder, folder_item_id)
     moved = await service.move_folder_item(
@@ -203,7 +203,7 @@ async def folder_move_quiz(folder_item_id: str, source_folder_id: str, target_fo
         target_folder_id=target_folder_id,
         user_id=context.user_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not moved:
         raise ValueError("Folder quiz item not found")

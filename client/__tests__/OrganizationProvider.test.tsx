@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   OrganizationProvider,
   OrganizationScopeBoundary,
@@ -26,13 +26,17 @@ jest.mock("@features/organizations/api/organizationsApi", () => ({
   },
 }));
 
+let currentContext: ReturnType<typeof useOrganization>;
+
 function OrganizationProbe() {
-  const { activeOrganization, switchOrganization } = useOrganization();
+  currentContext = useOrganization();
+  const { activeOrganization, switchOrganization, isLoading } = currentContext;
   return (
     <>
       <p data-testid="active-organization">
         {activeOrganization?.organization_id ?? "none"}
       </p>
+      <p data-testid="scope-loading">{String(isLoading)}</p>
       <button type="button" onClick={() => void switchOrganization("org-2")}>
         Switch
       </button>
@@ -110,5 +114,55 @@ describe("OrganizationProvider", () => {
     );
 
     await waitFor(() => expect(screen.getByTestId("scoped-probe")).toHaveTextContent("2"));
+  });
+
+  test("changes page scope before the optional membership refresh completes", async () => {
+    let finishRefresh!: (memberships: any[]) => void;
+    mockListMemberships.mockReset();
+    mockListMemberships.mockResolvedValueOnce([
+      { organization_id: "org-1", organization_name: "Personal", role: "owner", is_active: true },
+      { organization_id: "org-2", organization_name: "Acme", role: "admin", is_active: false },
+    ]).mockReturnValueOnce(new Promise((resolve) => { finishRefresh = resolve; }));
+    render(<OrganizationProvider><OrganizationProbe />
+      <OrganizationScopeBoundary><ScopedProbe /></OrganizationScopeBoundary>
+    </OrganizationProvider>);
+    await waitFor(() => expect(screen.getByTestId("active-organization")).toHaveTextContent("org-1"));
+    fireEvent.click(screen.getByRole("button", { name: "Switch" }));
+    await waitFor(() => expect(screen.getByTestId("active-organization")).toHaveTextContent("org-2"));
+    expect(screen.getByTestId("scoped-probe")).toHaveTextContent("2");
+    expect(screen.getByTestId("scope-loading")).toHaveTextContent("true");
+    await act(async () => { finishRefresh([
+      { organization_id: "org-2", role: "admin", is_active: true },
+    ]); });
+    await waitFor(() => expect(screen.getByTestId("scope-loading")).toHaveTextContent("false"));
+  });
+
+  test.each(["selection", "refresh"])("ignores an old account's delayed %s response", async (stage) => {
+    let finish!: (value: any) => void;
+    const delayed = new Promise<any>((resolve) => { finish = resolve; });
+    const selected = { organization_id: "org-2", organization_name: "Acme", organization_kind: "corporate", role: "admin" };
+    mockListMemberships.mockReset();
+    mockListMemberships.mockResolvedValueOnce([
+      { organization_id: "org-1", role: "owner", is_active: true },
+    ]);
+    if (stage === "selection") mockSelectActiveOrganization.mockReturnValueOnce(delayed);
+    else {
+      mockSelectActiveOrganization.mockResolvedValueOnce(selected);
+      mockListMemberships.mockReturnValueOnce(delayed);
+    }
+    mockListMemberships.mockResolvedValueOnce([
+      { organization_id: "user-2-personal", role: "owner", is_active: true },
+    ]);
+    const view = render(<OrganizationProvider><OrganizationProbe /></OrganizationProvider>);
+    await waitFor(() => expect(screen.getByTestId("active-organization")).toHaveTextContent("org-1"));
+    let pending!: Promise<unknown>;
+    act(() => { pending = currentContext.switchOrganization("org-2").catch((error) => error); });
+    if (stage === "refresh") await waitFor(() => expect(mockListMemberships).toHaveBeenCalledTimes(2));
+    authState = { ...authState, user: { id: "user-2" } };
+    view.rerender(<OrganizationProvider><OrganizationProbe /></OrganizationProvider>);
+    await waitFor(() => expect(screen.getByTestId("active-organization")).toHaveTextContent("user-2-personal"));
+    await act(async () => { finish(stage === "selection" ? selected : [selected]); await pending; });
+    expect(screen.getByTestId("active-organization")).toHaveTextContent("user-2-personal");
+    expect(screen.getByTestId("scope-loading")).toHaveTextContent("false");
   });
 });

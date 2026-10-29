@@ -31,7 +31,7 @@ async def create_saved_quiz(
             questions=quiz.questions,
             quiz_id=quiz.quiz_id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
         return {
             "message": "Quiz saved successfully",
@@ -53,7 +53,7 @@ async def list_saved_quizzes(
         return await quiz_user_library_service.list_saved_quizzes(
             user_id=str(current_user.id),
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
     except HTTPException:
         raise
@@ -72,7 +72,7 @@ async def remove_saved_quiz(
             user_id=str(current_user.id),
             saved_quiz_id=quiz_id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
         if not deleted:
             raise HTTPException(status_code=404, detail="Quiz not found")
@@ -94,7 +94,7 @@ async def get_saved_quiz(
             user_id=str(current_user.id),
             saved_quiz_id=quiz_id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
         if not quiz:
             raise HTTPException(
@@ -128,7 +128,7 @@ async def rename_saved_quiz_item(
             saved_quiz_id=quiz_id,
             title=payload.title.strip(),
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Quiz not found")

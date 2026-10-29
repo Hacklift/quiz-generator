@@ -53,7 +53,7 @@ async def test_non_manager_personas_are_denied_training_management(
     )
 
 
-def test_training_management_routes_require_manager_capability():
+def test_training_management_routes_require_verified_user_and_organization_context():
     for endpoint in (
         training_runs.list_owned_training_quizzes,
         training_runs.create_training_run,
@@ -63,7 +63,9 @@ def test_training_management_routes_require_manager_capability():
     ):
         dependency = inspect.signature(endpoint).parameters["current_user"].default
         assert isinstance(dependency, Depends)
-        assert dependency.dependency is get_training_manager_user
+        assert dependency.dependency is get_verified_user
+        organization_dependency = inspect.signature(endpoint).parameters["organization"].default
+        assert isinstance(organization_dependency, Depends)
 
 
 def test_training_manager_capability_composes_verified_user_requirement():

@@ -112,26 +112,27 @@ tamper-proof evidence or re-import spreadsheet-resaved files as trusted input.
 
 ## Organization tenancy integration
 
-The resource-scope rollout filters training-run lists, details and CSV exports
-by the server-resolved active organization, in addition to existing manager and
-owner checks. Owning runs in two organizations does not allow exporting one
-while acting in the other. The policy-cutover rollout subsequently replaces
-persona-based management assumptions with membership permissions.
+Training-run lists, details and CSV exports use the server-resolved active
+organization and central membership policy. Owners/admins have tenant-wide
+access; facilitators operate their own runs. Auditors may view and export
+reports, but cannot close runs. Personas customize the UI and never grant
+these permissions. Access to one organization never authorizes another.
 
 Protocol B adds tenant/authorship metadata to the existing training collections
 without rewriting retained closure payloads. Thresholds, outcomes, completion
 registers and materialized final summaries remain unchanged. New closure audits
 carry organization context from their run in both HTTP and worker paths.
 
-Legacy unscoped runs are readable only by their owner in a personal context
-during the additive rollout. Complete the controlled Protocol B migration before
-strict policy cutover. Local Docker gates development startup on its migration;
+Legacy personal-context fallback reads end at policy cutover. Complete the
+controlled Protocol B migration and its `--verify-complete` check using the
+cutover revision before deploying enforcement, including newly merged
+`product_events`. Local Docker gates development startup on its migration;
 Protocol B is not automatically run on Render. This reporting integration adds
 no Redis polling or periodic jobs.
 
 ## Manual verification
 
-1. Sign in as verified HR/Business personnel. Create an assigned run with a
+1. Sign in with a verified owner/admin or facilitator membership. Create an assigned run with a
    non-default threshold and at least two recipients. Confirm both are listed
    as not started and the chosen threshold survives refresh.
 2. Complete one recipient's quiz. Verify timestamp, score and the inclusive
@@ -140,8 +141,10 @@ no Redis polling or periodic jobs.
 4. Close the run (or allow scheduled closure), refresh and export again: the
    page and CSV must say final and agree on outcomes. Repeated exports preserve
    evidence; only the export-generation timestamp changes.
-5. Verify another manager cannot view/export the run, and an Employee account
-   cannot use the manager export endpoint. Public live quizzes and their
+5. Verify another organization's member cannot view/export the run, and a learner
+   membership cannot use the report endpoint even with an HR/Business persona.
+   An auditor can view/export but cannot close it; tenant admins can report on
+   other authors' runs. Public live quizzes and their
    existing CSV/PDF/text exports must still work unchanged.
    Also switch between two organizations as the same manager: runs and exports
    must follow the selected workspace, including direct requests by guessed ID.

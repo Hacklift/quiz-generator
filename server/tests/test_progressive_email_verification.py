@@ -21,6 +21,7 @@ from server.app.users import routes as user_routes
 from server.app.users.models import UpdatePersonaRequest, UserOut
 from server.app.users.schemas import NewUserSchema, UserRegisterSchema
 from server.app.core.dependencies import get_current_user, get_verified_user
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.quiz.models.quiz_models import QuizRequest
 from server.app.quiz.routes.generation import get_quiz
 from server.app.quiz.routes.downloads import download_quiz_handler, limiter
@@ -45,6 +46,20 @@ def _user(is_verified: bool) -> UserOut:
         is_verified=is_verified,
         is_active=True,
         role="user",
+    )
+
+
+def _organization_context(user: UserOut) -> OrganizationContext:
+    return OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="personal",
+        membership_role="owner",
+        principal=OrganizationPrincipal(
+            user_id=user.id,
+            session_id="session-1",
+            platform_role=user.role,
+        ),
+        membership={"organization_id": "organization-1", "user_id": user.id},
     )
 
 
@@ -440,12 +455,17 @@ async def test_unverified_user_can_generate_quiz():
         "server.app.quiz.routes.generation.get_product_events_collection",
         return_value=MagicMock(),
     ):
-        result = await get_quiz(MagicMock(), Response(), request, current_user=current_user)
+        result = await get_quiz(
+            MagicMock(), Response(), request, current_user=current_user,
+            organization=_organization_context(current_user),
+        )
 
     assert result == {"source": "mock", "questions": []}
     get_questions_mock.assert_awaited_once_with(
         request,
         user_id=current_user.id,
+        organization_id="organization-1",
+        organization_context=_organization_context(current_user),
         invitation_repository=ANY,
         email_service=ANY,
     )
@@ -534,11 +554,13 @@ async def test_quiz_generation_response_is_not_delayed_by_slow_telemetry(monkeyp
     loop = asyncio.get_running_loop()
     started_at = loop.time()
 
+    current_user = _user(is_verified=True)
     result = await get_quiz(
         MagicMock(),
         Response(),
         request,
-        current_user=_user(is_verified=True),
+        current_user=current_user,
+        organization=_organization_context(current_user),
     )
 
     assert result == {"source": "mock", "questions": []}
@@ -727,10 +749,22 @@ async def test_verified_user_can_download_authenticated_quiz():
     quiz_id = str(ObjectId())
     current_user = _user(is_verified=True)
 
+    quiz = MagicMock()
+    quiz.model_dump.return_value = {
+        "_id": ObjectId(quiz_id),
+        "organization_id": "organization-1",
+        "created_by_user_id": current_user.id,
+    }
     with patch(
         "server.app.quiz.routes.downloads.download_quiz_by_id",
         new=AsyncMock(return_value="streaming-response"),
-    ) as download_mock:
+    ) as download_mock, patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=quiz),
+    ), patch(
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
+        new=AsyncMock(return_value=_organization_context(current_user)),
+    ):
         result = await download_quiz_handler(
             request=MagicMock(),
             response=Response(),
@@ -747,5 +781,101 @@ async def test_verified_user_can_download_authenticated_quiz():
     download_mock.assert_awaited_once_with(
         quiz_id=quiz_id,
         file_format="txt",
-        user_id=current_user.id,
+        organization_id="organization-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_mock_download_does_not_resolve_a_stale_organization_context():
+    current_user = _user(is_verified=True)
+    resolver = AsyncMock(
+        side_effect=HTTPException(status_code=403, detail="Organization access denied")
+    )
+
+    with patch(
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
+        new=resolver,
+    ):
+        result = await download_quiz_handler(
+            request=MagicMock(),
+            response=Response(),
+            query=DownloadQuizQuery(
+                format="txt",
+                question_type="multichoice",
+                num_question=1,
+            ),
+            current_user=current_user,
+        )
+
+    assert result.media_type == "text/plain"
+    resolver.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_quiz_download_hides_cross_organization_quiz():
+    current_user = _user(is_verified=True)
+    organization = _organization_context(current_user)
+    resolver = AsyncMock(return_value=organization)
+
+    with patch(
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
+        new=resolver,
+    ), patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=None),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await download_quiz_handler(
+                request=MagicMock(),
+                response=Response(),
+                query=DownloadQuizQuery(
+                    quiz_id=str(ObjectId()),
+                    format="txt",
+                    question_type="multichoice",
+                    num_question=1,
+                ),
+                current_user=current_user,
+            )
+
+    assert exc_info.value.status_code == 404
+    resolver.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_quiz_download_preserves_in_organization_role_denial():
+    current_user = _user(is_verified=True)
+    principal = OrganizationPrincipal(user_id=current_user.id, session_id="session-1")
+    organization = OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="corporate",
+        membership_role="author",
+        principal=principal,
+        membership={"role": "author", "status": "active"},
+    )
+    quiz = MagicMock()
+    quiz.model_dump.return_value = {
+        "organization_id": organization.organization_id,
+        "created_by_user_id": "another-user",
+    }
+
+    with patch(
+        "server.app.quiz.routes.downloads.resolve_current_user_organization_context",
+        new=AsyncMock(return_value=organization),
+    ), patch(
+        "server.app.quiz.routes.downloads.QuizV2Repository.find_by_id_for_organization",
+        new=AsyncMock(return_value=quiz),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await download_quiz_handler(
+                request=MagicMock(),
+                response=Response(),
+                query=DownloadQuizQuery(
+                    quiz_id=str(ObjectId()),
+                    format="txt",
+                    question_type="multichoice",
+                    num_question=1,
+                ),
+                current_user=current_user,
+            )
+
+    assert exc_info.value.status_code == 403

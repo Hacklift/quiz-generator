@@ -3,6 +3,8 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
+from fastapi import HTTPException, status
+
 from server.app.organizations.models import (
     MembershipRole,
     OrganizationContext,
@@ -19,6 +21,9 @@ class OrganizationAction(StrEnum):
     CONTENT_READ = "content.read"
     CONTENT_UPDATE = "content.update"
     CONTENT_DELETE = "content.delete"
+    CONTENT_SHARE = "content.share"
+    CONTENT_EXPORT = "content.export"
+    DELIVERY_READ = "delivery.read"
     DELIVERY_RUN = "delivery.run"
     REPORT_READ = "report.read"
     AUDIT_READ = "audit.read"
@@ -35,7 +40,10 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
             OrganizationAction.CONTENT_READ,
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
+            OrganizationAction.CONTENT_SHARE,
+            OrganizationAction.CONTENT_EXPORT,
             OrganizationAction.DELIVERY_RUN,
+            OrganizationAction.DELIVERY_READ,
             OrganizationAction.REPORT_READ,
             OrganizationAction.AUDIT_READ,
         }
@@ -46,17 +54,26 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
             OrganizationAction.CONTENT_READ,
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
+            OrganizationAction.CONTENT_SHARE,
+            OrganizationAction.CONTENT_EXPORT,
         }
     ),
     "facilitator": frozenset(
         {
+            OrganizationAction.CONTENT_CREATE,
             OrganizationAction.CONTENT_READ,
+            OrganizationAction.CONTENT_UPDATE,
+            OrganizationAction.CONTENT_DELETE,
+            OrganizationAction.CONTENT_SHARE,
+            OrganizationAction.CONTENT_EXPORT,
+            OrganizationAction.DELIVERY_READ,
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
         }
     ),
     "learner": frozenset(
         {
+            OrganizationAction.CONTENT_CREATE,
             OrganizationAction.CONTENT_READ,
             OrganizationAction.ATTEMPT_COMPLETE,
         }
@@ -81,6 +98,7 @@ _RESOURCELESS_ACTIONS = frozenset(
         OrganizationAction.MEMBERSHIP_ADMIN_MANAGE,
         OrganizationAction.BILLING_MANAGE,
         OrganizationAction.CONTENT_CREATE,
+        OrganizationAction.DELIVERY_READ,
     }
 )
 
@@ -92,6 +110,29 @@ class OrganizationPolicy:
     visibility, and guardian relationships are resource facts evaluated here,
     rather than route-local role checks.
     """
+
+    @staticmethod
+    def _resource_relates_to_principal(
+        resource: dict[str, Any] | None,
+        principal: OrganizationPrincipal,
+        *fields: str,
+    ) -> bool:
+        """Match persisted resource relationships without widening tenant access.
+
+        `created_by_user_id` is the canonical authorship field. `owner_user_id`
+        remains a compatibility fallback for legacy canonical quizzes that were
+        scoped before authorship was populated. Assignment-backed resources use
+        their existing recipient/user fields; a missing relationship never
+        grants access.
+        """
+        return bool(
+            resource
+            and any(
+                resource.get(field) is not None
+                and str(resource[field]) == principal.user_id
+                for field in fields
+            )
+        )
 
     def can(
         self,
@@ -111,31 +152,77 @@ class OrganizationPolicy:
         if action not in _ROLE_ACTIONS[role]:
             return False
 
-        if role == "author" and action in {
+        # Admin permissions are tenant-wide by design; creator restrictions
+        # below apply to authors/facilitators, never across tenant boundaries.
+        if role in {"author", "facilitator"} and action in {
             OrganizationAction.CONTENT_UPDATE,
             OrganizationAction.CONTENT_DELETE,
+            OrganizationAction.CONTENT_SHARE,
+            OrganizationAction.CONTENT_EXPORT,
         }:
-            return bool(
-                resource
-                and str(resource.get("created_by_user_id")) == principal.user_id
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "created_by_user_id",
+                "owner_user_id",
             )
 
         if role == "facilitator" and action in {
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
         }:
-            return bool(
-                resource
-                and str(resource.get("facilitator_user_id")) == principal.user_id
+            # Explicit facilitator delegation is future-facing. Existing
+            # delivery records only persist a creator/owner relationship, so
+            # a facilitator may operate delivery they created, never every
+            # delivery in the organization merely by role membership.
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "facilitator_user_id",
+                "created_by_user_id",
+                "owner_user_id",
             )
 
-        if role == "learner" and action in {
-            OrganizationAction.CONTENT_READ,
-            OrganizationAction.ATTEMPT_COMPLETE,
-        }:
-            return bool(
-                resource
-                and str(resource.get("assigned_user_id")) == principal.user_id
+        if role == "learner" and action == OrganizationAction.CONTENT_READ:
+            # Learners may read self-authored practice content as well as
+            # resources explicitly assigned to them. Public/unlisted content
+            # is handled by its explicit capability path before this policy.
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "assigned_user_id",
+                "recipient_user_id",
+                "created_by_user_id",
+                "owner_user_id",
+            )
+
+        if role == "learner" and action == OrganizationAction.ATTEMPT_COMPLETE:
+            return self._resource_relates_to_principal(
+                resource,
+                principal,
+                "assigned_user_id",
+                "recipient_user_id",
+                "user_id",
             )
 
         return True
+
+
+def require_organization_permission(
+    *,
+    context: OrganizationContext,
+    action: OrganizationAction,
+    resource: dict[str, Any] | None,
+) -> None:
+    """Enforce a policy decision without revealing cross-tenant resources.
+
+    A resource from another organization is indistinguishable from a missing
+    resource. A resource in the active organization that the member cannot
+    operate on produces a normal authorization error.
+    """
+    # Keep the policy's fail-closed tenant check as defense in depth. This
+    # HTTP boundary additionally hides foreign resources as 404, not 403.
+    if resource is not None and str(resource.get("organization_id")) != context.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    if not OrganizationPolicy().can(context.principal, action, resource, context):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization permission denied")

@@ -23,7 +23,7 @@ async def get_quiz_attempts(
     return await quiz_attempt_service.list_attempts(
         user_id=str(current_user.id),
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        organization=organization,
         quiz_id=quiz_id,
     )
 
@@ -37,7 +37,7 @@ async def get_quiz_attempt(
     attempt = await quiz_attempt_service.get_attempt(
         user_id=str(current_user.id),
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        organization=organization,
         attempt_id=attempt_id,
     )
     if attempt is None:
@@ -54,7 +54,6 @@ async def delete_quiz_attempt(
     deleted = await quiz_attempt_service.delete_attempt(
         user_id=str(current_user.id),
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
         attempt_id=attempt_id,
     )
     if not deleted:

@@ -63,9 +63,13 @@ through `user_id` into each user's personal organization. That collection-level
 coverage is tested against complete attempt documents, preserving question
 results, scores, options, and soft-deleted records.
 
-During the additive resource-scope rollout, legacy unscoped attempts are readable
-only by their user in a personal organization. Shared contexts never use that
-fallback. The policy-cutover rollout removes the fallback and requires tenant
-fields on persisted models and Mongo validators. Complete the controlled Protocol
-B backfill and its verification before enabling that strict enforcement. Local
-Docker's existing migration gate handles the development database separately.
+The resource-scope PR temporarily reads legacy unscoped attempts only for their
+user in a personal organization. This policy-cutover branch removes that fallback
+and requires organization scope on persisted attempt models and Mongo validators.
+Private grading and history source enrichment follow the central content-read
+policy. Public/unlisted practice requires an active source organization. Results
+remain readable from their own snapshots when the source is no longer accessible.
+
+Complete the controlled Protocol B backfill and its verification before enabling
+strict enforcement. Local Docker's existing migration gate handles the development
+database separately.

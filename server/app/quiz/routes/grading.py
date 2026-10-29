@@ -49,7 +49,7 @@ async def grade_quiz_submission(
             source=source,
             user_id=str(current_user.id) if current_user is not None else None,
             organization_id=organization.organization_id if organization else None,
-            allow_legacy_personal=bool(organization and organization.organization_kind == "personal"),
+            organization=organization,
         )
     except SubmissionMismatchError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

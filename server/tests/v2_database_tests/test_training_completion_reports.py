@@ -18,7 +18,9 @@ from server.app.db.core.connection import (
     get_users_collection, get_user_sessions_collection,
     get_organizations_collection, get_organization_memberships_collection,
 )
-from server.app.organizations.models import OrganizationDocument, OrganizationMembershipDocument
+from server.app.organizations.models import (
+    OrganizationDocument, OrganizationMembershipDocument, OrganizationContext, OrganizationPrincipal,
+)
 from server.app.quiz.utils.training_completion import build_closure_payload, MAX_COMPLETION_REPORT_ROWS, completion_row, completion_summary
 from server.tests.test_training_completion_reports import run_document
 
@@ -522,8 +524,9 @@ async def test_mixed_bad_evidence_only_marks_its_own_run_unavailable_on_the_list
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id="owner-1", is_verified=True, persona_category="corporate", persona_user_type="hr",
     )
-    app.dependency_overrides[get_active_organization_context] = lambda: SimpleNamespace(
-        organization_id=organization_id, organization_kind="corporate"
+    app.dependency_overrides[get_active_organization_context] = lambda: OrganizationContext(
+        organization_id=organization_id, organization_kind="corporate", membership_role="owner",
+        principal=OrganizationPrincipal(user_id="owner-1", session_id="session-1"), membership={},
     )
     service = TrainingRunService(repository_for(test_db), SimpleNamespace())
     app.dependency_overrides[training_runs.get_training_run_service] = lambda: service

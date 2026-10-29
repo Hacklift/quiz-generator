@@ -59,7 +59,7 @@ async def get_folders_for_user(
     return await quiz_user_library_service.list_folders(
         user_id=user.id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -74,7 +74,7 @@ async def get_folder_by_id_route(
             folder_id=folder_id,
             user_id=user.id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
     except PermissionError:
         raise HTTPException(status_code=403, detail="Unauthorized access to folder")
@@ -97,7 +97,7 @@ async def bulk_delete_folders_route(
             folder_id=folder_id,
             user_id=user.id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         ):
             deleted_count += 1
     return {"deleted": deleted_count}
@@ -115,7 +115,7 @@ async def rename_existing_folder(
         user_id=user.id,
         new_name=payload.new_name,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -132,7 +132,7 @@ async def delete_existing_folder(
         folder_id=folder_id,
         user_id=user.id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not deleted:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -152,7 +152,7 @@ async def add_quiz_to_folder_route(
             saved_quiz_id=quiz_data.quiz_id,
             user_id=user.id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         )
     except PermissionError:
         raise HTTPException(status_code=403, detail="Unauthorized access to folder")
@@ -182,7 +182,7 @@ async def remove_quiz(
         folder_item_id=quiz_id,
         user_id=user.id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not removed:
         raise HTTPException(status_code=404, detail="Quiz not found in folder")
@@ -201,7 +201,7 @@ async def move_quiz_between_folders_route(
         target_folder_id=request.to_folder_id,
         user_id=user.id,
         organization_id=organization.organization_id,
-        allow_legacy_personal=organization.organization_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not moved:
         raise HTTPException(status_code=404, detail="Quiz not found in source folder")
@@ -222,7 +222,7 @@ async def bulk_remove_quizzes(
             folder_item_id=quiz_id,
             user_id=user.id,
             organization_id=organization.organization_id,
-            allow_legacy_personal=organization.organization_kind == "personal",
+            allow_legacy_personal=False,
         ):
             removed += 1
     return {"message": "Quizzes removed successfully", "removed": removed}

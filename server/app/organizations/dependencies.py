@@ -56,6 +56,38 @@ async def get_organization_principal(
     )
 
 
+async def resolve_current_user_organization_context(
+    *,
+    current_user: UserOut,
+    sessions_collection,
+    organizations_collection,
+    memberships_collection,
+) -> OrganizationContext:
+    """Resolve server-proven tenant scope for an authenticated user.
+
+    Route handlers that only conditionally need tenant authority use this
+    helper after entering their tenant-owned branch. Keeping principal
+    construction here prevents security-sensitive routes from drifting in
+    their session or platform-role handling.
+    """
+    if not current_user.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session context is missing",
+        )
+    return await resolve_active_organization_context(
+        current_user=current_user,
+        principal=OrganizationPrincipal(
+            user_id=current_user.id,
+            session_id=current_user.session_id,
+            platform_role=current_user.role or "user",
+        ),
+        sessions_collection=sessions_collection,
+        organizations_collection=organizations_collection,
+        memberships_collection=memberships_collection,
+    )
+
+
 async def get_active_organization_context(
     principal: OrganizationPrincipal = Depends(get_organization_principal),
     current_user: UserOut = Depends(get_current_user),
@@ -198,14 +230,8 @@ async def get_optional_active_organization_context(
         # incomplete legacy identity is supplied. Normal token resolution
         # already requires `sid`, so this is a defensive compatibility guard.
         return None
-    principal = OrganizationPrincipal(
-        user_id=current_user.id,
-        session_id=session_id,
-        platform_role=current_user.role or "user",
-    )
-    return await resolve_active_organization_context(
+    return await resolve_current_user_organization_context(
         current_user=current_user,
-        principal=principal,
         sessions_collection=sessions_collection,
         organizations_collection=organizations_collection,
         memberships_collection=memberships_collection,

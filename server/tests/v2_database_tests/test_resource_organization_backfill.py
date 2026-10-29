@@ -12,8 +12,11 @@ from server.scripts.migrations.organizations.backfill_resource_organizations imp
     auto_backfill_resource_organizations,
     backfill_resource_organizations,
     cleanup_unresolvable_resources,
+    RESOURCE_COLLECTIONS,
     ResourceBackfillBlockedError,
+    ResourceScopeVerificationError,
     validate_cleanup_authorization,
+    verify_resource_organization_scope,
 )
 from server.scripts.migrations.organizations.backfill_organizations import backfill_organizations
 from server.app.quiz.utils.training_completion import build_closure_payload
@@ -62,6 +65,41 @@ def test_production_deployment_paths_never_invoke_destructive_resource_cleanup()
 
 
 @pytest.mark.asyncio
+async def test_scope_verification_never_creates_migration_collections(test_db):
+    await backfill_organizations(dry_run=False, strict=True, database_instance=test_db)
+    await test_db.drop_collection("migration_runs")
+    await test_db.drop_collection("migration_locks")
+    before = set(await test_db.list_collection_names())
+    with pytest.raises(ResourceScopeVerificationError, match="no completed migration"):
+        await verify_resource_organization_scope(database_instance=test_db)
+    assert set(await test_db.list_collection_names()) == before
+
+
+@pytest.mark.asyncio
+async def test_protocol_b_verification_requires_completed_clean_scope_backfill(test_db):
+    await backfill_organizations(
+        dry_run=False,
+        database_instance=test_db,
+        triggered_by="test-protocol-a",
+    )
+    await backfill_resource_organizations(
+        dry_run=False,
+        strict=True,
+        database_instance=test_db,
+        triggered_by="test-protocol-b",
+    )
+
+    assert await verify_resource_organization_scope(database_instance=test_db) == {
+        "collections_checked": len(RESOURCE_COLLECTIONS),
+        "unscoped_records": 0,
+    }
+
+    await test_db["notifications"].insert_one({"_id": ObjectId(), "user_id": "late-user"})
+    with pytest.raises(ResourceScopeVerificationError, match="notifications=1"):
+        await verify_resource_organization_scope(database_instance=test_db)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("personal_active", [True, False])
 async def test_protocol_b_uses_personal_ownership_not_a_changed_default(test_db, personal_active):
     user_id = str(ObjectId())
@@ -82,6 +120,7 @@ async def test_protocol_b_uses_personal_ownership_not_a_changed_default(test_db,
     await test_db.quizzes_v2.insert_one({"_id": quiz_id, "owner_user_id": user_id, "source": "manual"})
     await test_db.quiz_attempts_v2.insert_one({"_id": attempt_id, "user_id": user_id, "quiz_id": str(quiz_id)})
     await test_db.quiz_history_v2.insert_one({"_id": history_id, "user_id": user_id, "quiz_id": str(quiz_id)})
+    await test_db.product_events.insert_one({"user_id": user_id, "event_type": "quiz_generated", "quiz_id": str(quiz_id)})
     if personal_active:
         report = await backfill_resource_organizations(
             dry_run=False, strict=True, force=True, database_instance=test_db
@@ -98,6 +137,8 @@ async def test_protocol_b_uses_personal_ownership_not_a_changed_default(test_db,
         document = await test_db[collection].find_one({"_id": identifier})
         assert document.get("organization_id") == (personal_id if personal_active else None)
     assert (await test_db.users.find_one({"_id": ObjectId(user_id)}))["default_organization_id"] == str(shared.id)
+    event = await test_db.product_events.find_one({"user_id": user_id})
+    assert event.get("organization_id") == (personal_id if personal_active else None)
 
 
 @pytest.mark.asyncio
@@ -272,6 +313,7 @@ async def test_resource_backfill_scopes_user_records_and_platform_seed_content(t
     from server.app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
     legacy_attempt = QuizAttemptDocumentV2(
         _id=attempt_id, user_id=str(user_id), quiz_id=str(inferred_quiz_id),
+        organization_id=str(personal_organization_id),
         question_results=[{
             "question": "Choose", "user_answer": "A", "correct_answer": "A",
             "options": ["A", "B"], "question_type": "multichoice",

@@ -8,7 +8,7 @@ async def library_list_saved_quizzes(limit: int = 100) -> list[dict]:
         user_id=context.user_id,
         limit=limit,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -18,7 +18,7 @@ async def library_get_saved_quiz(saved_quiz_id: str) -> dict | None:
         user_id=context.user_id,
         saved_quiz_id=saved_quiz_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -29,7 +29,7 @@ async def library_find_saved_quiz_by_title(title: str, limit: int = 10) -> dict:
         title=title,
         limit=limit,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -39,7 +39,7 @@ async def library_list_history(limit: int = 100) -> list[dict]:
         user_id=context.user_id,
         limit=limit,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
 
 
@@ -49,7 +49,7 @@ async def library_get_history_detail(history_id: str) -> dict | None:
         user_id=context.user_id,
         history_id=history_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     return detail.model_dump(mode="json") if detail else None
 
@@ -68,7 +68,7 @@ async def library_save_quiz(
         questions=questions,
         quiz_id=quiz_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     return {
         "id": str(saved_quiz.id),
@@ -86,7 +86,7 @@ async def saved_quiz_rename(saved_quiz_id: str, title: str) -> dict:
         saved_quiz_id=saved_quiz_id,
         title=title,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if renamed is None:
         raise ValueError("Saved quiz not found")
@@ -99,7 +99,7 @@ async def saved_quiz_delete(saved_quiz_id: str) -> dict:
         user_id=context.user_id,
         saved_quiz_id=saved_quiz_id,
         organization_id=context.tenant_id,
-        allow_legacy_personal=context.tenant_kind == "personal",
+        allow_legacy_personal=False,
     )
     if not deleted:
         raise ValueError("Saved quiz not found")

@@ -54,8 +54,15 @@ class QuizV2Repository:
         document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
-    async def find_by_structure_fingerprint(self, structure_fingerprint: str) -> Optional[QuizDocumentV2]:
-        document = await self.collection.find_one({"structure_fingerprint": structure_fingerprint})
+    async def find_by_structure_fingerprint(
+        self,
+        structure_fingerprint: str,
+        organization_id: Optional[str] | object = _ORGANIZATION_SCOPE_UNSET,
+    ) -> Optional[QuizDocumentV2]:
+        query = {"structure_fingerprint": structure_fingerprint}
+        if organization_id is not _ORGANIZATION_SCOPE_UNSET:
+            query["organization_id"] = organization_id
+        document = await self.collection.find_one(query)
         return QuizDocumentV2(**document) if document else None
 
     async def find_by_access_code(self, access_code: str) -> Optional[QuizDocumentV2]:
@@ -236,6 +243,38 @@ class QuizV2Repository:
             return None
         return QuizDocumentV2(**document) if document else None
 
+    async def find_by_id_for_organization(
+        self,
+        quiz_id: str,
+        organization_id: str,
+    ) -> Optional[QuizDocumentV2]:
+        """Load a canonical quiz through its tenant boundary."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "organization_id": organization_id,
+                    "status": {"$ne": "deleted"},
+                }
+            )
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
+    async def find_public_shareable_by_id(self, quiz_id: str) -> Optional[QuizDocumentV2]:
+        """Resolve an anonymous share only through an explicit visibility grant."""
+        try:
+            document = await self.collection.find_one(
+                {
+                    "_id": ObjectId(quiz_id),
+                    "status": "active",
+                    "visibility": {"$in": ["public", "unlisted"]},
+                }
+            )
+        except InvalidId:
+            return None
+        return QuizDocumentV2(**document) if document else None
+
     async def find_many_by_ids(self, quiz_ids: list[str]) -> list[QuizDocumentV2]:
         object_ids: list[ObjectId] = []
         order: list[ObjectId] = []
@@ -257,10 +296,8 @@ class QuizV2Repository:
         quiz_ids: list[str],
         *,
         organization_id: str | None,
-        user_id: str | None,
-        allow_legacy_personal: bool = False,
     ) -> list[QuizDocumentV2]:
-        """Resolve practice sources without joining another tenant's private data."""
+        """Load tenant/public candidates; callers must apply content-read policy."""
         object_ids = []
         for quiz_id in quiz_ids:
             try:
@@ -272,8 +309,6 @@ class QuizV2Repository:
         scopes = [{"visibility": {"$in": ["public", "unlisted"]}}]
         if organization_id:
             scopes.append({"organization_id": organization_id})
-            if allow_legacy_personal and user_id:
-                scopes.append({"organization_id": None, "owner_user_id": user_id})
         documents = await self.collection.find({
             "_id": {"$in": object_ids},
             "status": {"$ne": "deleted"},
@@ -312,21 +347,23 @@ class QuizV2Repository:
         access_code_expires_at: datetime,
         participant_access_mode: str = "public",
         invited_participant_emails: Optional[list[str]] = None,
+        organization_id: str | None = None,
     ) -> Optional[QuizDocumentV2]:
         try:
+            query = {"_id": ObjectId(quiz_id), "status": {"$ne": "deleted"}}
+            if organization_id is not None:
+                query["organization_id"] = organization_id
+            else:
+                query["owner_user_id"] = creator_id
+            query["$or"] = [
+                {"live_quiz_enabled": {"$ne": True}},
+                {"access_code": None},
+                {"access_code": ""},
+                {"access_code_expires_at": None},
+                {"access_code_expires_at": {"$lte": observed_at}},
+            ]
             updated = await self.collection.find_one_and_update(
-                {
-                    "_id": ObjectId(quiz_id),
-                    "status": {"$ne": "deleted"},
-                    "owner_user_id": creator_id,
-                    "$or": [
-                        {"live_quiz_enabled": {"$ne": True}},
-                        {"access_code": None},
-                        {"access_code": ""},
-                        {"access_code_expires_at": None},
-                        {"access_code_expires_at": {"$lte": observed_at}},
-                    ],
-                },
+                query,
                 {
                     "$set": {
                         "live_quiz_enabled": True,

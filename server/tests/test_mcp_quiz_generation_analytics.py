@@ -5,6 +5,7 @@ import pytest
 
 import server.app.mcp.tools.quiz_tools as quiz_tools
 from server.app.mcp.context import McpRequestContext
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 
 
 def _trusted_context():
@@ -20,6 +21,10 @@ def _trusted_context():
         role="user",
         tenant_id="organization-1",
         tenant_kind="school",
+        organization_context=OrganizationContext(
+            organization_id="organization-1", organization_kind="school", membership_role="owner",
+            principal=OrganizationPrincipal(user_id="user-1", session_id="session-1"), membership={},
+        ),
         user=user,
     )
 

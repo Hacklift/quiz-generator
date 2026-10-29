@@ -7,6 +7,15 @@ from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
 from server.app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
 from server.app.quiz.services.quiz_attempt_service import QuizAttemptService
 from server.app.quiz.services.quiz_grading_service import QuizGradingService
+from server.app.quiz.services.quiz_practice_access import QuizPracticeAccess
+
+
+class FakeOrganizationRepository:
+    async def get_active(self, organization_id):
+        return {"_id": organization_id, "status": "active"}
+
+    async def list_active_by_ids(self, organization_ids):
+        return [{"_id": organization_id, "status": "active"} for organization_id in organization_ids]
 
 
 class FakeQuizRepository:
@@ -20,19 +29,21 @@ class FakeQuizRepository:
         return [self.quizzes[quiz_id] for quiz_id in quiz_ids if quiz_id in self.quizzes]
 
     async def find_attempt_source_quizzes(
-        self, quiz_ids, *, organization_id, user_id, allow_legacy_personal=False,
+        self, quiz_ids, *, organization_id,
     ):
         return [quiz for quiz in await self.find_many_by_ids(quiz_ids) if (
             quiz.status.value != "deleted" and (
                 quiz.visibility.value in {"public", "unlisted"}
                 or (organization_id and quiz.organization_id == organization_id)
-                or (organization_id and allow_legacy_personal and quiz.organization_id is None and quiz.owner_user_id == user_id)
             )
         )]
 
 
 class FakeReferenceRepository:
     async def get_saved_quiz_by_public_id(self, quiz_id: str):
+        return None
+
+    async def get_saved_quiz_for_attempt(self, quiz_id: str, *, user_id, organization_id):
         return None
 
 
@@ -108,6 +119,7 @@ async def test_grade_submission_persists_attempt_for_authenticated_user():
     quiz = build_quiz_document()
     attempt_repository = FakeAttemptRepository()
     service = QuizGradingService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         reference_repository=FakeReferenceRepository(),
         attempt_repository=attempt_repository,
@@ -145,6 +157,7 @@ async def test_grade_submission_does_not_persist_attempt_for_anonymous_user():
     quiz = build_quiz_document()
     attempt_repository = FakeAttemptRepository()
     service = QuizGradingService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         reference_repository=FakeReferenceRepository(),
         attempt_repository=attempt_repository,
@@ -167,6 +180,7 @@ async def test_grade_submission_does_not_persist_attempt_for_anonymous_user():
 async def test_grade_submission_returns_scores_when_attempt_persistence_fails(caplog):
     quiz = build_quiz_document()
     service = QuizGradingService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         reference_repository=FakeReferenceRepository(),
         attempt_repository=FailingAttemptRepository(),
@@ -191,13 +205,14 @@ async def test_grade_submission_returns_scores_when_attempt_persistence_fails(ca
 @pytest.mark.asyncio
 async def test_duplicate_question_options_are_snapshotted_in_order():
     quiz = QuizDocumentV2(
-        title="Repeated prompts", quiz_type="multichoice", visibility="public", questions=[
+        title="Repeated prompts", organization_id="org-1", quiz_type="multichoice", visibility="public", questions=[
             {"question": "Choose", "correct_answer": "A", "options": ["A", "B"]},
             {"question": "Choose", "correct_answer": "C", "options": ["C", "D"]},
         ],
     )
     attempts = FakeAttemptRepository()
     service = QuizGradingService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         reference_repository=FakeReferenceRepository(), attempt_repository=attempts,
     )
@@ -216,6 +231,7 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
     quiz_two = QuizDocumentV2(
         _id=ObjectId(),
         title="Storage Basics",
+        organization_id="org-1",
         visibility="public",
         quiz_type="short-answer",
         source="manual",
@@ -270,6 +286,7 @@ async def test_list_attempts_returns_newest_first_and_passes_quiz_filter():
         ]
     )
     service = QuizAttemptService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository(
             {
                 str(quiz.id): quiz,
@@ -316,6 +333,7 @@ async def test_attempt_history_backfills_options_from_the_quiz_for_legacy_attemp
         percentage=0.0,
     )
     service = QuizAttemptService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         attempt_repository=FakeAttemptRepository(attempts=[attempt]),
     )
@@ -331,6 +349,7 @@ async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_th
     quiz = QuizDocumentV2(
         _id=ObjectId(),
         title="Science Facts",
+        organization_id="org-1",
         visibility="public",
         quiz_type="true-false",
         source="manual",
@@ -361,6 +380,7 @@ async def test_attempt_history_adds_true_false_options_when_legacy_quiz_omits_th
         percentage=100.0,
     )
     service = QuizAttemptService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         attempt_repository=FakeAttemptRepository(attempts=[attempt]),
     )
@@ -395,6 +415,7 @@ async def test_get_and_delete_attempt_use_user_scope():
     )
     attempt_repository = FakeAttemptRepository(attempts=[attempt])
     service = QuizAttemptService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
         quiz_repository=FakeQuizRepository({str(quiz.id): quiz}),
         attempt_repository=attempt_repository,
     )

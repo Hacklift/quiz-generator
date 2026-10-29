@@ -32,6 +32,7 @@ RESOURCE_COLLECTIONS = (
     "ai_generated_quizzes",
     "training_runs",
     "notifications",
+    "product_events",
     "folder_items_v2",
     "training_assignments",
     "training_audit_events",
@@ -70,6 +71,10 @@ class ResourceBackfillBlockedError(RuntimeError):
         super().__init__(
             f"Resource organization backfill has {report.unresolved} unresolved records"
         )
+
+
+class ResourceScopeVerificationError(RuntimeError):
+    """Raised when strict policy cannot safely rely on Protocol B output."""
 
 
 @dataclass
@@ -178,6 +183,41 @@ async def _has_missing_resource_scopes(db) -> bool:
     return False
 
 
+async def verify_resource_organization_scope(
+    *,
+    database_instance: Any | None = None,
+) -> dict[str, int]:
+    """Verify Protocol B completion without writing to the target database.
+
+    This is intentionally a manual release-gate command for environments where
+    resource migration is operator-controlled. It proves both that Protocol B
+    completed and that no later writer introduced an unscoped resource.
+    """
+    db = database_instance if database_instance is not None else database
+    if await _platform_organization_id(db) is None:
+        raise ResourceScopeVerificationError(
+            "Platform library organization is missing; complete Protocol A first"
+        )
+
+    lock = MigrationLockService(db)
+    if not await lock.get_latest_completed_run(MIGRATION_NAME):
+        raise ResourceScopeVerificationError(
+            "Protocol B has no completed migration run; execute the controlled backfill first"
+        )
+
+    gaps: dict[str, int] = {}
+    for collection in RESOURCE_COLLECTIONS:
+        count = await db[collection].count_documents(MISSING_SCOPE_QUERY)
+        if count:
+            gaps[collection] = count
+    if gaps:
+        formatted = ", ".join(f"{collection}={count}" for collection, count in sorted(gaps.items()))
+        raise ResourceScopeVerificationError(
+            f"Protocol B verification found unscoped resources: {formatted}"
+        )
+    return {"collections_checked": len(RESOURCE_COLLECTIONS), "unscoped_records": 0}
+
+
 def _is_local_compose_database(mongo_uri: str | None = None) -> bool:
     """Limit automatic destructive cleanup to the Compose Mongo service."""
     mongo_uri = mongo_uri if mongo_uri is not None else os.getenv("MONGO_URI", "")
@@ -201,6 +241,16 @@ def validate_cleanup_authorization(args: argparse.Namespace, *, mongo_uri: str |
         raise ValueError("--confirm-destructive is only valid with --purge-unresolvable")
     if args.auto and (args.dry_run or args.force or args.strict):
         raise ValueError("--auto cannot be combined with --dry-run, --force, or --strict")
+    if getattr(args, "verify_complete", False) and any(
+        (
+            args.purge_unresolvable,
+            args.auto,
+            args.dry_run,
+            args.force,
+            args.strict,
+        )
+    ):
+        raise ValueError("--verify-complete cannot be combined with migration or cleanup options")
     if args.purge_unresolvable and not args.dry_run:
         if args.local_only:
             if not _is_local_compose_database(mongo_uri):
@@ -872,6 +922,7 @@ async def _backfill_all(
 
     await process_owner_collection("training_runs", "owner_user_id")
     await process_owner_collection("notifications", "user_id")
+    await process_owner_collection("product_events", "user_id")
 
     await _backfill_by_parent(
         db,
@@ -1035,6 +1086,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run strict preflight and write only when legacy scope gaps exist.",
     )
+    parser.add_argument(
+        "--verify-complete",
+        action="store_true",
+        help="Verify a completed Protocol B run and fail if any resource remains unscoped.",
+    )
     parser.add_argument("--batch-size", type=int, default=200)
     parser.add_argument("--run-id")
     parser.add_argument("--force", action="store_true")
@@ -1059,6 +1115,8 @@ async def main() -> None:
             run_id=args.run_id,
             triggered_by=args.triggered_by,
         )
+    elif args.verify_complete:
+        report = await verify_resource_organization_scope()
     else:
         report = await backfill_resource_organizations(
             dry_run=args.dry_run,
@@ -1068,7 +1126,10 @@ async def main() -> None:
             strict=args.strict,
             triggered_by=args.triggered_by,
         )
-    logger.info("Resource organization migration result: %s", asdict(report))
+    logger.info(
+        "Resource organization migration result: %s",
+        report if isinstance(report, dict) else asdict(report),
+    )
 
 
 if __name__ == "__main__":
@@ -1080,4 +1141,7 @@ if __name__ == "__main__":
             "Resource organization backfill is blocked pending data repair: %s",
             asdict(exc.report),
         )
+        raise SystemExit(1)
+    except ResourceScopeVerificationError as exc:
+        logger.error("Resource organization verification failed: %s", exc)
         raise SystemExit(1)

@@ -6,9 +6,14 @@ import TrainingRunsPage from "@features/training/pages/TrainingRunsPage";
 import { trainingRunApi, type TrainingRunDetail } from "@features/training/api/trainingRunApi";
 
 const router = { push: jest.fn(), replace: jest.fn(), isReady: true, query: { kind: "compliance" } };
+let membershipRole = "owner";
+jest.mock("@features/organizations/context/organizationContext", () => ({
+  useOrganization: () => ({ activeOrganization: { role: membershipRole }, isLoading: false }),
+}));
 jest.mock("next/router", () => ({ useRouter: () => router }));
 jest.mock("@features/training/components/RequireTrainingManager", () => ({
   __esModule: true, default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  canManageTrainingRuns: (role: string) => ["owner", "admin", "facilitator"].includes(role),
 }));
 jest.mock("@features/quiz/components/NavBar", () => ({ __esModule: true, default: () => null }));
 jest.mock("@features/quiz/components/Footer", () => ({ __esModule: true, default: () => null }));
@@ -35,6 +40,7 @@ const detail = (): TrainingRunDetail => ({
 });
 
 beforeEach(() => {
+  membershipRole = "owner";
   jest.clearAllMocks();
   api.getRun.mockResolvedValue(detail());
   api.listOwnedQuizzes.mockResolvedValue([{ id: "quiz-1", title: "Safety quiz", quiz_type: "multichoice" }]);
@@ -60,6 +66,15 @@ test("shows the per-run assignee report, outcome, threshold and non-starter", as
   expect(within(absent).getByText("Not started")).toBeInTheDocument();
   expect(within(absent).getByText("Not completed")).toBeInTheDocument();
   expect(screen.getByText("Passing threshold")).toBeInTheDocument();
+});
+
+test("auditors can export evidence without being offered management actions", async () => {
+  membershipRole = "auditor";
+  render(<TrainingRunDetailPage runId="run-1" />);
+  await screen.findByText("Safety training");
+  expect(screen.getByRole("button", { name: "Export completion CSV" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Close run" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "All runs" })).not.toBeInTheDocument();
 });
 
 test("one click exports the selected run and releases the download object URL", async () => {
