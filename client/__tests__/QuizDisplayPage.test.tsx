@@ -2,9 +2,9 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DisplayQuiz from "@features/quiz/pages/QuizDisplayPage";
 import { api } from "@shared/api/http";
+import publicApi from "@shared/api/publicHttp";
+import { TokenService } from "@shared/auth/tokenService";
 import toast from "react-hot-toast";
-
-let mockIsAuthenticated = true;
 
 jest.mock("next/navigation", () => ({
   useSearchParams: () => ({
@@ -20,13 +20,6 @@ jest.mock("react-hot-toast", () => ({
   },
 }));
 
-jest.mock("@shared/api/publicHttp", () => ({
-  __esModule: true,
-  default: {
-    post: jest.fn(),
-  },
-}));
-
 jest.mock("@shared/api/http", () => ({
   api: {
     get: jest.fn(),
@@ -36,30 +29,13 @@ jest.mock("@shared/api/http", () => ({
 
 jest.mock("@shared/auth/tokenService", () => ({
   TokenService: {
-    hasTokens: () => false,
+    hasTokens: jest.fn(),
   },
 }));
 
-jest.mock("@features/auth/context/authContext", () => ({
-  useAuth: () => ({ isAuthenticated: mockIsAuthenticated }),
-}));
-
-jest.mock("@features/auth/components/SignInModal", () => ({
+jest.mock("@shared/api/publicHttp", () => ({
   __esModule: true,
-  default: ({
-    isOpen,
-    onSuccess,
-  }: {
-    isOpen: boolean;
-    onSuccess?: () => void | Promise<void>;
-  }) =>
-    isOpen ? (
-      <div role="dialog" aria-label="Sign in required">
-        <button type="button" onClick={() => void onSuccess?.()}>
-          Complete sign in
-        </button>
-      </div>
-    ) : null,
+  default: { post: jest.fn() },
 }));
 
 jest.mock("@features/quiz-history/api/saveQuizToHistoryApi", () => ({
@@ -92,6 +68,8 @@ jest.mock("@features/quiz/components", () => {
 });
 
 const mockApiPost = api.post as jest.Mock;
+const mockPublicPost = publicApi.post as jest.Mock;
+const mockHasTokens = TokenService.hasTokens as jest.Mock;
 const mockToastError = toast.error as jest.Mock;
 const mockToastSuccess = toast.success as jest.Mock;
 
@@ -117,59 +95,13 @@ const storedQuiz = {
 
 describe("QuizDisplayPage", () => {
   beforeEach(() => {
-    mockIsAuthenticated = true;
     localStorage.clear();
     localStorage.setItem("saved_quiz_view", JSON.stringify(storedQuiz));
     mockApiPost.mockReset();
+    mockPublicPost.mockReset();
+    mockHasTokens.mockReturnValue(true);
     mockToastError.mockReset();
     mockToastSuccess.mockReset();
-  });
-
-  test("requires sign-in before grading and preserves answers through sign-in", async () => {
-    mockIsAuthenticated = false;
-    mockApiPost.mockResolvedValue({
-      data: {
-        question_results: storedQuiz.questions.map((question, question_index) => ({
-          question_index,
-          question: question.question,
-          user_answer: question.answer,
-          correct_answer: question.answer,
-          result: "Correct",
-          is_correct: true,
-          question_type: "multichoice",
-        })),
-      },
-    });
-    render(<DisplayQuiz />);
-
-    const radioButtons = await screen.findAllByRole("radio");
-    fireEvent.click(radioButtons[0]);
-    fireEvent.click(radioButtons[2]);
-    fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
-
-    expect(mockApiPost).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(
-      "Sign in to submit this quiz and receive or save your result.",
-    );
-    expect(
-      screen.getByRole("dialog", { name: "Sign in required" }),
-    ).toBeInTheDocument();
-    expect(radioButtons[0]).toBeChecked();
-    expect(radioButtons[2]).toBeChecked();
-
-    fireEvent.click(screen.getByRole("button", { name: "Complete sign in" }));
-
-    await waitFor(() => expect(mockApiPost).toHaveBeenCalledTimes(1));
-    expect(mockApiPost).toHaveBeenCalledWith(
-      "/api/quizzes/quiz-123/grade",
-      {
-        answers: [
-          { question_index: 0, user_answer: "A) Paris" },
-          { question_index: 1, user_answer: "A) Madrid" },
-        ],
-      },
-    );
-    expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
   });
 
   test("prompts the user instead of grading when questions are unanswered", async () => {
@@ -230,5 +162,52 @@ describe("QuizDisplayPage", () => {
     screen.getAllByRole("radio").forEach((radio) => {
       expect(radio).toBeDisabled();
     });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(mockPublicPost).not.toHaveBeenCalled();
+  });
+
+  test("grades guests with the public client", async () => {
+    mockHasTokens.mockReturnValue(false);
+    mockPublicPost.mockResolvedValue({ data: [], headers: { "x-quiz-attempt-status": "not-requested" } });
+    render(<DisplayQuiz />);
+    const radios = await screen.findAllByRole("radio");
+    fireEvent.click(radios[0]);
+    fireEvent.click(radios[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
+
+    expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
+    expect(mockPublicPost).toHaveBeenCalledTimes(1);
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  test("keeps scores visible and warns when attempt storage fails", async () => {
+    mockApiPost.mockResolvedValue({ data: [], headers: { "x-quiz-attempt-status": "failed" } });
+    render(<DisplayQuiz />);
+    const radios = await screen.findAllByRole("radio");
+    fireEvent.click(radios[0]);
+    fireEvent.click(radios[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Check Quiz" }));
+
+    expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalledWith(
+      "Your quiz was graded, but this attempt could not be saved to history.",
+    );
+  });
+
+  test("prevents duplicate submissions and freezes answers while grading", async () => {
+    let resolveGrade!: (value: unknown) => void;
+    mockApiPost.mockReturnValue(new Promise((resolve) => { resolveGrade = resolve; }));
+    render(<DisplayQuiz />);
+    const radios = await screen.findAllByRole("radio");
+    fireEvent.click(radios[0]);
+    fireEvent.click(radios[2]);
+    const submit = screen.getByRole("button", { name: "Check Quiz" });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    radios.forEach((radio) => expect(radio).toBeDisabled());
+    resolveGrade({ data: [] });
+    expect(await screen.findByText("My Quiz Result")).toBeInTheDocument();
   });
 });

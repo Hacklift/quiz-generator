@@ -1,6 +1,15 @@
-"""Authoritative deterministic grading for canonical quiz questions."""
+"""Authoritative deterministic grading for canonical quiz questions.
 
+Answers are graded against stored quiz documents, never against correct
+answers supplied by the client.
+"""
+import logging
+from collections import defaultdict, deque
+from dataclasses import dataclass
 from typing import Any
+
+from fastapi import HTTPException
+from server.app.organizations.models import OrganizationContext
 
 from server.app.db.core.connection import (
     get_folder_items_v2_collection,
@@ -10,25 +19,20 @@ from server.app.db.core.connection import (
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
 )
-from server.app.quiz.repositories.v2.models.attempt_models import (
+from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
+from server.app.quiz.repositories.v2.models.reference_models import (
     QuizAttemptDocumentV2,
     QuizAttemptQuestionResultV2,
 )
-from server.app.quiz.repositories.v2.models.quiz_models import QuizDocumentV2
-from server.app.quiz.repositories.v2.repositories.attempt_repository import (
-    QuizAttemptV2Repository,
-)
-from server.app.quiz.repositories.v2.repositories.quiz_repository import (
-    QuizV2Repository,
-)
-from server.app.quiz.repositories.v2.repositories.reference_repository import (
-    ReferenceV2Repository,
-)
+from server.app.quiz.repositories.v2.repositories.attempt_repository import QuizAttemptV2Repository
+from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
+from server.app.quiz.repositories.v2.repositories.reference_repository import ReferenceV2Repository
 from server.app.quiz.utils.grading import grade_answers
-from server.app.share.services import can_access_quiz
+from server.app.quiz.services.quiz_practice_access import QuizPracticeAccess
 
 OBJECTIVE_TYPES = {"multichoice", "true-false", "short-answer", "matching"}
-GRADING_POLICY_VERSION = "objective-v1"
+
+logger = logging.getLogger(__name__)
 
 
 class SubmissionMismatchError(ValueError):
@@ -37,6 +41,12 @@ class SubmissionMismatchError(ValueError):
 
 def _normalize_text(value: Any) -> str:
     return str(value if value is not None else "").strip().casefold()
+
+
+@dataclass(frozen=True)
+class GradedQuizSubmission:
+    results: list[dict[str, Any]]
+    attempt_saved: bool | None = None
 
 
 def _normalize_true_false(value: Any) -> str:
@@ -95,14 +105,14 @@ def grade_against_stored_questions(
     non-objective/open-ended path.
     """
     answers_by_index: dict[int, Any] = {}
-    questions_by_text = {
-        question.get("question"): index
-        for index, question in enumerate(stored_questions)
-    }
+    questions_by_text: dict[Any, deque[int]] = defaultdict(deque)
+    for index, question in enumerate(stored_questions):
+        questions_by_text[question.get("question")].append(index)
     for submitted in submitted_answers:
         index = submitted.get("question_index")
         if index is None:
-            index = questions_by_text.get(submitted.get("question"))
+            matching_indexes = questions_by_text.get(submitted.get("question"))
+            index = matching_indexes.popleft() if matching_indexes else None
         if not isinstance(index, int) or index < 0 or index >= len(stored_questions):
             raise SubmissionMismatchError(
                 "Submitted answers do not match this quiz's questions."
@@ -165,6 +175,7 @@ class QuizGradingService:
         quiz_repository: QuizV2Repository | None = None,
         reference_repository: ReferenceV2Repository | None = None,
         attempt_repository: QuizAttemptV2Repository | None = None,
+        quiz_access: QuizPracticeAccess | None = None,
     ):
         self.quiz_repository = quiz_repository or QuizV2Repository(
             get_quizzes_v2_collection()
@@ -175,20 +186,84 @@ class QuizGradingService:
             get_saved_quizzes_v2_collection(),
             get_quiz_history_v2_collection(),
         )
-        self.attempt_repository = attempt_repository or QuizAttemptV2Repository(
-            get_quiz_attempts_v2_collection()
+        self.attempt_repository = (
+            attempt_repository
+            if attempt_repository is not None
+            else QuizAttemptV2Repository(get_quiz_attempts_v2_collection())
+        )
+        self.quiz_access = quiz_access or QuizPracticeAccess()
+
+    @staticmethod
+    def _build_attempt_summary(graded_results: list[dict[str, Any]]) -> tuple[int, float]:
+        total_questions = len(graded_results)
+        score = sum(1 for result in graded_results if result.get("is_correct"))
+        percentage = round((score / total_questions) * 100, 2) if total_questions else 0.0
+        return score, percentage
+
+    @staticmethod
+    def _history_options(
+        options: list[str] | None,
+        *,
+        question_type: str,
+    ) -> list[str] | None:
+        if options:
+            return options
+        if question_type == "true-false":
+            return ["True", "False"]
+        return None
+
+    async def _store_attempt(
+        self,
+        *,
+        user_id: str,
+        organization_id: str,
+        quiz_id: str,
+        graded_results: list[dict[str, Any]],
+        stored_questions: list[dict[str, Any]],
+    ) -> None:
+        score, percentage = self._build_attempt_summary(graded_results)
+        options_by_text = defaultdict(deque)
+        for question in stored_questions:
+            options_by_text[question["question"]].append(question.get("options"))
+        await self.attempt_repository.insert_attempt(
+            QuizAttemptDocumentV2(
+                user_id=user_id,
+                organization_id=organization_id,
+                created_by_user_id=user_id,
+                quiz_id=quiz_id,
+                question_results=[
+                    QuizAttemptQuestionResultV2(
+                        **graded_result,
+                        options=self._history_options(
+                            options_by_text[graded_result["question"]].popleft(),
+                            question_type=str(
+                                graded_result.get("question_type") or ""
+                            ),
+                        ),
+                    )
+                    for graded_result in graded_results
+                ],
+                score=score,
+                percentage=percentage,
+            )
         )
 
-    async def _resolve_quiz(self, quiz_id: str) -> QuizDocumentV2 | None:
-        quiz_doc = await self.quiz_repository.find_by_id(quiz_id)
-        if not quiz_doc:
-            saved_reference = (
-                await self.reference_repository.get_saved_quiz_by_public_id(quiz_id)
+    async def _resolve_quiz(
+        self, quiz_id: str, *, user_id: str | None, organization_id: str | None,
+    ) -> QuizDocumentV2 | None:
+        quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+            [quiz_id], organization_id=organization_id,
+        )
+        quiz_doc = next(iter(quizzes), None)
+        if not quiz_doc and user_id is not None and organization_id:
+            saved_reference = await self.reference_repository.get_saved_quiz_for_attempt(
+                quiz_id, user_id=user_id, organization_id=organization_id,
             )
             if saved_reference:
-                quiz_doc = await self.quiz_repository.find_by_id(
-                    saved_reference.quiz_id
+                quizzes = await self.quiz_repository.find_attempt_source_quizzes(
+                    [saved_reference.quiz_id], organization_id=organization_id,
                 )
+                quiz_doc = next(iter(quizzes), None)
         return quiz_doc
 
     @staticmethod
@@ -216,44 +291,57 @@ class QuizGradingService:
         quiz_id: str,
         submitted_answers: list[dict[str, Any]],
         *,
-        user_id: str,
         source: str = "mock",
-    ) -> dict[str, Any] | None:
-        quiz_doc = await self._resolve_quiz(quiz_id)
-        if quiz_doc is None or not can_access_quiz(quiz_doc, user_id):
+        user_id: str | None = None,
+        organization_id: str | None = None,
+        organization: OrganizationContext | None = None,
+    ) -> GradedQuizSubmission | None:
+        """Return scores and independent persistence status, or None if missing."""
+        if user_id is not None and not organization_id:
+            raise HTTPException(status_code=409, detail="Organization context has not been provisioned")
+        if organization is not None and (
+            organization.principal.user_id != user_id
+            or organization.organization_id != organization_id
+        ):
+            raise HTTPException(status_code=403, detail="Organization access denied")
+        quiz_doc = await self._resolve_quiz(
+            quiz_id, user_id=user_id, organization_id=organization_id,
+        )
+        if quiz_doc is None or quiz_doc.status.value == "deleted":
             return None
-        questions = [
+        await self.quiz_access.require_readable(quiz_doc, organization)
+
+        stored_questions = [
             {
-                "question": q.question,
-                "correct_answer": q.correct_answer,
+                "question": question.question,
+                "correct_answer": question.correct_answer,
+                "options": question.options,
                 "question_type": quiz_doc.quiz_type.value,
             }
-            for q in quiz_doc.questions
+            for question in quiz_doc.questions
         ]
-        grading = self.grade_canonical_questions(
-            questions,
+        graded_results = grade_against_stored_questions(
+            stored_questions,
             submitted_answers,
             quiz_type=quiz_doc.quiz_type.value,
             source=source,
         )
-        attempt = QuizAttemptDocumentV2(
-            user_id=user_id,
-            quiz_id=str(quiz_doc.id),
-            score=grading["score"],
-            total_questions=grading["total_questions"],
-            percentage=grading["percentage"],
-            grading_policy_version=GRADING_POLICY_VERSION,
-            question_results=[
-                QuizAttemptQuestionResultV2(**result)
-                for result in grading["question_results"]
-            ],
-        )
-        stored = await self.attempt_repository.insert_attempt(attempt)
-        return {
-            "attempt_id": str(stored.id),
-            "status": stored.status,
-            **grading,
-            "submitted_at": stored.submitted_at,
-            "graded_at": stored.graded_at,
-            "grading_policy_version": stored.grading_policy_version,
-        }
+        attempt_saved = None
+        if user_id is not None:
+            try:
+                await self._store_attempt(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    quiz_id=str(quiz_doc.id),
+                    graded_results=graded_results,
+                    stored_questions=stored_questions,
+                )
+                attempt_saved = True
+            except Exception:
+                logger.exception(
+                    "Failed to persist quiz attempt for user_id=%s quiz_id=%s",
+                    user_id,
+                    str(quiz_doc.id),
+                )
+                attempt_saved = False
+        return GradedQuizSubmission(results=graded_results, attempt_saved=attempt_saved)

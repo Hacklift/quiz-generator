@@ -1,24 +1,25 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from server.app.core.dependencies import get_current_user_optional
+from server.app.db.core.connection import get_organizations_collection
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.repository import OrganizationRepository
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.quiz.services.canonical_quiz_service import CanonicalQuizWriteService
-from server.app.share.services import can_access_quiz
+
 
 router = APIRouter()
 
 
 def _quiz_to_display_payload(quiz) -> dict[str, Any]:
-    quiz_type = (
-        quiz.quiz_type.value
-        if hasattr(quiz.quiz_type, "value")
-        else str(quiz.quiz_type)
-    )
-    visibility = (
-        quiz.visibility.value
-        if hasattr(quiz.visibility, "value")
-        else str(quiz.visibility)
-    )
+    quiz_type = quiz.quiz_type.value if hasattr(quiz.quiz_type, "value") else str(quiz.quiz_type)
+    visibility = quiz.visibility.value if hasattr(quiz.visibility, "value") else str(quiz.visibility)
     source = quiz.source.value if hasattr(quiz.source, "value") else str(quiz.source)
     return {
         "id": str(quiz.id),
@@ -45,7 +46,9 @@ def _quiz_to_display_payload(quiz) -> dict[str, Any]:
         "subcategory_slug": quiz.subcategory_slug,
         "tags": quiz.tags,
         "classification": (
-            quiz.classification.model_dump(mode="json") if quiz.classification else None
+            quiz.classification.model_dump(mode="json")
+            if quiz.classification
+            else None
         ),
         "live_quiz_enabled": quiz.live_quiz_enabled,
         "time_limit_minutes": quiz.time_limit_minutes,
@@ -58,20 +61,35 @@ def _quiz_to_display_payload(quiz) -> dict[str, Any]:
 async def get_canonical_quiz(
     quiz_id: str,
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(
+        get_optional_active_organization_context
+    ),
+    organizations_collection=Depends(get_organizations_collection),
 ):
     quiz = await CanonicalQuizWriteService().get_quiz_v2_by_id(quiz_id)
     if quiz is None:
         raise HTTPException(status_code=404, detail="Quiz not found")
 
-    current_user_id = str(current_user.id) if current_user else None
-    if not can_access_quiz(quiz, current_user_id):
-        quiz_status = (
-            quiz.status.value if hasattr(quiz.status, "value") else str(quiz.status)
-        )
-        if quiz_status == "deleted":
+    quiz_status = quiz.status.value if hasattr(quiz.status, "value") else str(quiz.status)
+    if quiz_status == "deleted":
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    visibility = quiz.visibility.value if hasattr(quiz.visibility, "value") else str(quiz.visibility)
+    if visibility in {"public", "unlisted"}:
+        # Public visibility does not outlive the tenant that granted it.
+        if not await OrganizationRepository(organizations_collection).get_active(
+            quiz.organization_id
+        ):
             raise HTTPException(status_code=404, detail="Quiz not found")
-        raise HTTPException(
-            status_code=403, detail="You do not have access to this quiz"
+    else:
+        if current_user is None or organization is None:
+            # Do not disclose the existence of a private resource to an
+            # unauthenticated caller holding a guessed identifier.
+            raise HTTPException(status_code=404, detail="Quiz not found")
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_READ,
+            resource=quiz.model_dump(by_alias=True),
         )
 
     return _quiz_to_display_payload(quiz)

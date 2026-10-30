@@ -4,16 +4,16 @@ from pymongo.errors import OperationFailure
 from .constants import (
     FOLDER_ITEMS_V2_COLLECTION,
     FOLDERS_V2_COLLECTION,
-    QUIZ_HISTORY_V2_COLLECTION,
     QUIZ_ATTEMPTS_V2_COLLECTION,
+    QUIZ_HISTORY_V2_COLLECTION,
     QUIZZES_V2_COLLECTION,
     SAVED_QUIZZES_V2_COLLECTION,
 )
 from .indexes import (
     ensure_folder_items_v2_indexes,
     ensure_folders_v2_indexes,
-    ensure_quiz_history_v2_indexes,
     ensure_quiz_attempts_v2_indexes,
+    ensure_quiz_history_v2_indexes,
     ensure_quizzes_v2_indexes,
     ensure_saved_quizzes_v2_indexes,
 )

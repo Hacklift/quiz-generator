@@ -297,6 +297,7 @@ async def _resolve_chunk_embeddings(
     client: InferenceClient,
     document: ExtractedDocument,
     chunks: list[TextChunk],
+    organization_id: str | None,
 ) -> tuple[list[list[float]], bool]:
     if settings.DOCUMENT_RAG_CACHE_ENABLED:
         cached_embeddings = await get_cached_document_embeddings(
@@ -306,6 +307,7 @@ async def _resolve_chunk_embeddings(
             chunk_size_chars=settings.DOCUMENT_CHUNK_SIZE_CHARS,
             chunk_overlap_chars=settings.DOCUMENT_CHUNK_OVERLAP_CHARS,
             chunk_limit=settings.DOCUMENT_RAG_MAX_CHUNKS,
+            organization_id=organization_id,
         )
         if cached_embeddings:
             return cached_embeddings, True
@@ -329,6 +331,7 @@ async def _resolve_chunk_embeddings(
             chunk_size_chars=settings.DOCUMENT_CHUNK_SIZE_CHARS,
             chunk_overlap_chars=settings.DOCUMENT_CHUNK_OVERLAP_CHARS,
             chunk_limit=settings.DOCUMENT_RAG_MAX_CHUNKS,
+            organization_id=organization_id,
         )
 
     return chunk_embeddings, False
@@ -467,6 +470,7 @@ async def generate_document_quiz_with_rag(
     focus_topic: str | None,
     user_id: str | None,
     token: str | None,
+    organization_id: str | None = None,
 ) -> DocumentQuizGenerationResult:
     final_token = await resolve_document_quiz_token(user_id, token)
     if not final_token:
@@ -486,6 +490,7 @@ async def generate_document_quiz_with_rag(
         client=client,
         document=document,
         chunks=chunks,
+        organization_id=organization_id,
     )
 
     query_embedding = await _feature_extract_text(

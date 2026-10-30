@@ -7,6 +7,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 
 from server.app.core.config import settings
 from server.app.core.dependencies import get_current_user_optional
+from server.app.organizations.dependencies import get_optional_active_organization_context
+from server.app.organizations.models import OrganizationContext
+from server.app.organizations.policy import (
+    OrganizationAction,
+    require_organization_permission,
+)
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.quiz.models.document_quiz_models import DocumentQuizResponse
 from server.app.quiz.repositories.ai_generated_quiz_repository import save_ai_generated_quiz
@@ -19,7 +25,7 @@ from server.app.db.core.connection import (
 from server.app.analytics.product_events import (
     LIVE_QUIZ_ENABLED,
     QUIZ_GENERATED,
-    record_product_event,
+    record_product_event_safely,
 )
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
 from server.app.quiz.utils.ai_generate import generate_document_quiz_with_rag
@@ -65,6 +71,7 @@ async def generate_document_quiz(
     access_code_expires_at: datetime | None = Form(default=None),
     document_file: UploadFile | None = File(default=None),
     current_user=Depends(get_current_user_optional),
+    organization: OrganizationContext | None = Depends(get_optional_active_organization_context),
 ):
     if not document_file and not (document_text and document_text.strip()):
         raise HTTPException(
@@ -82,6 +89,28 @@ async def generate_document_quiz(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Login is required to generate a live quiz access code",
+        )
+
+    if live_quiz_enabled and organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active organization is required to generate a live quiz access code",
+        )
+
+    if current_user is not None and organization is None:
+        # Optional authentication means a missing Authorization header is
+        # allowed. It does not mean a verified authenticated identity may be
+        # silently downgraded to a guest when its server-side tenant context
+        # is changing or unavailable, which would discard its saved quiz.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization context is unavailable; retry shortly",
+        )
+    if current_user is not None and isinstance(organization, OrganizationContext):
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_CREATE,
+            resource=None,
         )
 
     if live_quiz_enabled and (not time_limit_minutes or not access_code_expires_at):
@@ -141,6 +170,8 @@ async def generate_document_quiz(
             detail="The provided material is too short to generate a quiz from.",
         )
 
+    # Guest document generation is intentionally ephemeral. Authenticated
+    # generation always has a proven tenant due to the guard above.
     user_id = str(current_user.id) if current_user else None
     try:
         rag_result = await generate_document_quiz_with_rag(
@@ -154,6 +185,7 @@ async def generate_document_quiz(
             focus_topic=focus_topic,
             user_id=user_id,
             token=token,
+            organization_id=organization.organization_id if organization else None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -165,6 +197,7 @@ async def generate_document_quiz(
 
     quiz_id = None
     live_access_code = None
+    live_access_code_created = False
     live_access_expires = _to_iso_datetime(access_code_expires_at)
     category_metadata = {
         "category": None,
@@ -186,26 +219,36 @@ async def generate_document_quiz(
         "token": token,
         "questions": rag_result.questions,
         "user_id": user_id,
+        "organization_id": (
+            organization.organization_id
+            if isinstance(organization, OrganizationContext)
+            else None
+        ),
+        "created_by_user_id": user_id,
     }
 
-    try:
-        save_result = await save_ai_generated_quiz(save_payload)
-        if save_result and "quiz_id" in save_result:
-            quiz_id = save_result.get("quiz_id")
-            category_metadata = {
-                "category": save_result.get("category"),
-                "category_slug": save_result.get("category_slug"),
-                "subcategory": save_result.get("subcategory"),
-                "subcategory_slug": save_result.get("subcategory_slug"),
-                "tags": save_result.get("tags") or [],
-                "classification": save_result.get("classification"),
-            }
-    except Exception:
-        logger.exception(
-            "Failed to persist generated document quiz for user %s; returning unsaved quiz",
-            user_id,
-        )
-        quiz_id = None
+    # Guest document generation is deliberately ephemeral, matching ordinary
+    # guest generation. Persisting it would create a private canonical quiz
+    # with neither an author nor an organization to authorize later.
+    if user_id:
+        try:
+            save_result = await save_ai_generated_quiz(save_payload)
+            if save_result and "quiz_id" in save_result:
+                quiz_id = save_result.get("quiz_id")
+                category_metadata = {
+                    "category": save_result.get("category"),
+                    "category_slug": save_result.get("category_slug"),
+                    "subcategory": save_result.get("subcategory"),
+                    "subcategory_slug": save_result.get("subcategory_slug"),
+                    "tags": save_result.get("tags") or [],
+                    "classification": save_result.get("classification"),
+                }
+        except Exception:
+            logger.exception(
+                "Failed to persist generated document quiz for user %s; returning unsaved quiz",
+                user_id,
+            )
+            quiz_id = None
 
     if live_quiz_enabled:
         if not quiz_id:
@@ -219,13 +262,26 @@ async def generate_document_quiz(
                 get_live_quiz_sessions_collection(),
             )
         )
+        authorized_quiz = await live_service.repository.get_quiz_by_id_for_organization(
+            quiz_id,
+            organization.organization_id,
+        )
+        if authorized_quiz is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+        require_organization_permission(
+            context=organization,
+            action=OrganizationAction.CONTENT_SHARE,
+            resource=authorized_quiz,
+        )
         live_config = await live_service.generate_access_code(
             quiz_id=quiz_id,
             access_code_expires_at=access_code_expires_at,
             creator_id=user_id,
             time_limit_minutes=time_limit_minutes,
+            authorized_quiz=authorized_quiz,
         )
         live_access_code = live_config["access_code"]
+        live_access_code_created = live_config.pop("_access_code_created", False)
         live_access_expires = _to_iso_datetime(
             live_config.get("access_code_expires_at")
         )
@@ -251,18 +307,20 @@ async def generate_document_quiz(
         **category_metadata,
     )
     if current_user is not None:
-        events = get_product_events_collection()
-        await record_product_event(
-            events,
+        await record_product_event_safely(
+            get_product_events_collection,
             event_type=QUIZ_GENERATED,
+            organization_id=organization.organization_id,
             user_id=current_user.id,
             user=current_user,
             quiz_id=quiz_id,
+            origin="rest",
         )
-        if live_access_code:
-            await record_product_event(
-                events,
+        if live_access_code_created:
+            await record_product_event_safely(
+                get_product_events_collection,
                 event_type=LIVE_QUIZ_ENABLED,
+                organization_id=organization.organization_id,
                 user_id=current_user.id,
                 user=current_user,
                 quiz_id=quiz_id,

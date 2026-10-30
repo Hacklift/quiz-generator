@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from ...app.quiz.repositories.v2.models.quiz_models import QuizCreateV2, QuizMetadataUpdateV2, QuizQuestionV2
-from ...app.quiz.repositories.v2.models.attempt_models import QuizAttemptDocumentV2
+from ...app.quiz.repositories.v2.models.reference_models import QuizAttemptDocumentV2
 
 
 def test_quiz_create_v2_accepts_valid_payload():
@@ -11,6 +11,7 @@ def test_quiz_create_v2_accepts_valid_payload():
         description="Core backend quiz",
         quiz_type="multichoice",
         source="manual",
+        organization_id="organization-1",
         questions=[
             {
                 "question": "What does HTTP stand for?",
@@ -30,6 +31,7 @@ def test_quiz_create_v2_accepts_optional_category_metadata():
         quiz_type="short-answer",
         source="seed",
         visibility="public",
+        organization_id="platform-library",
         category="Science",
         category_slug="science",
         subcategory="Biology",
@@ -69,6 +71,7 @@ def test_quiz_create_v2_rejects_invalid_quiz_type():
         QuizCreateV2(
             title="Invalid",
             quiz_type="multiple_choice",
+            organization_id="organization-1",
             questions=[
                 {
                     "question": "Bad type",
@@ -86,19 +89,37 @@ def test_quiz_metadata_update_v2_rejects_unknown_fields():
 def test_matching_quiz_uses_structured_authoritative_answer():
     quiz = QuizCreateV2(
         title="Matching", quiz_type="matching", source="manual",
+        organization_id="organization-1",
         questions=[{"question": "Match", "options": ["Paris"], "correct_answer": {"France": "Paris"}}],
     )
     assert quiz.questions[0].correct_answer == {"France": "Paris"}
 
 
-def test_attempt_rejects_inconsistent_authoritative_aggregate():
+def test_quiz_attempt_document_v2_requires_non_negative_score():
     with pytest.raises(ValidationError):
         QuizAttemptDocumentV2(
-            user_id="learner", quiz_id="quiz", score=1, total_questions=2, percentage=100,
+            user_id="user-1",
+            organization_id="organization-1",
+            quiz_id="quiz-1",
             question_results=[
-                {"question_index": 0, "question": "Q1", "question_type": "multichoice",
-                 "user_answer": "A", "correct_answer": "A", "is_correct": True, "result": "Correct"},
-                {"question_index": 1, "question": "Q2", "question_type": "multichoice",
-                 "user_answer": "A", "correct_answer": "B", "is_correct": False, "result": "Incorrect"},
+                {
+                    "question": "Q1",
+                    "user_answer": "A",
+                    "correct_answer": "B",
+                    "question_type": "multichoice",
+                    "is_correct": False,
+                    "result": "Incorrect",
+                }
             ],
+            score=-1,
+            percentage=0,
+        )
+
+
+@pytest.mark.parametrize("organization_id", [None, ""])
+def test_quiz_attempt_document_requires_organization_after_cutover(organization_id):
+    with pytest.raises(ValidationError):
+        QuizAttemptDocumentV2(
+            user_id="user-1", quiz_id="quiz-1", organization_id=organization_id,
+            question_results=[], score=0, percentage=0,
         )

@@ -14,9 +14,8 @@ import {
   SaveQuizButton,
 } from "@features/quiz/components";
 import { api } from "@shared/api/http";
+import publicApi from "@shared/api/publicHttp";
 import { TokenService } from "@shared/auth/tokenService";
-import { useAuth } from "@features/auth/context/authContext";
-import SignInModal from "@features/auth/components/SignInModal";
 import LiveQuizAccessCodePanel from "@features/live-quiz/components/LiveQuizAccessCodePanel";
 import { saveQuizToHistory } from "@features/quiz-history/api/saveQuizToHistoryApi";
 
@@ -42,7 +41,6 @@ const isAnswerProvided = (answer: LearnerAnswer | undefined) => {
 };
 
 const QuizDisplayPage: React.FC = () => {
-  const { isAuthenticated } = useAuth();
   const searchParams = useSearchParams();
   const isDocumentGenerated = searchParams?.get("generated") === "document";
   const generatedQuizKey = searchParams?.get("generatedQuizKey") || "";
@@ -56,6 +54,7 @@ const QuizDisplayPage: React.FC = () => {
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [userAnswers, setUserAnswers] = useState<LearnerAnswer[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
+  const [isGrading, setIsGrading] = useState(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
   const [quizId, setQuizId] = useState(canonicalQuizId);
   const [quizTitle, setQuizTitle] = useState("");
@@ -66,8 +65,8 @@ const QuizDisplayPage: React.FC = () => {
   const [liveAccessCode, setLiveAccessCode] = useState("");
   const [liveAccessUrl, setLiveAccessUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const lastFetchKeyRef = useRef<string | null>(null);
+  const gradingInFlightRef = useRef(false);
 
   useEffect(() => {
     const fetchKey = JSON.stringify({
@@ -293,7 +292,7 @@ const QuizDisplayPage: React.FC = () => {
   ]);
 
   const handleAnswerChange = (index: number, answer: LearnerAnswer) => {
-    if (isQuizChecked) {
+    if (isQuizChecked || gradingInFlightRef.current) {
       return;
     }
 
@@ -302,29 +301,8 @@ const QuizDisplayPage: React.FC = () => {
     setUserAnswers(updated);
   };
 
-  const submitAnswers = async () => {
-    try {
-      const payload = {
-        answers: quizQuestions.map((q, i) => ({
-          question_index: i,
-          user_answer: userAnswers[i],
-        })),
-      };
-
-      const { data } = await api.post(
-        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
-        payload,
-      );
-
-      setQuizReport(Array.isArray(data) ? data : data.question_results);
-      setIsQuizChecked(true);
-    } catch (err) {
-      console.error("Error checking answers:", err);
-      toast.error("Failed to grade your quiz. Please try again.");
-    }
-  };
-
   const checkAnswers = async () => {
+    if (isQuizChecked || gradingInFlightRef.current) return;
     const unansweredQuestions = quizQuestions
       .map((_, index) => index)
       .filter((index) => !isAnswerProvided(userAnswers[index]));
@@ -345,15 +323,40 @@ const QuizDisplayPage: React.FC = () => {
       return;
     }
 
-    if (!isAuthenticated) {
-      toast.error("Sign in to submit this quiz and receive or save your result.");
-      setIsSignInOpen(true);
-      return;
-    }
+    gradingInFlightRef.current = true;
+    setIsGrading(true);
+    try {
+      // Grading is authoritative on the server: only the user's answers are
+      // sent, and correct answers come back in the grading response.
+      const payload = {
+        answers: quizQuestions.map((_, i) => ({
+          question_index: i,
+          user_answer: userAnswers[i],
+        })),
+      };
 
-    // Grading is authoritative on the server: only the user's answers are
-    // sent, and correct answers come back in the grading response.
-    await submitAnswers();
+      const authenticated = TokenService.hasTokens();
+      const httpClient = authenticated ? api : publicApi;
+      const { data: report, headers } = await httpClient.post(
+        `/api/quizzes/${encodeURIComponent(quizId)}/grade`,
+        payload,
+      );
+
+      setQuizReport(report);
+      setIsQuizChecked(true);
+      const attemptStatus = headers?.["x-quiz-attempt-status"];
+      if (authenticated && attemptStatus === "failed") {
+        toast.error("Your quiz was graded, but this attempt could not be saved to history.");
+      } else if (authenticated && attemptStatus === "not-requested") {
+        toast.error("Your quiz was graded without saving an attempt. Sign in again before your next attempt.");
+      }
+    } catch (err) {
+      console.error("Error checking answers:", err);
+      toast.error("Failed to grade your quiz. Please try again.");
+    } finally {
+      gradingInFlightRef.current = false;
+      setIsGrading(false);
+    }
   };
 
   if (isLoading) {
@@ -441,14 +444,15 @@ const QuizDisplayPage: React.FC = () => {
                     onAnswerChange={handleAnswerChange}
                     options={q.options || []}
                     value={userAnswers[i]}
-                    disabled={isQuizChecked}
+                    disabled={isQuizChecked || isGrading}
                   />
                 </div>
               ))}
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0">
-              {!isQuizChecked && <CheckButton onClick={checkAnswers} />}
+              {!isQuizChecked && !isGrading && <CheckButton onClick={checkAnswers} />}
+              {isGrading && <p role="status">Grading your answers...</p>}
               <SaveQuizButton quizData={quizQuestions} quizId={quizId} />
               <DownloadQuizButton
                 quizId={quizId}
@@ -546,15 +550,6 @@ const QuizDisplayPage: React.FC = () => {
       </main>
 
       <Footer />
-      <SignInModal
-        isOpen={isSignInOpen}
-        onClose={() => setIsSignInOpen(false)}
-        switchToSignUp={() => setIsSignInOpen(false)}
-        onSuccess={async () => {
-          setIsSignInOpen(false);
-          await submitAnswers();
-        }}
-      />
     </div>
   );
 };

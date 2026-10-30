@@ -1,3 +1,4 @@
+import asyncio
 import csv
 from datetime import datetime, timezone
 from io import StringIO
@@ -8,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 from pypdf import PdfReader
 
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
 from server.app.quiz.routes import live_sessions as live_sessions_routes
 from server.app.quiz.routes.live_sessions import export_live_quiz_results
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
@@ -16,6 +18,28 @@ from server.app.quiz.utils.live_results_export import (
     generate_live_results_pdf,
     generate_live_results_txt,
 )
+
+
+def _owner_context(user_id="teacher-1") -> OrganizationContext:
+    principal = OrganizationPrincipal(user_id=user_id, session_id="session-1")
+    return OrganizationContext(
+        organization_id="organization-1",
+        organization_kind="personal",
+        membership_role="owner",
+        principal=principal,
+        membership={"role": "owner", "status": "active"},
+    )
+
+
+class ExportRouteService:
+    class Repository:
+        async def get_quiz_by_id_for_organization(self, quiz_id, organization_id):
+            return {
+                "_id": quiz_id, "organization_id": organization_id,
+                "created_by_user_id": "teacher-1",
+            }
+
+    repository = Repository()
 
 
 class ResultsRepository:
@@ -185,18 +209,15 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
 ):
     payload = {"title": "Class Results", "question_count": 0, "participants": []}
 
-    class Service:
-        async def build_results_export(self, quiz_id, requester_id):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             assert (quiz_id, requester_id) == ("quiz-1", "teacher-1")
+            assert authorized_quiz["organization_id"] == "organization-1"
             return payload
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
-    event_collection = object()
     monkeypatch.setattr(
-        live_sessions_routes,
-        "get_product_events_collection",
-        lambda: event_collection,
+        live_sessions_routes, "record_product_event_safely", record_event
     )
     current_user = SimpleNamespace(
         id="teacher-1",
@@ -208,12 +229,10 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
         "quiz-1",
         export_format,
         current_user,
-        Service(),
+        organization=_owner_context(),
+        service=Service(),
     )
-    chunks = [chunk async for chunk in response.body_iterator]
-    body = b"".join(
-        chunk if isinstance(chunk, bytes) else chunk.encode() for chunk in chunks
-    )
+    body = response.body
     if export_format == "csv":
         assert body.decode() == "Participant,Score,Percentage\n"
     elif export_format == "txt":
@@ -225,31 +244,69 @@ async def test_authenticated_creator_route_records_one_successful_export_event(
         f'attachment; filename="Class Results results.{export_format}"'
     )
     record_event.assert_awaited_once_with(
-        event_collection,
+        live_sessions_routes.get_product_events_collection,
         event_type="results_exported",
         user_id="teacher-1",
         user=current_user,
         quiz_id="quiz-1",
         export_format=export_format,
+        organization_id="organization-1",
     )
+
+
+@pytest.mark.asyncio
+async def test_export_response_is_not_delayed_by_slow_telemetry(monkeypatch):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
+            return {"title": "Class Results", "question_count": 0, "participants": []}
+
+    async def slow_insert(_event):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        live_sessions_routes,
+        "get_product_events_collection",
+        lambda: SimpleNamespace(insert_one=slow_insert),
+    )
+    current_user = SimpleNamespace(id="teacher-1")
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    response = await export_live_quiz_results(
+        quiz_id="quiz-1",
+        format="csv",
+        current_user=SimpleNamespace(id="teacher-1"),
+        organization=_owner_context(),
+        service=Service(),
+    )
+
+    assert response.media_type == "text/csv"
+    assert loop.time() - started_at < 0.2
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status_code", [403, 404])
 async def test_rejected_export_does_not_record_product_event(monkeypatch, status_code):
-    class Service:
-        async def build_results_export(self, quiz_id, requester_id):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             raise HTTPException(status_code=status_code, detail="Rejected")
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(HTTPException) as error:
         await export_live_quiz_results(
             "quiz-1",
             "csv",
             SimpleNamespace(id="teacher-2"),
-            Service(),
+            organization=_owner_context("teacher-2"),
+            service=Service(),
         )
 
     assert error.value.status_code == status_code
@@ -258,8 +315,8 @@ async def test_rejected_export_does_not_record_product_event(monkeypatch, status
 
 @pytest.mark.asyncio
 async def test_invalid_export_format_does_not_record_product_event(monkeypatch):
-    class Service:
-        async def build_results_export(self, quiz_id, requester_id):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             return {
                 "title": "Class Results",
                 "question_count": 0,
@@ -267,14 +324,17 @@ async def test_invalid_export_format_does_not_record_product_event(monkeypatch):
             }
 
     record_event = AsyncMock()
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(KeyError):
         await export_live_quiz_results(
             "quiz-1",
             "json",
             SimpleNamespace(id="teacher-1"),
-            Service(),
+            organization=_owner_context(),
+            service=Service(),
         )
 
     record_event.assert_not_awaited()
@@ -282,8 +342,8 @@ async def test_invalid_export_format_does_not_record_product_event(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_failed_export_generation_does_not_record_product_event(monkeypatch):
-    class Service:
-        async def build_results_export(self, quiz_id, requester_id):
+    class Service(ExportRouteService):
+        async def build_results_export(self, quiz_id, requester_id, *, authorized_quiz):
             return {
                 "title": "Class Results",
                 "question_count": 0,
@@ -295,14 +355,17 @@ async def test_failed_export_generation_does_not_record_product_event(monkeypatc
 
     record_event = AsyncMock()
     monkeypatch.setattr(live_sessions_routes, "generate_live_results_csv", fail_generation)
-    monkeypatch.setattr(live_sessions_routes, "record_product_event", record_event)
+    monkeypatch.setattr(
+        live_sessions_routes, "record_product_event_safely", record_event
+    )
 
     with pytest.raises(RuntimeError, match="export generation failed"):
         await export_live_quiz_results(
             "quiz-1",
             "csv",
             SimpleNamespace(id="teacher-1"),
-            Service(),
+            organization=_owner_context(),
+            service=Service(),
         )
 
     record_event.assert_not_awaited()

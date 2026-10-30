@@ -1,10 +1,15 @@
+import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
-from server.app.analytics.product_events import QUIZ_GENERATED, record_product_event
+from server.app.analytics.product_events import (
+    QUIZ_GENERATED,
+    record_product_event,
+    record_product_event_safely,
+)
 from server.app.analytics.reporting import aggregate_persona_events
 from server.app.users.persona import analytics_persona_snapshot
 from server.app.users.repository import record_auth_event
@@ -73,6 +78,79 @@ async def test_product_event_is_minimal_and_snapshots_persona_at_event_time():
 
 
 @pytest.mark.asyncio
+async def test_product_event_carries_validated_tenant_and_actor():
+    collection = SimpleNamespace(insert_one=AsyncMock())
+    await record_product_event(
+        collection, event_type=QUIZ_GENERATED, user_id="user-1", user=None,
+        organization_id="organization-1",
+    )
+    saved = collection.insert_one.await_args.args[0]
+    assert saved["organization_id"] == "organization-1"
+    assert saved["created_by_user_id"] == saved["user_id"] == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_product_event_timeout_is_bounded_and_does_not_raise(monkeypatch, caplog):
+    attempts = 0
+
+    async def slow_insert(_event):
+        nonlocal attempts
+        attempts += 1
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(
+        "server.app.analytics.product_events.settings.PRODUCT_EVENT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    collection = SimpleNamespace(insert_one=slow_insert)
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+
+    await record_product_event(
+        collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    assert loop.time() - started_at < 0.2
+    assert attempts == 1
+    assert "Timed out recording product event quiz_generated" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_product_event_unexpected_exception_does_not_raise(caplog):
+    collection = SimpleNamespace(
+        insert_one=AsyncMock(side_effect=RuntimeError("telemetry unavailable"))
+    )
+
+    await record_product_event(
+        collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    collection.insert_one.assert_awaited_once()
+    assert "Unexpected failure recording product event quiz_generated" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_product_event_collection_acquisition_failure_does_not_raise(caplog):
+    def unavailable_collection():
+        raise RuntimeError("analytics collection unavailable")
+
+    await record_product_event_safely(
+        unavailable_collection,
+        event_type=QUIZ_GENERATED,
+        user_id="user-1",
+        user=None,
+    )
+
+    assert "Failed to acquire product events collection for quiz_generated" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_auth_event_merges_persona_without_adding_profile_pii():
     collection = SimpleNamespace(insert_one=AsyncMock())
     user = {
@@ -112,6 +190,7 @@ def test_report_groups_signup_and_generation_and_normalizes_legacy_events():
             "created_at": timestamp,
             "persona_category": "school",
             "persona_user_type": "parent",
+            "origin": "mcp",
         },
         {"created_at": timestamp, "persona_category": "school"},
     ]

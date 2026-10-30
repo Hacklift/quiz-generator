@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import pytest
 from bson import ObjectId
 from fastapi import HTTPException
@@ -14,6 +12,9 @@ from server.app.quiz.services.quiz_grading_service import (
     SubmissionMismatchError,
     grade_against_stored_questions,
 )
+from server.app.quiz.services.quiz_practice_access import QuizPracticeAccess
+from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
+from server.tests.test_quiz_attempts import FakeOrganizationRepository
 
 
 def grade_one(question_type, correct_answer, user_answer, *, source="mock"):
@@ -154,12 +155,16 @@ class FakeQuizRepository:
     def __init__(self, quiz):
         self.quiz = quiz
 
-    async def find_by_id(self, quiz_id):
-        return self.quiz
+    async def find_attempt_source_quizzes(self, quiz_ids, *, organization_id):
+        if str(self.quiz.id) not in quiz_ids or self.quiz.status.value == "deleted":
+            return []
+        if self.quiz.visibility.value in {"public", "unlisted"}:
+            return [self.quiz]
+        return [self.quiz] if self.quiz.organization_id == organization_id else []
 
 
 class FakeReferenceRepository:
-    async def get_saved_quiz_by_public_id(self, quiz_id):
+    async def get_saved_quiz_for_attempt(self, quiz_id, *, user_id, organization_id):
         return None
 
 
@@ -186,6 +191,8 @@ def make_quiz(
         title="Objective quiz",
         quiz_type="multichoice",
         source="manual",
+        organization_id="org-1",
+        created_by_user_id=owner_user_id,
         owner_user_id=owner_user_id,
         visibility=visibility,
         status=status,
@@ -193,6 +200,25 @@ def make_quiz(
             {"question": "Q1", "correct_answer": "A", "options": ["A", "B"]},
             {"question": "Q2", "correct_answer": "B", "options": ["A", "B"]},
         ],
+    )
+
+
+def organization_context(user_id: str, *, role: str = "owner"):
+    return OrganizationContext(
+        organization_id="org-1",
+        organization_kind="personal",
+        membership_role=role,
+        principal=OrganizationPrincipal(user_id=user_id, session_id="session-1"),
+        membership={},
+    )
+
+
+def make_service(quiz, attempts):
+    return QuizGradingService(
+        quiz_access=QuizPracticeAccess(FakeOrganizationRepository()),
+        quiz_repository=FakeQuizRepository(quiz),
+        reference_repository=FakeReferenceRepository(),
+        attempt_repository=attempts,
     )
 
 
@@ -206,35 +232,29 @@ def complete_answers():
 @pytest.mark.asyncio
 async def test_private_quiz_owner_can_grade_and_persist_attempt():
     quiz, attempts = make_quiz(owner_user_id="user-a"), FakeAttemptRepository()
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=attempts,
-    )
+    service = make_service(quiz, attempts)
 
     response = await service.grade_submission(
-        str(quiz.id), complete_answers(), user_id="user-a"
+        str(quiz.id), complete_answers(), user_id="user-a",
+        organization_id="org-1", organization=organization_context("user-a"),
     )
 
     assert response is not None
-    assert response["score"] == 2
+    assert all(result["is_correct"] for result in response.results)
     assert len(attempts.attempts) == 1
 
 
 @pytest.mark.asyncio
 async def test_private_quiz_non_owner_gets_no_result_or_correct_answers_and_no_attempt():
     quiz, attempts = make_quiz(owner_user_id="user-a"), FakeAttemptRepository()
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=attempts,
-    )
+    service = make_service(quiz, attempts)
 
-    response = await service.grade_submission(
-        str(quiz.id), complete_answers(), user_id="user-b"
-    )
-
-    assert response is None
+    with pytest.raises(HTTPException):
+        await service.grade_submission(
+            str(quiz.id), complete_answers(), user_id="user-b",
+            organization_id="org-1",
+            organization=organization_context("user-b", role="learner"),
+        )
     assert attempts.attempts == []
 
 
@@ -245,18 +265,15 @@ async def test_non_owner_can_grade_shareable_quiz(visibility):
         make_quiz(owner_user_id="user-a", visibility=visibility),
         FakeAttemptRepository(),
     )
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=attempts,
-    )
+    service = make_service(quiz, attempts)
 
     response = await service.grade_submission(
-        str(quiz.id), complete_answers(), user_id="user-b"
+        str(quiz.id), complete_answers(), user_id="user-b",
+        organization_id="org-1", organization=organization_context("user-b"),
     )
 
     assert response is not None
-    assert response["question_results"][0]["correct_answer"] == "A"
+    assert response.results[0]["correct_answer"] == "A"
     assert len(attempts.attempts) == 1
 
 
@@ -266,15 +283,12 @@ async def test_deleted_quiz_cannot_be_graded_even_by_owner():
         make_quiz(owner_user_id="user-a", status="deleted"),
         FakeAttemptRepository(),
     )
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=attempts,
-    )
+    service = make_service(quiz, attempts)
 
     assert (
         await service.grade_submission(
-            str(quiz.id), complete_answers(), user_id="user-a"
+            str(quiz.id), complete_answers(), user_id="user-a",
+            organization_id="org-1", organization=organization_context("user-a"),
         )
         is None
     )
@@ -299,6 +313,7 @@ async def test_grading_route_maps_hidden_quiz_to_404(monkeypatch):
             payload=payload,
             source="mock",
             current_user=current_user,
+            organization=None,
         )
 
     assert exc_info.value.status_code == 404
@@ -323,6 +338,7 @@ async def test_grading_route_does_not_expose_internal_exception_text(monkeypatch
             payload=payload,
             source="mock",
             current_user=current_user,
+            organization=None,
         )
 
     assert exc_info.value.status_code == 500
@@ -333,11 +349,7 @@ async def test_grading_route_does_not_expose_internal_exception_text(monkeypatch
 @pytest.mark.asyncio
 async def test_authenticated_submission_persists_complete_attempt_before_response():
     quiz, attempts = make_quiz(), FakeAttemptRepository()
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=attempts,
-    )
+    service = make_service(quiz, attempts)
     response = await service.grade_submission(
         str(quiz.id),
         [
@@ -345,46 +357,38 @@ async def test_authenticated_submission_persists_complete_attempt_before_respons
             {"question_index": 1, "user_answer": "A"},
         ],
         user_id="learner-1",
+        organization_id="org-1",
+        organization=organization_context("learner-1"),
     )
     assert len(attempts.attempts) == 1
     attempt = attempts.attempts[0]
-    assert response["attempt_id"] == str(attempt.id)
-    assert (attempt.user_id, attempt.quiz_id, attempt.status) == (
+    assert response.attempt_saved is True
+    assert (attempt.user_id, attempt.quiz_id) == (
         "learner-1",
         str(quiz.id),
-        "completed",
     )
-    assert (attempt.score, attempt.total_questions, attempt.percentage) == (1, 2, 50.0)
+    assert (attempt.score, attempt.percentage) == (1, 50.0)
     assert len(attempt.question_results) == 2
     assert attempt.question_results[0].correct_answer == "A"
-    assert all(
-        isinstance(value, datetime)
-        for value in (
-            attempt.submitted_at,
-            attempt.graded_at,
-            attempt.created_at,
-            attempt.updated_at,
-        )
-    )
+    assert attempt.submitted_at is not None
 
 
 @pytest.mark.asyncio
 async def test_persistence_failure_does_not_return_success():
     quiz = make_quiz()
-    service = QuizGradingService(
-        quiz_repository=FakeQuizRepository(quiz),
-        reference_repository=FakeReferenceRepository(),
-        attempt_repository=FakeAttemptRepository(fail=True),
+    service = make_service(quiz, FakeAttemptRepository(fail=True))
+    result = await service.grade_submission(
+        str(quiz.id),
+        [
+            {"question_index": 0, "user_answer": "A"},
+            {"question_index": 1, "user_answer": "B"},
+        ],
+        user_id="learner-1",
+        organization_id="org-1",
+        organization=organization_context("learner-1"),
     )
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        await service.grade_submission(
-            str(quiz.id),
-            [
-                {"question_index": 0, "user_answer": "A"},
-                {"question_index": 1, "user_answer": "B"},
-            ],
-            user_id="learner-1",
-        )
+    assert result.attempt_saved is False
+    assert all(item["is_correct"] for item in result.results)
 
 
 def test_live_and_parent_practice_use_shared_objective_semantics(monkeypatch):

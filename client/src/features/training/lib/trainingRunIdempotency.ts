@@ -18,6 +18,7 @@ export const trainingRunIntentFingerprint = (
     purpose: payload.purpose,
     title: (payload.title ?? "").trim(),
     time_limit_minutes: payload.time_limit_minutes,
+    passing_threshold_percentage: payload.passing_threshold_percentage ?? 80,
     closes_at: payload.closes_at,
     due_at: payload.due_at ?? null,
     access_mode: payload.access_mode,
