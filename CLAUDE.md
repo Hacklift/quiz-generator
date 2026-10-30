@@ -119,7 +119,7 @@ When implementing or modifying a feature across the stack, follow this data flow
 2. **MongoDB ObjectId Handling**: Never leak raw `ObjectId` instances in API responses. Serialize `_id` to string `id: str` in Pydantic response models.
 3. **Authentication**: Protect user endpoints using `Depends(get_current_user)`.
 4. **Error Handling**: Raise explicit `HTTPException(status_code=..., detail=...)`.
-5. **Rate Limiting**: Apply `@limiter.limit(...)` to public or heavy AI generation endpoints.
+5. **Rate Limiting**: Apply `@limiter.limit(...)` to public or heavy AI generation endpoints. With rate-limit headers enabled, handlers returning JSON/Pydantic data must accept both `request: Request` and `response: Response` so SlowAPI can inject headers. Handlers returning a `Response` directly do not need an injected response. Test decorated endpoints over HTTP with limiting enabled, not only via `__wrapped__`.
 
 ### Frontend (`client/`)
 1. **Feature-First Organization**: Place code under `client/src/features/<feature>/` (`components/`, `api/`, `types/`, `pages/`).

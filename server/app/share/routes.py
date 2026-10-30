@@ -55,6 +55,7 @@ shared_quiz_read_service = SharedQuizReadService()
 @limiter.limit(RateLimits.PUBLIC)
 async def get_random_quiz_id(
     request: Request,
+    response: Response,
     quizzes_v2_collection: AsyncIOMotorCollection = Depends(get_quizzes_v2_collection),
     organizations_collection: AsyncIOMotorCollection = Depends(get_organizations_collection),
 ):
@@ -141,6 +142,7 @@ async def _is_anonymously_shareable(quiz_id: str) -> bool:
 @limiter.limit(RateLimits.PUBLIC)
 async def get_share_link(
     request: Request,
+    response: Response,
     quiz_id: str,
     current_user: UserOut | None = Depends(get_current_user_optional),
     sessions_collection=Depends(get_user_sessions_collection),
@@ -182,7 +184,7 @@ async def get_share_link(
 
 @router.get("/shared-quiz/{quiz_id}", response_model=SharedQuizDataResponse)
 @limiter.limit(RateLimits.PUBLIC)
-async def get_shared_quiz_data(request: Request, quiz_id: str):
+async def get_shared_quiz_data(request: Request, response: Response, quiz_id: str):
     try:
         shared_quiz = await shared_quiz_read_service.resolve_shared_quiz(quiz_id)
         if not shared_quiz:

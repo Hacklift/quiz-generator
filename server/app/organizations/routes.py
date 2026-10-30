@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from bson import ObjectId
 
 from server.app.core.dependencies import get_current_user, get_verified_user
@@ -77,6 +77,7 @@ def _invitation_service() -> OrganizationInvitationService:
 @limiter.limit(RateLimits.API_WRITE)
 async def create_organization(
     request: Request,
+    response: Response,
     payload: CreateOrganizationRequest,
     current_user: UserOut = Depends(get_verified_user),
 ):
@@ -103,6 +104,7 @@ async def create_organization(
 @limiter.limit(RateLimits.API_READ)
 async def list_my_memberships(
     request: Request,
+    response: Response,
     current_user: UserOut = Depends(get_current_user),
 ):
     memberships = await OrganizationMembershipRepository(
@@ -160,6 +162,7 @@ async def list_my_memberships(
 @limiter.limit(RateLimits.API_WRITE)
 async def select_active_organization(
     request: Request,
+    response: Response,
     payload: ActiveOrganizationSelectionRequest,
     current_user: UserOut = Depends(get_current_user),
 ):
@@ -191,6 +194,7 @@ async def select_active_organization(
 @limiter.limit(RateLimits.API_WRITE)
 async def create_invitation(
     request: Request,
+    response: Response,
     payload: CreateOrganizationInvitationRequest,
     email_service: EmailService = Depends(get_email_service),
     _current_user: UserOut = Depends(get_verified_user),
@@ -220,6 +224,7 @@ async def create_invitation(
 @limiter.limit(RateLimits.API_READ)
 async def list_invitations(
     request: Request,
+    response: Response,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, min_length=24, max_length=24),
     _current_user: UserOut = Depends(get_verified_user),
@@ -247,6 +252,7 @@ async def list_invitations(
 @limiter.limit(RateLimits.API_READ)
 async def list_organization_members(
     request: Request,
+    response: Response,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, min_length=24, max_length=24),
     _current_user: UserOut = Depends(get_verified_user),
@@ -297,6 +303,7 @@ async def list_organization_members(
 @limiter.limit(RateLimits.API_WRITE)
 async def accept_invitation(
     request: Request,
+    response: Response,
     payload: InvitationDecisionRequest,
     current_user: UserOut = Depends(get_verified_user),
 ):
@@ -312,6 +319,7 @@ async def accept_invitation(
 @limiter.limit(RateLimits.API_WRITE)
 async def decline_invitation(
     request: Request,
+    response: Response,
     payload: InvitationDecisionRequest,
     current_user: UserOut = Depends(get_verified_user),
 ):
@@ -324,6 +332,7 @@ async def decline_invitation(
 async def revoke_invitation(
     invitation_id: str,
     request: Request,
+    response: Response,
     _current_user: UserOut = Depends(get_verified_user),
     context: OrganizationContext = Depends(get_active_organization_context),
 ):
@@ -355,6 +364,7 @@ async def update_membership_status(
     user_id: str,
     payload: UpdateOrganizationMembershipRequest,
     request: Request,
+    response: Response,
     _current_user: UserOut = Depends(get_verified_user),
     context: OrganizationContext = Depends(get_active_organization_context),
 ):
