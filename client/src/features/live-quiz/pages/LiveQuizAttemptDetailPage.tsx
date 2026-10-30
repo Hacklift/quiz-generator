@@ -79,8 +79,8 @@ export default function LiveQuizAttemptDetailPage({
                         <div>
                           <h3 className="font-extrabold">Question {answer.question_index + 1}</h3>
                           <p className="mt-[5px]">{answer.question}</p>
-                          <p className="mt-[8px] text-[14px] text-ink/70">Child&apos;s answer: {answer.selected_answer || "No answer"}</p>
-                          <p className="mt-[3px] text-[14px] text-ink/70">Correct answer: {answer.correct_answer}</p>
+                          <p className="mt-[8px] text-[14px] text-ink/70">Child&apos;s answer: {typeof answer.selected_answer === "object" ? JSON.stringify(answer.selected_answer) : answer.selected_answer || "No answer"}</p>
+                          <p className="mt-[3px] text-[14px] text-ink/70">Correct answer: {typeof answer.correct_answer === "object" ? JSON.stringify(answer.correct_answer) : answer.correct_answer}</p>
                         </div>
                       </div>
                     </li>

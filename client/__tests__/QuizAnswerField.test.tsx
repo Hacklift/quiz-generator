@@ -36,4 +36,20 @@ describe("QuizAnswerField", () => {
 
     expect(onAnswerChange).toHaveBeenCalledWith(1, 1);
   });
+
+  test("matching emits a structured mapping", () => {
+    const onAnswerChange = jest.fn();
+    render(
+      <QuizAnswerField
+        questionType="matching"
+        index={2}
+        options={["Paris", "Rome"]}
+        value={{ France: "", Italy: "" }}
+        onAnswerChange={onAnswerChange}
+      />,
+    );
+
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "Paris" } });
+    expect(onAnswerChange).toHaveBeenCalledWith(2, { France: "Paris", Italy: "" });
+  });
 });

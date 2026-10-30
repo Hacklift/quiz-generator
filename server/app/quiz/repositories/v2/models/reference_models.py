@@ -127,9 +127,10 @@ class QuizHistoryDocumentV2(BaseModel):
 
 
 class QuizAttemptQuestionResultV2(BaseModel):
+    question_index: int | None = None
     question: str
-    user_answer: str | int | None = None
-    correct_answer: str | int | None = None
+    user_answer: str | int | dict[str, str] | None = None
+    correct_answer: str | int | dict[str, str] | None = None
     options: list[str] | None = None
     question_type: str
     accuracy_percentage: float | None = None

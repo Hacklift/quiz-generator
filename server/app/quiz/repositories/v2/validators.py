@@ -31,7 +31,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                     "owner_user_id": {"bsonType": ["string", "null"]},
                     "organization_id": {"bsonType": "string", "minLength": 1},
                     "created_by_user_id": {"bsonType": ["string", "null"]},
-                    "quiz_type": {"enum": ["multichoice", "true-false", "open-ended", "short-answer"]},
+                    "quiz_type": {"enum": ["multichoice", "true-false", "open-ended", "short-answer", "matching"]},
                     "visibility": {"enum": ["private", "public", "unlisted"]},
                     "status": {"enum": ["active", "archived", "deleted"]},
                     "source": {"enum": ["ai", "manual", "seed", "legacy"]},
@@ -69,7 +69,7 @@ def get_v2_collection_validators() -> dict[str, dict]:
                             "required": ["question", "correct_answer"],
                             "properties": {
                                 "question": {"bsonType": "string", "minLength": 1},
-                                "correct_answer": {"bsonType": "string", "minLength": 1},
+                                "correct_answer": {"bsonType": ["string", "object"]},
                                 "options": {
                                     "bsonType": ["array", "null"],
                                     "items": {"bsonType": "string"},
@@ -173,9 +173,10 @@ def get_v2_collection_validators() -> dict[str, dict]:
                                 "result",
                             ],
                             "properties": {
+                                "question_index": {"bsonType": ["int", "long", "null"]},
                                 "question": {"bsonType": "string", "minLength": 1},
-                                "user_answer": {"bsonType": ["string", "int", "long", "null"]},
-                                "correct_answer": {"bsonType": ["string", "int", "long", "null"]},
+                                "user_answer": {"bsonType": ["string", "int", "long", "object", "null"]},
+                                "correct_answer": {"bsonType": ["string", "int", "long", "object", "null"]},
                                 "options": {
                                     "bsonType": ["array", "null"],
                                     "items": {"bsonType": "string"},

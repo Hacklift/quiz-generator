@@ -18,7 +18,7 @@ interface LiveQuizPageProps {
 const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   const router = useRouter();
   const [session, setSession] = useState<LiveQuizSessionState | null>(null);
-  const [selectedAnswer, setSelectedAnswer] = useState("");
+  const [selectedAnswer, setSelectedAnswer] = useState<string | Record<string, string>>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -165,7 +165,9 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
   const saveCurrentAnswer = async (nextQuestionIndex?: number) => {
     if (
       !session?.question ||
-      !selectedAnswer.trim() ||
+      (typeof selectedAnswer === "string"
+        ? !selectedAnswer.trim()
+        : Object.keys(selectedAnswer).length === 0 || !Object.values(selectedAnswer).every(Boolean)) ||
       hasAutoSubmitted ||
       hasSubmitted ||
       remainingSeconds === 0
@@ -200,7 +202,7 @@ const LiveQuizPage: React.FC<LiveQuizPageProps> = ({ sessionId }) => {
     }
   };
 
-  const handleSelect = async (answer: string) => {
+  const handleSelect = async (answer: string | Record<string, string>) => {
     if (hasAutoSubmitted || hasSubmitted || remainingSeconds === 0) return;
     setSelectedAnswer(answer);
     if (!session?.question) return;

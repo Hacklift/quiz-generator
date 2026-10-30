@@ -1,8 +1,7 @@
-from typing import List, Union
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
-
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from server.app.core.dependencies import get_current_user_optional
 from server.app.core.rate_limiter import RateLimits, limiter
 from server.app.organizations.dependencies import get_optional_active_organization_context
@@ -12,17 +11,28 @@ from server.app.quiz.services.quiz_grading_service import (
     SubmissionMismatchError,
 )
 
-
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class SubmittedAnswer(BaseModel):
-    question: str
-    user_answer: Union[str, int]
+    question_index: int | None = Field(default=None, ge=0)
+    question: str | None = None
+    user_answer: str | int | bool | dict[str, str]
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def require_question_locator(self):
+        if self.question_index is None and not self.question:
+            raise ValueError("question_index or question is required")
+        return self
 
 
 class GradeQuizRequest(BaseModel):
-    answers: List[SubmittedAnswer]
+    answers: list[SubmittedAnswer]
+
+    model_config = ConfigDict(extra="forbid")
 
 
 @router.post("/quizzes/{quiz_id}/grade")
@@ -56,7 +66,8 @@ async def grade_quiz_submission(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Error grading answers: {str(exc)}") from exc
+        logger.exception("Failed to grade quiz submission", extra={"quiz_id": quiz_id})
+        raise HTTPException(status_code=500, detail="Could not grade quiz") from exc
 
     if graded is None:
         raise HTTPException(status_code=404, detail="Quiz not found")

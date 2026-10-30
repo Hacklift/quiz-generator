@@ -86,6 +86,15 @@ def test_quiz_metadata_update_v2_rejects_unknown_fields():
         QuizMetadataUpdateV2(title="Valid", unknown_field="nope")
 
 
+def test_matching_quiz_uses_structured_authoritative_answer():
+    quiz = QuizCreateV2(
+        title="Matching", quiz_type="matching", source="manual",
+        organization_id="organization-1",
+        questions=[{"question": "Match", "options": ["Paris"], "correct_answer": {"France": "Paris"}}],
+    )
+    assert quiz.questions[0].correct_answer == {"France": "Paris"}
+
+
 def test_quiz_attempt_document_v2_requires_non_negative_score():
     with pytest.raises(ValidationError):
         QuizAttemptDocumentV2(

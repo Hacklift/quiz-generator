@@ -6,6 +6,7 @@ const QUESTION_TYPES = [
   { label: "Multiple Choice", value: "multichoice" },
   { label: "True/False", value: "true-false" },
   { label: "Short Answer", value: "short-answer" },
+  { label: "Matching", value: "matching" },
   { label: "Open Ended", value: "open-ended" },
 ];
 

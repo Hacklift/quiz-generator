@@ -29,12 +29,15 @@ type DocumentContext = {
   embeddingCacheHit: boolean;
 };
 
-const isAnswerProvided = (answer: string | number | undefined) => {
+type LearnerAnswer = string | number | Record<string, string>;
+
+const isAnswerProvided = (answer: LearnerAnswer | undefined) => {
   if (typeof answer === "number") {
     return true;
   }
 
-  return typeof answer === "string" && answer.trim().length > 0;
+  if (typeof answer === "string") return answer.trim().length > 0;
+  return !!answer && Object.keys(answer).length > 0 && Object.values(answer).every(Boolean);
 };
 
 const QuizDisplayPage: React.FC = () => {
@@ -49,7 +52,7 @@ const QuizDisplayPage: React.FC = () => {
   const customInstruction = searchParams?.get("customInstruction") || "";
 
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
-  const [userAnswers, setUserAnswers] = useState<(string | number)[]>([]);
+  const [userAnswers, setUserAnswers] = useState<LearnerAnswer[]>([]);
   const [isQuizChecked, setIsQuizChecked] = useState<boolean>(false);
   const [isGrading, setIsGrading] = useState(false);
   const [quizReport, setQuizReport] = useState<any[]>([]);
@@ -115,7 +118,13 @@ const QuizDisplayPage: React.FC = () => {
         setQuizDescription(quizData?.description || "");
         setActiveQuestionType(resolvedQuestionType);
         setQuizQuestions(normalizedQuestions);
-        setUserAnswers(Array(normalizedQuestions.length).fill(""));
+        setUserAnswers(
+          normalizedQuestions.map((question: any) =>
+            question.question_type === "matching" && question.answer && typeof question.answer === "object"
+              ? Object.fromEntries(Object.keys(question.answer).map((key) => [key, ""]))
+              : "",
+          ),
+        );
         setQuizId(resolvedQuizId);
 
         if (quizData?.source_document_name) {
@@ -282,7 +291,7 @@ const QuizDisplayPage: React.FC = () => {
     customInstruction,
   ]);
 
-  const handleAnswerChange = (index: number, answer: string | number) => {
+  const handleAnswerChange = (index: number, answer: LearnerAnswer) => {
     if (isQuizChecked || gradingInFlightRef.current) {
       return;
     }
@@ -320,8 +329,8 @@ const QuizDisplayPage: React.FC = () => {
       // Grading is authoritative on the server: only the user's answers are
       // sent, and correct answers come back in the grading response.
       const payload = {
-        answers: quizQuestions.map((q, i) => ({
-          question: q.question,
+        answers: quizQuestions.map((_, i) => ({
+          question_index: i,
           user_answer: userAnswers[i],
         })),
       };
@@ -509,10 +518,12 @@ const QuizDisplayPage: React.FC = () => {
                       <strong>Question:</strong> {r.question}
                     </p>
                     <p>
-                      <strong>Your Answer:</strong> {r.user_answer}
+                      <strong>Your Answer:</strong>{" "}
+                      {typeof r.user_answer === "object" ? JSON.stringify(r.user_answer) : r.user_answer}
                     </p>
                     <p>
-                      <strong>Correct:</strong> {r.correct_answer}
+                      <strong>Correct:</strong>{" "}
+                      {typeof r.correct_answer === "object" ? JSON.stringify(r.correct_answer) : r.correct_answer}
                     </p>
                     {r.accuracy_percentage && (
                       <p>

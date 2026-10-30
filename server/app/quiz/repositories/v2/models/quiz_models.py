@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -13,6 +13,7 @@ class QuizTypeV2(str, Enum):
     TRUE_FALSE = "true-false"
     OPEN_ENDED = "open-ended"
     SHORT_ANSWER = "short-answer"
+    MATCHING = "matching"
 
 
 class QuizVisibilityV2(str, Enum):
@@ -53,7 +54,7 @@ class QuizClassificationV2(BaseModel):
 
 class QuizQuestionV2(BaseModel):
     question: str
-    correct_answer: str
+    correct_answer: Union[str, Dict[str, str]]
     options: Optional[List[str]] = None
 
     model_config = ConfigDict(extra="forbid")

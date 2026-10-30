@@ -16,12 +16,13 @@ load_dotenv()
 
 
 SEED_CATEGORIES_DIR = Path(__file__).resolve().parents[1] / "seed_data" / "categories"
-CANONICAL_QUIZ_TYPES = {"multichoice", "true-false", "open-ended", "short-answer"}
+CANONICAL_QUIZ_TYPES = {"multichoice", "true-false", "open-ended", "short-answer", "matching"}
 API_QUIZ_TYPE_LABELS = {
     "multichoice": "multiple choice",
     "true-false": "true or false",
     "open-ended": "open ended",
     "short-answer": "short answer",
+    "matching": "matching",
 }
 QUIZ_TYPE_ALIASES = {
     "multiple choice": "multichoice",
@@ -34,6 +35,7 @@ QUIZ_TYPE_ALIASES = {
     "open-ended": "open-ended",
     "short answer": "short-answer",
     "short-answer": "short-answer",
+    "matching": "matching",
 }
 STOP_WORDS = {
     "and",

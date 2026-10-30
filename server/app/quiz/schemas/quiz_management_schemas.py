@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,7 +26,7 @@ class SavedQuizRenameResponse(BaseModel):
 class QuizHistoryQuestionResponse(BaseModel):
     question: str
     options: list[str] | None = None
-    answer: str
+    answer: Any
 
 
 class LiveQuizStatsResponse(BaseModel):

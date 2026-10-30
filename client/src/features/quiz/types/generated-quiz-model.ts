@@ -1,7 +1,7 @@
 export interface GeneratedQuizModel {
   question: string;
   options?: string[];
-  correct_answer: string; // ✅ Add this line
+  correct_answer: string | Record<string, string>;
   question_type: string;
-  answer: string | number;
+  answer: string | number | Record<string, string>;
 }

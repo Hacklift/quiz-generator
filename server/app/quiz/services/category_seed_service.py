@@ -8,6 +8,7 @@ from server.app.db.core.connection import (
     get_folders_v2_collection,
     get_quiz_attempts_v2_collection,
     get_quiz_history_v2_collection,
+    get_quiz_attempts_v2_collection,
     get_quizzes_v2_collection,
     get_saved_quizzes_v2_collection,
 )
