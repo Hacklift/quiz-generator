@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request, Response
 
 from server.app.api.health import router as health_router
 from server.app.assistant.routes import router as assistant_router
+from server.app.assignments.routes import router as assignments_router, progress_router as cohort_progress_router
+from server.app.cohorts.routes import router as cohorts_router
 from server.app.auth.routes import router as auth_router
 from server.app.billing.routes import router as billing_router
 from server.app.core.rate_limiter import limiter
@@ -53,4 +55,7 @@ router.include_router(live_quiz_router, prefix="/api/v1", tags=["Live Quiz"])
 router.include_router(training_runs_router, prefix="/api/v1", tags=["Training Runs"])
 router.include_router(notifications_router, prefix="/api/notifications", tags=["Notifications"])
 router.include_router(organizations_router, prefix="/api")
+router.include_router(cohorts_router, prefix="/api")
+router.include_router(assignments_router)
+router.include_router(cohort_progress_router)
 router.include_router(share_router, prefix="/share", tags=["share"])

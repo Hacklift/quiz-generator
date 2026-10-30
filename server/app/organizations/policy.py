@@ -28,6 +28,13 @@ class OrganizationAction(StrEnum):
     REPORT_READ = "report.read"
     AUDIT_READ = "audit.read"
     ATTEMPT_COMPLETE = "attempt.complete"
+    COHORT_READ = "cohort.read"
+    COHORT_MANAGE = "cohort.manage"
+    COHORT_MEMBERSHIP_MANAGE = "cohort.membership.manage"
+    ASSIGNMENT_CREATE = "assignment.create"
+    ASSIGNMENT_MANAGE = "assignment.manage"
+    COHORT_REPORT = "cohort.report"
+    MEMBER_ATTEMPT_READ = "member.attempt.read"
 
 
 _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
@@ -46,6 +53,13 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
             OrganizationAction.DELIVERY_READ,
             OrganizationAction.REPORT_READ,
             OrganizationAction.AUDIT_READ,
+            OrganizationAction.COHORT_READ,
+            OrganizationAction.COHORT_MANAGE,
+            OrganizationAction.COHORT_MEMBERSHIP_MANAGE,
+            OrganizationAction.ASSIGNMENT_CREATE,
+            OrganizationAction.ASSIGNMENT_MANAGE,
+            OrganizationAction.COHORT_REPORT,
+            OrganizationAction.MEMBER_ATTEMPT_READ,
         }
     ),
     "author": frozenset(
@@ -69,6 +83,10 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
             OrganizationAction.DELIVERY_READ,
             OrganizationAction.DELIVERY_RUN,
             OrganizationAction.REPORT_READ,
+            OrganizationAction.ASSIGNMENT_CREATE,
+            OrganizationAction.ASSIGNMENT_MANAGE,
+            OrganizationAction.COHORT_REPORT,
+            OrganizationAction.MEMBER_ATTEMPT_READ,
         }
     ),
     "learner": frozenset(
@@ -83,6 +101,9 @@ _ROLE_ACTIONS: dict[MembershipRole, frozenset[OrganizationAction]] = {
         {
             OrganizationAction.REPORT_READ,
             OrganizationAction.AUDIT_READ,
+            OrganizationAction.COHORT_READ,
+            OrganizationAction.COHORT_REPORT,
+            OrganizationAction.MEMBER_ATTEMPT_READ,
         }
     ),
 }
@@ -99,6 +120,9 @@ _RESOURCELESS_ACTIONS = frozenset(
         OrganizationAction.BILLING_MANAGE,
         OrganizationAction.CONTENT_CREATE,
         OrganizationAction.DELIVERY_READ,
+        OrganizationAction.COHORT_READ,
+        OrganizationAction.COHORT_MANAGE,
+        OrganizationAction.COHORT_MEMBERSHIP_MANAGE,
     }
 )
 
@@ -149,6 +173,16 @@ class OrganizationPolicy:
             return False
 
         role = context.membership_role
+        if action in {
+            OrganizationAction.COHORT_READ,
+            OrganizationAction.COHORT_MANAGE,
+            OrganizationAction.COHORT_MEMBERSHIP_MANAGE,
+            OrganizationAction.ASSIGNMENT_CREATE,
+            OrganizationAction.ASSIGNMENT_MANAGE,
+            OrganizationAction.COHORT_REPORT,
+            OrganizationAction.MEMBER_ATTEMPT_READ,
+        }:
+            return self._cohort_permission(principal, action, resource, context)
         if action not in _ROLE_ACTIONS[role]:
             return False
 
@@ -206,6 +240,63 @@ class OrganizationPolicy:
             )
 
         return True
+
+    @staticmethod
+    def _cohort_permission(principal, action, resource, context) -> bool:
+        """Delegation is loaded by the service, never accepted from client input.
+
+        A cohort role delegates exactly its two flags within an already proven
+        active organization membership. It does not promote the organization
+        role, inherit from a parent, or grant guardian access to learner data.
+        """
+        if context.membership.get("status") != "active":
+            return False
+        role = context.membership_role
+        if action == OrganizationAction.ASSIGNMENT_CREATE:
+            if resource is not None and resource.get("status") == "archived":
+                return False
+        if role in {"owner", "admin"}:
+            return True
+        if action in {OrganizationAction.COHORT_MANAGE, OrganizationAction.COHORT_MEMBERSHIP_MANAGE}:
+            return False
+        if role == "auditor" and action in {
+            OrganizationAction.COHORT_READ, OrganizationAction.COHORT_REPORT,
+            OrganizationAction.MEMBER_ATTEMPT_READ,
+        }:
+            return True
+        if resource is None:
+            return False
+        cohort_id = resource.get("cohort_id")
+        if not cohort_id:
+            # Named-recipient assignments retain the established facilitator
+            # creator boundary; cohort-targeted assignments require delegation.
+            return bool(
+                role == "facilitator"
+                and action in {
+                    OrganizationAction.ASSIGNMENT_CREATE, OrganizationAction.ASSIGNMENT_MANAGE,
+                    OrganizationAction.COHORT_REPORT, OrganizationAction.MEMBER_ATTEMPT_READ,
+                }
+                and OrganizationPolicy._resource_relates_to_principal(
+                    resource, principal, "created_by_user_id", "owner_user_id"
+                )
+            )
+        member = resource.get("cohort_membership")
+        if not isinstance(member, dict) or not (
+            member.get("status") == "active"
+            and str(member.get("organization_id")) == context.organization_id
+            and str(member.get("cohort_id")) == str(cohort_id)
+            and str(member.get("user_id")) == principal.user_id
+        ):
+            return False
+        if action == OrganizationAction.COHORT_READ:
+            return True
+        if member.get("role") != "facilitator":
+            return False
+        if action in {OrganizationAction.ASSIGNMENT_CREATE, OrganizationAction.ASSIGNMENT_MANAGE}:
+            return member.get("can_assign") is True
+        if action in {OrganizationAction.COHORT_REPORT, OrganizationAction.MEMBER_ATTEMPT_READ}:
+            return member.get("can_report") is True
+        return False
 
 
 def require_organization_permission(

@@ -29,6 +29,13 @@ EXPECTED_ACTIONS = {
         OrganizationAction.DELIVERY_RUN,
         OrganizationAction.REPORT_READ,
         OrganizationAction.AUDIT_READ,
+        OrganizationAction.COHORT_READ,
+        OrganizationAction.COHORT_MANAGE,
+        OrganizationAction.COHORT_MEMBERSHIP_MANAGE,
+        OrganizationAction.ASSIGNMENT_CREATE,
+        OrganizationAction.ASSIGNMENT_MANAGE,
+        OrganizationAction.COHORT_REPORT,
+        OrganizationAction.MEMBER_ATTEMPT_READ,
     },
     "author": {
         OrganizationAction.CONTENT_CREATE,
@@ -48,6 +55,10 @@ EXPECTED_ACTIONS = {
         OrganizationAction.DELIVERY_READ,
         OrganizationAction.DELIVERY_RUN,
         OrganizationAction.REPORT_READ,
+        OrganizationAction.ASSIGNMENT_CREATE,
+        OrganizationAction.ASSIGNMENT_MANAGE,
+        OrganizationAction.COHORT_REPORT,
+        OrganizationAction.MEMBER_ATTEMPT_READ,
     },
     "learner": {
         OrganizationAction.CONTENT_CREATE,
@@ -55,7 +66,11 @@ EXPECTED_ACTIONS = {
         OrganizationAction.ATTEMPT_COMPLETE,
     },
     "guardian": set(),
-    "auditor": {OrganizationAction.REPORT_READ, OrganizationAction.AUDIT_READ},
+    "auditor": {
+        OrganizationAction.REPORT_READ, OrganizationAction.AUDIT_READ,
+        OrganizationAction.COHORT_READ, OrganizationAction.COHORT_REPORT,
+        OrganizationAction.MEMBER_ATTEMPT_READ,
+    },
 }
 
 

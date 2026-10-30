@@ -16,6 +16,7 @@ from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.schemas.training_runs import TrainingRunDetail, TrainingRunSummary
 from server.app.quiz.services.live_session_service import LiveQuizSessionService
+from server.app.assignments.statistics import add_assignment_closure_evidence
 from server.app.users.identity import normalize_email
 from server.app.quiz.utils.training_completion import (
     assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
@@ -92,6 +93,7 @@ class TrainingRunService:
         organization_id: str | None = None,
         *,
         authorized_quiz: dict | None = None,
+        delivery_snapshot: dict | None = None,
     ) -> dict:
         now = _utc_now()
         closes_at = _as_utc(payload.closes_at)
@@ -104,7 +106,10 @@ class TrainingRunService:
                 detail="Run close time must allow one full training duration",
             )
 
-        request_fingerprint = self._request_fingerprint(payload, organization_id)
+        request_fingerprint = (
+            delivery_snapshot["request_fingerprint"] if delivery_snapshot is not None
+            else self._request_fingerprint(payload, organization_id)
+        )
         if organization_id is None:
             existing = await self.repository.get_run_by_idempotency_key(
                 owner_user_id, idempotency_key
@@ -160,7 +165,7 @@ class TrainingRunService:
                 detail="Training title must not exceed 180 characters",
             )
         quiz_snapshot = self._quiz_snapshot(quiz)
-        recipient_user_ids = (
+        recipient_user_ids = delivery_snapshot["recipient_user_ids"] if delivery_snapshot is not None else (
             await self.notification_service.verified_user_ids_by_email(
                 [str(email) for email in payload.recipient_emails]
             )
@@ -197,6 +202,14 @@ class TrainingRunService:
             "created_at": now,
             "updated_at": now,
         }
+        if delivery_snapshot is not None:
+            run_document.update({
+                key: delivery_snapshot[key] for key in (
+                    "delivery_kind", "cohort_id", "available_from", "quiz_revision_id",
+                    "recipient_names", "recipient_snapshot", "delegation_snapshot",
+                )
+            })
+            run_document["quiz_snapshot"] = deepcopy(delivery_snapshot["quiz_snapshot"])
         if access_code:
             run_document["access_code"] = access_code
 
@@ -228,6 +241,13 @@ class TrainingRunService:
 
     async def _resume_or_return_run(self, run: dict, now: datetime) -> dict:
         """Finish an interrupted create workflow without duplicate side effects."""
+        if run.get("delivery_kind") == "quiz" and (
+            run.get("status") == "closed"
+            or (run.get("status") == "open" and run.get("provisioning_complete") is True)
+        ):
+            # Generic assignment responses are projected/paginated by their
+            # own service. Do not load an unlimited attempt history on retry.
+            return self._run_summary(run, [], [])
         if run.get("status") == "closed":
             assignments = await self.repository.list_assignments_for_run(str(run["_id"]))
             sessions = await self.repository.list_sessions_for_run(str(run["_id"]))
@@ -323,6 +343,12 @@ class TrainingRunService:
                 "created_by_user_id": run.get("created_by_user_id") or run["owner_user_id"],
                 "recipient_email": email,
                 "recipient_user_id": recipient_user_ids.get(email),
+                **({
+                    "recipient_name": run.get("recipient_names", {}).get(email),
+                    "quiz_revision_id": run.get("quiz_revision_id"),
+                    "assignment_id": str(run["_id"]),
+                    "delivery_kind": "quiz",
+                } if run.get("delivery_kind") == "quiz" else {}),
                 "status": "assigned",
                 "due_at": run.get("due_at"),
                 "max_attempts": run.get("max_attempts"),
@@ -640,6 +666,8 @@ class TrainingRunService:
             raise HTTPException(status_code=409, detail="Training run is closed")
         if _as_utc(run["closes_at"]) <= _utc_now():
             raise HTTPException(status_code=409, detail="Training run is closed")
+        if run.get("available_from") and _as_utc(run["available_from"]) > _utc_now():
+            raise HTTPException(status_code=409, detail="Assignment is not available yet")
         self._ensure_enough_time_to_start(run)
         quiz = await self._quiz_for_run(run)
         if not quiz:
@@ -659,6 +687,7 @@ class TrainingRunService:
                 participant_type="assigned",
                 quiz_snapshot=run.get("quiz_snapshot"),
                 training_closes_at=run["closes_at"],
+                **({"organization_session_id": getattr(user, "session_id", None)} if run.get("delivery_kind") == "quiz" else {}),
             )
             attached = await self.repository.attach_session_to_attempt(
                 assignment_id, user_id, session["session_id"], _utc_now()
@@ -753,7 +782,9 @@ class TrainingRunService:
                 str(claimed["_id"]), closed_at
             )
             assignments = await self.repository.list_assignments_for_run(str(claimed["_id"]))
-            sessions = await self.repository.list_sessions_for_run(str(claimed["_id"]))
+            # Generic deliveries have a bounded, frozen recipient roster and
+            # no public sessions. Their unlimited retries are not report rows.
+            sessions = [] if claimed.get("delivery_kind") == "quiz" else await self.repository.list_sessions_for_run(str(claimed["_id"]))
             await self.repository.create_audit_event(
                 {
                     "training_run_id": str(claimed["_id"]),
@@ -763,7 +794,9 @@ class TrainingRunService:
                     "created_by_user_id": claimed.get("created_by_user_id") or claimed.get("owner_user_id") or owner_user_id,
                     "occurred_at": closed_at,
                     # No update/delete operation is exposed for a final audit snapshot.
-                    "payload": build_closure_payload(claimed, assignments, sessions),
+                    "payload": add_assignment_closure_evidence(
+                        build_closure_payload(claimed, assignments, sessions), claimed, assignments,
+                    ),
                 }
             )
             closed = (
@@ -804,6 +837,10 @@ class TrainingRunService:
                 **deepcopy(snapshot),
                 "_id": run["quiz_id"],
                 "owner_user_id": run["owner_user_id"],
+                "organization_id": run.get("organization_id"),
+                "created_by_user_id": run.get("created_by_user_id") or run["owner_user_id"],
+                "quiz_revision_id": run.get("quiz_revision_id"),
+                "delivery_kind": run.get("delivery_kind"),
             }
         return await self.repository.get_owned_quiz(run["quiz_id"], run["owner_user_id"])
 
@@ -918,6 +955,8 @@ class TrainingRunService:
             if run.get("due_at")
             else "before the run closes"
         )
+        neutral = run.get("delivery_kind") == "quiz"
+        destination = "/assignments/mine" if neutral else "/assigned-training"
         return [
             {
                 "delivery_key": (
@@ -930,11 +969,11 @@ class TrainingRunService:
                 "recipient_email": assignment["recipient_email"],
                 "template_id": "custom",
                 "template_vars": {
-                    "subject": f"Training assigned: {run['title']}",
+                    "subject": f"{'Quiz' if neutral else 'Training'} assigned: {run['title']}",
                     "body": (
                         f"You have been assigned {run['title']}. Sign in with this email "
                         f"to complete it by {due_text}.\n\n"
-                        f"{settings.FRONTEND_BASE_URL}/assigned-training"
+                        f"{settings.FRONTEND_BASE_URL}{destination}"
                     ),
                 },
                 "purpose": "training_invitation",

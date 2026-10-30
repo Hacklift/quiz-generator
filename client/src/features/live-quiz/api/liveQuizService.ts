@@ -36,6 +36,7 @@ export interface LiveQuizQuestion {
 export interface LiveQuizSessionState {
   session_id: string;
   quiz_id: string;
+  delivery_kind?: "quiz" | null;
   title: string;
   participant_name: string;
   participant_email?: string | null;

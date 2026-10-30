@@ -16,6 +16,14 @@ export const ROUTES = {
   TRAINING_RUNS: "/training-runs",
   ASSIGNED_TRAINING: "/assigned-training",
   TRAINING_ACCESS: "/training-access",
+  COHORTS: "/cohorts",
+  ASSIGNMENTS: "/assignments",
+  MY_ASSIGNMENTS: "/assignments/mine",
+
+  cohort: (cohortId: string) => `/cohorts/${encodeURIComponent(cohortId)}`,
+  assignment: (assignmentId: string) => `/assignments/${encodeURIComponent(assignmentId)}`,
+  assignedAttempt: (assignmentId: string, userId: string, sessionId: string) =>
+    `/assignments/${encodeURIComponent(assignmentId)}/recipients/${encodeURIComponent(userId)}/attempts/${encodeURIComponent(sessionId)}`,
 
   trainingRun: (runId: string) => `/training-runs/${encodeURIComponent(runId)}`,
   trainingAccess: (accessCode: string) =>

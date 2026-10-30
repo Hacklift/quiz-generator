@@ -8,6 +8,7 @@ from pymongo import ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError
 from pydantic import ValidationError
 from server.app.quiz.schemas.training_runs import CompletionActivitySummary
+from server.app.users.identity import ACTIVE_USER_STATUSES, coerce_user_status
 from server.app.quiz.utils.training_completion import (
     STARTED_ASSIGNMENT_STATUSES, SHARED_SESSION_STATES, REPORT_METADATA_FIELDS, CompletionEvidenceError,
     COMPLETION_OUTCOMES,
@@ -25,6 +26,9 @@ class TrainingRunRepository:
         audit_events_collection: AsyncIOMotorCollection,
         sessions_collection: Optional[AsyncIOMotorCollection] = None,
         email_deliveries_collection: Optional[AsyncIOMotorCollection] = None,
+        memberships_collection: Optional[AsyncIOMotorCollection] = None,
+        organizations_collection: Optional[AsyncIOMotorCollection] = None,
+        user_sessions_collection: Optional[AsyncIOMotorCollection] = None,
     ):
         self.quizzes_collection = quizzes_collection
         self.runs_collection = runs_collection
@@ -32,6 +36,52 @@ class TrainingRunRepository:
         self.audit_events_collection = audit_events_collection
         self.sessions_collection = sessions_collection
         self.email_deliveries_collection = email_deliveries_collection
+        self.memberships_collection = memberships_collection
+        self.organizations_collection = organizations_collection
+        self.user_sessions_collection = user_sessions_collection
+
+    async def delivery_participant_active(self, session: dict) -> bool:
+        """Re-prove private assigned access even when only a participant token arrives."""
+        memberships = self.memberships_collection if self.memberships_collection is not None else self.runs_collection.database["organization_memberships"]
+        organizations = self.organizations_collection if self.organizations_collection is not None else self.runs_collection.database["organizations"]
+        organization_id, user_id = session.get("organization_id"), session.get("user_id")
+        if not organization_id or not user_id or not ObjectId.is_valid(organization_id) or not ObjectId.is_valid(user_id):
+            return False
+        account = await self.runs_collection.database["users"].find_one(
+            {"_id": ObjectId(user_id)}, {"status": 1, "deleted_at": 1, "is_verified": 1},
+        )
+        if account is None or coerce_user_status(account) not in ACTIVE_USER_STATUSES:
+            return False
+        if not await organizations.find_one({"_id": ObjectId(organization_id), "status": "active"}, {"_id": 1}):
+            return False
+        if not await memberships.find_one({"organization_id": organization_id, "user_id": user_id, "status": "active"}, {"_id": 1}):
+            return False
+        auth_session_id = session.get("organization_session_id")
+        if not auth_session_id:
+            return False
+        from server.app.users.repository import get_active_session
+
+        user_sessions = self.user_sessions_collection if self.user_sessions_collection is not None else self.runs_collection.database["user_sessions"]
+        auth_session = await get_active_session(user_sessions, session_id=auth_session_id, user_id=user_id)
+        if not auth_session or auth_session.get("active_organization_id") != organization_id:
+            return False
+        assignment = await self.get_assignment_for_recipient(
+            session.get("training_assignment_id", ""), user_id, organization_id,
+        )
+        return bool(assignment and assignment.get("training_run_id") == session.get("training_run_id"))
+
+    async def rotate_assignment_session_token(self, session, token_hash, organization_session_id, now):
+        return await self.sessions_collection.find_one_and_update(
+            {
+                "_id": session["_id"], "organization_id": session["organization_id"],
+                "training_run_id": session["training_run_id"],
+                "training_assignment_id": session["training_assignment_id"], "user_id": session["user_id"],
+                "participant_token_hash": session["participant_token_hash"],
+                "status": {"$in": ["joined", "active", "disconnected"]}, "expires_at": {"$gt": now},
+            },
+            {"$set": {"participant_token_hash": token_hash, "organization_session_id": organization_session_id, "updated_at": now}},
+            return_document=ReturnDocument.AFTER,
+        )
 
     @staticmethod
     def _object_id(value: str) -> Optional[ObjectId]:
@@ -197,7 +247,7 @@ class TrainingRunRepository:
     ) -> list[dict]:
         cursor = self.runs_collection.find(
             self._scoped_query(
-                {"owner_user_id": owner_user_id, "status": {"$in": ["open", "closed"]}},
+                {"owner_user_id": owner_user_id, "status": {"$in": ["open", "closed"]}, "delivery_kind": {"$ne": "quiz"}},
                 organization_id,
                 allow_legacy_personal,
             )
@@ -216,7 +266,7 @@ class TrainingRunRepository:
             return None
         return await self.runs_collection.find_one(
             self._scoped_query(
-                {"_id": object_id, "owner_user_id": owner_user_id},
+                {"_id": object_id, "owner_user_id": owner_user_id, "delivery_kind": {"$ne": "quiz"}},
                 organization_id,
                 allow_legacy_personal,
             )
@@ -235,6 +285,7 @@ class TrainingRunRepository:
                 "_id": object_id,
                 "organization_id": organization_id,
                 "status": {"$in": ["open", "closed"]},
+                "delivery_kind": {"$ne": "quiz"},
             }
         )
 
@@ -247,6 +298,7 @@ class TrainingRunRepository:
             {
                 "organization_id": organization_id,
                 "status": {"$in": ["open", "closed"]},
+                "delivery_kind": {"$ne": "quiz"},
             }
         ).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
@@ -631,6 +683,7 @@ class TrainingRunRepository:
         cursor = self.assignments_collection.find(
             self._scoped_query(
                 {
+                    "delivery_kind": {"$ne": "quiz"},
                     "$or": [
                         {"recipient_user_id": user_id},
                         {
