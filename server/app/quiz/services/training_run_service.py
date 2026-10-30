@@ -15,7 +15,10 @@ from pydantic import ValidationError
 from server.app.core.config import settings
 from server.app.quiz.repositories.training_run_repository import TrainingRunRepository
 from server.app.quiz.schemas.training_runs import TrainingRunDetail, TrainingRunSummary
-from server.app.quiz.services.live_session_service import LiveQuizSessionService
+from server.app.quiz.services.live_session_service import (
+    LiveQuizSessionService,
+    training_run_withholds_results,
+)
 from server.app.users.identity import normalize_email
 from server.app.quiz.utils.training_completion import (
     assignment_snapshot, shared_session_snapshot, completion_row, build_closure_payload,
@@ -194,6 +197,7 @@ class TrainingRunService:
             "recipient_user_ids": recipient_user_ids,
             "max_attempts": payload.max_attempts,
             "send_email_invitations": payload.send_email_invitations,
+            "release_answers": payload.release_answers,
             "created_at": now,
             "updated_at": now,
         }
@@ -307,6 +311,8 @@ class TrainingRunService:
         # Custom thresholds are a distinct creation intent, never an edit.
         if payload.passing_threshold_percentage != 80:
             canonical["passing_threshold_percentage"] = payload.passing_threshold_percentage
+        if payload.release_answers != "immediate":
+            canonical["release_answers"] = payload.release_answers
         encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -873,6 +879,7 @@ class TrainingRunService:
             "started_count": len(started) + len(shared_sessions),
             "completed_count": len(completed) + len(shared_completed),
             "average_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "release_answers": run.get("release_answers", "immediate"),
         }
 
     def _assignment_summary(self, assignment: dict, run: dict) -> dict:
@@ -883,6 +890,7 @@ class TrainingRunService:
         latest_start_at = _as_utc(run["closes_at"]) - timedelta(
             minutes=int(run["time_limit_minutes"])
         )
+        results_withheld = training_run_withholds_results(run, now)
         return {
             "id": str(assignment["_id"]), "training_run_id": assignment["training_run_id"],
             "quiz_id": assignment["quiz_id"], "title": run["title"], "kind": run["kind"],
@@ -896,9 +904,10 @@ class TrainingRunService:
                 and now < latest_start_at
                 and (max_attempts is None or attempts_used < max_attempts)
             ),
-            "latest_score": assignment.get("latest_score"),
-            "latest_percentage": assignment.get("latest_percentage"),
+            "latest_score": None if results_withheld else assignment.get("latest_score"),
+            "latest_percentage": None if results_withheld else assignment.get("latest_percentage"),
             "completed_at": assignment.get("completed_at"),
+            "release_answers": run.get("release_answers", "immediate"),
         }
 
     async def _generate_unique_code(self) -> str:

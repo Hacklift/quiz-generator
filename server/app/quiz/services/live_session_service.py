@@ -32,6 +32,21 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def training_run_is_open(run: Dict[str, Any], now: datetime) -> bool:
+    """A run is open while its status is open, it is not closing, and its deadline has not passed."""
+    closes_at = _as_utc(run["closes_at"]) if run.get("closes_at") else None
+    return (
+        run.get("status") == "open"
+        and not run.get("closure_in_progress")
+        and (closes_at is None or closes_at > now)
+    )
+
+
+def training_run_withholds_results(run: Dict[str, Any], now: datetime) -> bool:
+    """Participant scores, answers and explanations stay hidden until an after_close run closes."""
+    return run.get("release_answers") == "after_close" and training_run_is_open(run, now)
+
+
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -468,7 +483,11 @@ class LiveQuizSessionService:
         elif session.get("status") != "submitted":
             await self._ensure_training_run_open(session)
 
-        return self._build_session_state(session, quiz)
+        training_run = None
+        if session.get("status") == "submitted":
+            training_run = await self._load_submitted_training_run(session)
+
+        return self._build_session_state(session, quiz, training_run=training_run)
 
     async def save_answer(
         self,
@@ -536,7 +555,7 @@ class LiveQuizSessionService:
             raise HTTPException(status_code=404, detail="Quiz not found")
 
         if session.get("status") == "submitted":
-            return self._submission_response(session, already_submitted=True)
+            return await self._released_submission_response(session, already_submitted=True)
 
         is_expired = self._is_expired(session)
         if not is_expired:
@@ -584,7 +603,7 @@ class LiveQuizSessionService:
             str(finalized["_id"]),
             "participant_submitted",
         )
-        return self._submission_response(finalized)
+        return await self._released_submission_response(finalized)
 
     async def mark_disconnected(
         self,
@@ -860,12 +879,7 @@ class LiveQuizSessionService:
         if not run_id or not self.assignment_repository:
             return
         run = await self.assignment_repository.get_run(run_id)
-        if (
-            not run
-            or run.get("status") != "open"
-            or run.get("closure_in_progress")
-            or _as_utc(run["closes_at"]) <= _utc_now()
-        ):
+        if not run or not training_run_is_open(run, _utc_now()):
             raise HTTPException(status_code=409, detail="Training run is closed")
 
     async def _ensure_training_expiry_can_finalize(
@@ -1000,10 +1014,60 @@ class LiveQuizSessionService:
     ) -> Dict[str, Any]:
         return grade_live_session(session, quiz)
 
+    def _mask_graded_answers(
+        self,
+        raw_graded: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Mask correct answers and explanations for withheld participant view."""
+        return [
+            {
+                "question_index": item.get("question_index", idx),
+                "question": item.get("question", ""),
+                "selected_answer": str(item["selected_answer"]) if item.get("selected_answer") is not None else "",
+                "correct_answer": None,
+                "question_type": str(item.get("question_type", "")),
+                "is_correct": None,
+                "explanation": None,
+            }
+            for idx, item in enumerate(raw_graded)
+        ]
+
+    def _determine_answers_released(
+        self,
+        session: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]],
+        server_now: datetime,
+    ) -> tuple[bool, Optional[datetime]]:
+        """Determine whether answers and explanations may be released to participants."""
+        if not session.get("training_run_id"):
+            return True, None
+
+        if not training_run:
+            logger.warning(
+                "Training run %s could not be loaded for session %s; withholding answers fail-closed",
+                session.get("training_run_id"),
+                session.get("_id"),
+            )
+            # Fail-closed: session has a training_run_id but the run could not be resolved
+            return False, None
+
+        if training_run_withholds_results(training_run, server_now):
+            closes_at = training_run.get("closes_at")
+            return False, _as_utc(closes_at) if closes_at else None
+        return True, None
+
+    async def _load_submitted_training_run(
+        self, session: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        if session.get("training_run_id") and self.assignment_repository:
+            return await self.assignment_repository.get_run(session["training_run_id"])
+        return None
+
     def _build_session_state(
         self,
         session: Dict[str, Any],
         quiz: Dict[str, Any],
+        training_run: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         current_index = session.get("current_question_index", 0)
         questions = quiz.get("questions") or []
@@ -1030,6 +1094,26 @@ class LiveQuizSessionService:
             _as_utc(session["submitted_at"]) if session.get("submitted_at") else None
         )
 
+        answers_released = True
+        release_answers_at = None
+        graded_answers = None
+
+        if session.get("status") == "submitted":
+            raw_graded = session.get("graded_answers")
+            if not isinstance(raw_graded, list):
+                raw_graded = self._grade_session(session, quiz).get("graded_answers", [])
+
+            answers_released, release_answers_at = self._determine_answers_released(
+                session, training_run, server_now
+            )
+            if not answers_released:
+                graded_answers = self._mask_graded_answers(raw_graded)
+            else:
+                graded_answers = raw_graded
+
+        score = session.get("score") if answers_released else None
+        percentage = session.get("percentage") if answers_released else None
+
         return {
             "session_id": str(session["_id"]),
             "quiz_id": session["quiz_id"],
@@ -1051,9 +1135,12 @@ class LiveQuizSessionService:
             "remaining_seconds": self._remaining_seconds(expires_at, server_now),
             "question": question,
             "answers": session.get("answers", []),
-            "score": session.get("score"),
-            "percentage": session.get("percentage"),
+            "score": score,
+            "percentage": percentage,
             "auto_submitted": session.get("auto_submitted", False),
+            "graded_answers": graded_answers,
+            "answers_released": answers_released,
+            "release_answers_at": release_answers_at,
         }
 
     def _public_question(
@@ -1076,16 +1163,33 @@ class LiveQuizSessionService:
             "selected_answer": selected_answer,
         }
 
-    def _submission_response(
+    async def _released_submission_response(
         self,
         session: Dict[str, Any],
         already_submitted: bool = False,
     ) -> Dict[str, Any]:
+        training_run = await self._load_submitted_training_run(session)
+        answers_released, _ = self._determine_answers_released(
+            session, training_run, _utc_now()
+        )
+        return self._submission_response(
+            session,
+            already_submitted=already_submitted,
+            answers_released=answers_released,
+        )
+
+    def _submission_response(
+        self,
+        session: Dict[str, Any],
+        already_submitted: bool = False,
+        answers_released: bool = True,
+    ) -> Dict[str, Any]:
         return {
             "status": "already_submitted" if already_submitted else "submitted",
-            "score": session["score"],
+            "score": session["score"] if answers_released else None,
             "total_questions": session["total_questions"],
-            "percentage": session["percentage"],
+            "percentage": session["percentage"] if answers_released else None,
+            "answers_released": answers_released,
             "submitted_at": _as_utc(session["submitted_at"]),
             "auto_submitted": session.get("auto_submitted", False),
             "duration_used_seconds": session.get("duration_used_seconds"),

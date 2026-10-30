@@ -10,6 +10,7 @@ from pymongo import UpdateOne
 from server.app.notifications.repository import create_notification
 from server.app.notifications.documents import build_notification_document
 from server.app.notifications.schemas import NotificationCreate, NotificationType
+from server.app.quiz.services.live_session_service import training_run_withholds_results
 from server.app.users.identity import normalize_email
 from server.app.users.repository import active_user_query
 
@@ -111,6 +112,8 @@ class TrainingNotificationService:
         if not run:
             return
         percentage = assignment.get("latest_percentage")
+        if training_run_withholds_results(run, datetime.now(timezone.utc)):
+            percentage = None
         score = f" Your score: {percentage}%" if percentage is not None else ""
         await create_notification(
             self.notifications_collection,

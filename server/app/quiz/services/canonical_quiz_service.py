@@ -35,6 +35,7 @@ class CanonicalQuizWriteService:
                     "question": raw_question.get("question"),
                     "options": raw_question.get("options"),
                     "correct_answer": raw_question.get("correct_answer") or raw_question.get("answer"),
+                    "explanation": raw_question.get("explanation"),
                 }
             )
         return normalized_questions

@@ -81,6 +81,11 @@ export default function LiveQuizAttemptDetailPage({
                           <p className="mt-[5px]">{answer.question}</p>
                           <p className="mt-[8px] text-[14px] text-ink/70">Child&apos;s answer: {answer.selected_answer || "No answer"}</p>
                           <p className="mt-[3px] text-[14px] text-ink/70">Correct answer: {answer.correct_answer}</p>
+                          {answer.explanation ? (
+                            <p className="mt-[6px] rounded bg-ink/5 p-2 text-[13px] text-ink/80">
+                              <strong className="text-ink">Explanation:</strong> {answer.explanation}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </li>

@@ -25,6 +25,7 @@ export const trainingRunIntentFingerprint = (
     recipient_emails: recipientEmails,
     max_attempts: payload.max_attempts,
     send_email_invitations: payload.send_email_invitations,
+    release_answers: payload.release_answers ?? "immediate",
   });
 };
 

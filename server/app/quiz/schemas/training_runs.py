@@ -29,6 +29,7 @@ class CreateTrainingRunRequest(BaseModel):
     # None is the explicit, supported representation for unlimited retries.
     max_attempts: Optional[Literal[1, 2]] = 1
     send_email_invitations: bool = False
+    release_answers: Literal["immediate", "after_close"] = "immediate"
 
     @field_validator("title")
     @classmethod
@@ -120,6 +121,7 @@ class TrainingRunSummary(BaseModel):
     started_count: int = 0
     completed_count: int = 0
     average_score: Optional[float] = None
+    release_answers: Literal["immediate", "after_close"] = "immediate"
     participant_count: int = 0
     summary_availability: Literal["available", "unavailable"] = "available"
 
@@ -142,6 +144,7 @@ class TrainingAssignmentSummary(BaseModel):
     latest_score: Optional[int] = None
     latest_percentage: Optional[float] = None
     completed_at: Optional[datetime] = None
+    release_answers: Literal["immediate", "after_close"] = "immediate"
 
 
 class TrainingCompletionRow(BaseModel):

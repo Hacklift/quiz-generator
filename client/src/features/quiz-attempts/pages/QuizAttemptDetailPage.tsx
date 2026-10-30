@@ -18,6 +18,7 @@ interface QuestionResult {
   accuracy_percentage?: number | null;
   is_correct: boolean;
   result: string;
+  explanation?: string | null;
 }
 
 interface QuizAttempt {
@@ -151,6 +152,12 @@ function QuizAttemptDetailContent() {
                         <strong>Accuracy:</strong>{" "}
                         {question.accuracy_percentage.toFixed(0)}%
                       </p>
+                    ) : null}
+                    {question.explanation ? (
+                      <div className="mt-3 rounded-md border border-slate-200 bg-white/80 p-3 text-sm text-slate-700">
+                        <strong className="text-slate-900">Explanation:</strong>{" "}
+                        {question.explanation}
+                      </div>
                     ) : null}
                   </section>
                 ))}

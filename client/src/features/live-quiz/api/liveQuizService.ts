@@ -58,15 +58,19 @@ export interface LiveQuizSessionState {
   score?: number | null;
   percentage?: number | null;
   auto_submitted: boolean;
+  graded_answers?: GradedAnswer[] | null;
+  answers_released?: boolean;
+  release_answers_at?: string | null;
 }
 
 export interface LiveQuizResult {
   status: "submitted" | "already_submitted";
-  score: number;
+  score: number | null;
   total_questions: number;
-  percentage: number;
+  percentage: number | null;
   submitted_at: string;
   auto_submitted: boolean;
+  answers_released?: boolean;
 }
 
 export interface ParticipantRow {
@@ -122,9 +126,10 @@ export interface GradedAnswer {
   question_index: number;
   question: string;
   selected_answer: string;
-  correct_answer: string;
+  correct_answer?: string | null;
   question_type: string;
-  is_correct: boolean;
+  is_correct?: boolean | null;
+  explanation?: string | null;
 }
 
 export interface LiveQuizAttemptDetail {

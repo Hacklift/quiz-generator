@@ -179,6 +179,25 @@ async def test_deleted_quiz_cannot_be_graded(grading_app):
 
 
 @pytest.mark.asyncio
+async def test_grading_returns_per_question_correctness_and_explanations(grading_app):
+    app, quiz, _, attempts = grading_app
+    app.dependency_overrides[get_current_user_optional] = lambda: SimpleNamespace(id="user-1")
+    # Add an explanation to the first question
+    quiz.questions[0].explanation = "HTTP is the standard application protocol for distributed, collaborative hypermedia."
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(f"/api/quizzes/{quiz.id}/grade", json=submission(quiz))
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["is_correct"] is True
+    assert data[0]["result"] == "Correct"
+    assert data[0]["correct_answer"] == "HTTP"
+    assert data[0]["explanation"] == "HTTP is the standard application protocol for distributed, collaborative hypermedia."
+    assert len(attempts.attempts) == 1
+    assert attempts.attempts[0].question_results[0].explanation == "HTTP is the standard application protocol for distributed, collaborative hypermedia."
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("status_code", [403, 409])
 async def test_authenticated_context_failures_do_not_silently_grade_as_guest(grading_app, status_code):
     from fastapi import HTTPException
