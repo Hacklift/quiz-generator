@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from fastapi.params import Depends
 from unittest.mock import MagicMock
 from pymongo.errors import ConnectionFailure, OperationFailure
@@ -51,6 +51,7 @@ async def test_random_seed_quiz_requires_an_active_platform_library():
     with pytest.raises(HTTPException) as exc_info:
         await handler(
             request=MagicMock(),
+            response=Response(),
             quizzes_v2_collection=quizzes,
             organizations_collection=organizations,
         )
@@ -76,7 +77,7 @@ async def test_random_seed_quiz_database_failure_returns_503(failure_stage, capl
         quizzes.aggregate.return_value.to_list.side_effect = failure
     handler = getattr(routes.get_random_quiz_id, "__wrapped__", routes.get_random_quiz_id)
     with pytest.raises(HTTPException) as exc:
-        await handler(request=MagicMock(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
+        await handler(request=MagicMock(), response=Response(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
     assert exc.value.status_code == 503
     assert exc.value.detail == "Public quiz library is temporarily unavailable"
     assert "Database unavailable while selecting a public template quiz" in caplog.text
@@ -90,7 +91,7 @@ async def test_random_seed_query_error_is_not_misreported_as_empty_or_retryable(
     organizations = SimpleNamespace(find_one=AsyncMock(side_effect=OperationFailure("invalid query")))
     handler = getattr(routes.get_random_quiz_id, "__wrapped__", routes.get_random_quiz_id)
     with pytest.raises(HTTPException) as exc:
-        await handler(request=MagicMock(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
+        await handler(request=MagicMock(), response=Response(), quizzes_v2_collection=quizzes, organizations_collection=organizations)
     assert exc.value.status_code == 500
     assert exc.value.detail == "Failed to fetch a public template quiz"
     quizzes.aggregate.assert_not_called()
@@ -108,6 +109,7 @@ async def test_guest_can_create_a_link_only_for_an_anonymously_shareable_quiz(mo
 
     response = await _share_link_handler(routes)(
         request=MagicMock(),
+        response=Response(),
         quiz_id="public-quiz",
         current_user=None,
     )
@@ -130,6 +132,7 @@ async def test_public_link_does_not_depend_on_a_stale_authenticated_tenant(monke
 
     response = await _share_link_handler(routes)(
         request=MagicMock(),
+        response=Response(),
         quiz_id="public-quiz",
         current_user=object(),
     )
@@ -149,6 +152,7 @@ async def test_guest_cannot_create_a_link_for_a_private_quiz(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         await _share_link_handler(routes)(
             request=MagicMock(),
+            response=Response(),
             quiz_id="private-quiz",
             current_user=None,
         )
@@ -177,6 +181,7 @@ async def test_share_link_preserves_tenant_authorization_errors(monkeypatch, sta
     with pytest.raises(HTTPException) as exc_info:
         await _share_link_handler(routes)(
             request=MagicMock(),
+            response=Response(),
             quiz_id="tenant-quiz",
             current_user=object(),
         )
@@ -204,6 +209,7 @@ async def test_authorized_private_quiz_returns_a_clear_shareability_error(monkey
     with pytest.raises(HTTPException) as exc_info:
         await _share_link_handler(routes)(
             request=MagicMock(),
+            response=Response(),
             quiz_id="private-quiz",
             current_user=object(),
         )
