@@ -191,6 +191,8 @@ async def test_public_platform_library_quiz_is_frozen_into_active_organization()
     {"cohort_id": None, "recipient_user_ids": []},
     {"recipient_user_ids": [MEMBER]},
     {"available_from": datetime.now(timezone.utc).replace(tzinfo=None)},
+    {"due_at": datetime.now(timezone.utc).replace(tzinfo=None)},
+    {"closes_at": datetime.now(timezone.utc).replace(tzinfo=None)},
     {"available_from": datetime.now(timezone.utc) + timedelta(days=3)},
     {"max_attempts": 3},
     {"title": "Unsafe\nTitle"},
@@ -349,18 +351,13 @@ async def test_recipient_picker_rejects_non_assigning_roles(role):
 
 @pytest.mark.asyncio
 async def test_facilitator_recipient_picker_only_returns_ids_and_names():
-    cursor = SimpleNamespace(to_list=AsyncMock(return_value=[{
-        "_id": ObjectId(), "user_id": MEMBER, "_user": [{"full_name": "Learner", "email": "private@example.com"}],
-    }]))
-    captured = []
-    def aggregate(pipeline):
-        captured.append(pipeline)
-        return cursor
-    repository = SimpleNamespace(memberships=SimpleNamespace(aggregate=aggregate), users=SimpleNamespace(name="users"))
+    repository = SimpleNamespace(recipient_options=AsyncMock(return_value=([{
+        "_id": ObjectId(), "user_id": MEMBER, "name": "Learner", "email": "private@example.com",
+    }], None)))
     service = AssignmentService(repository, None, None)
     result = await service.recipient_options(context("facilitator"))
     assert result["items"] == [{"user_id": MEMBER, "name": "Learner"}]
-    assert captured[0][0]["$match"] == {"organization_id": ORG, "status": "active"}
+    repository.recipient_options.assert_awaited_once_with(ORG, cursor=None, limit=25)
 
 
 @pytest.mark.asyncio

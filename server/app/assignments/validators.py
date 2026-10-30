@@ -56,6 +56,10 @@ async def ensure_assignment_collections(database):
         [("organization_id", 1), ("delivery_kind", 1), ("_id", -1)],
         name="organization_delivery_cursor",
     )
+    await database["organization_memberships"].create_index(
+        [("organization_id", 1), ("status", 1), ("_id", -1)],
+        name="organization_member_options_cursor",
+    )
     await database["training_assignments"].create_index(
         [("organization_id", 1), ("recipient_user_id", 1), ("training_run_id", 1)],
         name="organization_recipient_assignment",

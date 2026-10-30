@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from bson import ObjectId
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
+from limits.storage import MemoryStorage
+from limits.strategies import FixedWindowRateLimiter
+from slowapi.errors import RateLimitExceeded
 import pytest
 import pytest_asyncio
 
@@ -28,7 +31,7 @@ from server.app.db.core.connection import (
     get_organization_memberships_collection, get_organizations_collection,
     get_user_sessions_collection,
 )
-from server.app.core.rate_limiter import limiter
+from server.app.core.rate_limiter import limiter, rate_limit_handler
 from server.app.db.core.connection import ensure_training_run_indexes
 from server.app.organizations.dependencies import get_active_organization_context
 from server.app.organizations.models import OrganizationContext, OrganizationPrincipal
@@ -87,10 +90,16 @@ async def delivery(test_db, monkeypatch):
                                 training, CohortDeliveryAdapter(cohorts))
     cohort = await cohorts.create_cohort(CreateCohortRequest(kind="class", name="Class A"), contexts["owner"])
     await cohorts.set_member(cohort.id, SetCohortMemberRequest(user_id=ids["learner"]), contexts["owner"])
-    monkeypatch.setattr(limiter, "enabled", False)
+    storage = MemoryStorage()
+    monkeypatch.setattr(limiter, "enabled", True)
+    monkeypatch.setattr(limiter, "_headers_enabled", True)
+    monkeypatch.setattr(limiter, "_storage_dead", False)
+    monkeypatch.setattr(limiter, "_storage", storage)
+    monkeypatch.setattr(limiter, "_limiter", FixedWindowRateLimiter(storage))
     state = SimpleNamespace(context=contexts["owner"], user=users["owner"])
     app = FastAPI()
     app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
     app.include_router(cohorts_router, prefix="/api")
     app.include_router(assignments_router)
     app.include_router(progress_router)
@@ -161,6 +170,121 @@ async def test_route_contract_and_cross_tenant_guessed_ids(delivery):
                      f"/api/cohorts/{d.cohort.id}/progress"):
             response = await client.get(path)
             assert response.status_code == 404, (path, response.text)
+
+
+@pytest.mark.asyncio
+async def test_assignment_mutations_return_rate_headers_and_complete_real_delivery(delivery):
+    d = delivery
+    async with AsyncClient(transport=ASGITransport(app=d.app), base_url="http://test") as client:
+        created = await client.post("/api/v1/assignments", json=payload(d).model_dump(mode="json"),
+                                    headers={"Idempotency-Key": "limited-create-01"})
+        assert created.status_code == 201, created.text
+        run_id = created.json()["id"]
+        d.state.user, d.state.context = d.users["learner"], d.contexts["learner"]
+        started = await client.post(f"/api/v1/assignments/{run_id}/start")
+        assert started.status_code == 200, started.text
+        d.state.user, d.state.context = d.users["owner"], d.contexts["owner"]
+        closed = await client.post(f"/api/v1/assignments/{run_id}/close", json={"confirm": True})
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["status"] == "closed"
+        for response in (created, started, closed):
+            assert int(response.headers["x-ratelimit-limit"]) > 0
+            assert int(response.headers["x-ratelimit-remaining"]) >= 0
+            assert "x-ratelimit-reset" in response.headers
+
+
+@pytest.mark.asyncio
+async def test_assignment_create_limit_blocks_before_duplicate_work(delivery):
+    d = delivery
+    body = payload(d).model_dump(mode="json")
+    async with AsyncClient(transport=ASGITransport(app=d.app), base_url="http://test") as client:
+        responses = [await client.post("/api/v1/assignments", json=body,
+                                       headers={"Idempotency-Key": "rate-limit-retry-01"})
+                     for _ in range(11)]
+        assert all(response.status_code == 201 for response in responses[:10])
+        assert responses[-1].status_code == 429
+        assert responses[-1].json()["error"] == "rate_limit_exceeded"
+        assert await d.db.training_runs.count_documents({}) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["future", "elapsed", "closed"])
+async def test_http_start_checks_delivery_window_before_consuming_an_attempt(delivery, state):
+    d = delivery
+    changes = {"available_from": datetime.now(timezone.utc) + timedelta(hours=1)} if state == "future" else {}
+    created = await d.assignments.create(d.contexts["owner"], payload(d, **changes), f"window-{state}-01")
+    if state == "elapsed":
+        await d.db.training_runs.update_one({"_id": ObjectId(created["id"])}, {
+            "$set": {"closes_at": datetime.now(timezone.utc) - timedelta(seconds=1)},
+        })
+    elif state == "closed":
+        await d.assignments.close(d.contexts["owner"], created["id"])
+    d.state.user, d.state.context = d.users["learner"], d.contexts["learner"]
+    async with AsyncClient(transport=ASGITransport(app=d.app), base_url="http://test") as client:
+        response = await client.post(f"/api/v1/assignments/{created['id']}/start")
+    assert response.status_code == 409, response.text
+    recipient = await d.db.training_assignments.find_one({"training_run_id": created["id"]})
+    assert recipient["attempts_used"] == 0
+    assert await d.db.live_quiz_sessions.count_documents({}) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["available_from", "due_at", "closes_at"])
+async def test_naive_assignment_dates_are_http_422_not_server_errors(delivery, field):
+    d = delivery
+    body = payload(d).model_dump(mode="json")
+    body[field] = "2035-01-01T12:00:00"
+    async with AsyncClient(transport=ASGITransport(app=d.app), base_url="http://test") as client:
+        response = await client.post("/api/v1/assignments", json=body,
+                                     headers={"Idempotency-Key": "invalid-date-01"})
+    assert response.status_code == 422
+    assert await d.db.training_runs.count_documents({}) == 0
+
+
+@pytest.mark.asyncio
+async def test_recipient_directory_skips_invalid_deleted_and_missing_users(delivery):
+    d = delivery
+    missing_id, deleted_id = str(ObjectId()), ObjectId()
+    await d.db.users.insert_one({"_id": deleted_id, "username": "Deleted", "status": "deleted"})
+    await d.db.organization_memberships.insert_many([
+        {"organization_id": d.org, "user_id": user_id, "role": "learner", "status": "active"}
+        for user_id in (missing_id, str(deleted_id), "bad")
+    ])
+    seen = []
+    cursor = None
+    while True:
+        result = await d.assignments.recipient_options(d.contexts["owner"], limit=1, cursor=cursor)
+        seen.extend(result["items"])
+        cursor = result["next_cursor"]
+        if cursor is None:
+            break
+    assert {row["user_id"] for row in seen} == set(d.ids.values())
+    assert len(seen) == len(d.ids)
+    assert all(set(row) == {"user_id", "name"} for row in seen)
+    indexes = await d.db.organization_memberships.index_information()
+    assert indexes["organization_member_options_cursor"]["key"] == [
+        ("organization_id", 1), ("status", 1), ("_id", -1),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mine_ignores_broken_references_and_refills_without_cross_tenant_data(delivery):
+    d = delivery
+    created = await d.assignments.create(d.contexts["owner"], payload(d), "mine-valid-01")
+    recipient = await d.db.training_assignments.find_one({"training_run_id": created["id"]})
+    original_run = await d.db.training_runs.find_one({"_id": ObjectId(created["id"])})
+    foreign_run_id, deleted_run_id = ObjectId(), ObjectId()
+    await d.db.training_runs.insert_many([
+        {**original_run, "_id": foreign_run_id, "organization_id": str(ObjectId())},
+        {**original_run, "_id": deleted_run_id, "status": "deleted", "idempotency_key": "deleted-run-01"},
+    ])
+    await d.db.training_assignments.insert_many([
+        {**recipient, "_id": ObjectId(), "training_run_id": value}
+        for value in ("bad", None, str(foreign_run_id), str(deleted_run_id))
+    ])
+    result = await d.assignments.mine(d.contexts["learner"], limit=1)
+    assert [row["id"] for row in result["items"]] == [created["id"]]
+    assert result["next_cursor"] is None
 
 
 @pytest.mark.asyncio

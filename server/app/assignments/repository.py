@@ -4,6 +4,14 @@ from fastapi import HTTPException
 from server.app.assignments.statistics import recipient_statistics
 from server.app.quiz.repositories.v2.repositories.quiz_repository import QuizV2Repository
 
+FILTERED_PAGE_SCAN_LIMIT = 500
+FILTERED_PAGE_BATCH_SIZE = 100
+ASSIGNMENT_SUMMARY_FIELDS = (
+    "organization_id", "title", "quiz_id", "quiz_revision_id", "cohort_id", "status",
+    "available_from", "due_at", "closes_at", "closed_at", "created_at",
+    "time_limit_minutes", "max_attempts", "passing_threshold_percentage", "delivery_kind",
+)
+
 
 def page_query(query, cursor):
     if cursor is not None:
@@ -19,12 +27,87 @@ async def page(collection, query, *, cursor=None, limit=25, projection=None):
     return rows[:limit], str(rows[limit - 1]["_id"]) if len(rows) > limit else None
 
 
+async def matching_page(collection, query, resolve_batch, *, cursor=None, limit=25):
+    """Refill post-filtered pages without unbounded scans or lost lookahead rows.
+
+    An unusually dirty page may still be short, but its cursor always advances
+    so callers can reach later eligible records without rescanning old rows.
+    """
+    limit = max(1, min(limit, 100))
+    matches = []
+    scanned = 0
+    while scanned < FILTERED_PAGE_SCAN_LIMIT:
+        batch_size = min(FILTERED_PAGE_BATCH_SIZE, FILTERED_PAGE_SCAN_LIMIT - scanned)
+        rows = await collection.find(page_query(query, cursor)).sort("_id", -1).limit(batch_size).to_list(length=batch_size)
+        if not rows:
+            return matches, None
+        matches.extend(await resolve_batch(rows))
+        if len(matches) > limit:
+            return matches[:limit], str(matches[limit - 1]["_id"])
+        scanned += len(rows)
+        cursor = str(rows[-1]["_id"])
+        if len(rows) < batch_size:
+            return matches, None
+    return matches, cursor
+
+
+def valid_object_id(value):
+    return isinstance(value, (str, ObjectId)) and ObjectId.is_valid(value)
+
+
 class AssignmentRepository:
     def __init__(self, training_repository, users, memberships, revisions):
         self.training = training_repository
         self.users = users
         self.memberships = memberships
         self.revisions = revisions
+
+    async def recipient_options(self, organization_id, *, cursor=None, limit=25):
+        async def resolve(rows):
+            ids = {ObjectId(row["user_id"]) for row in rows if valid_object_id(row.get("user_id"))}
+            if not ids:
+                return []
+            users = await self.users.find(
+                {"_id": {"$in": list(ids)}, "status": {"$ne": "deleted"}},
+                {"full_name": 1, "username": 1},
+            ).to_list(length=len(ids))
+            by_id = {str(user["_id"]): user for user in users}
+            result = []
+            for row in rows:
+                if not valid_object_id(row.get("user_id")):
+                    continue
+                user = by_id.get(str(ObjectId(row["user_id"])))
+                if user is not None:
+                    result.append({**row, "user_id": str(user["_id"]),
+                        "name": user.get("full_name") or user.get("username") or "Member"})
+            return result
+
+        return await matching_page(self.memberships, {
+            "organization_id": organization_id, "status": "active",
+        }, resolve, cursor=cursor, limit=limit)
+
+    async def my_assignments(self, organization_id, user_id, *, cursor=None, limit=25):
+        async def resolve(rows):
+            ids = {ObjectId(row["training_run_id"]) for row in rows if valid_object_id(row.get("training_run_id"))}
+            if not ids:
+                return []
+            runs = await self.training.runs_collection.find({
+                "_id": {"$in": list(ids)}, "organization_id": organization_id,
+                "delivery_kind": "quiz", "status": {"$in": ["open", "closed"]},
+            }, {key: 1 for key in ASSIGNMENT_SUMMARY_FIELDS}).to_list(length=len(ids))
+            by_id = {str(run["_id"]): run for run in runs}
+            result = []
+            for row in rows:
+                if not valid_object_id(row.get("training_run_id")):
+                    continue
+                run_id = str(ObjectId(row["training_run_id"]))
+                if run_id in by_id:
+                    result.append({**row, "training_run_id": run_id, "_run": by_id[run_id]})
+            return result
+
+        return await matching_page(self.training.assignments_collection, {
+            "organization_id": organization_id, "recipient_user_id": user_id, "delivery_kind": "quiz",
+        }, resolve, cursor=cursor, limit=limit)
 
     async def active_recipients(self, organization_id, user_ids):
         ids = sorted(set(user_ids))

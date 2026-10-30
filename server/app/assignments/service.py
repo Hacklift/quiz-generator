@@ -7,12 +7,11 @@ import logging
 from types import SimpleNamespace
 from typing import Protocol
 
-from bson import ObjectId
 from fastapi import HTTPException
 from pydantic import ValidationError
 
 from server.app.assignments.models import AssignmentProgressStatistics, RecipientProgress
-from server.app.assignments.repository import page, page_query
+from server.app.assignments.repository import ASSIGNMENT_SUMMARY_FIELDS, page
 from server.app.assignments.statistics import has_completed
 from server.app.organizations.policy import OrganizationAction, OrganizationPolicy
 
@@ -134,11 +133,7 @@ class AssignmentService:
 
     @staticmethod
     def _summary(run):
-        return {"id": str(run["_id"]), **{key: run.get(key) for key in (
-            "organization_id", "title", "quiz_id", "quiz_revision_id", "cohort_id", "status",
-            "available_from", "due_at", "closes_at", "closed_at", "created_at",
-            "time_limit_minutes", "max_attempts", "passing_threshold_percentage", "delivery_kind",
-        )}}
+        return {"id": str(run["_id"]), **{key: run.get(key) for key in ASSIGNMENT_SUMMARY_FIELDS}}
 
     async def _summaries(self, context, runs):
         stats = await self.repository.summaries(context.organization_id, runs)
@@ -183,22 +178,13 @@ class AssignmentService:
         return {"items": items, "next_cursor": next_cursor}
 
     async def mine(self, context, *, cursor=None, limit=25):
-        recipients, next_cursor = await page(self.training.repository.assignments_collection, {
-            "organization_id": context.organization_id, "recipient_user_id": context.principal.user_id, "delivery_kind": "quiz",
-        }, cursor=cursor, limit=limit)
-        run_ids = [ObjectId(row["training_run_id"]) for row in recipients]
-        runs = await self.training.repository.runs_collection.find({
-            "_id": {"$in": run_ids}, "organization_id": context.organization_id,
-            "delivery_kind": "quiz", "status": {"$in": ["open", "closed"]},
-        }).to_list(length=len(run_ids)) if run_ids else []
-        by_id = {str(run["_id"]): run for run in runs}
+        recipients, next_cursor = await self.repository.my_assignments(
+            context.organization_id, context.principal.user_id, cursor=cursor, limit=limit)
         frozen = await self.repository.frozen_user_rows(context.organization_id,
-            [str(run["_id"]) for run in runs if run["status"] == "closed"], context.principal.user_id)
+            [row["training_run_id"] for row in recipients if row["_run"]["status"] == "closed"], context.principal.user_id)
         items = []
         for row in recipients:
-            run = by_id.get(row["training_run_id"])
-            if run is None:
-                continue
+            run = row["_run"]
             evidence = frozen.get(row["training_run_id"]) if run["status"] == "closed" else row
             if evidence is None:
                 raise HTTPException(status_code=503, detail="Final completion record is unavailable")
@@ -263,7 +249,7 @@ class AssignmentService:
         return result
 
     async def start(self, context, assignment_id, user):
-        run = await self._run(context, assignment_id)
+        await self._run(context, assignment_id)
         recipient = await self.repository.recipient(context.organization_id, assignment_id, context.principal.user_id)
         if recipient is None:
             raise HTTPException(status_code=404, detail="Assigned recipient not found")
@@ -339,16 +325,7 @@ class AssignmentService:
         resource = {"organization_id": context.organization_id, "created_by_user_id": context.principal.user_id}
         if not self.policy.can(context.principal, OrganizationAction.ASSIGNMENT_CREATE, resource, context):
             raise HTTPException(status_code=403, detail="Assignment permission denied")
-        query = page_query({"organization_id": context.organization_id, "status": "active"}, cursor)
-        rows = await self.repository.memberships.aggregate([
-            {"$match": query}, {"$sort": {"_id": -1}},
-            {"$lookup": {
-                "from": self.repository.users.name, "let": {"user_id": "$user_id"},
-                "pipeline": [{"$match": {
-                    "status": {"$ne": "deleted"},
-                    "$expr": {"$eq": [{"$toString": "$_id"}, "$$user_id"]},
-                }}, {"$project": {"full_name": 1, "username": 1}}], "as": "_user",
-            }}, {"$match": {"_user.0": {"$exists": True}}}, {"$limit": limit + 1},
-        ]).to_list(length=limit + 1)
-        return {"items": [{"user_id": row["user_id"], "name": row["_user"][0].get("full_name") or row["_user"][0].get("username") or "Member"}
-                          for row in rows[:limit]], "next_cursor": str(rows[limit - 1]["_id"]) if len(rows) > limit else None}
+        rows, next_cursor = await self.repository.recipient_options(
+            context.organization_id, cursor=cursor, limit=limit)
+        return {"items": [{"user_id": row["user_id"], "name": row["name"]} for row in rows],
+                "next_cursor": next_cursor}

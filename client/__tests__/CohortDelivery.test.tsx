@@ -73,6 +73,17 @@ test("waits for authenticated organization resolution before any scoped request"
   expect(api.listCohorts).not.toHaveBeenCalled();
 });
 
+test("an empty partial assignment page retains its cursor and does not claim no assignments exist", async () => {
+  api.myAssignments.mockResolvedValueOnce({ items: [], next_cursor: "remaining-records" })
+    .mockResolvedValueOnce({ items: [{ ...assignment, can_start: true }], next_cursor: null });
+  render(<MyAssignmentsPage />);
+  await screen.findByText("Some records are unavailable. Load more to continue.");
+  expect(screen.queryByText("Nothing is assigned to you in this workspace yet.")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+  await screen.findByRole("heading", { name: assignment.title });
+  expect(api.myAssignments).toHaveBeenLastCalledWith("remaining-records");
+});
+
 test("discarding a stale organization response never displays the previous roster", async () => {
   let resolveOld!: (value: { items: Cohort[]; next_cursor: null }) => void;
   api.listCohorts.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));

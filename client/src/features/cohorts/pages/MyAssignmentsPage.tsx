@@ -37,7 +37,9 @@ function MyAssignmentsContent() {
       </div>
       {assignment.can_start === true || assignment.can_resume === true ? <button className={`${BTN_PRIMARY} disabled:opacity-50`} disabled={starting !== null} type="button" onClick={() => void start(assignment.id)}>{starting === assignment.id ? "Opening..." : assignment.can_resume ? "Resume assignment" : assignment.attempts_used ? "Retry assignment" : "Start assignment"}</button> : <p className="text-sm font-bold">{assignment.has_completed ? "Completed" : assignment.recipient_status === "in_progress" ? "Attempt in progress" : "Not available to start"}</p>}
     </article>)}
-    {!page.loading && !page.error && !page.items.length && <p className={PANEL}>Nothing is assigned to you in this workspace yet.</p>}
+    {!page.loading && !page.error && !page.items.length && <p className={PANEL}>{page.cursor
+      ? "Some records are unavailable. Load more to continue."
+      : "Nothing is assigned to you in this workspace yet."}</p>}
     <MoreRecords {...page} />
   </section>;
 }

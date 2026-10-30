@@ -73,7 +73,9 @@ export function MemberPicker({ selected, onChange, multiple = true, load = cohor
         <span>{member.name || member.user_id}</span>
       </label>)}
     </div>
-    {!page.loading && !page.items.length && !page.error && <p>No eligible members found.</p>}
+    {!page.loading && !page.items.length && !page.error && <p>{page.cursor
+      ? "No eligible members on this page. Load more to continue."
+      : "No eligible members found."}</p>}
     <MoreRecords {...page} />
     {multiple && <p className="mt-3 text-sm">{selected.length} selected</p>}
   </fieldset>;
