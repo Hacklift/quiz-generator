@@ -15,7 +15,7 @@ os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017")
 
 import pytest
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from pydantic import ValidationError
 
 from server.app.organizations.invitation_service import (
@@ -284,6 +284,7 @@ async def test_verified_user_can_create_an_organization_from_any_active_tenant(m
 
     result = await organization_routes.create_organization.__wrapped__(
         request=SimpleNamespace(),
+        response=Response(),
         payload=CreateOrganizationRequest(name="New workspace", kind="corporate"),
         current_user=SimpleNamespace(id="author-in-another-organization"),
     )
@@ -313,6 +314,7 @@ async def test_admin_cannot_revoke_an_owner_admin_invitation(monkeypatch):
         await organization_routes.revoke_invitation.__wrapped__(
             invitation_id=invitation_id,
             request=SimpleNamespace(),
+            response=Response(),
             _current_user=SimpleNamespace(),
             context=_organization_context("admin"),
         )
@@ -350,6 +352,7 @@ async def test_owner_revoke_conditionally_preserves_the_authorized_invitation_ro
     response = await organization_routes.revoke_invitation.__wrapped__(
         invitation_id=invitation_id,
         request=SimpleNamespace(),
+        response=Response(),
         _current_user=SimpleNamespace(),
         context=_organization_context("owner"),
     )
