@@ -11,6 +11,8 @@ from server.app.notifications.documents import build_notification_document
 from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.quiz.utils.session_grading import grade_live_session
 from server.app.quiz.utils.training_completion import build_closure_payload
+from server.app.assignments.statistics import add_assignment_closure_evidence
+from server.app.assignments.authorization import may_receive_assignment_completion
 
 
 logger = logging.getLogger(__name__)
@@ -136,12 +138,12 @@ def _finalize_expired_session(
                 notifications,
                 _notification_document(
                     user_id=assignment["recipient_user_id"],
-                    title="Training completed",
+                    title="Quiz completed" if run.get("delivery_kind") == "quiz" else "Training completed",
                     message=(
                         f"You completed {run['title']}. "
                         f"Your score: {graded['percentage']}%."
                     ),
-                    action_url="/assigned-training",
+                    action_url="/assignments/mine" if run.get("delivery_kind") == "quiz" else "/assigned-training",
                     dedupe_key=f"training-assignment:{assignment['_id']}:completed",
                     now=now,
                     organization_id=run.get("organization_id"),
@@ -154,16 +156,30 @@ def _finalize_expired_session(
         if assignment
         else updated.get("participant_name") or updated.get("participant_email")
     ) or "A participant"
+    if run.get("delivery_kind") == "quiz":
+        database = assignments.database
+        membership = database["organization_memberships"].find_one({
+            "organization_id": run["organization_id"], "user_id": run["owner_user_id"], "status": "active",
+        })
+        cohort_membership = database["cohort_memberships"].find_one({
+            "organization_id": run["organization_id"], "cohort_id": run.get("cohort_id"),
+            "user_id": run["owner_user_id"], "status": "active",
+        }) if run.get("cohort_id") else None
+        organization = database["organizations"].find_one({
+            "_id": ObjectId(run["organization_id"]), "status": "active",
+        })
+        if not may_receive_assignment_completion(run, membership, cohort_membership, organization=organization):
+            return
     _upsert_notification(
         notifications,
         _notification_document(
             user_id=run["owner_user_id"],
-            title="Training completed",
+            title="Quiz completed" if run.get("delivery_kind") == "quiz" else "Training completed",
             message=(
                 f"{participant} completed {run['title']}. "
                 f"Score: {graded['percentage']}%."
             ),
-            action_url=f"/training-runs/{run['_id']}",
+            action_url=f"/assignments/{run['_id']}" if run.get("delivery_kind") == "quiz" else f"/training-runs/{run['_id']}",
             dedupe_key=(
                 f"training-run:{run['_id']}:session:{updated['_id']}:owner-completed"
             ),
@@ -174,7 +190,7 @@ def _finalize_expired_session(
     )
 
 
-def _reconcile_submitted_assignment_sessions(assignments, sessions, run_id: str, now: datetime) -> None:
+def _reconcile_submitted_assignment_sessions(assignments, sessions, run_id: str, now: datetime, *, current_only: bool = False) -> None:
     """Finish the tiny session/assignment write gap before sealing an audit snapshot.
 
     A participant can submit just before the closure worker claims the run. The
@@ -183,16 +199,20 @@ def _reconcile_submitted_assignment_sessions(assignments, sessions, run_id: str,
     a prior completed attempt can never overwrite a later retry.
     """
     assignment_rows = list(
-        assignments.find({"training_run_id": run_id, "status": "in_progress"})
+        assignments.find({"training_run_id": run_id, "status": {"$in": ["in_progress", "submitting"]} if current_only else "in_progress"})
     )
+    session_query = {
+        "training_run_id": run_id,
+        "training_assignment_id": {"$exists": True},
+        "status": "submitted",
+    }
+    if current_only:
+        # New assignments fence one active session per recipient. Reconcile
+        # that bounded set, not every historical unlimited-retry attempt.
+        session_query["_id"] = {"$in": [ObjectId(row["active_session_id"])
+            for row in assignment_rows if ObjectId.is_valid(row.get("active_session_id"))]}
     submitted_by_assignment: dict[str, dict] = {}
-    for session in sessions.find(
-        {
-            "training_run_id": run_id,
-            "training_assignment_id": {"$exists": True},
-            "status": "submitted",
-        }
-    ):
+    for session in sessions.find(session_query):
         assignment_id = session.get("training_assignment_id")
         if not assignment_id:
             continue
@@ -205,7 +225,7 @@ def _reconcile_submitted_assignment_sessions(assignments, sessions, run_id: str,
         if not session:
             continue
         assignments.update_one(
-            {"_id": assignment["_id"], "status": "in_progress"},
+            {"_id": assignment["_id"], "status": {"$in": ["in_progress", "submitting"]} if current_only else "in_progress"},
             {
                 "$set": {
                     "status": "completed",
@@ -332,11 +352,12 @@ def close_expired_training_runs() -> int:
                             now=now,
                         )
 
-                    _reconcile_submitted_assignment_sessions(
-                        assignments, sessions, run_id, now
-                    )
+                    if run.get("delivery_kind") == "quiz":
+                        _reconcile_submitted_assignment_sessions(assignments, sessions, run_id, now, current_only=True)
+                    else:
+                        _reconcile_submitted_assignment_sessions(assignments, sessions, run_id, now)
                 assignment_rows = list(assignments.find({"training_run_id": run_id}))
-                session_rows = list(sessions.find({"training_run_id": run_id}))
+                session_rows = [] if run.get("delivery_kind") == "quiz" else list(sessions.find({"training_run_id": run_id}))
                 audit_events.update_one(
                     {"training_run_id": run_id, "event_type": "run_closed"},
                     {
@@ -347,7 +368,9 @@ def close_expired_training_runs() -> int:
                             "organization_id": run.get("organization_id"),
                             "created_by_user_id": run.get("created_by_user_id") or run.get("owner_user_id"),
                             "occurred_at": now,
-                            "payload": build_closure_payload(run, assignment_rows, session_rows),
+                            "payload": add_assignment_closure_evidence(
+                                build_closure_payload(run, assignment_rows, session_rows), run, assignment_rows,
+                            ),
                         }
                     },
                     upsert=True,

@@ -4,7 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
-TrainingRunKind = Literal["business", "compliance"]
+TrainingRunKind = Literal["business", "compliance", "quiz"]
 TrainingPurpose = Literal[
     "onboarding",
     "product_knowledge",
@@ -17,7 +17,7 @@ TrainingAccessMode = Literal["public", "assigned_only"]
 
 class CreateTrainingRunRequest(BaseModel):
     quiz_id: str = Field(min_length=1)
-    kind: TrainingRunKind = "business"
+    kind: Literal["business", "compliance"] = "business"
     purpose: TrainingPurpose = "custom"
     title: Optional[str] = Field(default=None, max_length=180)
     time_limit_minutes: int = Field(default=20, ge=1, le=1440)

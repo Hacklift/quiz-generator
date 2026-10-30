@@ -21,6 +21,7 @@ import { ROUTES } from "@shared/config/patterns/routes";
 import NotificationBell from "@features/notifications/components/NotificationBell";
 import { archivo, BTN_PRIMARY } from "@shared/ui/quizwerk";
 import OrganizationSwitcher from "@features/organizations/components/OrganizationSwitcher";
+import UpgradePlanButton from "./sidebar/UpgradePlanButton";
 
 /**
  * Primary navigation, in the Quizwerk design language.
@@ -50,6 +51,8 @@ function mobileWorkspaceLinks(t: TerminologyResolver) {
     { label: `Saved ${t("quiz", "plural")}`, href: "/saved_quiz" },
     { label: `Popular ${t("quiz", "plural")}`, href: "/popular" },
     { label: "Folders", href: "/folders" },
+    { label: `${titleCaseTerm(t("group", "plural"))} & assignments`, href: ROUTES.COHORTS },
+    { label: titleCaseTerm(t("live_quiz", "plural")), href: "/my-live-quizzes" },
     { label: `${titleCaseTerm(t("quiz"))} history`, href: "/quiz_history" },
   ];
 }
@@ -92,42 +95,45 @@ const NavBar: React.FC = () => {
 
   return (
     <div className={archivo.className}>
-      {!isLoading && isAuthenticated && (
-        <>
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label="Toggle workspace sidebar"
-            className="fixed left-4 top-4 z-[100] hidden bg-brand p-2 text-paper transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:flex"
-          >
-            {isSidebarOpen ? <X /> : <Menu />}
-          </button>
-
-          <div
-            className={`fixed left-0 top-0 z-50 h-full border-r-2 border-divider bg-paper transition-all duration-300 ${
-              isSidebarOpen ? "w-64" : "w-0 overflow-hidden"
-            }`}
-            style={{ paddingTop: "64px" }}
-          >
-            <Sidebar onBrowseClick={() => router.push(ROUTES.CATEGORIES)} />
-          </div>
-        </>
+      {!isLoading && isAuthenticated && isSidebarOpen && (
+        <aside
+          id="workspace-sidebar"
+          aria-label="Workspace navigation"
+          className="fixed bottom-0 left-0 top-16 z-50 hidden w-64 overflow-y-auto overscroll-contain border-r-2 border-divider bg-paper xl:block"
+        >
+          <Sidebar onBrowseClick={() => router.push(ROUTES.CATEGORIES)} />
+        </aside>
       )}
 
       <nav className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center border-b-2 border-divider bg-paper">
-        <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-[clamp(20px,5vw,72px)]">
-          <Link
-            href="/"
-            className="text-[18px] font-extrabold tracking-[-0.015em] text-ink"
-          >
-            Quizwerk
-          </Link>
+        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-6 px-5 xl:px-6">
+          <div className="flex shrink-0 items-center gap-3">
+            {!isLoading && isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen((open) => !open)}
+                aria-label="Toggle workspace sidebar"
+                aria-controls="workspace-sidebar"
+                aria-expanded={isSidebarOpen}
+                className="hidden h-11 w-11 shrink-0 items-center justify-center bg-brand text-paper transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand xl:flex"
+              >
+                {isSidebarOpen ? <X /> : <Menu />}
+              </button>
+            )}
+            <Link
+              href="/"
+              className="text-[18px] font-extrabold tracking-[-0.015em] text-ink"
+            >
+              Quizwerk
+            </Link>
+          </div>
 
-          <div className="hidden items-center gap-[28px] md:flex">
+          <div className="hidden shrink-0 items-center gap-5 xl:flex">
             {visibleItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className={`text-[15px] transition ${
+                className={`whitespace-nowrap text-[15px] transition ${
                   isActive(item.href)
                     ? "font-extrabold text-brand"
                     : "text-ink hover:text-brand"
@@ -138,15 +144,18 @@ const NavBar: React.FC = () => {
             ))}
           </div>
 
-          <div className="hidden items-center gap-[16px] md:flex">
+          <div className="hidden min-w-0 items-center gap-3 xl:flex">
             <NavGenerateQuizButton />
             {!isLoading && (
               <>
                 {isAuthenticated ? (
                   <>
                     <NotificationBell />
-                    <OrganizationSwitcher />
-                    <span className="text-[15px] text-ink">
+                    <OrganizationSwitcher className="shrink-0" />
+                    <span
+                      className="min-w-0 max-w-[144px] truncate text-[14px] text-ink"
+                      title={`Hi, ${user?.username || "User"}${personaDefinition ? ` · ${personaDefinition.label}` : ""}`}
+                    >
                       Hi, {user?.username || "User"}
                       {personaDefinition ? (
                         <span className="ml-[6px] text-[13px] text-ink/60">
@@ -154,7 +163,7 @@ const NavBar: React.FC = () => {
                         </span>
                       ) : null}
                     </span>
-                    <button onClick={logout} className={BTN_PRIMARY}>
+                    <button onClick={logout} className={`${BTN_PRIMARY} shrink-0`}>
                       Logout
                     </button>
                   </>
@@ -169,9 +178,12 @@ const NavBar: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
-            className="p-2 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand md:hidden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand xl:hidden"
             aria-label="Toggle mobile top-nav"
+            aria-controls="compact-navigation"
+            aria-expanded={isMobileNavOpen}
           >
             {isMobileNavOpen ? <X /> : <Menu />}
           </button>
@@ -180,10 +192,9 @@ const NavBar: React.FC = () => {
 
       <div className="h-16" />
 
-      <div
-        className={`fixed left-0 top-16 z-30 max-h-[calc(100vh-64px)] w-full overflow-y-auto border-b-2 border-divider bg-paper transition-transform duration-200 md:hidden ${
-          isMobileNavOpen ? "translate-y-0" : "-translate-y-full"
-        }`}
+      {isMobileNavOpen && <div
+        id="compact-navigation"
+        className="fixed left-0 top-16 z-30 max-h-[calc(100dvh-64px)] w-full overflow-y-auto overscroll-contain border-b-2 border-divider bg-paper xl:hidden"
       >
         <div className="flex flex-col px-4 py-4">
           {visibleItems.map((item) => (
@@ -226,12 +237,13 @@ const NavBar: React.FC = () => {
                 {isAuthenticated ? (
                   <>
                     <OrganizationSwitcher className="self-center" />
-                    <span className="text-center text-[15px] text-ink">
+                    <span className="break-words text-center text-[15px] text-ink">
                       Hi, {user?.username || "User"}
                     </span>
                     <div className="flex justify-center">
                       <NotificationBell />
                     </div>
+                    <UpgradePlanButton />
                     <button
                       onClick={() => {
                         logout();
@@ -258,7 +270,7 @@ const NavBar: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       <SignUpModal
         isOpen={isSignUpOpen}

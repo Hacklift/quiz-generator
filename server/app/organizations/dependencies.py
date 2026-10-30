@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException, status
 
 from server.app.core.dependencies import get_current_user, get_current_user_optional
 from server.app.db.core.connection import (
@@ -94,15 +96,22 @@ async def get_active_organization_context(
     sessions_collection=Depends(get_user_sessions_collection),
     organizations_collection=Depends(get_organizations_collection),
     memberships_collection=Depends(get_organization_memberships_collection),
+    expected_organization_id: Annotated[str | None, Header(alias="X-Organization-ID", max_length=24)] = None,
 ) -> OrganizationContext:
     """Resolve server-owned active scope and prove membership for every request."""
-    return await resolve_active_organization_context(
+    context = await resolve_active_organization_context(
         current_user=current_user,
         principal=principal,
         sessions_collection=sessions_collection,
         organizations_collection=organizations_collection,
         memberships_collection=memberships_collection,
     )
+    # This is an intent fence, never proof of membership or a scope override.
+    # Keep it on the request through auth refresh/retry so an old workspace's
+    # form cannot create state in a newly selected workspace.
+    if expected_organization_id is not None and expected_organization_id != context.organization_id:
+        raise HTTPException(status_code=409, detail="Workspace changed; refresh before retrying this action")
+    return context
 
 
 async def resolve_active_organization_context(

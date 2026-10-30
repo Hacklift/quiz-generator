@@ -32,6 +32,9 @@ auth_events_collection = database["auth_events"]
 organizations_collection = database["organizations"]
 organization_memberships_collection = database["organization_memberships"]
 organization_invitations_collection = database["organization_invitations"]
+cohorts_collection = database["cohorts"]
+cohort_memberships_collection = database["cohort_memberships"]
+quiz_revisions_collection = database["quiz_revisions"]
 product_events_collection = database["product_events"]
 quiz_history_collection = database["quiz_history"]
 ai_generated_quizzes_collection = database["ai_generated_quizzes"]
@@ -352,6 +355,11 @@ async def startUp():
         organization_memberships_collection,
         organization_invitations_collection,
     )
+    from server.app.cohorts.validators import ensure_cohort_collections
+    from server.app.assignments.validators import ensure_assignment_collections
+
+    await ensure_cohort_collections(database)
+    await ensure_assignment_collections(database)
     await drop_removed_collections()
     await ensure_ai_quiz_indexes(ai_generated_quizzes_collection)
     await ensure_user_tokens_indexes(user_tokens_collection)
@@ -464,6 +472,18 @@ def get_live_quiz_invitations_collection() -> AsyncIOMotorCollection:
 
 def get_training_runs_collection() -> AsyncIOMotorCollection:
     return training_runs_collection
+
+
+def get_cohorts_collection() -> AsyncIOMotorCollection:
+    return cohorts_collection
+
+
+def get_cohort_memberships_collection() -> AsyncIOMotorCollection:
+    return cohort_memberships_collection
+
+
+def get_quiz_revisions_collection() -> AsyncIOMotorCollection:
+    return quiz_revisions_collection
 
 
 def get_training_assignments_collection() -> AsyncIOMotorCollection:

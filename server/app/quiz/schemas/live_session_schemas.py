@@ -38,6 +38,7 @@ class LiveQuizQuestion(BaseModel):
 class LiveQuizSessionState(BaseModel):
     session_id: str
     quiz_id: str
+    delivery_kind: Optional[Literal["quiz"]] = None
     title: str
     participant_name: str
     participant_email: Optional[EmailStr] = None

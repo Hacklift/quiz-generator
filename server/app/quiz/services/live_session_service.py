@@ -344,6 +344,7 @@ class LiveQuizSessionService:
         participant_type: str = "guest",
         quiz_snapshot: Optional[Dict[str, Any]] = None,
         training_closes_at: Optional[datetime] = None,
+        organization_session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a normal session for either a public quiz or a training assignment."""
         questions = quiz.get("questions") or []
@@ -401,6 +402,12 @@ class LiveQuizSessionService:
             session_data["training_assignment_id"] = training_assignment_id
         if quiz_snapshot:
             session_data["quiz_snapshot"] = quiz_snapshot
+        if quiz.get("delivery_kind") == "quiz":
+            session_data.update({
+                "delivery_kind": "quiz", "assignment_id": training_run_id,
+                "quiz_revision_id": quiz["quiz_revision_id"],
+                "organization_session_id": organization_session_id,
+            })
         session_id = await self.repository.create_session(session_data)
         remaining_seconds = self._remaining_seconds(expires_at, server_now)
 
@@ -469,6 +476,32 @@ class LiveQuizSessionService:
             await self._ensure_training_run_open(session)
 
         return self._build_session_state(session, quiz)
+
+    async def resume_assigned_session(self, session, *, user_id, organization_session_id):
+        """Authenticated recovery rotates the capability, not the timer/attempt."""
+        if session.get("delivery_kind") != "quiz" or session.get("user_id") != user_id:
+            raise HTTPException(status_code=404, detail="Assigned session not found")
+        access_session = {**session, "organization_session_id": organization_session_id}
+        if not self.assignment_repository or not await self.assignment_repository.delivery_participant_active(access_session):
+            raise HTTPException(status_code=403, detail="Organization assignment access denied")
+        await self._ensure_training_run_open(session)
+        if self._is_expired(session):
+            raise HTTPException(status_code=409, detail="Session has expired")
+        token = secrets.token_urlsafe(32)
+        resumed = await self.assignment_repository.rotate_assignment_session_token(
+            session, _hash_token(token), organization_session_id, _utc_now(),
+        )
+        if not resumed:
+            raise HTTPException(status_code=409, detail="Session changed; refresh before resuming")
+        server_now = _utc_now()
+        return {
+            "session_id": str(resumed["_id"]), "participant_token": token,
+            "started_at": resumed["started_at"], "expires_at": resumed["expires_at"],
+            "server_now": server_now, "time_limit_minutes": resumed["time_limit_minutes"],
+            "duration_seconds": resumed["duration_seconds"],
+            "remaining_seconds": self._remaining_seconds(resumed["expires_at"], server_now),
+            "redirect_url": f"/live-quiz/{resumed['_id']}",
+        }
 
     async def save_answer(
         self,
@@ -656,6 +689,8 @@ class LiveQuizSessionService:
         )
         if not session:
             raise HTTPException(status_code=404, detail="Completed attempt not found")
+        if session.get("delivery_kind") == "quiz":
+            raise HTTPException(status_code=404, detail="Completed attempt not found")
         if session.get("quiz_id") != quiz_id:
             raise HTTPException(status_code=404, detail="Completed attempt not found")
         if session.get("status") != "submitted" or not session.get("submitted_at"):
@@ -808,8 +843,12 @@ class LiveQuizSessionService:
     ) -> List[Dict[str, Any]]:
         """Use the tenant predicate whenever the persisted quiz carries scope."""
         if organization_id is None:
-            return await self.repository.list_quiz_sessions(quiz_id)
-        return await self.repository.list_quiz_sessions(quiz_id, organization_id)
+            sessions = await self.repository.list_quiz_sessions(quiz_id)
+        else:
+            sessions = await self.repository.list_quiz_sessions(quiz_id, organization_id)
+        # Cohort delivery has independent report/delegation policy, not the
+        # canonical quiz's legacy creator-report permission.
+        return [session for session in sessions if session.get("delivery_kind") != "quiz"]
 
     async def _generate_unique_code(self) -> str:
         alphabet = string.ascii_uppercase + string.digits
@@ -843,6 +882,9 @@ class LiveQuizSessionService:
             raise HTTPException(status_code=404, detail="Session not found")
         if session.get("participant_token_hash") != _hash_token(participant_token):
             raise HTTPException(status_code=403, detail="Invalid participant token")
+        if session.get("delivery_kind") == "quiz":
+            if self.assignment_repository is None or not await self.assignment_repository.delivery_participant_active(session):
+                raise HTTPException(status_code=403, detail="Organization assignment access denied")
         return session
 
     async def _get_session_quiz(self, session: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -867,6 +909,8 @@ class LiveQuizSessionService:
             or _as_utc(run["closes_at"]) <= _utc_now()
         ):
             raise HTTPException(status_code=409, detail="Training run is closed")
+        if run.get("available_from") and _as_utc(run["available_from"]) > _utc_now():
+            raise HTTPException(status_code=409, detail="Assignment is not available yet")
 
     async def _ensure_training_expiry_can_finalize(
         self, session: Dict[str, Any]
@@ -1033,6 +1077,7 @@ class LiveQuizSessionService:
         return {
             "session_id": str(session["_id"]),
             "quiz_id": session["quiz_id"],
+            "delivery_kind": session.get("delivery_kind"),
             "title": quiz.get("title", "Live Quiz"),
             "participant_name": session["participant_name"],
             "participant_email": session.get("participant_email"),
@@ -1201,6 +1246,8 @@ class LiveQuizSessionService:
         try:
             session = await self.repository.get_session(session_id)
             if not session:
+                return
+            if session.get("delivery_kind") == "quiz":
                 return
             organization_id = session.get("organization_id")
             if not organization_id:

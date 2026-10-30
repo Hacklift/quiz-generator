@@ -12,6 +12,7 @@ from server.app.notifications.documents import build_notification_document
 from server.app.notifications.schemas import NotificationCreate, NotificationType
 from server.app.users.identity import normalize_email
 from server.app.users.repository import active_user_query
+from server.app.assignments.authorization import may_receive_assignment_completion
 
 
 logger = logging.getLogger(__name__)
@@ -53,13 +54,13 @@ class TrainingNotificationService:
                 user_id=user_id,
                 organization_id=run.get("organization_id"),
                 created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
-                title="Training assigned",
+                title="Quiz assigned" if run.get("delivery_kind") == "quiz" else "Training assigned",
                 message=(
                     f"{run['title']} is assigned to you. "
                     f"Complete it before {run['closes_at'].strftime('%d %b %Y, %H:%M UTC')}."
                 ),
                 type=NotificationType.TRAINING,
-                action_url="/assigned-training",
+                action_url="/assignments/mine" if run.get("delivery_kind") == "quiz" else "/assigned-training",
                 dedupe_key=f"training-assignment:{assignment['_id']}:assigned",
             ),
         )
@@ -77,13 +78,13 @@ class TrainingNotificationService:
                     user_id=user_id,
                     organization_id=run.get("organization_id"),
                     created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
-                    title="Training assigned",
+                    title="Quiz assigned" if run.get("delivery_kind") == "quiz" else "Training assigned",
                     message=(
                         f"{run['title']} is assigned to you. "
                         f"Complete it before {run['closes_at'].strftime('%d %b %Y, %H:%M UTC')}."
                     ),
                     type=NotificationType.TRAINING,
-                    action_url="/assigned-training",
+                    action_url="/assignments/mine" if run.get("delivery_kind") == "quiz" else "/assigned-training",
                     dedupe_key=f"training-assignment:{assignment['_id']}:assigned",
                 )
             )
@@ -118,10 +119,10 @@ class TrainingNotificationService:
                 user_id=user_id,
                 organization_id=run.get("organization_id"),
                 created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
-                title="Training completed",
+                title="Quiz completed" if run.get("delivery_kind") == "quiz" else "Training completed",
                 message=f"You completed {run['title']}.{score}",
                 type=NotificationType.TRAINING,
-                action_url="/assigned-training",
+                action_url="/assignments/mine" if run.get("delivery_kind") == "quiz" else "/assigned-training",
                 dedupe_key=f"training-assignment:{assignment['_id']}:completed",
             ),
         )
@@ -138,6 +139,22 @@ class TrainingNotificationService:
         if not owner_user_id:
             return
 
+        if run.get("delivery_kind") == "quiz":
+            database = self.runs_collection.database
+            organization = await database["organizations"].find_one({
+                "_id": self._object_id(run["organization_id"]), "status": "active",
+            })
+            member = await database["organization_memberships"].find_one({
+                "organization_id": run["organization_id"],
+                "user_id": owner_user_id, "status": "active",
+            })
+            cohort_member = await database["cohort_memberships"].find_one({
+                "organization_id": run["organization_id"], "cohort_id": run.get("cohort_id"),
+                "user_id": owner_user_id, "status": "active",
+            }) if run.get("cohort_id") else None
+            if not may_receive_assignment_completion(run, member, cohort_member, organization=organization):
+                return
+
         participant = (
             assignment.get("recipient_email")
             if assignment
@@ -152,10 +169,10 @@ class TrainingNotificationService:
                 user_id=owner_user_id,
                 organization_id=run.get("organization_id"),
                 created_by_user_id=run.get("created_by_user_id") or run.get("owner_user_id"),
-                title="Training completed",
+                title="Quiz completed" if run.get("delivery_kind") == "quiz" else "Training completed",
                 message=f"{participant} completed {run['title']}.{score}",
                 type=NotificationType.TRAINING,
-                action_url=f"/training-runs/{run_id}",
+                action_url=f"/assignments/{run_id}" if run.get("delivery_kind") == "quiz" else f"/training-runs/{run_id}",
                 dedupe_key=f"training-run:{run_id}:session:{session['_id']}:owner-completed",
             ),
         )

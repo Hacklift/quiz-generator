@@ -926,6 +926,7 @@ async def test_assignment_email_fallback_only_includes_unclaimed_assignments():
     )
 
     assert assignments_collection.query == {
+        "delivery_kind": {"$ne": "quiz"},
         "$or": [
             {"recipient_user_id": "learner-1"},
             {

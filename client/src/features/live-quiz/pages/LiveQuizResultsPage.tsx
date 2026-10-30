@@ -1,8 +1,14 @@
 import { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import GuestSignupPopup from "@features/live-quiz/components/GuestSignupPopup";
+import {
+  useLivePageLifecycle,
+  type LivePageLifecycle,
+} from "@features/live-quiz/hooks/useLivePageLifecycle";
+import { ROUTES } from "@shared/config/patterns/routes";
 import {
   LiveQuizSessionState,
   liveQuizService,
@@ -12,31 +18,39 @@ interface LiveQuizResultsPageProps {
   sessionId: string;
 }
 
-const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
+function LiveQuizResults({
   sessionId,
-}) => {
+  lifecycle,
+}: LiveQuizResultsPageProps & { lifecycle: LivePageLifecycle }) {
   const router = useRouter();
+  const { capture } = lifecycle;
   const [session, setSession] = useState<LiveQuizSessionState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showSignup, setShowSignup] = useState(false);
+  const [signupDismissed, setSignupDismissed] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const guard = capture();
+    const isCurrent = () => !cancelled && guard();
     const loadResult = async () => {
       try {
         setIsLoading(true);
         const data = await liveQuizService.getSession(sessionId);
+        if (!isCurrent()) return;
         setSession(data);
-        setShowSignup(
-          data.status === "submitted" && router.query.completed === "1",
-        );
       } catch (error: any) {
-        toast.error(error?.response?.data?.detail || "Could not load results.");
+        if (isCurrent()) {
+          toast.error(error?.response?.data?.detail || "Could not load results.");
+        }
       } finally {
-        setIsLoading(false);
+        if (isCurrent()) setIsLoading(false);
       }
     };
     loadResult();
-  }, [router.query.completed, sessionId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [capture, sessionId]);
 
   if (isLoading) {
     return (
@@ -45,6 +59,18 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
       </div>
     );
   }
+
+  const privateAssignment = session?.delivery_kind === "quiz";
+  const returnHref = lifecycle.isAuthenticated
+    ? privateAssignment
+      ? ROUTES.MY_ASSIGNMENTS
+      : ROUTES.DASHBOARD
+    : ROUTES.HOME;
+  const returnLabel = lifecycle.isAuthenticated
+    ? privateAssignment
+      ? "Back to assigned quizzes"
+      : "Back to dashboard"
+    : "Back to home";
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10">
@@ -90,12 +116,44 @@ const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
         ) : (
           <p className="mt-4 text-sm text-slate-600">Result unavailable.</p>
         )}
+        <Link
+          className="mt-6 inline-block font-semibold text-[#0F2654] underline"
+          href={returnHref}
+        >
+          {returnLabel}
+        </Link>
       </section>
       <GuestSignupPopup
-        isOpen={showSignup}
-        onClose={() => setShowSignup(false)}
+        isOpen={
+          !lifecycle.isAuthenticated &&
+          !lifecycle.isLeaving &&
+          !signupDismissed &&
+          session?.status === "submitted" &&
+          router.query.completed === "1"
+        }
+        onClose={() => setSignupDismissed(true)}
       />
     </main>
+  );
+}
+
+const LiveQuizResultsPage: React.FC<LiveQuizResultsPageProps> = ({
+  sessionId,
+}) => {
+  const lifecycle = useLivePageLifecycle(sessionId);
+  return lifecycle.ready ? (
+    <LiveQuizResults
+      key={lifecycle.pageKey}
+      sessionId={sessionId}
+      lifecycle={lifecycle}
+    />
+  ) : (
+    <div
+      role="status"
+      className="flex min-h-screen items-center justify-center"
+    >
+      Loading results...
+    </div>
   );
 };
 
